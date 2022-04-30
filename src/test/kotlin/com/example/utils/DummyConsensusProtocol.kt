@@ -6,11 +6,10 @@ import com.example.domain.ConsensusResult
 import com.example.domain.ConsensusSuccess
 
 object DummyConsensusProtocol: ConsensusProtocol {
-
     private var response: ConsensusResult = ConsensusSuccess
 
-    override fun proposeChange(change: Change): ConsensusResult =
-        response
+    override fun proposeChange(change: Change): ConsensusResult
+        = response
 
     fun setResponse(response: ConsensusResult) {
         this.response = response
