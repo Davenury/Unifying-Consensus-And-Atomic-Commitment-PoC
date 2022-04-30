@@ -1,10 +1,11 @@
-val ktor_version: String by project
 val kotlin_version: String by project
 val logback_version: String by project
+val ktor_version = "1.6.4"
 
 plugins {
     application
     kotlin("jvm") version "1.6.21"
+    kotlin("plugin.serialization") version "1.6.10"
 }
 
 group = "com.example"
@@ -22,9 +23,26 @@ repositories {
 }
 
 dependencies {
-    implementation("io.ktor:ktor-server-core-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-netty-jvm:$ktor_version")
+    implementation("io.ktor:ktor-server:$ktor_version")
+    implementation("io.ktor:ktor-server-netty:$ktor_version")
+    implementation("io.ktor:ktor-serialization:$ktor_version")
     implementation("ch.qos.logback:logback-classic:$logback_version")
-    testImplementation("io.ktor:ktor-server-tests-jvm:$ktor_version")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
+    implementation("io.insert-koin:koin-ktor:3.1.6")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.2")
+
+
+    testImplementation(platform("org.junit:junit-bom:5.8.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("io.strikt:strikt-core:0.34.0")
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
+tasks.test {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
 }
