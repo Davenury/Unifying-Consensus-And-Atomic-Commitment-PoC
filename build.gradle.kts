@@ -46,3 +46,9 @@ tasks.test {
         events("passed", "skipped", "failed")
     }
 }
+
+tasks.withType<Jar> {
+    manifest {
+        attributes["Main-Class"] = "com.example.ApplicationKt"
+    }
+}
