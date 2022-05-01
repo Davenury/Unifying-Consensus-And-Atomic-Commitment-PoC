@@ -1,6 +1,7 @@
 package com.example.infrastructure
 
 import com.example.domain.*
+import org.slf4j.LoggerFactory
 
 class InMemoryHistoryManagement(
     consensusProtocol: ConsensusProtocol
@@ -25,7 +26,11 @@ class InMemoryHistoryManagement(
         try {
             historyStorage.last()
         } catch (ex: java.util.NoSuchElementException) {
+            logger.error("History is empty!")
             null
         }
 
+    companion object {
+        private val logger = LoggerFactory.getLogger(InMemoryHistoryManagement::class.java)
+    }
 }
