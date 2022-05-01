@@ -1,20 +1,16 @@
 package com.example.api
 
-import com.example.domain.Change
+import com.example.domain.ChangeDto
 import com.example.domain.HistoryManagement
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 
 interface HistoryManagementFacade {
-    fun change(change: String)
+    fun change(changeDto: ChangeDto)
 }
 
 class HistoryManagementFacadeImpl(
     private val historyManagement: HistoryManagement
 ): HistoryManagementFacade {
-    override fun change(change: String) {
-        Json.decodeFromString<Change>(change).let {
-            historyManagement.change(it)
-        }
+    override fun change(changeDto: ChangeDto) {
+        historyManagement.change(changeDto.toChange())
     }
 }

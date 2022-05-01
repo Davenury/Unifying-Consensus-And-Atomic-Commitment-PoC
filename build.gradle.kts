@@ -23,12 +23,16 @@ repositories {
 }
 
 dependencies {
+    //ktor
     implementation("io.ktor:ktor-server:$ktor_version")
     implementation("io.ktor:ktor-server-netty:$ktor_version")
     implementation("io.ktor:ktor-serialization:$ktor_version")
     implementation("ch.qos.logback:logback-classic:$logback_version")
     implementation("io.insert-koin:koin-ktor:3.1.6")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.2")
+
+    // object mapper
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.13.2.2")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.2")
 
 
     testImplementation(platform("org.junit:junit-bom:5.8.2"))

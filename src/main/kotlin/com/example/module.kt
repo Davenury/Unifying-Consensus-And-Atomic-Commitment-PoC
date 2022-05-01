@@ -6,6 +6,7 @@ import com.example.domain.ConsensusProtocol
 import com.example.domain.HistoryManagement
 import com.example.infrastructure.DummyConsensusProtocol
 import com.example.infrastructure.InMemoryHistoryManagement
+import io.ktor.http.*
 import org.koin.dsl.module
 
 val historyManagementModule = module {

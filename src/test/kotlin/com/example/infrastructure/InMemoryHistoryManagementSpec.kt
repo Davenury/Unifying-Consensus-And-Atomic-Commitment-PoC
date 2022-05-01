@@ -18,7 +18,7 @@ class InMemoryHistoryManagementSpec {
     @Test
     fun `should be able to add change, when consensus protocol is ok with it`() {
         // given - some change
-        val change = Change("from", "to", "ADD_RELATION")
+        val change = AddRelationChange("from", "to")
         // and - consensus protocol that's ok with changes
         consensusProtocol.setResponse(ConsensusSuccess)
         // when - change is proposed
@@ -30,7 +30,7 @@ class InMemoryHistoryManagementSpec {
     @Test
     fun `should not add change if consensus protocol isn't ok with this`() {
         // given - some change
-        val change = Change("from", "to", "ADD_RELATION")
+        val change = AddRelationChange("from", "to")
         // and - consensus protocol that isn't ok with changes
         consensusProtocol.setResponse(ConsensusFailure)
 
