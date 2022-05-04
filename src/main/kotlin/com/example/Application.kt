@@ -12,8 +12,10 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import org.koin.ktor.ext.Koin
 
-fun main() {
-    embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
+fun main(args: Array<String>) {
+
+    val id = args[0].toInt()
+    embeddedServer(Netty, port = 8080+id, host = "0.0.0.0") {
         install(ContentNegotiation) {
             json()
         }
@@ -27,10 +29,13 @@ fun main() {
                 call.respondText(status = HttpStatusCode.BadRequest, text = "Missing parameter: ${cause.message}")
             }
             exception<UnknownOperationException> { cause ->
-                call.respondText(status = HttpStatusCode.BadRequest, text = "Unknown operation to perform: ${cause.desiredOperationName}")
+                call.respondText(
+                    status = HttpStatusCode.BadRequest,
+                    text = "Unknown operation to perform: ${cause.desiredOperationName}"
+                )
             }
         }
 
-        configureRouting()
+        configureRouting(id)
     }.start(wait = true)
 }

@@ -1,6 +1,7 @@
 val kotlin_version: String by project
 val logback_version: String by project
 val ktor_version = "1.6.4"
+val ratis_version = "2.2.0"
 
 plugins {
     application
@@ -34,6 +35,15 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.13.2.2")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.2")
 
+
+    implementation("org.apache.ratis:ratis:$ratis_version")
+    implementation("org.apache.ratis:ratis-proto:$ratis_version")
+    implementation("org.apache.ratis:ratis-grpc:$ratis_version")
+    implementation("org.apache.ratis:ratis-common:$ratis_version")
+    implementation("org.apache.ratis:ratis-server-api:$ratis_version")
+    implementation("org.apache.ratis:ratis-tools:$ratis_version")
+    implementation("org.apache.ratis:ratis-client:$ratis_version")
+    implementation("org.apache.ratis:ratis-thirdparty-misc:0.7.0")
 
     testImplementation(platform("org.junit:junit-bom:5.8.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
