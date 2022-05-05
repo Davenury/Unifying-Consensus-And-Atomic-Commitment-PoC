@@ -74,9 +74,6 @@ class RaftNode(
             .setStateMachine(counterStateMachine)
             .build()
 
-        println(raftGroup)
-        println(peer.address)
-
         client = buildClient(peer)
 
         this.start()
