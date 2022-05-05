@@ -5,13 +5,15 @@ import com.example.domain.ConsensusProtocol
 import com.example.domain.ConsensusResult
 import com.example.domain.ConsensusSuccess
 
-object DummyConsensusProtocol: ConsensusProtocol {
+object DummyConsensusProtocol: ConsensusProtocol<Change, MutableList<Change>> {
     private var response: ConsensusResult = ConsensusSuccess
 
     override fun proposeChange(change: Change): ConsensusResult
-        = response
+            = response
 
     fun setResponse(response: ConsensusResult) {
         this.response = response
     }
+
+    override fun getState(): MutableList<Change>? = mutableListOf()
 }

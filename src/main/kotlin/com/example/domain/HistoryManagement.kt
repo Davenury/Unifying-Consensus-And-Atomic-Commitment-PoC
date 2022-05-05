@@ -1,13 +1,25 @@
 package com.example.domain
 
-abstract class HistoryManagement(
-    protected val consensusProtocol: ConsensusProtocol
-) {
-    abstract fun change(change: Change): HistoryChangeResult
+import com.example.raft.History
+
+
+abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
+    open fun change(change: Change) =
+        consensusProtocol.proposeChange(change)
+            .let {
+                when (it) {
+                    ConsensusFailure -> {
+                        HistoryChangeFailure
+                    }
+                    ConsensusSuccess -> {
+                        HistoryChangeSuccess
+                    }
+                }
+            }
 
     abstract fun getLastChange(): Change?
 }
 
 sealed class HistoryChangeResult
-object HistoryChangeSuccess: HistoryChangeResult()
-object HistoryChangeFailure: HistoryChangeResult()
+object HistoryChangeSuccess : HistoryChangeResult()
+object HistoryChangeFailure : HistoryChangeResult()

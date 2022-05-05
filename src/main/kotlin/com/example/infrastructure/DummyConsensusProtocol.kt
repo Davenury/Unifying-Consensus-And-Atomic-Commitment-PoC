@@ -5,7 +5,13 @@ import com.example.domain.ConsensusProtocol
 import com.example.domain.ConsensusResult
 import com.example.domain.ConsensusSuccess
 
-object DummyConsensusProtocol: ConsensusProtocol {
-    override fun proposeChange(change: Change): ConsensusResult
-        = ConsensusSuccess
+class DummyConsensusProtocol : ConsensusProtocol<Change, MutableList<Change>> {
+    private val historyStorage: MutableList<Change> = mutableListOf()
+
+    override fun proposeChange(change: Change): ConsensusResult {
+        historyStorage.add(change)
+        return ConsensusSuccess
+    }
+
+    override fun getState(): MutableList<Change> = historyStorage
 }

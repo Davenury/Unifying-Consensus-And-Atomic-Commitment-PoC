@@ -10,23 +10,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * `query` method however INCREMENT is a transactional command which
  * will be handled by `applyTransaction`.
  */
-class CounterStateMachine : StateMachine<AtomicInteger>() {
-    private var counter = AtomicInteger(0)
-    override fun getState(): AtomicInteger {
-        return counter
-    }
-
-    override fun serializeState(state: AtomicInteger): String {
-        return counter.toString()
-    }
-
-    override fun toStringState(state: AtomicInteger): String {
-        return counter.toString()
-    }
-
-    override fun loadState(newState: AtomicInteger) {
-        counter = newState
-    }
+class CounterStateMachine(
+    private var counter: AtomicInteger = AtomicInteger(0)
+) : StateMachine<AtomicInteger>(counter) {
 
     override fun applyOperation(operation: String): String? {
         return if (operation == "INCREMENT") {
@@ -40,5 +26,6 @@ class CounterStateMachine : StateMachine<AtomicInteger>() {
         return if (operation != "GET") "Invalid Command" else counter.toString()
     }
 
+    override fun serializeState(): String = state.toString()
 
 }

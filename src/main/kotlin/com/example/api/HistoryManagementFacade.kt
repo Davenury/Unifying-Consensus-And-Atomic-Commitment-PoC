@@ -9,7 +9,7 @@ interface HistoryManagementFacade {
 
 class HistoryManagementFacadeImpl(
     private val historyManagement: HistoryManagement
-): HistoryManagementFacade {
+) : HistoryManagementFacade {
     override fun change(changeDto: ChangeDto) {
         historyManagement.change(changeDto.toChange())
     }

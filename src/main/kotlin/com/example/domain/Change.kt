@@ -1,6 +1,7 @@
 package com.example.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import org.apache.ratis.thirdparty.com.google.gson.Gson
 import org.slf4j.LoggerFactory
 
 data class ChangeDto(
@@ -24,16 +25,23 @@ data class ChangeDto(
 @JsonIgnoreProperties(ignoreUnknown = true)
 sealed class Change(
     val operation: Operation
-)
+) {
+    companion object {
+        fun fromJson(json: String): Change = Gson()
+            .fromJson(json, HashMap<String, String>().javaClass)
+            .let { ChangeDto(it) }.toChange()
+    }
+}
+
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class AddRelationChange(val from: String, val to: String): Change(Operation.ADD_RELATION)
+data class AddRelationChange(val from: String, val to: String) : Change(Operation.ADD_RELATION)
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class DeleteRelationChange(val from: String, val to: String): Change(Operation.DELETE_RELATION)
+data class DeleteRelationChange(val from: String, val to: String) : Change(Operation.DELETE_RELATION)
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class AddUserChange(val userName: String): Change(Operation.ADD_USER)
+data class AddUserChange(val userName: String) : Change(Operation.ADD_USER)
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class AddGroupChange(val groupName: String): Change(Operation.ADD_GROUP)
+data class AddGroupChange(val groupName: String) : Change(Operation.ADD_GROUP)

@@ -35,15 +35,16 @@ import java.util.*
  * Constants across servers and clients
  */
 object Constants {
-    lateinit var PEERS: List<RaftPeer>
-    lateinit var PATH: String
+    val PEERS: List<RaftPeer>
+    private val PATH: String
+    private val CLUSTER_GROUP_ID: UUID
+    val RAFT_GROUP: RaftGroup
 
     fun rootPath() = Paths.get("").toAbsolutePath().toString()
 
     init {
         val properties = Properties()
         val conf = Paths.get(rootPath(), "/src/main/resources/conf.properties").toString()
-        print(conf)
         try {
             FileInputStream(conf).use { inputStream ->
                 InputStreamReader(inputStream, StandardCharsets.UTF_8).use { reader ->
@@ -53,31 +54,31 @@ object Constants {
                 }
             }
         } catch (e: IOException) {
-            throw IllegalStateException("Failed to load $conf", e)
+            throw IllegalStateException("Failed to load ratis configuration", e)
         }
-        val key = "raft.server.address.list"
-        val addresses = Optional.ofNullable(properties.getProperty(key))
+        val addressListKey = "raft.server.address.list"
+        val addresses = Optional.ofNullable(properties.getProperty(addressListKey))
             .map { s: String ->
                 s.split(
                     ","
                 ).toTypedArray()
             }
             .orElse(null)
-        require(!(addresses == null || addresses.size == 0)) { "Failed to get $key from $conf" }
-        val key1 = "raft.server.root.storage.path"
-        val path = properties.getProperty(key1)
+        require(!(addresses == null || addresses.isEmpty())) { "Failed to get $addressListKey from $conf" }
+        val storagePathKey = "raft.server.root.storage.path"
+        val path = properties.getProperty(storagePathKey)
         PATH = path ?: "./raft-examples/target"
         val peers: MutableList<RaftPeer> = ArrayList(addresses.size)
         for (i in addresses.indices) {
             peers.add(RaftPeer.newBuilder().setId("n$i").setAddress(addresses[i]).build())
         }
         PEERS = Collections.unmodifiableList(peers)
+        println(PEERS)
+        val clusterGroupIdKey = "raft.cluster.id"
+        CLUSTER_GROUP_ID = properties.getProperty(clusterGroupIdKey).let { UUID.fromString(it) }
+        RAFT_GROUP = RaftGroup.valueOf(RaftGroupId.valueOf(CLUSTER_GROUP_ID), PEERS)
     }
 
-    private val CLUSTER_GROUP_ID = UUID.fromString("02511d47-d67c-49a3-9011-abb3109a44c1")
-    val RAFT_GROUP = RaftGroup.valueOf(
-        RaftGroupId.valueOf(CLUSTER_GROUP_ID), PEERS
-    )
 
     fun oneNodeGroup(peer: RaftPeer): RaftGroup {
         return RaftGroup.valueOf(

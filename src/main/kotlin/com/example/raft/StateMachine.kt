@@ -1,23 +1,23 @@
 package com.example.raft
 
 import org.apache.ratis.proto.RaftProtos
+import org.apache.ratis.protocol.Message
 import org.apache.ratis.protocol.RaftGroupId
 import org.apache.ratis.server.RaftServer
 import org.apache.ratis.server.protocol.TermIndex
 import org.apache.ratis.server.raftlog.RaftLog
 import org.apache.ratis.server.storage.RaftStorage
-import org.apache.ratis.protocol.Message
-import org.apache.ratis.util.JavaUtils;
 import org.apache.ratis.statemachine.TransactionContext
 import org.apache.ratis.statemachine.impl.BaseStateMachine
 import org.apache.ratis.statemachine.impl.SimpleStateMachineStorage
 import org.apache.ratis.statemachine.impl.SingleFileSnapshotInfo
+import org.apache.ratis.util.JavaUtils
 import java.io.*
 import java.nio.charset.Charset
 import java.util.concurrent.CompletableFuture
 
 
-abstract class StateMachine<A> : BaseStateMachine() {
+abstract class StateMachine<A>(open var state: A) : BaseStateMachine() {
     private val storage: SimpleStateMachineStorage = SimpleStateMachineStorage()
 
     /**
@@ -69,7 +69,7 @@ abstract class StateMachine<A> : BaseStateMachine() {
         try {
             ObjectOutputStream(
                 BufferedOutputStream(FileOutputStream(snapshotFile))
-            ).use { out -> out.writeObject(getState()) }
+            ).use { out -> out.writeObject(serializeState()) }
         } catch (ioe: IOException) {
             LOG.warn(
                 "Failed to write snapshot file \"" + snapshotFile
@@ -172,13 +172,14 @@ abstract class StateMachine<A> : BaseStateMachine() {
         return f
     }
 
-    abstract fun getState(): A
 
-    abstract fun serializeState(state: A = getState()): String
+    abstract fun serializeState(): String
 
-    abstract fun toStringState(state: A = getState()): String
+    fun toStringState(): String = state.toString()
 
-    abstract fun loadState(newState: A)
+    fun loadState(newState: A) {
+        state = newState
+    }
 
     abstract fun applyOperation(operation: String): String?
 

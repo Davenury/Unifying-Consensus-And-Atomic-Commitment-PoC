@@ -24,7 +24,7 @@ enum class Operation {
     companion object {
         private val logger = LoggerFactory.getLogger(Operation::class.java)
 
-        private inline fun <reified T: Change>readChange(changeDto: ChangeDto): Change =
+        private inline fun <reified T : Change> readChange(changeDto: ChangeDto): Change =
             try {
                 objectMapper.convertValue(changeDto.properties, T::class.java)
             } catch (ex: Exception) {
