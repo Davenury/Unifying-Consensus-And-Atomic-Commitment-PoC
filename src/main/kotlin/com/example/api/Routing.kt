@@ -9,11 +9,9 @@ import io.ktor.response.*
 import io.ktor.routing.*
 import org.koin.ktor.ext.inject
 
-fun Application.configureRouting(id: Int) {
+fun Application.configureRouting(raftNode: RaftNode) {
 
     val historyManagementFacade: HistoryManagementFacade by inject()
-    val raftNode = RaftNode.initialize(id)
-
 
     // Starting point for a Ktor app:
     routing {

@@ -43,7 +43,11 @@ import java.nio.charset.Charset;
  * Run this application three times with three different parameter set-up a
  * ratis cluster which maintain a counter value replicated in each server memory
  */
-class RaftNode(peer: RaftPeer, storageDir: File?) : Closeable {
+class RaftNode(
+    peer: RaftPeer,
+    storageDir: File?,
+    raftGroup: RaftGroup
+) : Closeable {
     private val server: RaftServer
 
     private val client: RaftClient
@@ -64,13 +68,18 @@ class RaftNode(peer: RaftPeer, storageDir: File?) : Closeable {
 
         //create and start the Raft server
         server = RaftServer.newBuilder()
-            .setGroup(Constants.RAFT_GROUP)
+            .setGroup(raftGroup)
             .setProperties(properties)
             .setServerId(peer.id)
             .setStateMachine(counterStateMachine)
             .build()
 
+        println(raftGroup)
+        println(peer.address)
+
         client = buildClient(peer)
+
+        this.start()
     }
 
 
@@ -104,21 +113,5 @@ class RaftNode(peer: RaftPeer, storageDir: File?) : Closeable {
 
     fun incrementValue() {
         client.io().send(Message.valueOf("INCREMENT"))
-    }
-
-
-    companion object {
-        fun initialize(peerId: Int): RaftNode {
-
-            //find current peer object based on application parameter
-            val currentPeer: RaftPeer = Constants.PEERS[peerId - 1]
-
-            //start a counter server
-            val storageDir = File("./" + currentPeer.id)
-            val counterServer = RaftNode(currentPeer, storageDir)
-            counterServer.start()
-
-            return counterServer
-        }
     }
 }
