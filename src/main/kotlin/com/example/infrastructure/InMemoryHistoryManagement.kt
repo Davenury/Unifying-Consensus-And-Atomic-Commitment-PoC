@@ -5,7 +5,7 @@ import com.example.raft.History
 import org.slf4j.LoggerFactory
 
 class InMemoryHistoryManagement(
-    val consensusProtocol: ConsensusProtocol<Change, History>
+    private val consensusProtocol: ConsensusProtocol<Change, History>
 ) : HistoryManagement(consensusProtocol) {
     private val historyStorage: MutableList<Change> = mutableListOf()
 
@@ -16,11 +16,11 @@ class InMemoryHistoryManagement(
             .let {
                 when (it) {
                     ConsensusFailure -> {
-                        HistoryChangeFailure
+                        HistoryChangeResult.HistoryChangeFailure
                     }
                     ConsensusSuccess -> {
                         historyStorage.add(change)
-                        HistoryChangeSuccess
+                        HistoryChangeResult.HistoryChangeSuccess
                     }
                 }
             }

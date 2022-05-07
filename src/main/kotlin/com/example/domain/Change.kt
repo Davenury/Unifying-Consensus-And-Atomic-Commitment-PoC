@@ -27,6 +27,7 @@ sealed class Change(
     val operation: Operation
 ) {
     companion object {
+
         fun fromJson(json: String): Change = Gson()
             .fromJson(json, HashMap<String, String>().javaClass)
             .let { ChangeDto(it) }.toChange()

@@ -9,10 +9,10 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
             .let {
                 when (it) {
                     ConsensusFailure -> {
-                        HistoryChangeFailure
+                        HistoryChangeResult.HistoryChangeFailure
                     }
                     ConsensusSuccess -> {
-                        HistoryChangeSuccess
+                        HistoryChangeResult.HistoryChangeSuccess
                     }
                 }
             }
@@ -20,6 +20,7 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
     abstract fun getLastChange(): Change?
 }
 
-sealed class HistoryChangeResult
-object HistoryChangeSuccess : HistoryChangeResult()
-object HistoryChangeFailure : HistoryChangeResult()
+enum class HistoryChangeResult {
+    HistoryChangeSuccess, HistoryChangeFailure
+
+}

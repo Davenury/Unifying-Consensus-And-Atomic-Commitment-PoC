@@ -1,6 +1,7 @@
 package com.example.raft
 
 import com.example.domain.Change
+import com.example.objectMapper
 import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.ObjectMapper
 
@@ -8,7 +9,6 @@ typealias History = MutableList<Change>
 
 
 class HistoryStateMachine(override var state: History = mutableListOf()) : StateMachine<History>(state) {
-    val objectMapper = ObjectMapper()
 
     override fun serializeState(): String =
         objectMapper.writeValueAsString(state)

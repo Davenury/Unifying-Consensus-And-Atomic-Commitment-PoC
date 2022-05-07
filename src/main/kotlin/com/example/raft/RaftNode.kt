@@ -8,6 +8,7 @@ import org.apache.ratis.grpc.GrpcFactory
 import org.apache.ratis.protocol.ClientId
 import org.apache.ratis.protocol.Message
 import org.apache.ratis.protocol.RaftPeer
+import org.apache.ratis.protocol.SetConfigurationRequest
 import org.apache.ratis.server.RaftServer
 import org.apache.ratis.server.RaftServerConfigKeys
 import org.apache.ratis.util.NetUtils
@@ -51,6 +52,7 @@ abstract class RaftNode(
             .setServerId(peer.id)
             .setStateMachine(stateMachine)
             .build()
+
 
         client = buildClient(peer)
 

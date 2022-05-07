@@ -13,6 +13,7 @@ import io.ktor.serialization.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import org.koin.ktor.ext.Koin
+import org.koin.ktor.ext.modules
 
 fun main(args: Array<String>) {
 

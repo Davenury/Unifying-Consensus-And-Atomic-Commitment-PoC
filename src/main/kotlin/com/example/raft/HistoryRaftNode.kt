@@ -2,9 +2,7 @@ package com.example.raft
 
 import com.example.domain.*
 import com.example.infrastructure.RatisHistoryManagement
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import org.apache.ratis.thirdparty.com.google.gson.Gson
-import org.apache.ratis.thirdparty.com.google.gson.internal.LinkedTreeMap
+import com.example.objectMapper
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.File
@@ -13,8 +11,6 @@ class HistoryRaftNode(peerId: Int) :
     RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId")),
     Closeable,
     ConsensusProtocol<Change, History> {
-
-    val objectMapper = jacksonObjectMapper()
 
     override fun proposeChange(change: Change): ConsensusResult {
         val msg = objectMapper.writeValueAsString(change)
@@ -26,8 +22,8 @@ class HistoryRaftNode(peerId: Int) :
         val msg = HistoryStateMachine.OperationType.STATE.toString()
         val result = queryData(msg)
         return try {
-            Gson()
-                .fromJson(result, mutableListOf<LinkedTreeMap<String, String>>().javaClass)
+            objectMapper
+                .readValue(result, mutableListOf<LinkedHashMap<String, String>>().javaClass)
                 .map { ChangeDto(it).toChange() }
                 .toMutableList()
         } catch (e: Exception) {
