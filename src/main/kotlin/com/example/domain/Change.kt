@@ -1,7 +1,7 @@
 package com.example.domain
 
+import com.example.objectMapper
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
-import org.apache.ratis.thirdparty.com.google.gson.Gson
 import org.slf4j.LoggerFactory
 
 data class ChangeDto(
@@ -28,8 +28,8 @@ sealed class Change(
 ) {
     companion object {
 
-        fun fromJson(json: String): Change = Gson()
-            .fromJson(json, HashMap<String, String>().javaClass)
+        fun fromJson(json: String): Change = objectMapper
+            .readValue(json, HashMap<String, String>().javaClass)
             .let { ChangeDto(it) }.toChange()
     }
 }
