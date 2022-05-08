@@ -42,6 +42,6 @@ class InMemoryHistoryManagementSpec {
     }
 
     private val consensusProtocol = DummyConsensusProtocol
-    private lateinit var subject: HistoryManagement
+    private lateinit var subject: InMemoryHistoryManagement
 
 }

@@ -1,26 +1,29 @@
 package com.example.infrastructure
 
 import com.example.domain.*
+import com.example.raft.History
 import org.slf4j.LoggerFactory
 
 class InMemoryHistoryManagement(
-    consensusProtocol: ConsensusProtocol
-): HistoryManagement(consensusProtocol) {
+    private val consensusProtocol: ConsensusProtocol<Change, History>
+) : HistoryManagement(consensusProtocol) {
     private val historyStorage: MutableList<Change> = mutableListOf()
 
     // TODO: think about what's better - if change asks consensus protocol if it
     // can be done or if something higher asks and then calls change
     override fun change(change: Change) =
         consensusProtocol.proposeChange(change)
-            .let { when(it) {
-                ConsensusFailure -> {
-                    HistoryChangeFailure
+            .let {
+                when (it) {
+                    ConsensusFailure -> {
+                        HistoryChangeResult.HistoryChangeFailure
+                    }
+                    ConsensusSuccess -> {
+                        historyStorage.add(change)
+                        HistoryChangeResult.HistoryChangeSuccess
+                    }
                 }
-                ConsensusSuccess -> {
-                    historyStorage.add(change)
-                    HistoryChangeSuccess
-                }
-            } }
+            }
 
     override fun getLastChange(): Change? =
         try {
