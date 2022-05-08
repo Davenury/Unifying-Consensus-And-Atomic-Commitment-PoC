@@ -25,16 +25,23 @@ class HistoryStateMachine(override var state: History = mutableListOf()) : State
 
     override fun queryOperation(operation: String): String =
         try {
-            when (OperationType.valueOf(operation)) {
-                OperationType.LAST -> state.last().let { objectMapper.writeValueAsString(it) }
-                OperationType.STATE -> serializeState()
-            }
+            OperationType.valueOf(operation).invokeOperation(state)
         } catch (e: java.lang.IllegalArgumentException) {
             "INVALID_OPERATION"
         }
 
     enum class OperationType {
-        LAST,
-        STATE,
+        LAST {
+            override fun invokeOperation(state: History): String {
+                return state.last().let { objectMapper.writeValueAsString(it) }
+            }
+        },
+        STATE {
+            override fun invokeOperation(state: History): String {
+                return objectMapper.writeValueAsString(state)
+            }
+        };
+
+        abstract fun invokeOperation(state: History): String
     }
 }

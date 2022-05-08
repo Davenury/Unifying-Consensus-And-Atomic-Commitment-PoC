@@ -35,6 +35,10 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.13.2.2")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.2")
 
+    // config reading
+    implementation("com.sksamuel.hoplite:hoplite-core:2.0.4")
+    implementation("com.sksamuel.hoplite:hoplite-hocon:2.0.4")
+
 
     implementation("org.apache.ratis:ratis:$ratis_version")
     implementation("org.apache.ratis:ratis-proto:$ratis_version")
@@ -51,7 +55,7 @@ dependencies {
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
 }
 
 tasks.test {
