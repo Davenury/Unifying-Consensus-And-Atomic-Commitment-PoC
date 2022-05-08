@@ -8,7 +8,6 @@ import org.apache.ratis.grpc.GrpcFactory
 import org.apache.ratis.protocol.ClientId
 import org.apache.ratis.protocol.Message
 import org.apache.ratis.protocol.RaftPeer
-import org.apache.ratis.protocol.SetConfigurationRequest
 import org.apache.ratis.server.RaftServer
 import org.apache.ratis.server.RaftServerConfigKeys
 import org.apache.ratis.util.NetUtils
@@ -21,19 +20,17 @@ abstract class RaftNode(
     peerId: Int,
     stateMachine: StateMachine<*>,
     storageDir: File?
-) :
-    Closeable {
-    val server: RaftServer
+) : Closeable {
+    private val server: RaftServer
 
-    val client: RaftClient
+    private val client: RaftClient
 
-    val peer: RaftPeer
+    private val peer: RaftPeer
 
     init {
         //create a property object
         val properties = RaftProperties()
 
-        println(Constants.PEERS)
         peer = Constants.PEERS[peerId - 1]
 
         //set the storage directory (different for each peer) in RaftProperty object
