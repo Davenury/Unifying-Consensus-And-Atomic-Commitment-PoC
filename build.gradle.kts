@@ -29,7 +29,6 @@ dependencies {
     implementation("io.ktor:ktor-server-netty:$ktor_version")
     implementation("io.ktor:ktor-serialization:$ktor_version")
     implementation("ch.qos.logback:logback-classic:$logback_version")
-    implementation("io.insert-koin:koin-ktor:3.1.6")
 
     // object mapper
     implementation("com.fasterxml.jackson.core:jackson-databind:2.13.2.2")

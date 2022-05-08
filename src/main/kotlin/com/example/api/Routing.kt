@@ -8,11 +8,8 @@ import io.ktor.application.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
-import org.koin.ktor.ext.inject
 
-fun Application.configureRouting() {
-
-    val historyManagement: HistoryManagement by inject()
+fun Application.configureRouting(historyManagement: HistoryManagement) {
 
     // Starting point for a Ktor app:
     routing {
@@ -23,7 +20,6 @@ fun Application.configureRouting() {
         }
         get("/change") {
             val result = historyManagement.getLastChange()
-
             call.respond((result ?: ErrorMessage("Error")).let { objectMapper.writeValueAsString(it) })
         }
 
