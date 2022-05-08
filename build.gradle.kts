@@ -29,11 +29,14 @@ dependencies {
     implementation("io.ktor:ktor-server-netty:$ktor_version")
     implementation("io.ktor:ktor-serialization:$ktor_version")
     implementation("ch.qos.logback:logback-classic:$logback_version")
-    implementation("io.insert-koin:koin-ktor:3.1.6")
 
     // object mapper
     implementation("com.fasterxml.jackson.core:jackson-databind:2.13.2.2")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.2")
+
+    // config reading
+    implementation("com.sksamuel.hoplite:hoplite-core:2.0.4")
+    implementation("com.sksamuel.hoplite:hoplite-hocon:2.0.4")
 
 
     implementation("org.apache.ratis:ratis:$ratis_version")
@@ -51,7 +54,7 @@ dependencies {
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
 }
 
 tasks.test {

@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.api.configureRouting
+import com.example.domain.ErrorMessage
 import com.example.domain.MissingParameterException
 import com.example.domain.UnknownOperationException
 import com.example.infrastructure.RatisHistoryManagement
@@ -12,8 +13,6 @@ import io.ktor.response.*
 import io.ktor.serialization.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
-import org.koin.ktor.ext.Koin
-import org.koin.ktor.ext.modules
 
 fun main(args: Array<String>) {
 
@@ -25,18 +24,20 @@ fun main(args: Array<String>) {
             json()
         }
 
-        install(Koin) {
-            modules(historyManagementModule)
-        }
-
         install(StatusPages) {
             exception<MissingParameterException> { cause ->
-                call.respondText(status = HttpStatusCode.BadRequest, text = "Missing parameter: ${cause.message}")
+                call.respond(status = HttpStatusCode.BadRequest, ErrorMessage("Missing parameter: ${cause.message}"))
             }
             exception<UnknownOperationException> { cause ->
-                call.respondText(
+                call.respond(
                     status = HttpStatusCode.BadRequest,
-                    text = "Unknown operation to perform: ${cause.desiredOperationName}"
+                    ErrorMessage("Unknown operation to perform: ${cause.desiredOperationName}")
+                )
+            }
+            exception<Throwable> { cause ->
+                call.respond(
+                    status = HttpStatusCode.InternalServerError,
+                    ErrorMessage("UnexpectedError, $cause")
                 )
             }
         }

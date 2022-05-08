@@ -20,7 +20,6 @@ fun Application.configureRouting(historyManagement: HistoryManagement) {
         }
         get("/change") {
             val result = historyManagement.getLastChange()
-
             call.respond((result ?: ErrorMessage("Error")).let { objectMapper.writeValueAsString(it) })
         }
 

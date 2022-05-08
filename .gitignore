@@ -34,3 +34,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+[0-9]*
+history-*
