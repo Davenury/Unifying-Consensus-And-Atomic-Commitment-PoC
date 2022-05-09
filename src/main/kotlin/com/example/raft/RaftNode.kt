@@ -8,6 +8,7 @@ import org.apache.ratis.grpc.GrpcFactory
 import org.apache.ratis.protocol.ClientId
 import org.apache.ratis.protocol.Message
 import org.apache.ratis.protocol.RaftPeer
+import org.apache.ratis.protocol.SetConfigurationRequest
 import org.apache.ratis.server.RaftServer
 import org.apache.ratis.server.RaftServerConfigKeys
 import org.apache.ratis.util.NetUtils
@@ -17,21 +18,18 @@ import java.io.IOException
 import java.nio.charset.Charset
 
 abstract class RaftNode(
-    peerId: Int,
+    peer: RaftPeer,
     stateMachine: StateMachine<*>,
-    storageDir: File?
+    peers: List<RaftPeer> = Constants.PEERS,
+    storageDir: File? = File("./history-${peer.id}")
 ) : Closeable {
     private val server: RaftServer
 
     private val client: RaftClient
 
-    private val peer: RaftPeer
-
     init {
         //create a property object
         val properties = RaftProperties()
-
-        peer = Constants.PEERS[peerId - 1]
 
         //set the storage directory (different for each peer) in RaftProperty object
         RaftServerConfigKeys.setStorageDir(properties, listOf(storageDir))
@@ -44,7 +42,7 @@ abstract class RaftNode(
 
         //create and start the Raft server
         server = RaftServer.newBuilder()
-            .setGroup(Constants.RAFT_GROUP)
+            .setGroup(Constants.createRaftGroups(peers))
             .setProperties(properties)
             .setServerId(peer.id)
             .setStateMachine(stateMachine)
@@ -94,4 +92,12 @@ abstract class RaftNode(
         .content
         .toString(Charset.defaultCharset());
 
+    fun getPeersGroups(): List<RaftPeer> =
+        server.groups.flatMap { it.peers }
+
+    fun addPeer(peer: RaftPeer) {
+        val newPeers = server.groups.flatMap { it.peers }.toSet().plus(peer).toList()
+        val serverConfiguration = SetConfigurationRequest(client.id, server.id, server.groupIds.first(), 1, newPeers)
+        server.setConfiguration(serverConfiguration)
+    }
 }
