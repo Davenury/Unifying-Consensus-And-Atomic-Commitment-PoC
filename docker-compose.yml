@@ -1,0 +1,39 @@
+version: "3.3"
+services:
+  _image_build:
+    image: poc
+    entrypoint: /bin/bash
+    command: 'echo build completed'
+    build:
+      context: .
+      dockerfile: Dockerfile
+  peer1:
+    image: poc
+    depends_on:
+      - _image_build
+    ports:
+      - "8081:8080"
+      - "10024"
+    environment:
+      - RAFT_NODE_ID=1
+      - CONFIG_FILE=application-compose.conf
+  peer2:
+    image: poc
+    depends_on:
+      - _image_build
+    ports:
+      - "8082:8080"
+      - "10124"
+    environment:
+      - RAFT_NODE_ID=2
+      - CONFIG_FILE=application-compose.conf
+  peer3:
+    image: poc
+    depends_on:
+      - _image_build
+    ports:
+      - "8083:8080"
+      - "11124"
+    environment:
+      - RAFT_NODE_ID=3
+      - CONFIG_FILE=application-compose.conf

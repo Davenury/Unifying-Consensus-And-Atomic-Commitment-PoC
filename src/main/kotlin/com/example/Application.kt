@@ -16,10 +16,10 @@ import io.ktor.server.netty.*
 
 fun main(args: Array<String>) {
 
-    val id = args[0].toInt()
-    val raftNode = HistoryRaftNode(id)
+    val conf = getIdAndOffset(args)
+    val raftNode = HistoryRaftNode(conf.nodeId)
     val historyManagement = RatisHistoryManagement(raftNode)
-    embeddedServer(Netty, port = 8080 + id, host = "0.0.0.0") {
+    embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
         install(ContentNegotiation) {
             json()
         }
@@ -44,4 +44,19 @@ fun main(args: Array<String>) {
 
         configureRouting(historyManagement)
     }.start(wait = true)
+}
+
+data class NodeIdAndPortOffset(
+    val nodeId: Int,
+    val portOffset: Int
+)
+
+fun getIdAndOffset(args: Array<String>): NodeIdAndPortOffset {
+    if (args.isNotEmpty()) {
+        return NodeIdAndPortOffset(nodeId = args[0].toInt(), portOffset = args[0].toInt())
+    }
+    
+    val id = System.getenv()["RAFT_NODE_ID"]?.toInt() ?: throw RuntimeException("Provide either arg or RAFT_NODE_ID env variable to represent id of node")
+
+    return NodeIdAndPortOffset(nodeId = id, portOffset = 0)
 }

@@ -8,5 +8,5 @@ data class ServerConfig(val addresses: List<String>, val root: RootConfig)
 data class RootConfig(val storage: StorageConfig)
 data class StorageConfig(val path: String)
 
-fun loadConfig() =
-    ConfigLoader().loadConfigOrThrow<Config>("/application.conf")
+fun loadConfig(configFile: String) =
+    ConfigLoader().loadConfigOrThrow<Config>(configFile)

@@ -9,7 +9,6 @@ import java.io.File
 
 class HistoryRaftNode(peerId: Int) :
     RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId")),
-    Closeable,
     ConsensusProtocol<Change, History> {
 
     override fun proposeChange(change: Change): ConsensusResult {
