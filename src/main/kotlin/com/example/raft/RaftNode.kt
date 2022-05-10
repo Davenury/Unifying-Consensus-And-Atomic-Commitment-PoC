@@ -5,10 +5,8 @@ import org.apache.ratis.conf.Parameters
 import org.apache.ratis.conf.RaftProperties
 import org.apache.ratis.grpc.GrpcConfigKeys
 import org.apache.ratis.grpc.GrpcFactory
-import org.apache.ratis.protocol.ClientId
-import org.apache.ratis.protocol.Message
-import org.apache.ratis.protocol.RaftPeer
-import org.apache.ratis.protocol.SetConfigurationRequest
+import org.apache.ratis.protocol.*
+import org.apache.ratis.rpc.CallId
 import org.apache.ratis.server.RaftServer
 import org.apache.ratis.server.RaftServerConfigKeys
 import org.apache.ratis.util.NetUtils
@@ -18,18 +16,20 @@ import java.io.IOException
 import java.nio.charset.Charset
 
 abstract class RaftNode(
-    peer: RaftPeer,
-    stateMachine: StateMachine<*>,
-    peers: List<RaftPeer> = Constants.PEERS,
+    val peer: RaftPeer,
+    private val stateMachine: StateMachine<*>,
+    private var peers: List<RaftPeer>,
     storageDir: File? = File("./history-${peer.id}")
 ) : Closeable {
-    private val server: RaftServer
+    private var server: RaftServer
 
-    private val client: RaftClient
+    private var client: RaftClient
+
+    private val properties: RaftProperties = RaftProperties()
+
 
     init {
         //create a property object
-        val properties = RaftProperties()
 
         //set the storage directory (different for each peer) in RaftProperty object
         RaftServerConfigKeys.setStorageDir(properties, listOf(storageDir))
@@ -41,13 +41,7 @@ abstract class RaftNode(
         //create the counter state machine which hold the counter value
 
         //create and start the Raft server
-        server = RaftServer.newBuilder()
-            .setGroup(Constants.createRaftGroups(peers))
-            .setProperties(properties)
-            .setServerId(peer.id)
-            .setStateMachine(stateMachine)
-            .build()
-
+        server = buildServer(peer, peers)
 
         client = buildClient(peer)
 
@@ -68,15 +62,23 @@ abstract class RaftNode(
 
     private fun buildClient(peer: RaftPeer): RaftClient {
         val raftProperties = RaftProperties()
-        val builder = RaftClient.newBuilder()
+        return RaftClient.newBuilder()
             .setProperties(raftProperties)
             .setRaftGroup(Constants.oneNodeGroup(peer))
             .setClientRpc(
                 GrpcFactory(Parameters())
                     .newRaftClientRpc(ClientId.randomId(), raftProperties)
             )
-        return builder.build()
+            .build()
     }
+
+    private fun buildServer(peer: RaftPeer, peers: List<RaftPeer>): RaftServer =
+        RaftServer.newBuilder()
+            .setGroup(Constants.createRaftGroups(peers))
+            .setProperties(properties)
+            .setServerId(peer.id)
+            .setStateMachine(stateMachine)
+            .build()
 
     fun queryData(msg: String): String = msg
         .let { Message.valueOf(it) }
@@ -92,12 +94,33 @@ abstract class RaftNode(
         .content
         .toString(Charset.defaultCharset());
 
-    fun getPeersGroups(): List<RaftPeer> =
-        server.groups.flatMap { it.peers }
-
-    fun addPeer(peer: RaftPeer) {
-        val newPeers = server.groups.flatMap { it.peers }.toSet().plus(peer).toList()
-        val serverConfiguration = SetConfigurationRequest(client.id, server.id, server.groupIds.first(), 1, newPeers)
-        server.setConfiguration(serverConfiguration)
+    fun newPeerSet(peers: List<RaftPeer>) {
+        close()
+        server = buildServer(peer,peers)
+        start()
+//        val groupId = client.getGroupManagementApi(server.id).list().groupIds.first()
+//
+//        val reply = client.clientRpc.sendRequest(
+//            SetConfigurationRequest(
+//                client.id,
+//                client.leaderId,
+//                groupId,
+//                CallId.getAndIncrement(),
+//                peers
+//            )
+//        )
+//
+//        println(reply)
     }
+
+//    fun addPeer(peer: RaftPeer) {
+//        val groupId = client.getGroupManagementApi(server.id).list().groupIds.first()
+//        val reply = server.groupManagement(
+//            GroupManagementRequest
+//                .newAdd(client.id, server.id, CallId.getAndIncrement(), Constants.oneNodeGroup(peer))
+//        )
+//        val reply = client.getGroupManagementApi(server.id).add(Constants.oneNodeGroup(peer))
+//        println(reply)
+//    }
+
 }

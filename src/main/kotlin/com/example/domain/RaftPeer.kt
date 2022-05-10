@@ -2,7 +2,14 @@ package com.example.domain
 
 import org.apache.ratis.protocol.RaftPeer
 
-object RaftPeerDto {
-    fun fromJson(json: Map<String, String>): RaftPeer =
-        RaftPeer.newBuilder().setId(json["peerId"]).setAddress(json["address"]).build()
+
+data class RaftPeerDto(val peerId: String, val address: String, val httpAddress: String) {
+    companion object {
+        fun fromJson(json: Map<String, String>): RaftPeerDto =
+            RaftPeerDto(json["peerId"]!!, json["address"]!!, json["httpAddress"]!!)
+    }
+
+    fun toRaftPeer(): RaftPeer = RaftPeer.newBuilder().setId(peerId).setAddress(address).build()
+
+    fun getPort() = address.split(":").last().toInt()
 }
