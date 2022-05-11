@@ -1,9 +1,8 @@
 package com.example
 
-import com.example.api.configureRouting
-import com.example.domain.ErrorMessage
-import com.example.domain.MissingParameterException
-import com.example.domain.UnknownOperationException
+import com.example.api.configureSampleRouting
+import com.example.api.protocolRouting
+import com.example.domain.*
 import com.example.infrastructure.RatisHistoryManagement
 import com.example.raft.HistoryRaftNode
 import io.ktor.application.*
@@ -19,6 +18,7 @@ fun main(args: Array<String>) {
     val conf = getIdAndOffset(args)
     val raftNode = HistoryRaftNode(conf.nodeId)
     val historyManagement = RatisHistoryManagement(raftNode)
+    val protocol = GPACProtocolImpl(historyManagement)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
         install(ContentNegotiation) {
             json()
@@ -34,6 +34,9 @@ fun main(args: Array<String>) {
                     ErrorMessage("Unknown operation to perform: ${cause.desiredOperationName}")
                 )
             }
+            exception<NotElectingYou> { cause ->
+                call.respond(status = HttpStatusCode.UnprocessableEntity, ErrorMessage("You're not valid leader. My Ballot Number is: ${cause.ballotNumber}"))
+            }
             exception<Throwable> { cause ->
                 call.respond(
                     status = HttpStatusCode.InternalServerError,
@@ -42,7 +45,8 @@ fun main(args: Array<String>) {
             }
         }
 
-        configureRouting(historyManagement)
+        configureSampleRouting(historyManagement)
+        protocolRouting(protocol)
     }.start(wait = true)
 }
 

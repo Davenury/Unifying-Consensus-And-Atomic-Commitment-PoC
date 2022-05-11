@@ -9,20 +9,21 @@ import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 
-fun Application.configureRouting(historyManagement: HistoryManagement) {
+fun Application.configureSampleRouting(historyManagement: HistoryManagement) {
 
     // Starting point for a Ktor app:
     routing {
-        post("/change") {
-            val change = ChangeDto(call.receive())
-            val result = historyManagement.change(change.toChange())
-            call.respond(result.toString())
+        route("/change") {
+            post {
+                val change = ChangeDto(call.receive())
+                val result = historyManagement.change(change.toChange())
+                call.respond(result.toString())
+            }
+            get {
+                val result = historyManagement.getLastChange()
+                call.respond((result ?: ErrorMessage("Error")).let { objectMapper.writeValueAsString(it) })
+            }
         }
-        get("/change") {
-            val result = historyManagement.getLastChange()
-            call.respond((result ?: ErrorMessage("Error")).let { objectMapper.writeValueAsString(it) })
-        }
-
     }
 }
 

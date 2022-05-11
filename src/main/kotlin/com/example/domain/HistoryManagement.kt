@@ -18,9 +18,14 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
             }
 
     abstract fun getLastChange(): Change?
+
+    /**
+     * function used to check if history can be build given another change to perform
+     * */
+    abstract fun canBeBuild(newChange: Change): Boolean
+    abstract fun build()
 }
 
 enum class HistoryChangeResult {
     HistoryChangeSuccess, HistoryChangeFailure
-
 }
