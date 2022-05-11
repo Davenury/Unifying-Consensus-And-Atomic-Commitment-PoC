@@ -1,29 +1,11 @@
 package com.example.raft
 
+import com.example.domain.RaftPeerDto
 import com.example.loadConfig
 import org.apache.ratis.protocol.RaftGroup
 import org.apache.ratis.protocol.RaftGroupId
 import org.apache.ratis.protocol.RaftPeer
 import java.util.*
-
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 
 
 /**
@@ -34,15 +16,15 @@ object Constants {
     val PATH: String
     val CLUSTER_GROUP_ID: UUID
     val RAFT_GROUP: RaftGroup
+    val PEERS_DTO: List<RaftPeerDto>
 
     init {
         val config = loadConfig("/${System.getenv("CONFIG_FILE") ?: "application.conf"}")
         PATH = config.raft.server.root.storage.path
-        PEERS = config.raft.server.addresses.mapIndexed { index, address ->
-            RaftPeer.newBuilder().setId("n$index").setAddress(address).build()
-        }
+        PEERS_DTO = config.raft.server.peers
+        PEERS = PEERS_DTO.map { it.toRaftPeer() }
         CLUSTER_GROUP_ID = UUID.fromString(config.raft.clusterGroupId)
-        RAFT_GROUP = RaftGroup.valueOf(RaftGroupId.valueOf(CLUSTER_GROUP_ID), PEERS)
+        RAFT_GROUP = createRaftGroups()
     }
 
     fun oneNodeGroup(peer: RaftPeer): RaftGroup {
@@ -50,4 +32,7 @@ object Constants {
             RaftGroupId.valueOf(CLUSTER_GROUP_ID), peer
         )
     }
+
+    fun createRaftGroups(peers: List<RaftPeer> = PEERS): RaftGroup =
+        RaftGroup.valueOf(RaftGroupId.valueOf(CLUSTER_GROUP_ID), peers)
 }

@@ -3,12 +3,13 @@ package com.example.raft
 import com.example.domain.*
 import com.example.infrastructure.RatisHistoryManagement
 import com.example.objectMapper
+import org.apache.ratis.protocol.RaftPeer
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.File
 
-class HistoryRaftNode(peerId: Int) :
-    RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId")),
+class HistoryRaftNode(raftPeer: RaftPeer, peers: List<RaftPeer>) :
+    RaftNode(raftPeer, HistoryStateMachine(), peers),
     ConsensusProtocol<Change, History> {
 
     override fun proposeChange(change: Change): ConsensusResult {

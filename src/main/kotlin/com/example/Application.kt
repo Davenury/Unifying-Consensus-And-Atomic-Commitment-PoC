@@ -3,6 +3,7 @@ package com.example
 import com.example.api.configureRouting
 import com.example.domain.ErrorMessage
 import com.example.domain.MissingParameterException
+import com.example.domain.RaftPeerDto
 import com.example.domain.UnknownOperationException
 import com.example.infrastructure.RatisHistoryManagement
 import com.example.raft.HistoryRaftNode
@@ -14,12 +15,15 @@ import io.ktor.serialization.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 
+
 fun main(args: Array<String>) {
 
-    val conf = getIdAndOffset(args)
-    val raftNode = HistoryRaftNode(conf.nodeId)
-    val historyManagement = RatisHistoryManagement(raftNode)
-    embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
+    val config = ConfigStore(args)
+
+    var raftNode = HistoryRaftNode(config.peer.toRaftPeer(), config.peers.toRaftPeers())
+    var historyManagement = RatisHistoryManagement(raftNode)
+
+    embeddedServer(Netty, port = config.insidePort, host = "0.0.0.0") {
         install(ContentNegotiation) {
             json()
         }
@@ -34,29 +38,10 @@ fun main(args: Array<String>) {
                     ErrorMessage("Unknown operation to perform: ${cause.desiredOperationName}")
                 )
             }
-            exception<Throwable> { cause ->
-                call.respond(
-                    status = HttpStatusCode.InternalServerError,
-                    ErrorMessage("UnexpectedError, $cause")
-                )
-            }
         }
 
-        configureRouting(historyManagement)
+        configureRouting(historyManagement, raftNode, config.peers)
     }.start(wait = true)
 }
 
-data class NodeIdAndPortOffset(
-    val nodeId: Int,
-    val portOffset: Int
-)
-
-fun getIdAndOffset(args: Array<String>): NodeIdAndPortOffset {
-    if (args.isNotEmpty()) {
-        return NodeIdAndPortOffset(nodeId = args[0].toInt(), portOffset = args[0].toInt())
-    }
-    
-    val id = System.getenv()["RAFT_NODE_ID"]?.toInt() ?: throw RuntimeException("Provide either arg or RAFT_NODE_ID env variable to represent id of node")
-
-    return NodeIdAndPortOffset(nodeId = id, portOffset = 0)
-}
+fun List<RaftPeerDto>.toRaftPeers() = this.map { it.toRaftPeer() }
