@@ -76,7 +76,6 @@ class GPACProtocolImpl(
         val acceptVal = if (electResponses.all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
 
         val agreedResponses = getAgreedResponses(change, otherPeers, acceptVal)
-        println("here: ${agreedResponses.size}, ${otherPeers.size}")
         if (agreedResponses.size < otherPeers.size / 2) throw TooFewResponsesException()
 
         this.state = this.state.copy(decision = true)
