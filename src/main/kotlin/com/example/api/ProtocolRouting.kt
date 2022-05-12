@@ -12,7 +12,7 @@ fun Application.protocolRouting(protocol: GPACProtocol, otherPeers: List<String>
 
     routing {
         post("/create_change") {
-            val change = call.receive<ChangeDto>()
+            val change = ChangeDto(call.receive())
             protocol.performProtocolAsLeader(change, otherPeers)
             call.respond(HttpStatusCode.OK)
         }

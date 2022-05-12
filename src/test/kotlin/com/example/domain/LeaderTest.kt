@@ -20,7 +20,7 @@ class LeaderTest {
     fun `should load only other peers`() {
         val nodeId = 2
 
-        expectThat(getOtherPeers(allPeers, nodeId)).containsExactlyInAnyOrder("http://localhost:8081", "http://localhost:8083")
+        expectThat(getOtherPeers(allPeers, nodeId)).containsExactlyInAnyOrder("localhost:8081", "localhost:8083")
     }
 
     @Test
@@ -70,7 +70,7 @@ class LeaderTest {
         PeerThree.verifyApplyStub(1)
     }
 
-    private val allPeers = listOf("http://localhost:8081", "http://localhost:8082", "http://localhost:8083")
+    private val allPeers = listOf("localhost:8081", "localhost:8082", "localhost:8083")
     private val otherPeers = getOtherPeers(allPeers, 1)
     private val consensusProtocol = DummyConsensusProtocol
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)

@@ -87,7 +87,7 @@ class GPACProtocolImpl(
     private suspend fun getElectedYouResponses(change: ChangeDto, otherPeers: List<String>): List<ElectedYou> =
         otherPeers.mapNotNull {
             try {
-                httpClient.post<ElectedYou>("$it/elect") {
+                httpClient.post<ElectedYou>("http://$it/elect") {
                     method = HttpMethod.Post
                     headers {
                         append("Content-Type", "application/json")
@@ -104,7 +104,7 @@ class GPACProtocolImpl(
     private suspend fun getAgreedResponses(change: ChangeDto, otherPeers: List<String>, acceptVal: Accept): List<Agreed> =
         otherPeers.mapNotNull {
             try {
-                httpClient.post<Agreed>("$it/ft-agree") {
+                httpClient.post<Agreed>("http://$it/ft-agree") {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
                     body = Agree(this@GPACProtocolImpl.state.ballotNumber, acceptVal, change)
@@ -118,7 +118,7 @@ class GPACProtocolImpl(
     private suspend fun sendApplyMessages(change: ChangeDto, otherPeers: List<String>) {
         otherPeers.forEach {
             try {
-                httpClient.post("$it/apply") {
+                httpClient.post("http://$it/apply") {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
                     body = Apply(this@GPACProtocolImpl.state.ballotNumber, this@GPACProtocolImpl.state.decision, change)
