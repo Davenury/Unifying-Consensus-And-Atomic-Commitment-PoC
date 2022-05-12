@@ -1,7 +1,8 @@
 package com.example.domain
 
 enum class Accept {
-    COMMIT, ABORT
+    COMMIT,
+    ABORT;
 }
 data class ElectMe(val ballotNumber: Int, val change: ChangeDto)
 data class ElectedYou(val ballotNumber: Int, val initVal: Accept, val acceptNum: Int, val acceptVal: Accept?, val decision: Boolean)

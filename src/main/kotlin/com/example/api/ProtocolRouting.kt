@@ -1,18 +1,19 @@
 package com.example.api
 
 import com.example.domain.*
+import com.example.objectMapper
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 
-fun Application.protocolRouting(protocol: GPACProtocol) {
+fun Application.protocolRouting(protocol: GPACProtocol, otherPeers: List<String>) {
 
     routing {
         post("/create_change") {
             val change = call.receive<ChangeDto>()
-            protocol.performProtocolAsLeader(change)
+            protocol.performProtocolAsLeader(change, otherPeers)
             call.respond(HttpStatusCode.OK)
         }
 

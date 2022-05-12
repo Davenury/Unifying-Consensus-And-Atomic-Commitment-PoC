@@ -2,6 +2,7 @@ package com.example.domain
 
 import com.example.infrastructure.InMemoryHistoryManagement
 import com.example.utils.DummyConsensusProtocol
+import io.ktor.client.*
 import org.junit.jupiter.api.Test
 import strikt.api.expect
 import strikt.api.expectThat
@@ -12,7 +13,7 @@ class GPACProtocolSpec {
 
     private val consensusProtocol = DummyConsensusProtocol
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-    private val subject = GPACProtocolImpl(historyManagement)
+    private val subject = GPACProtocolImpl(historyManagement, 3, HttpClient())
 
     @Test
     fun `should return elected you, when ballot number is lower than proposed`() {
