@@ -7,6 +7,7 @@ import com.example.utils.DummyConsensusProtocol
 import com.example.utils.PeerThree
 import com.example.utils.PeerTwo
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
 import strikt.api.expectThrows
@@ -16,8 +17,21 @@ import strikt.assertions.isEqualTo
 
 class LeaderTest {
 
+    @BeforeEach
+    fun setup() {
+        subject = GPACProtocolImpl(historyManagement, 3, httpClient)
+    }
+
     @Test
     fun `should load only other peers`() {
+        val nodeId = 2
+
+        val allPeers = listOf("peer1:8080", "peer2:8080", "peer3:8080")
+        expectThat(getOtherPeers(allPeers, nodeId)).containsExactlyInAnyOrder("peer1:8080", "peer3:8080")
+    }
+
+    @Test
+    fun `should load only other peers - localhost version`() {
         val nodeId = 2
 
         expectThat(getOtherPeers(allPeers, nodeId)).containsExactlyInAnyOrder("localhost:8081", "localhost:8083")
@@ -74,7 +88,7 @@ class LeaderTest {
     private val otherPeers = getOtherPeers(allPeers, 1)
     private val consensusProtocol = DummyConsensusProtocol
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-    private val subject = GPACProtocolImpl(historyManagement, 3, httpClient)
+    private var subject = GPACProtocolImpl(historyManagement, 3, httpClient)
     private val changeDto = ChangeDto(mapOf(
         "operation" to "ADD_USER",
         "userName" to "userName"

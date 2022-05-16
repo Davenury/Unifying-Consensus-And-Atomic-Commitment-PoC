@@ -3,6 +3,7 @@ package com.example.domain
 import com.example.infrastructure.InMemoryHistoryManagement
 import com.example.utils.DummyConsensusProtocol
 import io.ktor.client.*
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expect
 import strikt.api.expectThat
@@ -13,7 +14,12 @@ class GPACProtocolSpec {
 
     private val consensusProtocol = DummyConsensusProtocol
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-    private val subject = GPACProtocolImpl(historyManagement, 3, HttpClient())
+    private var subject = GPACProtocolImpl(historyManagement, 3, HttpClient())
+
+    @BeforeEach
+    fun setup() {
+        subject = GPACProtocolImpl(historyManagement, 3, HttpClient())
+    }
 
     @Test
     fun `should return elected you, when ballot number is lower than proposed`() {
@@ -22,9 +28,8 @@ class GPACProtocolSpec {
         val result = subject.handleElect(message)
 
         expect {
-            // ballot number is unchanged for now
-            that(result.ballotNumber).isEqualTo(0)
-            that(subject.getState().ballotNumber).isEqualTo(0)
+            that(result).isEqualTo(ElectedYou(100000, Accept.COMMIT, 0, null, false))
+            that(subject.getTransaction(100000)!!.ballotNumber).isEqualTo(100000)
         }
     }
 
@@ -41,22 +46,36 @@ class GPACProtocolSpec {
 
     @Test
     fun `should return elected you with commit init val, when history can be built`() {
-        val message = ElectMe(1, changeDto)
+        val message = ElectMe(3, changeDto)
 
         val result = subject.handleElect(message)
 
         expectThat(result.initVal).isEqualTo(Accept.COMMIT)
-        expectThat(subject.getState().ballotNumber).isEqualTo(0)
+        expectThat(subject.getTransaction(3)).isEqualTo(Transaction(3, Accept.COMMIT, 0, null, false))
     }
 
     @Test
     fun `should change ballot number and return agreed, when asked to ft-agree on change`() {
+        subject.handleElect(ElectMe(100, changeDto))
         val message = Agree(100, Accept.COMMIT, changeDto)
 
         val result = subject.handleAgree(message)
 
         expectThat(result).isEqualTo(Agreed(100, Accept.COMMIT))
-        expectThat(subject.getState().ballotNumber).isEqualTo(100)
+        expectThat(subject.getTransaction(100)!!.ballotNumber).isEqualTo(100)
+        expectThat(subject.getBallotNumber()).isEqualTo(100)
+    }
+
+    @Test
+    fun `should throw IllegalState when trying to agree on transaction that wasn't in elect state`() {
+        val message = Agree(100, Accept.COMMIT, changeDto)
+
+        println(subject.getTransaction(100))
+        println(subject.getBallotNumber())
+
+        expectThrows<IllegalStateException> {
+            subject.handleAgree(message)
+        }
     }
 
     @Test
@@ -68,19 +87,23 @@ class GPACProtocolSpec {
     }
 
     @Test
-    fun `should apply change and state should reset after ending transaction`() {
-        val message = Apply(10, true, changeDto)
+    fun `should apply change`() {
+        subject.handleElect(ElectMe(10, changeDto))
+        subject.handleAgree(Agree(10, Accept.COMMIT, changeDto))
+        val message = Apply(10, true, Accept.COMMIT, changeDto)
 
         subject.handleApply(message)
         expectThat(historyManagement.getLastChange()).isEqualTo(AddUserChange("userName"))
-        expectThat(subject.getState()).isEqualTo(State(
-            // as 0 is previous state
-            0,
-            Accept.ABORT,
-            0,
-            null,
-            false
-        ))
+    }
+
+    @Test
+    fun `should not apply change when acceptVal is abort`() {
+        subject.handleElect(ElectMe(10, changeDto))
+        subject.handleAgree(Agree(10, Accept.ABORT, changeDto))
+        val message = Apply(10, true, Accept.ABORT, changeDto)
+
+        subject.handleApply(message)
+        expectThat(historyManagement.getLastChange()).isEqualTo(null)
     }
 
     private val changeDto = ChangeDto(mapOf(
