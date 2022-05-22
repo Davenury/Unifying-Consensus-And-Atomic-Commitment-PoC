@@ -15,5 +15,5 @@ object DummyConsensusProtocol: ConsensusProtocol<Change, MutableList<Change>> {
         this.response = response
     }
 
-    override fun getState(): MutableList<Change>? = mutableListOf()
+    override fun getState(): MutableList<Change> = mutableListOf()
 }

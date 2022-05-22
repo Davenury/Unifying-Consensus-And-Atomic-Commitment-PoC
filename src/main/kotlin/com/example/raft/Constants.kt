@@ -36,7 +36,7 @@ object Constants {
     val RAFT_GROUP: RaftGroup
 
     init {
-        val config = loadConfig("/${System.getenv("CONFIG_FILE") ?: "application.conf"}")
+        val config = loadConfig()
         PATH = config.raft.server.root.storage.path
         PEERS = config.raft.server.addresses.mapIndexed { index, address ->
             RaftPeer.newBuilder().setId("n$index").setAddress(address).build()

@@ -33,6 +33,11 @@ class InMemoryHistoryManagement(
             null
         }
 
+    override fun canBeBuild(newChange: Change): Boolean
+        = true
+
+    override fun build() {}
+
     companion object {
         private val logger = LoggerFactory.getLogger(InMemoryHistoryManagement::class.java)
     }

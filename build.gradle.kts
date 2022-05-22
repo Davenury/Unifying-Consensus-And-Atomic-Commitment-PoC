@@ -1,6 +1,6 @@
 val kotlin_version: String by project
 val logback_version: String by project
-val ktor_version = "1.6.4"
+val ktor_version = "1.6.8"
 val ratis_version = "2.2.0"
 
 plugins {
@@ -27,8 +27,11 @@ dependencies {
     //ktor
     implementation("io.ktor:ktor-server:$ktor_version")
     implementation("io.ktor:ktor-server-netty:$ktor_version")
-    implementation("io.ktor:ktor-serialization:$ktor_version")
+    implementation("io.ktor:ktor-jackson:$ktor_version")
     implementation("ch.qos.logback:logback-classic:$logback_version")
+    implementation("io.ktor:ktor-client-core:$ktor_version")
+    implementation("io.ktor:ktor-client-okhttp:$ktor_version")
+    implementation("io.ktor:ktor-client-jackson:$ktor_version")
 
     // object mapper
     implementation("com.fasterxml.jackson.core:jackson-databind:2.13.2.2")
@@ -38,6 +41,7 @@ dependencies {
     implementation("com.sksamuel.hoplite:hoplite-core:2.0.4")
     implementation("com.sksamuel.hoplite:hoplite-hocon:2.0.4")
 
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1")
 
     implementation("org.apache.ratis:ratis:$ratis_version")
     implementation("org.apache.ratis:ratis-proto:$ratis_version")
@@ -51,6 +55,9 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.8.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("io.strikt:strikt-core:0.34.0")
+
+    // wiremock
+    testImplementation("com.github.tomakehurst:wiremock-jre8:2.33.2")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

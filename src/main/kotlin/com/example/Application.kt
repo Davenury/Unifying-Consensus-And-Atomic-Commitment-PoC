@@ -1,27 +1,31 @@
 package com.example
 
-import com.example.api.configureRouting
-import com.example.domain.ErrorMessage
-import com.example.domain.MissingParameterException
-import com.example.domain.UnknownOperationException
+import com.example.api.configureSampleRouting
+import com.example.api.protocolRouting
+import com.example.domain.*
 import com.example.infrastructure.RatisHistoryManagement
 import com.example.raft.HistoryRaftNode
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
+import io.ktor.jackson.*
 import io.ktor.response.*
-import io.ktor.serialization.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 
 fun main(args: Array<String>) {
 
     val conf = getIdAndOffset(args)
-    val raftNode = HistoryRaftNode(conf.nodeId)
-    val historyManagement = RatisHistoryManagement(raftNode)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
+        val raftNode = HistoryRaftNode(conf.nodeId)
+        val historyManagement = RatisHistoryManagement(raftNode)
+
+        val config = loadConfig()
+        val protocol = GPACProtocolImpl(historyManagement, config.peers.maxLeaderElectionTries , httpClient)
+        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId)
+
         install(ContentNegotiation) {
-            json()
+            register(ContentType.Application.Json, JacksonConverter(objectMapper))
         }
 
         install(StatusPages) {
@@ -34,6 +38,15 @@ fun main(args: Array<String>) {
                     ErrorMessage("Unknown operation to perform: ${cause.desiredOperationName}")
                 )
             }
+            exception<NotElectingYou> { cause ->
+                call.respond(status = HttpStatusCode.UnprocessableEntity, ErrorMessage("You're not valid leader. My Ballot Number is: ${cause.ballotNumber}"))
+            }
+            exception<MaxTriesExceededException> {
+                call.respond(HttpStatusCode.ServiceUnavailable, ErrorMessage("Transaction failed due to too many retries of becoming a leader."))
+            }
+            exception<TooFewResponsesException> {
+                call.respond(HttpStatusCode.ServiceUnavailable, ErrorMessage("Transaction failed due to too few responses of ft phase."))
+            }
             exception<Throwable> { cause ->
                 call.respond(
                     status = HttpStatusCode.InternalServerError,
@@ -42,7 +55,8 @@ fun main(args: Array<String>) {
             }
         }
 
-        configureRouting(historyManagement)
+        configureSampleRouting(historyManagement)
+        protocolRouting(protocol, otherPeers)
     }.start(wait = true)
 }
 
@@ -60,3 +74,6 @@ fun getIdAndOffset(args: Array<String>): NodeIdAndPortOffset {
 
     return NodeIdAndPortOffset(nodeId = id, portOffset = 0)
 }
+
+fun getOtherPeers(peersAddresses: List<String>, nodeId: Int): List<String>
+    = peersAddresses.filterNot { it.contains("peer$nodeId") || it.contains("${8080 + nodeId}") }
