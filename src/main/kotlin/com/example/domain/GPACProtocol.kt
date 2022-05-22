@@ -1,6 +1,8 @@
 package com.example.domain
 
-import com.example.getOtherPeers
+import com.example.GPACEventData
+import com.example.raiseEvent
+import io.ktor.application.*
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -31,7 +33,8 @@ interface GPACProtocol {
 class GPACProtocolImpl(
     private val historyManagement: HistoryManagement,
     private val maxLeaderElectionTries: Int,
-    private val httpClient: HttpClient
+    private val httpClient: HttpClient,
+    private val application: Application? = null
 ) : GPACProtocol {
 
     private var myBallotNumber: Int = 0
@@ -53,6 +56,11 @@ class GPACProtocolImpl(
 
         val defaultTransaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal)
         transactions[message.ballotNumber] = defaultTransaction
+
+        application?.raiseEvent(GPACEventData(
+            "elect",
+            defaultTransaction
+        ))
 
         return ElectedYou(
             message.ballotNumber,
