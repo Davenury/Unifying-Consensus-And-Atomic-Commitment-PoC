@@ -41,6 +41,8 @@ dependencies {
     implementation("com.sksamuel.hoplite:hoplite-core:2.0.4")
     implementation("com.sksamuel.hoplite:hoplite-hocon:2.0.4")
 
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1")
+
     implementation("org.apache.ratis:ratis:$ratis_version")
     implementation("org.apache.ratis:ratis-proto:$ratis_version")
     implementation("org.apache.ratis:ratis-grpc:$ratis_version")

@@ -6,6 +6,7 @@ import com.example.infrastructure.InMemoryHistoryManagement
 import com.example.utils.DummyConsensusProtocol
 import com.example.utils.PeerThree
 import com.example.utils.PeerTwo
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -67,7 +68,7 @@ class LeaderTest {
     }
 
     @Test
-    fun `should perform operation to the end`() {
+    fun `should perform operation to the end`() = runBlocking {
         PeerTwo.stubForElectMe(10, Accept.COMMIT, 10, null, false)
         PeerThree.stubForElectMe(10, Accept.COMMIT, 10, null, false)
         PeerTwo.stubForAgree(10, Accept.COMMIT)
@@ -80,8 +81,6 @@ class LeaderTest {
         }
 
         expectThat(historyManagement.getLastChange()).isEqualTo(changeDto.toChange())
-        PeerTwo.verifyApplyStub(1)
-        PeerThree.verifyApplyStub(1)
     }
 
     private val allPeers = listOf("localhost:8081", "localhost:8082", "localhost:8083")

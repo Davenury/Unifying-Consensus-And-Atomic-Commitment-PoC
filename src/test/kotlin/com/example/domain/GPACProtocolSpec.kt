@@ -70,9 +70,6 @@ class GPACProtocolSpec {
     fun `should throw IllegalState when trying to agree on transaction that wasn't in elect state`() {
         val message = Agree(100, Accept.COMMIT, changeDto)
 
-        println(subject.getTransaction(100))
-        println(subject.getBallotNumber())
-
         expectThrows<IllegalStateException> {
             subject.handleAgree(message)
         }

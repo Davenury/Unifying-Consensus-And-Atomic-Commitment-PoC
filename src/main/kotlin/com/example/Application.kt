@@ -76,4 +76,4 @@ fun getIdAndOffset(args: Array<String>): NodeIdAndPortOffset {
 }
 
 fun getOtherPeers(peersAddresses: List<String>, nodeId: Int): List<String>
-    = peersAddresses.filterNot { it.contains("peer$nodeId") || it.contains("808$nodeId") }
+    = peersAddresses.filterNot { it.contains("peer$nodeId") || it.contains("${8080 + nodeId}") }

@@ -29,8 +29,8 @@ fun Application.protocolRouting(protocol: GPACProtocol, otherPeers: List<String>
 
         post("/apply") {
             val message = call.receive<Apply>()
-            call.respond(HttpStatusCode.OK)
             protocol.handleApply(message)
+            call.respond(HttpStatusCode.OK)
         }
     }
 
