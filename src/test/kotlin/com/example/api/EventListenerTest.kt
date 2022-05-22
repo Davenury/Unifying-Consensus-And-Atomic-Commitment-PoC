@@ -23,14 +23,16 @@ class EventListenerTest {
 
     companion object {
 
-        private val events = mutableListOf<GPACEventData>()
+        private val events1 = mutableListOf<GPACEventData>()
+        private val events2 = mutableListOf<GPACEventData>()
+        private val events3 = mutableListOf<GPACEventData>()
 
         @BeforeAll
         @JvmStatic
         fun setup() {
-            GlobalScope.launch { startApplication(arrayOf("1"), listOf { application -> application.subscribeToEvent { events.add(it) } }) }
-            GlobalScope.launch { startApplication(arrayOf("2"), emptyList()) }
-            GlobalScope.launch { startApplication(arrayOf("3"), emptyList()) }
+            GlobalScope.launch { startApplication(arrayOf("1"), listOf { application -> application.subscribeToEvent { events1.add(it) } }) }
+            GlobalScope.launch { startApplication(arrayOf("2"), listOf { application -> application.subscribeToEvent { events2.add(it) } }) }
+            GlobalScope.launch { startApplication(arrayOf("3"), listOf { application -> application.subscribeToEvent { events3.add(it) } }) }
         }
     }
 
@@ -47,7 +49,9 @@ class EventListenerTest {
 
         delay(100)
 
-        expectThat(events.size).isEqualTo(1)
+        expectThat(events1.size).isEqualTo(1)
+        expectThat(events2.size).isEqualTo(0)
+        expectThat(events3.size).isEqualTo(0)
 
     }
 
