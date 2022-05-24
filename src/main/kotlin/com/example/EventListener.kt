@@ -1,19 +1,17 @@
 package com.example
 
 import com.example.domain.Transaction
-import io.ktor.application.*
 
-data class GPACEventData(
-    val action: String,
-    val transaction: Transaction
-)
+typealias AdditionalAction = (Transaction?) -> Unit
 
-val GPACEventDefinition = EventDefinition<GPACEventData>()
-
-fun Application.raiseEvent(eventData: GPACEventData) {
-    environment.monitor.raise(GPACEventDefinition, eventData)
-}
-
-fun Application.subscribeToEvent(handler: (GPACEventData) -> Unit) {
-    environment.monitor.subscribe(GPACEventDefinition, handler)
+enum class TestAddon {
+    OnSendingElect,
+    OnHandlingElectBegin,
+    OnHandlingElectEnd,
+    OnSendingAgree,
+    OnHandlingAgreeBegin,
+    OnHandlingAgreeEnd,
+    OnSendingApply,
+    OnHandlingApplyBegin,
+    OnHandlingApplyEnd
 }

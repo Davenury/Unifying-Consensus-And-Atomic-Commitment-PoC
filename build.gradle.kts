@@ -76,3 +76,23 @@ tasks.withType<Jar> {
         attributes["Main-Class"] = "com.example.ApplicationKt"
     }
 }
+
+tasks {
+    "test"(Test::class) {
+        filter {
+            excludeTestsMatching("com.example.api.IntegrationTest")
+        }
+    }
+}
+
+val integrationTest = sourceSets.create("integrationTest")
+tasks.register<Test>("integrationTest") {
+    group = "verification"
+
+    shouldRunAfter(tasks.test)
+    useJUnitPlatform()
+
+    filter {
+        includeTestsMatching("com.example.api.IntegrationTest")
+    }
+}

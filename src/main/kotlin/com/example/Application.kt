@@ -15,27 +15,21 @@ import io.ktor.server.netty.*
 
 
 fun main(args: Array<String>) {
-    startApplication(args, emptyList())
+    startApplication(args, emptyMap())
 }
 
-typealias AdditionalAction = (Application) -> Unit
-
-fun startApplication(args: Array<String>, additionalActions: List<AdditionalAction>) {
+fun startApplication(args: Array<String>, additionalActions: Map<TestAddon, AdditionalAction>) {
     val conf = getIdAndOffset(args)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
         val raftNode = HistoryRaftNode(conf.nodeId)
         val historyManagement = RatisHistoryManagement(raftNode)
 
         val config = loadConfig()
-        val protocol = GPACProtocolImpl(historyManagement, config.peers.maxLeaderElectionTries , httpClient, this)
+        val protocol = GPACProtocolImpl(historyManagement, config.peers.maxLeaderElectionTries , httpClient, additionalActions)
         val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId)
 
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
-        }
-
-        additionalActions.forEach {
-            it(this)
         }
 
         install(StatusPages) {

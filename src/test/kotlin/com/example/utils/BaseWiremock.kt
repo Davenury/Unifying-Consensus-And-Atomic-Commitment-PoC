@@ -4,6 +4,8 @@ import com.example.domain.Accept
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock.*
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 
 abstract class BaseWiremock(
     PORT: Int
@@ -18,6 +20,7 @@ abstract class BaseWiremock(
     @AfterAll
     fun cleanup() {
         wireMockServer.resetAll()
+        wireMockServer.stop()
     }
 
     fun stubForElectMe(ballotNumber: Int, initVal: Accept, acceptNum: Int, acceptVal: Accept?, decision: Boolean) {

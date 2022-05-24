@@ -1,8 +1,7 @@
 package com.example.domain
 
-import com.example.GPACEventData
-import com.example.raiseEvent
-import io.ktor.application.*
+import com.example.AdditionalAction
+import com.example.TestAddon
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -34,7 +33,7 @@ class GPACProtocolImpl(
     private val historyManagement: HistoryManagement,
     private val maxLeaderElectionTries: Int,
     private val httpClient: HttpClient,
-    private val application: Application? = null
+    private val addons: Map<TestAddon, AdditionalAction> = emptyMap()
 ) : GPACProtocol {
 
     private var myBallotNumber: Int = 0
@@ -51,16 +50,16 @@ class GPACProtocolImpl(
     override fun getBallotNumber(): Int = myBallotNumber
 
     override fun handleElect(message: ElectMe): ElectedYou {
+
+        addons[TestAddon.OnHandlingElectBegin]?.invoke(null)
+
         if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber)
         val initVal = if (historyManagement.canBeBuild(message.change.toChange())) Accept.COMMIT else Accept.ABORT
 
         val defaultTransaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal)
         transactions[message.ballotNumber] = defaultTransaction
 
-        application?.raiseEvent(GPACEventData(
-            "elect",
-            defaultTransaction
-        ))
+        addons[TestAddon.OnHandlingElectEnd]?.invoke(transactions[message.ballotNumber])
 
         return ElectedYou(
             message.ballotNumber,
@@ -72,6 +71,9 @@ class GPACProtocolImpl(
     }
 
     override fun handleAgree(message: Agree): Agreed {
+
+        addons[TestAddon.OnHandlingAgreeBegin]?.invoke(transactions[message.ballotNumber])
+
         if (!checkBallotNumber(message.ballotNumber)) {
             throw NotElectingYou(myBallotNumber)
         }
@@ -88,10 +90,13 @@ class GPACProtocolImpl(
 
         // TODO: lock? - lock apply
 
+        addons[TestAddon.OnHandlingAgreeEnd]?.invoke(transactions[message.ballotNumber])
+
         return Agreed(transactions[message.ballotNumber]!!.ballotNumber, acceptVal)
     }
 
     override fun handleApply(message: Apply) {
+        addons[TestAddon.OnHandlingApplyBegin]?.invoke(transactions[message.ballotNumber])
         this.transactions[message.ballotNumber] =
             this.transactions[message.ballotNumber]?.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
                 ?: throw IllegalStateException("Got apply for transaction that isn't in transactions map: ${message.ballotNumber}")
@@ -99,11 +104,15 @@ class GPACProtocolImpl(
         if (message.acceptVal == Accept.COMMIT) {
             historyManagement.change(message.change.toChange())
         }
+        addons[TestAddon.OnHandlingApplyEnd]?.invoke(transactions[message.ballotNumber])
     }
 
     override suspend fun performProtocolAsLeader(change: ChangeDto, otherPeers: List<String>) {
         var tries = 0
         var electResponses: List<ElectedYou>
+
+        addons[TestAddon.OnSendingElect]?.invoke(Transaction(this.myBallotNumber, Accept.COMMIT))
+
         do {
             if (!historyManagement.canBeBuild(change.toChange())) throw HistoryCannotBeBuildException()
             this.transactions[myBallotNumber] = Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
@@ -112,14 +121,21 @@ class GPACProtocolImpl(
             myBallotNumber++
         } while (electResponses.size <= otherPeers.size / 2 && tries < maxLeaderElectionTries)
 
+        myBallotNumber--
+
         if (tries >= maxLeaderElectionTries) throw MaxTriesExceededException()
 
         val acceptVal = if (electResponses.all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+
+        addons[TestAddon.OnSendingAgree]?.invoke(this.transactions[myBallotNumber])
 
         val agreedResponses = getAgreedResponses(change, otherPeers, acceptVal)
         if (agreedResponses.size <= otherPeers.size / 2) throw TooFewResponsesException()
 
         this.transactions[myBallotNumber] = this.transactions[myBallotNumber]!!.copy(decision = true)
+
+        addons[TestAddon.OnSendingApply]?.invoke(this.transactions[myBallotNumber])
+
         sendApplyMessages(change, otherPeers, acceptVal)
         this.handleApply(
             Apply(
