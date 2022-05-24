@@ -34,16 +34,10 @@ class IntegrationTest {
 
         expect {
             that(sniffedTransactions.size).isEqualTo(1)
-            that(sniffedTransactions[0]).isEqualTo(Transaction(0, Accept.COMMIT))
+            that(sniffedTransactions[0]).isEqualTo(Transaction(1, Accept.COMMIT))
         }
 
         listOf(app1, app2, app3).forEach { app -> app.cancel(CancellationException("Test is over")) }
-    }
-
-    @Test
-    // This test just checks if we should cancel coroutines after each tests or will they cancel by themselves
-    fun `should just start with another leader application`(): Unit = runBlocking {
-        GlobalScope.launch { startApplication(arrayOf("1"), emptyMap()) }
     }
 
     private val changeDto = ChangeDto(mapOf(

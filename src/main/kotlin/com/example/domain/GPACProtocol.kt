@@ -111,17 +111,18 @@ class GPACProtocolImpl(
         var tries = 0
         var electResponses: List<ElectedYou>
 
-        addons[TestAddon.OnSendingElect]?.invoke(Transaction(this.myBallotNumber, Accept.COMMIT))
+        if(!historyManagement.canBeBuild(change.toChange())) {
+            throw HistoryCannotBeBuildException()
+        }
 
         do {
+            myBallotNumber++
             if (!historyManagement.canBeBuild(change.toChange())) throw HistoryCannotBeBuildException()
             this.transactions[myBallotNumber] = Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
+            addons[TestAddon.OnSendingElect]?.invoke(this.transactions[myBallotNumber])
             electResponses = getElectedYouResponses(change, otherPeers)
             tries++
-            myBallotNumber++
         } while (electResponses.size <= otherPeers.size / 2 && tries < maxLeaderElectionTries)
-
-        myBallotNumber--
 
         if (tries >= maxLeaderElectionTries) throw MaxTriesExceededException()
 

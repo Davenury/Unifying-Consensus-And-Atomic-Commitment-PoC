@@ -51,6 +51,9 @@ fun startApplication(args: Array<String>, additionalActions: Map<TestAddon, Addi
             exception<TooFewResponsesException> {
                 call.respond(HttpStatusCode.ServiceUnavailable, ErrorMessage("Transaction failed due to too few responses of ft phase."))
             }
+            exception<HistoryCannotBeBuildException> {
+                call.respond(HttpStatusCode.BadRequest, ErrorMessage("Change you're trying to perform is not applicable with current state"))
+            }
             exception<Throwable> { cause ->
                 call.respond(
                     status = HttpStatusCode.InternalServerError,
