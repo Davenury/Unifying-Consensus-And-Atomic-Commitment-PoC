@@ -13,15 +13,19 @@ import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 
-fun main(args: Array<String>) {
 
+fun main(args: Array<String>) {
+    startApplication(args, emptyMap())
+}
+
+fun startApplication(args: Array<String>, additionalActions: Map<TestAddon, AdditionalAction>) {
     val conf = getIdAndOffset(args)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
         val raftNode = HistoryRaftNode(conf.nodeId)
         val historyManagement = RatisHistoryManagement(raftNode)
 
         val config = loadConfig()
-        val protocol = GPACProtocolImpl(historyManagement, config.peers.maxLeaderElectionTries , httpClient)
+        val protocol = GPACProtocolImpl(historyManagement, config.peers.maxLeaderElectionTries , httpClient, additionalActions)
         val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId)
 
         install(ContentNegotiation) {
@@ -46,6 +50,9 @@ fun main(args: Array<String>) {
             }
             exception<TooFewResponsesException> {
                 call.respond(HttpStatusCode.ServiceUnavailable, ErrorMessage("Transaction failed due to too few responses of ft phase."))
+            }
+            exception<HistoryCannotBeBuildException> {
+                call.respond(HttpStatusCode.BadRequest, ErrorMessage("Change you're trying to perform is not applicable with current state"))
             }
             exception<Throwable> { cause ->
                 call.respond(
