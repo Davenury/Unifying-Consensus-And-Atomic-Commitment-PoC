@@ -3,6 +3,7 @@ package com.example.domain
 import com.example.infrastructure.InMemoryHistoryManagement
 import com.example.utils.DummyConsensusProtocol
 import io.ktor.client.*
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expect
@@ -22,7 +23,7 @@ class GPACProtocolSpec {
     }
 
     @Test
-    fun `should return elected you, when ballot number is lower than proposed`() {
+    fun `should return elected you, when ballot number is lower than proposed`(): Unit = runBlocking {
         val message = ElectMe(100000, changeDto)
 
         val result = subject.handleElect(message)
@@ -34,7 +35,7 @@ class GPACProtocolSpec {
     }
 
     @Test
-    fun `should throw NotElectingYou when ballot number is higher than proposed`() {
+    fun `should throw NotElectingYou when ballot number is higher than proposed`(): Unit = runBlocking {
         // -1 is not possible value according to protocol, but extending protocol class
         // with functionality of changing state is not the way
         val message = ElectMe(-1, changeDto)
@@ -45,7 +46,7 @@ class GPACProtocolSpec {
     }
 
     @Test
-    fun `should return elected you with commit init val, when history can be built`() {
+    fun `should return elected you with commit init val, when history can be built`(): Unit = runBlocking {
         val message = ElectMe(3, changeDto)
 
         val result = subject.handleElect(message)
@@ -55,7 +56,7 @@ class GPACProtocolSpec {
     }
 
     @Test
-    fun `should change ballot number and return agreed, when asked to ft-agree on change`() {
+    fun `should change ballot number and return agreed, when asked to ft-agree on change`(): Unit = runBlocking {
         subject.handleElect(ElectMe(100, changeDto))
         val message = Agree(100, Accept.COMMIT, changeDto)
 
@@ -67,7 +68,7 @@ class GPACProtocolSpec {
     }
 
     @Test
-    fun `should throw IllegalState when trying to agree on transaction that wasn't in elect state`() {
+    fun `should throw IllegalState when trying to agree on transaction that wasn't in elect state`(): Unit = runBlocking {
         val message = Agree(100, Accept.COMMIT, changeDto)
 
         expectThrows<IllegalStateException> {
@@ -76,7 +77,7 @@ class GPACProtocolSpec {
     }
 
     @Test
-    fun `should throw not electing you, when proposed ballot number is less than state's`() {
+    fun `should throw not electing you, when proposed ballot number is less than state's`(): Unit = runBlocking {
         val message = Agree(-1, Accept.COMMIT, changeDto)
         expectThrows<NotElectingYou> {
             subject.handleAgree(message)
@@ -84,7 +85,7 @@ class GPACProtocolSpec {
     }
 
     @Test
-    fun `should apply change`() {
+    fun `should apply change`(): Unit = runBlocking {
         subject.handleElect(ElectMe(10, changeDto))
         subject.handleAgree(Agree(10, Accept.COMMIT, changeDto))
         val message = Apply(10, true, Accept.COMMIT, changeDto)
@@ -94,7 +95,7 @@ class GPACProtocolSpec {
     }
 
     @Test
-    fun `should not apply change when acceptVal is abort`() {
+    fun `should not apply change when acceptVal is abort`(): Unit = runBlocking {
         subject.handleElect(ElectMe(10, changeDto))
         subject.handleAgree(Agree(10, Accept.ABORT, changeDto))
         val message = Apply(10, true, Accept.ABORT, changeDto)

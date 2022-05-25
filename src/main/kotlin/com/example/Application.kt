@@ -15,17 +15,23 @@ import io.ktor.server.netty.*
 
 
 fun main(args: Array<String>) {
-    startApplication(args, emptyMap())
+    startApplication(args)
 }
 
-fun startApplication(args: Array<String>, additionalActions: Map<TestAddon, AdditionalAction>) {
+fun startApplication(
+    args: Array<String>,
+    additionalActions: Map<TestAddon, AdditionalAction> = emptyMap(),
+    eventListeners: List<EventListener> = emptyList()
+) {
     val conf = getIdAndOffset(args)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
         val raftNode = HistoryRaftNode(conf.nodeId)
         val historyManagement = RatisHistoryManagement(raftNode)
 
         val config = loadConfig()
-        val protocol = GPACProtocolImpl(historyManagement, config.peers.maxLeaderElectionTries , httpClient, additionalActions)
+        val eventPublisher = EventPublisher(eventListeners)
+        val protocol =
+            GPACProtocolImpl(historyManagement, config.peers.maxLeaderElectionTries, httpClient, additionalActions, eventPublisher)
         val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId)
 
         install(ContentNegotiation) {
@@ -43,16 +49,34 @@ fun startApplication(args: Array<String>, additionalActions: Map<TestAddon, Addi
                 )
             }
             exception<NotElectingYou> { cause ->
-                call.respond(status = HttpStatusCode.UnprocessableEntity, ErrorMessage("You're not valid leader. My Ballot Number is: ${cause.ballotNumber}"))
+                call.respond(
+                    status = HttpStatusCode.UnprocessableEntity,
+                    ErrorMessage("You're not valid leader. My Ballot Number is: ${cause.ballotNumber}")
+                )
             }
             exception<MaxTriesExceededException> {
-                call.respond(HttpStatusCode.ServiceUnavailable, ErrorMessage("Transaction failed due to too many retries of becoming a leader."))
+                call.respond(
+                    HttpStatusCode.ServiceUnavailable,
+                    ErrorMessage("Transaction failed due to too many retries of becoming a leader.")
+                )
             }
             exception<TooFewResponsesException> {
-                call.respond(HttpStatusCode.ServiceUnavailable, ErrorMessage("Transaction failed due to too few responses of ft phase."))
+                call.respond(
+                    HttpStatusCode.ServiceUnavailable,
+                    ErrorMessage("Transaction failed due to too few responses of ft phase.")
+                )
             }
             exception<HistoryCannotBeBuildException> {
-                call.respond(HttpStatusCode.BadRequest, ErrorMessage("Change you're trying to perform is not applicable with current state"))
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorMessage("Change you're trying to perform is not applicable with current state")
+                )
+            }
+            exception<AlreadyLockedException> {
+                call.respond(
+                    HttpStatusCode.Conflict,
+                    ErrorMessage("We cannot perform your transaction, as another transaction is currently running")
+                )
             }
             exception<Throwable> { cause ->
                 call.respond(
@@ -76,11 +100,12 @@ fun getIdAndOffset(args: Array<String>): NodeIdAndPortOffset {
     if (args.isNotEmpty()) {
         return NodeIdAndPortOffset(nodeId = args[0].toInt(), portOffset = args[0].toInt())
     }
-    
-    val id = System.getenv()["RAFT_NODE_ID"]?.toInt() ?: throw RuntimeException("Provide either arg or RAFT_NODE_ID env variable to represent id of node")
+
+    val id = System.getenv()["RAFT_NODE_ID"]?.toInt()
+        ?: throw RuntimeException("Provide either arg or RAFT_NODE_ID env variable to represent id of node")
 
     return NodeIdAndPortOffset(nodeId = id, portOffset = 0)
 }
 
-fun getOtherPeers(peersAddresses: List<String>, nodeId: Int): List<String>
-    = peersAddresses.filterNot { it.contains("peer$nodeId") || it.contains("${8080 + nodeId}") }
+fun getOtherPeers(peersAddresses: List<String>, nodeId: Int): List<String> =
+    peersAddresses.filterNot { it.contains("peer$nodeId") || it.contains("${8080 + nodeId}") }

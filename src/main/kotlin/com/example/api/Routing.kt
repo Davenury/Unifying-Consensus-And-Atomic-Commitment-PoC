@@ -8,6 +8,7 @@ import io.ktor.application.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import kotlinx.coroutines.delay
 
 fun Application.configureSampleRouting(historyManagement: HistoryManagement) {
 
