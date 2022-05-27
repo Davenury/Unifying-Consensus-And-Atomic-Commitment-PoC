@@ -6,5 +6,6 @@ class NotElectingYou(val ballotNumber: Int): Exception()
 class MaxTriesExceededException: Exception()
 class TooFewResponsesException: Exception()
 class HistoryCannotBeBuildException: Exception()
+class AlreadyLockedException: Exception()
 
 data class ErrorMessage(val msg: String)
