@@ -29,8 +29,7 @@ interface GPACProtocol: SignalSubject {
     suspend fun handleAgree(message: Agree): Agreed
     suspend fun handleApply(message: Apply)
     suspend fun performProtocolAsLeader(change: ChangeDto, otherPeers: List<List<String>>)
-    fun getTransaction(ballotNumber: Int): Transaction?
-    fun getTransactions(): Map<Int, Transaction>
+    fun getTransaction(): Transaction
     fun getBallotNumber(): Int
 }
 
@@ -46,14 +45,12 @@ class GPACProtocolImpl(
 
     private var myBallotNumber: Int = 0
 
-    private var transactions = mutableMapOf<Int, Transaction>()
+    private var transaction: Transaction = Transaction(myBallotNumber, Accept.ABORT)
 
     private fun checkBallotNumber(ballotNumber: Int): Boolean =
         ballotNumber > myBallotNumber
 
-    override fun getTransaction(ballotNumber: Int): Transaction? = this.transactions[ballotNumber]
-
-    override fun getTransactions(): Map<Int, Transaction> = transactions
+    override fun getTransaction(): Transaction = this.transaction
 
     override fun getBallotNumber(): Int = myBallotNumber
 
@@ -71,35 +68,33 @@ class GPACProtocolImpl(
         if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber)
         val initVal = if (historyManagement.canBeBuild(message.change.toChange())) Accept.COMMIT else Accept.ABORT
 
-        val defaultTransaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal)
-        transactions[message.ballotNumber] = defaultTransaction
+        transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal)
 
-        signal(TestAddon.OnHandlingElectEnd, transactions[message.ballotNumber])
+        signal(TestAddon.OnHandlingElectEnd, transaction)
 
         return ElectedYou(
             message.ballotNumber,
             initVal,
-            defaultTransaction.acceptNum,
-            defaultTransaction.acceptVal,
-            defaultTransaction.decision
+            transaction.acceptNum,
+            transaction.acceptVal,
+            transaction.decision
         )
     }
 
     override suspend fun handleAgree(message: Agree): Agreed {
 
-        signal(TestAddon.OnHandlingAgreeBegin, transactions[message.ballotNumber])
+        signal(TestAddon.OnHandlingAgreeBegin, transaction)
 
         if (!checkBallotNumber(message.ballotNumber)) {
             throw NotElectingYou(myBallotNumber)
         }
         val acceptVal = if (historyManagement.canBeBuild(message.change.toChange())) Accept.COMMIT else Accept.ABORT
-        this.transactions[message.ballotNumber] =
-            this.transactions[message.ballotNumber]?.copy(
+        this.transaction =
+            this.transaction.copy(
                 ballotNumber = message.ballotNumber,
                 acceptVal = acceptVal,
                 acceptNum = message.ballotNumber
             )
-                ?: throw IllegalStateException("Got agree for transaction that isn't in transactions map: ${message.ballotNumber}")
 
         myBallotNumber = message.ballotNumber
 
@@ -108,24 +103,23 @@ class GPACProtocolImpl(
         }
         logger.info("Lock aquired: ${message.ballotNumber}")
 
-        signal(TestAddon.OnHandlingAgreeEnd, transactions[message.ballotNumber])
+        signal(TestAddon.OnHandlingAgreeEnd, transaction)
 
-        return Agreed(transactions[message.ballotNumber]!!.ballotNumber, acceptVal)
+        return Agreed(transaction.ballotNumber, acceptVal)
     }
 
     override suspend fun handleApply(message: Apply) {
         semaphore.release()
 
-        signal(TestAddon.OnHandlingApplyBegin, transactions[message.ballotNumber])
+        signal(TestAddon.OnHandlingApplyBegin, transaction)
 
-        this.transactions[message.ballotNumber] =
-            this.transactions[message.ballotNumber]?.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
-                ?: throw IllegalStateException("Got apply for transaction that isn't in transactions map: ${message.ballotNumber}")
+        this.transaction =
+            this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
         if (message.acceptVal == Accept.COMMIT) {
             historyManagement.change(message.change.toChange())
         }
-        signal(TestAddon.OnHandlingApplyEnd, transactions[message.ballotNumber])
+        signal(TestAddon.OnHandlingApplyEnd, transaction)
     }
 
     override suspend fun performProtocolAsLeader(
@@ -142,8 +136,8 @@ class GPACProtocolImpl(
         do {
             myBallotNumber++
             if (!historyManagement.canBeBuild(change.toChange())) throw HistoryCannotBeBuildException()
-            this.transactions[myBallotNumber] = Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
-            signal(TestAddon.BeforeSendingElect, this.transactions[myBallotNumber])
+            this.transaction = Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
+            signal(TestAddon.BeforeSendingElect, this.transaction)
             electResponses = getElectedYouResponses(change, otherPeers)
             tries++
         } while (!superSet(otherPeers, electResponses) && tries < maxLeaderElectionTries)
@@ -162,7 +156,7 @@ class GPACProtocolImpl(
             }
         }
 
-        signal(TestAddon.BeforeSendingAgree, this.transactions[myBallotNumber])
+        signal(TestAddon.BeforeSendingAgree, this.transaction)
 
         if(!semaphore.tryAcquire()) {
             throw AlreadyLockedException()
@@ -170,15 +164,15 @@ class GPACProtocolImpl(
         val agreedResponses = getAgreedResponses(change, otherPeers, acceptVal)
         if (!superSet(otherPeers, agreedResponses)) throw TooFewResponsesException()
 
-        this.transactions[myBallotNumber] = this.transactions[myBallotNumber]!!.copy(decision = true)
+        this.transaction = this.transaction.copy(decision = true)
 
-        signal(TestAddon.BeforeSendingApply, this.transactions[myBallotNumber])
+        signal(TestAddon.BeforeSendingApply, this.transaction)
 
         sendApplyMessages(change, otherPeers, acceptVal)
         this.handleApply(
             Apply(
                 myBallotNumber,
-                this@GPACProtocolImpl.transactions[myBallotNumber]!!.decision,
+                this@GPACProtocolImpl.transaction.decision,
                 acceptVal,
                 change
             )
@@ -206,7 +200,7 @@ class GPACProtocolImpl(
     private suspend fun sendApplyMessages(change: ChangeDto, otherPeers: List<List<String>>, acceptVal: Accept) {
         sendRequests<Apply, HttpStatement>(otherPeers, Apply(
             myBallotNumber,
-            this@GPACProtocolImpl.transactions[myBallotNumber]!!.decision,
+            this@GPACProtocolImpl.transaction.decision,
             acceptVal,
             change
         ), "apply") { it, e -> "Peer: $it didn't apply transaction: $e" }

@@ -30,7 +30,7 @@ class GPACProtocolSpec {
 
         expect {
             that(result).isEqualTo(ElectedYou(100000, Accept.COMMIT, 0, null, false))
-            that(subject.getTransaction(100000)!!.ballotNumber).isEqualTo(100000)
+            that(subject.getTransaction().ballotNumber).isEqualTo(100000)
         }
     }
 
@@ -52,7 +52,7 @@ class GPACProtocolSpec {
         val result = subject.handleElect(message)
 
         expectThat(result.initVal).isEqualTo(Accept.COMMIT)
-        expectThat(subject.getTransaction(3)).isEqualTo(Transaction(3, Accept.COMMIT, 0, null, false))
+        expectThat(subject.getTransaction()).isEqualTo(Transaction(3, Accept.COMMIT, 0, null, false))
     }
 
     @Test
@@ -63,17 +63,8 @@ class GPACProtocolSpec {
         val result = subject.handleAgree(message)
 
         expectThat(result).isEqualTo(Agreed(100, Accept.COMMIT))
-        expectThat(subject.getTransaction(100)!!.ballotNumber).isEqualTo(100)
+        expectThat(subject.getTransaction().ballotNumber).isEqualTo(100)
         expectThat(subject.getBallotNumber()).isEqualTo(100)
-    }
-
-    @Test
-    fun `should throw IllegalState when trying to agree on transaction that wasn't in elect state`(): Unit = runBlocking {
-        val message = Agree(100, Accept.COMMIT, changeDto)
-
-        expectThrows<IllegalStateException> {
-            subject.handleAgree(message)
-        }
     }
 
     @Test
