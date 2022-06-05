@@ -25,14 +25,14 @@ fun startApplication(
 ) {
     val conf = getIdAndOffset(args)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
-        val raftNode = HistoryRaftNode(conf.nodeId)
+        val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId)
         val historyManagement = RatisHistoryManagement(raftNode)
 
         val config = loadConfig()
         val eventPublisher = EventPublisher(eventListeners)
         val protocol =
             GPACProtocolImpl(historyManagement, config.peers.maxLeaderElectionTries, httpClient, additionalActions, eventPublisher)
-        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId)
+        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId, conf.peersetId)
 
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
@@ -93,19 +93,36 @@ fun startApplication(
 
 data class NodeIdAndPortOffset(
     val nodeId: Int,
-    val portOffset: Int
+    val portOffset: Int,
+    val peersetId: Int
 )
 
 fun getIdAndOffset(args: Array<String>): NodeIdAndPortOffset {
+    val peersetId = System.getenv()["PEERSET_ID"]?.toInt()
+        ?: throw RuntimeException("Provide PEERSET_ID env variable to represent id of node")
+
     if (args.isNotEmpty()) {
-        return NodeIdAndPortOffset(nodeId = args[0].toInt(), portOffset = args[0].toInt())
+        return NodeIdAndPortOffset(nodeId = args[0].toInt(), portOffset = args[0].toInt(), peersetId)
     }
 
     val id = System.getenv()["RAFT_NODE_ID"]?.toInt()
         ?: throw RuntimeException("Provide either arg or RAFT_NODE_ID env variable to represent id of node")
 
-    return NodeIdAndPortOffset(nodeId = id, portOffset = 0)
+    return NodeIdAndPortOffset(nodeId = id, portOffset = 0, peersetId)
 }
 
-fun getOtherPeers(peersAddresses: List<String>, nodeId: Int): List<String> =
-    peersAddresses.filterNot { it.contains("peer$nodeId") || it.contains("${8080 + nodeId}") }
+fun getOtherPeers(peersAddresses: List<List<String>>, nodeId: Int, peersetId: Int): List<List<String>> =
+    try {
+        val result: MutableList<List<String>> = mutableListOf()
+        peersAddresses.forEachIndexed { index, strings ->
+            if (index == peersetId - 1) {
+                result.add(strings.filterNot { it.contains("peer$nodeId") || it.contains("${8080 + nodeId}") })
+            } else {
+                result.add(strings)
+            }
+        }
+        result
+    } catch (e: java.lang.IndexOutOfBoundsException) {
+        println("Peers addresses doesn't have enough elements in list - peers addresses length: ${peersAddresses.size}, index: ${peersetId - 1}")
+        throw IllegalStateException()
+    }

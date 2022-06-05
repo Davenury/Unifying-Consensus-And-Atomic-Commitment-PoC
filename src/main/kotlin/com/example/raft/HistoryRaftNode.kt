@@ -7,8 +7,8 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.io.File
 
-class HistoryRaftNode(peerId: Int) :
-    RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId")),
+class HistoryRaftNode(peerId: Int, peersetId: Int) :
+    RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId-$peersetId")),
     ConsensusProtocol<Change, History> {
 
     override fun proposeChange(change: Change): ConsensusResult {

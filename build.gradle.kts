@@ -85,12 +85,15 @@ tasks {
     }
 }
 
-val integrationTest = sourceSets.create("integrationTest")
-tasks.register<Test>("integrationTest") {
+val integrationTest = sourceSets.create("singlePeersetIntegrationTest")
+tasks.register<Test>("singlePeersetIntegrationTest") {
     group = "verification"
 
     shouldRunAfter(tasks.test)
     useJUnitPlatform()
+
+    environment("PEERSET_ID", "1")
+    environment("CONFIG_FILE", "single_peerset_application.conf")
 
     filter {
         includeTestsMatching("com.example.api.IntegrationTest")

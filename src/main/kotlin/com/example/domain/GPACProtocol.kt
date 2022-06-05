@@ -28,7 +28,7 @@ interface GPACProtocol: SignalSubject {
     suspend fun handleElect(message: ElectMe): ElectedYou
     suspend fun handleAgree(message: Agree): Agreed
     suspend fun handleApply(message: Apply)
-    suspend fun performProtocolAsLeader(change: ChangeDto, otherPeers: List<String>)
+    suspend fun performProtocolAsLeader(change: ChangeDto, otherPeers: List<List<String>>)
     fun getTransaction(ballotNumber: Int): Transaction?
     fun getTransactions(): Map<Int, Transaction>
     fun getBallotNumber(): Int
@@ -106,7 +106,7 @@ class GPACProtocolImpl(
         if (!semaphore.tryAcquire()) {
             throw AlreadyLockedException()
         }
-        println("Lock aquired: ${message.ballotNumber}")
+        logger.info("Lock aquired: ${message.ballotNumber}")
 
         signal(TestAddon.OnHandlingAgreeEnd, transactions[message.ballotNumber])
 
@@ -128,9 +128,12 @@ class GPACProtocolImpl(
         signal(TestAddon.OnHandlingApplyEnd, transactions[message.ballotNumber])
     }
 
-    override suspend fun performProtocolAsLeader(change: ChangeDto, otherPeers: List<String>) {
+    override suspend fun performProtocolAsLeader(
+        change: ChangeDto,
+        otherPeers: List<List<String>>
+    ) {
         var tries = 0
-        var electResponses: List<ElectedYou>
+        var electResponses: List<List<ElectedYou>>
 
         if(!historyManagement.canBeBuild(change.toChange())) {
             throw HistoryCannotBeBuildException()
@@ -143,11 +146,21 @@ class GPACProtocolImpl(
             signal(TestAddon.BeforeSendingElect, this.transactions[myBallotNumber])
             electResponses = getElectedYouResponses(change, otherPeers)
             tries++
-        } while (electResponses.size <= otherPeers.size / 2 && tries < maxLeaderElectionTries)
+        } while (!superSet(otherPeers, electResponses) && tries < maxLeaderElectionTries)
 
         if (tries >= maxLeaderElectionTries) throw MaxTriesExceededException()
 
-        val acceptVal = if (electResponses.all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+        // TODO - check for decision true
+        val decision = electResponses.flatten().any { it.decision }
+
+        val acceptVal = if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+
+        if (!decision && acceptVal == Accept.ABORT) {
+            if (!superSet(otherPeers, electResponses)) {
+                // TODO - change for waiting or trying again
+                logger.info("Got super majority from electing first time but not super set")
+            }
+        }
 
         signal(TestAddon.BeforeSendingAgree, this.transactions[myBallotNumber])
 
@@ -155,7 +168,7 @@ class GPACProtocolImpl(
             throw AlreadyLockedException()
         }
         val agreedResponses = getAgreedResponses(change, otherPeers, acceptVal)
-        if (agreedResponses.size <= otherPeers.size / 2) throw TooFewResponsesException()
+        if (!superSet(otherPeers, agreedResponses)) throw TooFewResponsesException()
 
         this.transactions[myBallotNumber] = this.transactions[myBallotNumber]!!.copy(decision = true)
 
@@ -172,25 +185,25 @@ class GPACProtocolImpl(
         )
     }
 
-    private suspend fun getElectedYouResponses(change: ChangeDto, otherPeers: List<String>): List<ElectedYou> =
+    private suspend fun getElectedYouResponses(change: ChangeDto, otherPeers: List<List<String>>): List<List<ElectedYou>> =
         sendRequests(
             otherPeers,
             ElectMe(myBallotNumber, change),
             "elect"
-        ) { it, e -> "Peer $it responded with exception: $e - election" }
+        ) { singlePeer, e -> "Peer $singlePeer responded with exception: $e - election" }
 
     private suspend fun getAgreedResponses(
         change: ChangeDto,
-        otherPeers: List<String>,
+        otherPeers: List<List<String>>,
         acceptVal: Accept
-    ): List<Agreed> =
-        sendRequests(
-            otherPeers,
-            Agree(myBallotNumber, acceptVal, change),
-            "ft-agree"
-        ) { it, e -> "Peer $it responded with exception: $e - ft agreement" }
+    ): List<List<Agreed>> =
+            sendRequests(
+                otherPeers,
+                Agree(myBallotNumber, acceptVal, change),
+                "ft-agree"
+            ) { singlePeer, e -> "Peer $singlePeer responded with exception: $e - ft agreement" }
 
-    private suspend fun sendApplyMessages(change: ChangeDto, otherPeers: List<String>, acceptVal: Accept) {
+    private suspend fun sendApplyMessages(change: ChangeDto, otherPeers: List<List<String>>, acceptVal: Accept) {
         sendRequests<Apply, HttpStatement>(otherPeers, Apply(
             myBallotNumber,
             this@GPACProtocolImpl.transactions[myBallotNumber]!!.decision,
@@ -200,29 +213,36 @@ class GPACProtocolImpl(
     }
 
     private suspend inline fun <T, reified K> sendRequests(
-        otherPeers: List<String>,
+        otherPeers: List<List<String>>,
         requestBody: T,
         urlPath: String,
         crossinline errorMessage: (String, Throwable) -> String
     ) =
-        otherPeers.mapNotNull {
-            withContext(Dispatchers.IO) {
-                try {
-                    logger.info("Sending to: ${"http://$it/$urlPath"}")
-                    httpClient.post<K>("http://$it/$urlPath") {
-                        contentType(ContentType.Application.Json)
-                        accept(ContentType.Application.Json)
-                        body = requestBody!!
+        otherPeers.mapIndexedNotNull { index, it ->
+            if (isInTransaction(index)) {
+                it.mapNotNull {
+                    withContext(Dispatchers.IO) {
+                        try {
+                            logger.info("Sending to: ${"http://$it/$urlPath"}")
+                            httpClient.post<K>("http://$it/$urlPath") {
+                                contentType(ContentType.Application.Json)
+                                accept(ContentType.Application.Json)
+                                body = requestBody!!
+                            }
+                        } catch (e: Exception) {
+                            logger.error(errorMessage(it, e))
+                            null
+                        }
                     }
-                } catch (e: Exception) {
-                    logger.error(errorMessage(it, e))
-                    null
                 }
+            } else {
+                null
             }
         }.also {
             logger.info("Got responses: $it")
         }
 
+    private fun isInTransaction(index: Int) = true
 
     companion object {
         private val logger = LoggerFactory.getLogger(GPACProtocolImpl::class.java)
@@ -231,5 +251,25 @@ class GPACProtocolImpl(
     private suspend fun signal(addon: TestAddon, transaction: Transaction?) {
         eventPublisher.signal(addon, this)
         addons[addon]?.invoke(transaction)
+    }
+
+    private fun <T>superMajority(allPeers: List<List<String>>, responses: List<List<T>>): Boolean {
+        val peersInTransaction = allPeers.filterIndexed { index, _ -> isInTransaction(index) }
+        val atLeastHalfShards = peersInTransaction.size > responses.size / 2
+        if (!atLeastHalfShards) {
+            return false
+        }
+
+        return responses.withIndex().all { (index, value) -> value.size > peersInTransaction[index].size / 2 }
+    }
+
+    private fun <T>superSet(allPeers: List<List<String>>, responses: List<List<T>>): Boolean {
+        val peersInTransaction = allPeers.filterIndexed { index, _ -> isInTransaction(index) }
+        val allShards = peersInTransaction.size >= responses.size
+        if (!allShards) {
+            return false
+        }
+
+        return responses.withIndex().all { (index, value) -> value.size > peersInTransaction[index].size / 2 }
     }
 }

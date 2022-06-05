@@ -36,12 +36,15 @@ object Constants {
     val RAFT_GROUP: RaftGroup
 
     init {
+        val peersetId = System.getenv()["PEERSET_ID"]?.toInt()
+            ?: throw RuntimeException("Provide PEERSET_ID env variable to represent id of node")
+
         val config = loadConfig()
         PATH = config.raft.server.root.storage.path
-        PEERS = config.raft.server.addresses.mapIndexed { index, address ->
+        PEERS = config.raft.server.addresses[peersetId - 1].mapIndexed { index, address ->
             RaftPeer.newBuilder().setId("n$index").setAddress(address).build()
         }
-        CLUSTER_GROUP_ID = UUID.fromString(config.raft.clusterGroupId)
+        CLUSTER_GROUP_ID = UUID.fromString(config.raft.clusterGroupIds[peersetId - 1])
         RAFT_GROUP = RaftGroup.valueOf(RaftGroupId.valueOf(CLUSTER_GROUP_ID), PEERS)
     }
 
