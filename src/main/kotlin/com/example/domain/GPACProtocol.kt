@@ -61,6 +61,13 @@ class GPACProtocolImpl(
 
         signal(TestAddon.OnHandlingElectBegin, null)
 
+        if (!semaphore.tryAcquire()) {
+            logger.info("Tried to respond to elect me when semaphore acquired: $message")
+            throw AlreadyLockedException()
+        } else {
+            semaphore.release()
+        }
+
         if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber)
         val initVal = if (historyManagement.canBeBuild(message.change.toChange())) Accept.COMMIT else Accept.ABORT
 

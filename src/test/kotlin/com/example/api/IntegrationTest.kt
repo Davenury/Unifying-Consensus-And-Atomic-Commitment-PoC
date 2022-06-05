@@ -61,7 +61,7 @@ class IntegrationTest {
     }
 
     @Test
-    fun `second leader comes with its transaction before first leader goes into ft-agree phase`(): Unit = runBlocking {
+    fun `second leader tries to become leader before first leader goes into ft-agree phase`(): Unit = runBlocking {
 
         val eventListener = object : EventListener {
             override fun onSignal(signal: Signal, subject: SignalSubject) {
@@ -88,7 +88,7 @@ class IntegrationTest {
         delay(5000)
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
-        expectThrows<ServerResponseException> {
+        expectThrows<ClientRequestException> {
             executeChange("http://localhost:8081/create_change")
         }
 
