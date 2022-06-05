@@ -67,7 +67,7 @@ class IntegrationTest {
             override fun onSignal(signal: Signal, subject: SignalSubject) {
                 if (signal.addon == TestAddon.BeforeSendingAgree) {
                     expectCatching {
-                        executeChange("http://0.0.0.0:8082/create_change")
+                        executeChange("http://localhost:8082/create_change")
                     }.isSuccess()
                 }
             }
@@ -103,7 +103,7 @@ class IntegrationTest {
                 override fun onSignal(signal: Signal, subject: SignalSubject) {
                     if (signal.addon == TestAddon.BeforeSendingApply) {
                         expectCatching {
-                            executeChange("http://0.0.0.0:8082/create_change")
+                            executeChange("http://localhost:8082/create_change")
                         }.isFailure()
                     }
                 }
