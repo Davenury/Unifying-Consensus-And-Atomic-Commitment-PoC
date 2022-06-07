@@ -109,6 +109,7 @@ class GPACProtocolImpl(
     }
 
     override suspend fun handleApply(message: Apply) {
+        logger.info("Releasing semaphore as cohort")
         semaphore.release()
 
         signal(TestAddon.OnHandlingApplyBegin, transaction)
@@ -168,7 +169,8 @@ class GPACProtocolImpl(
 
         signal(TestAddon.BeforeSendingApply, this.transaction)
 
-        sendApplyMessages(change, otherPeers, acceptVal)
+        val applyMessages = sendApplyMessages(change, otherPeers, acceptVal).flatten().map { it.receive<String>() }
+        logger.info("Apply Messages Responses: $applyMessages")
         this.handleApply(
             Apply(
                 myBallotNumber,
@@ -197,14 +199,15 @@ class GPACProtocolImpl(
                 "ft-agree"
             ) { singlePeer, e -> "Peer $singlePeer responded with exception: $e - ft agreement" }
 
-    private suspend fun sendApplyMessages(change: ChangeDto, otherPeers: List<List<String>>, acceptVal: Accept) {
-        sendRequests<Apply, HttpStatement>(otherPeers, Apply(
-            myBallotNumber,
-            this@GPACProtocolImpl.transaction.decision,
-            acceptVal,
-            change
-        ), "apply") { it, e -> "Peer: $it didn't apply transaction: $e" }
-    }
+    private suspend fun sendApplyMessages(change: ChangeDto, otherPeers: List<List<String>>, acceptVal: Accept) =
+        sendRequests<Apply, HttpStatement>(
+            otherPeers, Apply(
+                myBallotNumber,
+                this@GPACProtocolImpl.transaction.decision,
+                acceptVal,
+                change
+            ), "apply"
+        ) { it, e -> "Peer: $it didn't apply transaction: $e" }
 
     private suspend inline fun <T, reified K> sendRequests(
         otherPeers: List<List<String>>,
