@@ -163,7 +163,6 @@ class GPACProtocolImpl(
                 change
             )
         )
-        semaphore.release()
     }
 
     private suspend fun getElectedYouResponses(change: ChangeDto, otherPeers: List<String>): List<ElectedYou> =
