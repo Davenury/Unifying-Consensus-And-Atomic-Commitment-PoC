@@ -146,7 +146,7 @@ class GPACProtocolImpl(
             signal(TestAddon.BeforeSendingElect, this.transaction)
             electResponses = getElectedYouResponses(change, otherPeers)
             tries++
-        } while (!superSet(otherPeers, electResponses) && tries < maxLeaderElectionTries)
+        } while (!superMajority(otherPeers, electResponses) && tries < maxLeaderElectionTries)
 
         if (tries >= maxLeaderElectionTries) throw MaxTriesExceededException()
 
@@ -225,8 +225,9 @@ class GPACProtocolImpl(
                 it.mapNotNull {
                     withContext(Dispatchers.IO) {
                         try {
-                            logger.info("Sending to: ${"http://$it/$urlPath"}")
-                            httpClient.post<K>("http://$it/$urlPath") {
+                            val url = "http://$it/$urlPath"
+                            logger.info("Sending to: $url")
+                            httpClient.post<K>(url) {
                                 contentType(ContentType.Application.Json)
                                 accept(ContentType.Application.Json)
                                 body = requestBody!!
