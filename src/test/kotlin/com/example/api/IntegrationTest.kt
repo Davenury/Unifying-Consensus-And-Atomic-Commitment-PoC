@@ -88,7 +88,7 @@ class IntegrationTest {
         delay(5000)
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
-        expectThrows<ClientRequestException> {
+        expectThrows<ServerResponseException> {
             executeChange("http://localhost:8081/create_change")
         }
 
