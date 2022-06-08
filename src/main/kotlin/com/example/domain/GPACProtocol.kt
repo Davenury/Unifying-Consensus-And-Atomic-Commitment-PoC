@@ -254,16 +254,15 @@ class GPACProtocolImpl(
         addons[addon]?.invoke(transaction)
     }
 
-    private fun <T>superMajority(allPeers: List<List<String>>, responses: List<List<T>>): Boolean {
-        val peersInTransaction = allPeers.filterIndexed { index, _ -> isInTransaction(index) }
-        val atLeastHalfShards = peersInTransaction.size > responses.size / 2
+    private fun <T>superMajority(allPeers: List<List<String>>, responses: List<List<T>>): Boolean =
+        superFunction(allPeers, responses, 2)
 
-        return responses.withIndex().all { (index, value) -> value.size > peersInTransaction[index].size / 2 } && atLeastHalfShards
-    }
+    private fun <T>superSet(allPeers: List<List<String>>, responses: List<List<T>>): Boolean =
+        superFunction(allPeers, responses, 1)
 
-    private fun <T>superSet(allPeers: List<List<String>>, responses: List<List<T>>): Boolean {
+    private fun <T>superFunction(allPeers: List<List<String>>, responses: List<List<T>>, divider: Int): Boolean {
         val peersInTransaction = allPeers.filterIndexed { index, _ -> isInTransaction(index) }
-        val allShards = peersInTransaction.size >= responses.size
+        val allShards = peersInTransaction.size >= responses.size / divider
 
         return responses.withIndex().all { (index, value) -> value.size > peersInTransaction[index].size / 2 } && allShards
     }
