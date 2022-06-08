@@ -4,6 +4,7 @@ import com.example.AdditionalAction
 import com.example.EventPublisher
 import com.example.SignalSubject
 import com.example.TestAddon
+import io.ktor.client.statement.*
 import org.slf4j.LoggerFactory
 
 // TODO - ask if we should reject transaction or just wait
@@ -121,40 +122,50 @@ class GPACProtocolImpl(
     override suspend fun performProtocolAsLeader(
         change: ChangeDto
     ) {
-        val electResponses = electMePhase(change, otherPeers)
+        var electResponses = electMePhase(change) { responses -> superMajority(responses) }
 
         // TODO - check for decision true
-        val decision = electResponses.flatten().any { it.decision }
-
-        val acceptVal =
-            if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
-
-        if (!decision && acceptVal == Accept.ABORT) {
-            if (!superSet(otherPeers, electResponses)) {
-                // TODO - change for waiting or trying again
-                logger.info("Got super majority from electing first time but not super set")
-            }
+        val messageWithDecision = electResponses.flatten().find { it.decision }
+        if (messageWithDecision != null) {
+            // end of protocol, this cohort only needs to send apply once more to all the other peers
+            val applyMessages = applyPhase(change, messageWithDecision.acceptVal!!)
+            return
         }
+
+        var acceptVal = if (electResponses.flatten().all { it.acceptVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+
+        if (acceptVal == Accept.COMMIT) {
+            // someone got to ft-agree phase
+            this.transaction = this.transaction.copy(acceptVal = acceptVal)
+            signal(TestAddon.BeforeSendingAgree, this.transaction)
+
+            val agreedResponses = ftAgreePhase(change, acceptVal)
+
+            signal(TestAddon.BeforeSendingApply, this.transaction)
+
+            val applyResponses = applyPhase(change, acceptVal)
+
+            return
+        }
+
+        if (!superSet(electResponses)) {
+            logger.info("Got super majority from electing first time but not super set")
+            electResponses = electMePhase(change) { responses -> superSet(responses) }
+        }
+
+        acceptVal = if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+        this.transaction = this.transaction.copy(acceptVal = acceptVal)
 
         signal(TestAddon.BeforeSendingAgree, this.transaction)
 
-        ftAgreePhase(change, otherPeers, acceptVal)
+        val agreedResponses = ftAgreePhase(change, acceptVal)
 
         signal(TestAddon.BeforeSendingApply, this.transaction)
 
-        val applyMessages = sendApplyMessages(change, otherPeers, acceptVal).flatten().map { it.receive<String>() }
-        logger.info("Apply Messages Responses: $applyMessages")
-        this.handleApply(
-            Apply(
-                myBallotNumber,
-                this@GPACProtocolImpl.transaction.decision,
-                acceptVal,
-                change
-            )
-        )
+        val applyResponses = applyPhase(change, acceptVal)
     }
 
-    private suspend fun electMePhase(change: ChangeDto, otherPeers: List<List<String>>): List<List<ElectedYou>> {
+    private suspend fun electMePhase(change: ChangeDto, superFunction: (List<List<ElectedYou>>) -> Boolean): List<List<ElectedYou>> {
         var tries = 0
         var electResponses: List<List<ElectedYou>>
 
@@ -169,20 +180,35 @@ class GPACProtocolImpl(
             signal(TestAddon.BeforeSendingElect, this.transaction)
             electResponses = getElectedYouResponses(change, otherPeers)
             tries++
-        } while (!superMajority(otherPeers, electResponses) && tries < maxLeaderElectionTries)
+        } while (!superFunction(electResponses) && tries < maxLeaderElectionTries)
 
         if (tries >= maxLeaderElectionTries) throw MaxTriesExceededException()
 
         return electResponses
     }
 
-    private suspend fun ftAgreePhase(change: ChangeDto, otherPeers: List<List<String>>, acceptVal: Accept) {
+    private suspend fun ftAgreePhase(change: ChangeDto, acceptVal: Accept): List<List<Agreed>> {
         transactionBlocker.tryToBlock()
 
         val agreedResponses = getAgreedResponses(change, otherPeers, acceptVal)
-        if (!superSet(otherPeers, agreedResponses)) throw TooFewResponsesException()
+        if (!superSet(agreedResponses)) throw TooFewResponsesException()
 
         this.transaction = this.transaction.copy(decision = true)
+        return agreedResponses
+    }
+
+    private suspend fun applyPhase(change: ChangeDto, acceptVal: Accept): List<String> {
+        val applyMessages = sendApplyMessages(change, otherPeers, acceptVal).flatten().map { it.receive<String>() }
+        logger.info("Apply Messages Responses: $applyMessages")
+        this.handleApply(
+            Apply(
+                myBallotNumber,
+                this@GPACProtocolImpl.transaction.decision,
+                acceptVal,
+                change
+            )
+        )
+        return applyMessages
     }
 
     private suspend fun getElectedYouResponses(
@@ -219,14 +245,14 @@ class GPACProtocolImpl(
         addons[addon]?.invoke(transaction)
     }
 
-    private fun <T> superMajority(allPeers: List<List<String>>, responses: List<List<T>>): Boolean =
-        superFunction(allPeers, responses, 2)
+    private fun <T> superMajority(responses: List<List<T>>): Boolean =
+        superFunction(responses, 2)
 
-    private fun <T> superSet(allPeers: List<List<String>>, responses: List<List<T>>): Boolean =
-        superFunction(allPeers, responses, 1)
+    private fun <T> superSet(responses: List<List<T>>): Boolean =
+        superFunction(responses, 1)
 
-    private fun <T> superFunction(allPeers: List<List<String>>, responses: List<List<T>>, divider: Int): Boolean {
-        val peersInTransaction = allPeers.filterIndexed { index, _ -> isInTransaction(index) }
+    private fun <T> superFunction(responses: List<List<T>>, divider: Int): Boolean {
+        val peersInTransaction = otherPeers.filterIndexed { index, _ -> isInTransaction(index) }
         val allShards = peersInTransaction.size >= responses.size / divider
 
         return responses.withIndex()
