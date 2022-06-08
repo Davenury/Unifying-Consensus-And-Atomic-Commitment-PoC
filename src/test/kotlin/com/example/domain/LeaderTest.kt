@@ -3,6 +3,7 @@ package com.example.domain
 import com.example.getOtherPeers
 import com.example.httpClient
 import com.example.infrastructure.InMemoryHistoryManagement
+import com.example.infrastructure.ProtocolTimerImpl
 import com.example.utils.DummyConsensusProtocol
 import com.example.utils.PeerThree
 import com.example.utils.PeerTwo
@@ -19,7 +20,7 @@ class LeaderTest {
 
     @BeforeEach
     fun setup() {
-        subject = GPACProtocolImpl(historyManagement, 3, httpClient)
+        subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker)
     }
 
     @Test
@@ -97,7 +98,10 @@ class LeaderTest {
     private val otherPeers = getOtherPeers(allPeers, 1, 1)
     private val consensusProtocol = DummyConsensusProtocol
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-    private var subject = GPACProtocolImpl(historyManagement, 3, httpClient)
+    private val timer = ProtocolTimerImpl(1)
+    private val client = ProtocolClientImpl()
+    private val transactionBlocker = TransactionBlockerImpl()
+    private var subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker)
     private val changeDto = ChangeDto(mapOf(
         "operation" to "ADD_USER",
         "userName" to "userName"

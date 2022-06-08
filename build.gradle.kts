@@ -55,6 +55,7 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.8.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("io.strikt:strikt-core:0.34.0")
+    testImplementation("io.mockk:mockk:1.12.4")
 
     // wiremock
     testImplementation("com.github.tomakehurst:wiremock-jre8:2.33.2")
@@ -92,7 +93,6 @@ tasks.register<Test>("singlePeersetIntegrationTest") {
     shouldRunAfter(tasks.test)
     useJUnitPlatform()
 
-    environment("PEERSET_ID", "1")
     environment("CONFIG_FILE", "single_peerset_application.conf")
 
     filter {

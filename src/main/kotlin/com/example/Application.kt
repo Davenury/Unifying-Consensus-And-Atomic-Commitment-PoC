@@ -33,12 +33,15 @@ fun startApplication(
         val historyManagement = RatisHistoryManagement(raftNode)
         val eventPublisher = EventPublisher(eventListeners)
         val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs)
+        val protocolClient = ProtocolClientImpl()
+        val transactionBlocker = TransactionBlockerImpl()
         val protocol =
             GPACProtocolImpl(
                 historyManagement,
                 config.peers.maxLeaderElectionTries,
                 timer,
-                httpClient,
+                protocolClient,
+                transactionBlocker,
                 additionalActions,
                 eventPublisher
             )

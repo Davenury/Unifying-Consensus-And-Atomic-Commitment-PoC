@@ -81,9 +81,9 @@ class IntegrationTest {
             TestAddon.BeforeSendingAgree to firstLeaderAction
         )
 
-        val app1 = GlobalScope.launch { startApplication(arrayOf("1"), firstLeaderCallbacks, listOf(eventListener)) }
-        val app2 = GlobalScope.launch { startApplication(arrayOf("2"), emptyMap()) }
-        val app3 = GlobalScope.launch { startApplication(arrayOf("3"), emptyMap()) }
+        val app1 = GlobalScope.launch { startApplication(arrayOf("1", "1"), firstLeaderCallbacks, listOf(eventListener)) }
+        val app2 = GlobalScope.launch { startApplication(arrayOf("2", "1"), emptyMap()) }
+        val app3 = GlobalScope.launch { startApplication(arrayOf("3", "1"), emptyMap()) }
 
         delay(5000)
 
@@ -116,9 +116,9 @@ class IntegrationTest {
             val firstLeaderCallbacks: Map<TestAddon, suspend (Transaction?) -> Unit> = mapOf(
                 TestAddon.BeforeSendingApply to firstLeaderAction
             )
-            val app1 = GlobalScope.launch { startApplication(arrayOf("1"), firstLeaderCallbacks, listOf(eventListener)) }
-            val app2 = GlobalScope.launch { startApplication(arrayOf("2"), emptyMap()) }
-            val app3 = GlobalScope.launch { startApplication(arrayOf("3"), emptyMap()) }
+            val app1 = GlobalScope.launch { startApplication(arrayOf("1", "1"), firstLeaderCallbacks, listOf(eventListener)) }
+            val app2 = GlobalScope.launch { startApplication(arrayOf("2", "1"), emptyMap()) }
+            val app3 = GlobalScope.launch { startApplication(arrayOf("3", "1"), emptyMap()) }
 
             delay(5000)
 
