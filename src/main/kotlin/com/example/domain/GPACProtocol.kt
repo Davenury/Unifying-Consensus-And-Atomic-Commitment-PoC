@@ -120,6 +120,9 @@ class GPACProtocolImpl(
         if (message.acceptVal == Accept.COMMIT) {
             historyManagement.change(message.change.toChange())
         }
+
+        transaction = Transaction(myBallotNumber, Accept.ABORT)
+
         signal(TestAddon.OnHandlingApplyEnd, transaction)
     }
 
