@@ -20,7 +20,7 @@ class LeaderTest {
 
     @BeforeEach
     fun setup() {
-        subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker)
+        subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers)
     }
 
     @Test
@@ -55,7 +55,7 @@ class LeaderTest {
         PeerThree.stubForNotElectingYou()
 
         expectThrows<MaxTriesExceededException> {
-            subject.performProtocolAsLeader(changeDto, otherPeers)
+            subject.performProtocolAsLeader(changeDto)
         }
 
         // assert that we're actually asking 3 times
@@ -71,7 +71,7 @@ class LeaderTest {
         PeerThree.stubForNotAgree()
 
         expectThrows<TooFewResponsesException> {
-            subject.performProtocolAsLeader(changeDto, otherPeers)
+            subject.performProtocolAsLeader(changeDto)
         }
 
         PeerTwo.verifyAgreeStub(1)
@@ -88,7 +88,7 @@ class LeaderTest {
         PeerThree.stubForApply()
 
         runBlocking {
-            subject.performProtocolAsLeader(changeDto, otherPeers)
+            subject.performProtocolAsLeader(changeDto)
         }
 
         expectThat(historyManagement.getLastChange()).isEqualTo(changeDto.toChange())
@@ -101,7 +101,7 @@ class LeaderTest {
     private val timer = ProtocolTimerImpl(1)
     private val client = ProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
-    private var subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker)
+    private var subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers)
     private val changeDto = ChangeDto(mapOf(
         "operation" to "ADD_USER",
         "userName" to "userName"

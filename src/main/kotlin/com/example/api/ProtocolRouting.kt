@@ -8,12 +8,12 @@ import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 
-fun Application.protocolRouting(protocol: GPACProtocol, allPeers: List<List<String>>) {
+fun Application.protocolRouting(protocol: GPACProtocol) {
 
     routing {
         post("/create_change") {
             val change = ChangeDto(call.receive())
-            protocol.performProtocolAsLeader(change, allPeers)
+            protocol.performProtocolAsLeader(change)
             call.respond(HttpStatusCode.OK)
         }
 

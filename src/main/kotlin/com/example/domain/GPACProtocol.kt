@@ -12,7 +12,7 @@ interface GPACProtocol : SignalSubject {
     suspend fun handleElect(message: ElectMe): ElectedYou
     suspend fun handleAgree(message: Agree): Agreed
     suspend fun handleApply(message: Apply)
-    suspend fun performProtocolAsLeader(change: ChangeDto, otherPeers: List<List<String>>)
+    suspend fun performProtocolAsLeader(change: ChangeDto)
     fun getTransaction(): Transaction
     fun getBallotNumber(): Int
 }
@@ -23,6 +23,7 @@ class GPACProtocolImpl(
     private val timer: ProtocolTimer,
     private val protocolClient: ProtocolClient,
     private val transactionBlocker: TransactionBlocker,
+    private val otherPeers: List<List<String>>,
     private val addons: Map<TestAddon, AdditionalAction> = emptyMap(),
     private val eventPublisher: EventPublisher = EventPublisher(emptyList())
 ) : GPACProtocol {
@@ -108,8 +109,7 @@ class GPACProtocolImpl(
     }
 
     override suspend fun performProtocolAsLeader(
-        change: ChangeDto,
-        otherPeers: List<List<String>>
+        change: ChangeDto
     ) {
         val electResponses = electMePhase(change, otherPeers)
 

@@ -2,7 +2,6 @@ package com.example.domain
 
 import com.example.infrastructure.InMemoryHistoryManagement
 import com.example.utils.DummyConsensusProtocol
-import io.ktor.client.*
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -22,11 +21,25 @@ class GPACProtocolSpec {
     private val timerMock = mockk<ProtocolTimer>()
     private val protocolClientMock = mockk<ProtocolClient>()
     private val transactionBlockerMock = mockk<TransactionBlocker>()
-    private var subject = GPACProtocolImpl(historyManagement, 3, timerMock, protocolClientMock, transactionBlockerMock)
+    private var subject = GPACProtocolImpl(
+        historyManagement,
+        3,
+        timerMock,
+        protocolClientMock,
+        transactionBlockerMock,
+        listOf(listOf("http://localhost:8080"))
+    )
 
     @BeforeEach
     fun setup() {
-        subject = GPACProtocolImpl(historyManagement, 3, timerMock, protocolClientMock, transactionBlockerMock)
+        subject = GPACProtocolImpl(
+            historyManagement,
+            3,
+            timerMock,
+            protocolClientMock,
+            transactionBlockerMock,
+            listOf(listOf("http://localhost:8080"))
+        )
     }
 
     @Test
@@ -132,9 +145,11 @@ class GPACProtocolSpec {
         expectThat(historyManagement.getLastChange()).isEqualTo(null)
     }
 
-    private val changeDto = ChangeDto(mapOf(
-        "operation" to "ADD_USER",
-        "userName" to "userName"
-    ))
+    private val changeDto = ChangeDto(
+        mapOf(
+            "operation" to "ADD_USER",
+            "userName" to "userName"
+        )
+    )
 
 }

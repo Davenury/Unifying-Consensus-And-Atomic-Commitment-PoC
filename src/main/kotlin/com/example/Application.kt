@@ -35,6 +35,7 @@ fun startApplication(
         val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs)
         val protocolClient = ProtocolClientImpl()
         val transactionBlocker = TransactionBlockerImpl()
+        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId, conf.peersetId)
         val protocol =
             GPACProtocolImpl(
                 historyManagement,
@@ -42,10 +43,10 @@ fun startApplication(
                 timer,
                 protocolClient,
                 transactionBlocker,
+                otherPeers,
                 additionalActions,
                 eventPublisher
             )
-        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId, conf.peersetId)
 
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
@@ -100,7 +101,7 @@ fun startApplication(
         }
 
         configureSampleRouting(historyManagement)
-        protocolRouting(protocol, otherPeers)
+        protocolRouting(protocol)
     }.start(wait = true)
 }
 
