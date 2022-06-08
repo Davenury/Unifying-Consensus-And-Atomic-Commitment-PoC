@@ -3,6 +3,7 @@ package com.example
 import com.example.api.configureSampleRouting
 import com.example.api.protocolRouting
 import com.example.domain.*
+import com.example.infrastructure.ProtocolTimerImpl
 import com.example.infrastructure.RatisHistoryManagement
 import com.example.raft.Constants
 import com.example.raft.HistoryRaftNode
@@ -31,10 +32,12 @@ fun startApplication(
         val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId)
         val historyManagement = RatisHistoryManagement(raftNode)
         val eventPublisher = EventPublisher(eventListeners)
+        val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs)
         val protocol =
             GPACProtocolImpl(
                 historyManagement,
                 config.peers.maxLeaderElectionTries,
+                timer,
                 httpClient,
                 additionalActions,
                 eventPublisher

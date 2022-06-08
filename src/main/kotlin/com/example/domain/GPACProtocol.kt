@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
+import java.util.*
 
 data class Transaction(
     val ballotNumber: Int,
@@ -36,6 +37,7 @@ interface GPACProtocol: SignalSubject {
 class GPACProtocolImpl(
     private val historyManagement: HistoryManagement,
     private val maxLeaderElectionTries: Int,
+    private val timer: ProtocolTimer,
     private val httpClient: HttpClient,
     private val addons: Map<TestAddon, AdditionalAction> = emptyMap(),
     private val eventPublisher: EventPublisher = EventPublisher(emptyList())
