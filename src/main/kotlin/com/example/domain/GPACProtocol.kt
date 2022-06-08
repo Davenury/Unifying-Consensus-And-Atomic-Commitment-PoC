@@ -220,8 +220,9 @@ class GPACProtocolImpl(
         urlPath: String,
         crossinline errorMessage: (String, Throwable) -> String
     ) =
-        otherPeers.mapIndexedNotNull { index, it ->
-            if (isInTransaction(index)) {
+        otherPeers
+            .filterIndexed {index, _ -> isInTransaction(index) }
+            .map { it ->
                 it.mapNotNull {
                     withContext(Dispatchers.IO) {
                         try {
@@ -238,9 +239,6 @@ class GPACProtocolImpl(
                         }
                     }
                 }
-            } else {
-                null
-            }
         }.also {
             logger.info("Got responses: $it")
         }
@@ -259,20 +257,14 @@ class GPACProtocolImpl(
     private fun <T>superMajority(allPeers: List<List<String>>, responses: List<List<T>>): Boolean {
         val peersInTransaction = allPeers.filterIndexed { index, _ -> isInTransaction(index) }
         val atLeastHalfShards = peersInTransaction.size > responses.size / 2
-        if (!atLeastHalfShards) {
-            return false
-        }
 
-        return responses.withIndex().all { (index, value) -> value.size > peersInTransaction[index].size / 2 }
+        return responses.withIndex().all { (index, value) -> value.size > peersInTransaction[index].size / 2 } && atLeastHalfShards
     }
 
     private fun <T>superSet(allPeers: List<List<String>>, responses: List<List<T>>): Boolean {
         val peersInTransaction = allPeers.filterIndexed { index, _ -> isInTransaction(index) }
         val allShards = peersInTransaction.size >= responses.size
-        if (!allShards) {
-            return false
-        }
 
-        return responses.withIndex().all { (index, value) -> value.size > peersInTransaction[index].size / 2 }
+        return responses.withIndex().all { (index, value) -> value.size > peersInTransaction[index].size / 2 } && allShards
     }
 }
