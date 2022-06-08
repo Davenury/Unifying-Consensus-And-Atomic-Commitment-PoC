@@ -109,21 +109,23 @@ class GPACProtocolImpl(
     }
 
     override suspend fun handleApply(message: Apply) {
-        logger.info("Releasing semaphore as cohort")
-        semaphore.release()
-
         signal(TestAddon.OnHandlingApplyBegin, transaction)
 
-        this.transaction =
-            this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
+        try {
+            this.transaction =
+                this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
-        if (message.acceptVal == Accept.COMMIT) {
-            historyManagement.change(message.change.toChange())
+            if (message.acceptVal == Accept.COMMIT) {
+                historyManagement.change(message.change.toChange())
+            }
+        } finally {
+            transaction = Transaction(myBallotNumber, Accept.ABORT)
+
+            logger.info("Releasing semaphore as cohort")
+            semaphore.release()
+
+            signal(TestAddon.OnHandlingApplyEnd, transaction)
         }
-
-        transaction = Transaction(myBallotNumber, Accept.ABORT)
-
-        signal(TestAddon.OnHandlingApplyEnd, transaction)
     }
 
     override suspend fun performProtocolAsLeader(
