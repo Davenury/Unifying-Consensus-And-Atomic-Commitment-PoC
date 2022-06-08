@@ -85,10 +85,13 @@ class GPACProtocolImpl(
 
         signal(TestAddon.OnHandlingAgreeEnd, transaction)
 
+        selfdestruct(message.change)
+
         return Agreed(transaction.ballotNumber, acceptVal)
     }
 
     override suspend fun handleApply(message: Apply) {
+        recover()
         signal(TestAddon.OnHandlingApplyBegin, transaction)
 
         try {
@@ -106,6 +109,13 @@ class GPACProtocolImpl(
 
             signal(TestAddon.OnHandlingApplyEnd, transaction)
         }
+    }
+
+    private fun selfdestruct(change: ChangeDto) {
+        timer.startCounting { performProtocolAsLeader(change) }
+    }
+    private fun recover() {
+        timer.cancelCounting()
     }
 
     override suspend fun performProtocolAsLeader(

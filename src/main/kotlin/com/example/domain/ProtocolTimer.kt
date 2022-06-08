@@ -1,6 +1,6 @@
 package com.example.domain
 
 interface ProtocolTimer {
-    fun startCounting(fn: () -> Unit)
+    fun startCounting(action: suspend () -> Unit)
     fun cancelCounting()
 }

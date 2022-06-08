@@ -56,6 +56,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("io.strikt:strikt-core:0.34.0")
     testImplementation("io.mockk:mockk:1.12.4")
+    testImplementation("org.awaitility:awaitility:4.2.0")
 
     // wiremock
     testImplementation("com.github.tomakehurst:wiremock-jre8:2.33.2")
