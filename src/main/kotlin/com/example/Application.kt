@@ -120,15 +120,15 @@ fun getIdAndOffset(args: Array<String>, config: Config): NodeIdAndPortOffset {
 
 fun getOtherPeers(peersAddresses: List<List<String>>, nodeId: Int, peersetId: Int): List<List<String>> =
     try {
-        val result: MutableList<List<String>> = mutableListOf()
-        peersAddresses.forEachIndexed { index, strings ->
+        peersAddresses.foldIndexed(mutableListOf()) { index, acc, strings ->
             if (index == peersetId - 1) {
-                result.add(strings.filterNot { it.contains("peer$nodeId") || it.contains("${8080 + nodeId}") })
+                acc += strings.filterNot { it.contains("peer$nodeId") || it.contains("${8080 + nodeId}") }
+                acc
             } else {
-                result.add(strings)
+                acc += strings
+                acc
             }
         }
-        result
     } catch (e: java.lang.IndexOutOfBoundsException) {
         println("Peers addresses doesn't have enough elements in list - peers addresses length: ${peersAddresses.size}, index: ${peersetId - 1}")
         throw IllegalStateException()

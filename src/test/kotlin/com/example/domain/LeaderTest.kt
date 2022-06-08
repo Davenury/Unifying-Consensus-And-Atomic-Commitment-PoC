@@ -32,6 +32,15 @@ class LeaderTest {
     }
 
     @Test
+    fun `should load only other peers - mutliple peersets`() {
+        val nodeId = 2
+        val peersetId = 1
+
+        val allPeers = listOf(listOf("peer1:8080", "peer2:8080", "peer3:8080"), listOf("peer4:8080", "peer5:8080", "peer6:8080"))
+        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten()).containsExactlyInAnyOrder("peer1:8080", "peer3:8080", "peer4:8080", "peer5:8080", "peer6:8080")
+    }
+
+    @Test
     fun `should load only other peers - localhost version`() {
         val nodeId = 2
         val peersetId = 1
