@@ -30,15 +30,18 @@ import java.util.*
  * Constants across servers and clients
  */
 object Constants {
-    val PEERS: List<RaftPeer>
-    val PATH: String
-    val CLUSTER_GROUP_ID: UUID
-    val RAFT_GROUP: RaftGroup
+    private lateinit var PEERS: List<RaftPeer>
+    private lateinit var PATH: String
+    private lateinit var CLUSTER_GROUP_ID: UUID
+    private lateinit var RAFT_GROUP: RaftGroup
 
-    init {
-        val peersetId = System.getenv()["PEERSET_ID"]?.toInt()
-            ?: throw RuntimeException("Provide PEERSET_ID env variable to represent id of node")
+    fun oneNodeGroup(peer: RaftPeer): RaftGroup {
+        return RaftGroup.valueOf(
+            RaftGroupId.valueOf(CLUSTER_GROUP_ID), peer
+        )
+    }
 
+    fun loadConfig(peersetId: Int) {
         val config = loadConfig()
         PATH = config.raft.server.root.storage.path
         PEERS = config.raft.server.addresses[peersetId - 1].mapIndexed { index, address ->
@@ -48,9 +51,6 @@ object Constants {
         RAFT_GROUP = RaftGroup.valueOf(RaftGroupId.valueOf(CLUSTER_GROUP_ID), PEERS)
     }
 
-    fun oneNodeGroup(peer: RaftPeer): RaftGroup {
-        return RaftGroup.valueOf(
-            RaftGroupId.valueOf(CLUSTER_GROUP_ID), peer
-        )
-    }
+    fun getRaftGroup() = RAFT_GROUP
+    fun getPeers() = PEERS
 }

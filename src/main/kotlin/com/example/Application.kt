@@ -4,6 +4,7 @@ import com.example.api.configureSampleRouting
 import com.example.api.protocolRouting
 import com.example.domain.*
 import com.example.infrastructure.RatisHistoryManagement
+import com.example.raft.Constants
 import com.example.raft.HistoryRaftNode
 import io.ktor.application.*
 import io.ktor.features.*
@@ -25,6 +26,7 @@ fun startApplication(
 ) {
     val config = loadConfig()
     val conf = getIdAndOffset(args, config)
+    Constants.loadConfig(conf.peersetId)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
         val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId)
         val historyManagement = RatisHistoryManagement(raftNode)
@@ -103,14 +105,16 @@ data class NodeIdAndPortOffset(
 )
 
 fun getIdAndOffset(args: Array<String>, config: Config): NodeIdAndPortOffset {
-    val peersetId = System.getenv()["PEERSET_ID"]?.toInt()
-        ?: throw RuntimeException("Provide PEERSET_ID env variable to represent id of node")
 
     if (args.isNotEmpty()) {
+        val peersetId = args[1].toInt()
         val portOffsetFromPreviousPeersets: Int =
             config.peers.peersAddresses.foldIndexed(0) { index, acc, strings -> if (index <= peersetId - 2) acc + strings.size  else acc + 0 }
         return NodeIdAndPortOffset(nodeId = args[0].toInt(), portOffset = args[0].toInt() + portOffsetFromPreviousPeersets, peersetId)
     }
+
+    val peersetId = System.getenv()["PEERSET_ID"]?.toInt()
+        ?: throw RuntimeException("Provide PEERSET_ID env variable to represent id of node")
 
     val id = System.getenv()["RAFT_NODE_ID"]?.toInt()
         ?: throw RuntimeException("Provide either arg or RAFT_NODE_ID env variable to represent id of node")
