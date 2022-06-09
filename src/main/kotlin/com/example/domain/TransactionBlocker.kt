@@ -4,7 +4,7 @@ import kotlinx.coroutines.sync.Semaphore
 import org.slf4j.LoggerFactory
 
 interface TransactionBlocker {
-    fun canISendElectedYou(): Boolean
+    fun assertICanSendElectedYou()
     fun releaseBlock()
     fun tryToBlock()
 }
@@ -12,13 +12,12 @@ interface TransactionBlocker {
 class TransactionBlockerImpl: TransactionBlocker {
     private val semaphore = Semaphore(1)
 
-    override fun canISendElectedYou() =
+    override fun assertICanSendElectedYou() =
         if (!semaphore.tryAcquire()) {
             logger.info("Tried to respond to elect me when semaphore acquired!")
-            false
+            throw AlreadyLockedException()
         } else {
             semaphore.release()
-            true
         }
 
     override fun releaseBlock() {

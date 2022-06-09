@@ -4,7 +4,6 @@ import com.example.AdditionalAction
 import com.example.EventPublisher
 import com.example.SignalSubject
 import com.example.TestAddon
-import io.ktor.client.statement.*
 import org.slf4j.LoggerFactory
 
 // TODO - ask if we should reject transaction or just wait
@@ -44,9 +43,7 @@ class GPACProtocolImpl(
 
         signal(TestAddon.OnHandlingElectBegin, null)
 
-        if (!transactionBlocker.canISendElectedYou()) {
-            throw AlreadyLockedException()
-        }
+        transactionBlocker.assertICanSendElectedYou()
 
         if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber)
         val initVal = if (historyManagement.canBeBuild(message.change.toChange())) Accept.COMMIT else Accept.ABORT
@@ -86,13 +83,13 @@ class GPACProtocolImpl(
 
         signal(TestAddon.OnHandlingAgreeEnd, transaction)
 
-        selfdestruct(message.change)
+        leaderFailTimeoutStart(message.change)
 
         return Agreed(transaction.ballotNumber, acceptVal)
     }
 
     override suspend fun handleApply(message: Apply) {
-        recover()
+        leaderFailTimeoutStop()
         signal(TestAddon.OnHandlingApplyBegin, transaction)
 
         try {
@@ -112,10 +109,10 @@ class GPACProtocolImpl(
         }
     }
 
-    private fun selfdestruct(change: ChangeDto) {
+    private fun leaderFailTimeoutStart(change: ChangeDto) {
         timer.startCounting { performProtocolAsLeader(change) }
     }
-    private fun recover() {
+    private fun leaderFailTimeoutStop() {
         transactionBlocker.releaseBlock()
         timer.cancelCounting()
     }
