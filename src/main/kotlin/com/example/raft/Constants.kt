@@ -30,10 +30,12 @@ import java.util.*
  * Constants across servers and clients
  */
 object Constants {
-    private lateinit var PEERS: List<RaftPeer>
+    lateinit var PEERS: List<RaftPeer>
+        private set
     private lateinit var PATH: String
     private lateinit var CLUSTER_GROUP_ID: UUID
-    private lateinit var RAFT_GROUP: RaftGroup
+    lateinit var RAFT_GROUP: RaftGroup
+        private set
 
     fun oneNodeGroup(peer: RaftPeer): RaftGroup {
         return RaftGroup.valueOf(
@@ -50,7 +52,4 @@ object Constants {
         CLUSTER_GROUP_ID = UUID.fromString(config.raft.clusterGroupIds[peersetId - 1])
         RAFT_GROUP = RaftGroup.valueOf(RaftGroupId.valueOf(CLUSTER_GROUP_ID), PEERS)
     }
-
-    fun getRaftGroup() = RAFT_GROUP
-    fun getPeers() = PEERS
 }

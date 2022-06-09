@@ -146,7 +146,7 @@ class GPACProtocolImpl(
             signal(TestAddon.BeforeSendingElect, this.transaction)
             electResponses = getElectedYouResponses(change, otherPeers)
             tries++
-        } while (!superMajority(otherPeers, electResponses) && tries < maxLeaderElectionTries)
+        } while (!superSet(otherPeers, electResponses) && tries < maxLeaderElectionTries)
 
         if (tries >= maxLeaderElectionTries) throw MaxTriesExceededException()
 
