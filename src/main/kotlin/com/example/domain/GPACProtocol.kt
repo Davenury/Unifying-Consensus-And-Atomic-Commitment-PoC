@@ -4,6 +4,7 @@ import com.example.AdditionalAction
 import com.example.EventPublisher
 import com.example.SignalSubject
 import com.example.TestAddon
+import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
 
 // TODO - ask if we should reject transaction or just wait
@@ -69,13 +70,14 @@ class GPACProtocolImpl(
         if (!checkBallotNumber(message.ballotNumber)) {
             throw NotElectingYou(myBallotNumber)
         }
-        val acceptVal = if (historyManagement.canBeBuild(message.change.toChange())) Accept.COMMIT else Accept.ABORT
         this.transaction =
             this.transaction.copy(
                 ballotNumber = message.ballotNumber,
-                acceptVal = acceptVal,
+                acceptVal = message.acceptVal,
                 acceptNum = message.ballotNumber
             )
+
+        println("Cohort transaction state: ${this.transaction}")
 
         myBallotNumber = message.ballotNumber
 
@@ -86,7 +88,7 @@ class GPACProtocolImpl(
 
         leaderFailTimeoutStart(message.change)
 
-        return Agreed(transaction.ballotNumber, acceptVal)
+        return Agreed(transaction.ballotNumber, message.acceptVal)
     }
 
     override suspend fun handleApply(message: Apply) {
@@ -113,18 +115,20 @@ class GPACProtocolImpl(
         historyManagement.getState()?.any { it.acceptNum == this.transaction.acceptNum } == true
 
     private fun leaderFailTimeoutStart(change: ChangeDto) {
-        timer.startCounting { performProtocolAsRecoveryLeader(change) }
+        timer.startCounting {
+            logger.info("Recovery leader starts")
+            transactionBlocker.releaseBlock()
+            performProtocolAsRecoveryLeader(change)
+        }
     }
     private fun leaderFailTimeoutStop() {
-        transactionBlocker.releaseBlock()
         timer.cancelCounting()
     }
 
-    // TODO - make another function for recovery leader
     override suspend fun performProtocolAsLeader(
         change: ChangeDto
     ) {
-        val electResponses = electMePhase(change) { responses -> superSet(responses) }
+        val electResponses = electMePhase(change, { responses -> superSet(responses) })
 
         val acceptVal = if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
 
@@ -140,11 +144,11 @@ class GPACProtocolImpl(
     }
 
     override suspend fun performProtocolAsRecoveryLeader(change: ChangeDto) {
-        val electResponses = electMePhase(change) { responses -> superMajority(responses) }
+        val electResponses = electMePhase(change, { responses -> superMajority(responses) }, this.transaction)
 
-        // TODO - check for decision true
         val messageWithDecision = electResponses.flatten().find { it.decision }
         if (messageWithDecision != null) {
+            logger.info("Got hit with message with decision true")
             // someone got to ft-agree phase
             this.transaction = this.transaction.copy(acceptVal = messageWithDecision.acceptVal)
             signal(TestAddon.BeforeSendingAgree, this.transaction)
@@ -161,6 +165,7 @@ class GPACProtocolImpl(
         // I got to ft-agree phase, so my voice of this is crucial
         signal(TestAddon.BeforeSendingAgree, this.transaction)
 
+        logger.debug("Recovery leader transaction state: ${this.transaction}")
         val agreedResponses = ftAgreePhase(change, this.transaction.acceptVal!!)
 
         signal(TestAddon.BeforeSendingApply, this.transaction)
@@ -170,7 +175,7 @@ class GPACProtocolImpl(
         return
     }
 
-    private suspend fun electMePhase(change: ChangeDto, superFunction: (List<List<ElectedYou>>) -> Boolean): List<List<ElectedYou>> {
+    private suspend fun electMePhase(change: ChangeDto, superFunction: (List<List<ElectedYou>>) -> Boolean, transaction: Transaction? = null): List<List<ElectedYou>> {
         var tries = 0
         var electResponses: List<List<ElectedYou>>
 
@@ -181,7 +186,7 @@ class GPACProtocolImpl(
         do {
             myBallotNumber++
             if (!historyManagement.canBeBuild(change.toChange())) throw HistoryCannotBeBuildException()
-            this.transaction = Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
+            this.transaction = transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
             signal(TestAddon.BeforeSendingElect, this.transaction)
             electResponses = getElectedYouResponses(change, otherPeers)
             tries++

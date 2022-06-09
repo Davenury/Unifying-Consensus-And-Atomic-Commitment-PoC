@@ -25,6 +25,11 @@ fun Application.configureSampleRouting(historyManagement: HistoryManagement) {
                 call.respond((result ?: ErrorMessage("Error")).let { objectMapper.writeValueAsString(it) })
             }
         }
+        route("/changes") {
+            get {
+                val result = historyManagement.getState()
+                call.respond((result ?: ErrorMessage("Error")).let { objectMapper.writeValueAsString(it) })
+            }
+        }
     }
 }
-
