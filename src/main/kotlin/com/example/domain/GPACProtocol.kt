@@ -97,8 +97,8 @@ class GPACProtocolImpl(
             this.transaction =
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
-            if (message.acceptVal == Accept.COMMIT) {
-                historyManagement.change(message.change.toChange())
+            if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
+                historyManagement.change(message.change.toChange(), this.transaction.acceptNum)
             }
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT)
@@ -109,6 +109,8 @@ class GPACProtocolImpl(
             signal(TestAddon.OnHandlingApplyEnd, transaction)
         }
     }
+    private fun transactionWasAppliedBefore() =
+        historyManagement.getState()?.any { it.acceptNum == this.transaction.acceptNum } == true
 
     private fun leaderFailTimeoutStart(change: ChangeDto) {
         timer.startCounting { performProtocolAsRecoveryLeader(change) }

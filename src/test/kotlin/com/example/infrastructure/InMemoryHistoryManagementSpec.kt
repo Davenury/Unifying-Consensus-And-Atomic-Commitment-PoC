@@ -1,6 +1,7 @@
 package com.example.infrastructure
 
 import com.example.domain.*
+import com.example.raft.ChangeWithAcceptNum
 import com.example.utils.DummyConsensusProtocol
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -22,9 +23,9 @@ class InMemoryHistoryManagementSpec {
         // and - consensus protocol that's ok with changes
         consensusProtocol.setResponse(ConsensusSuccess)
         // when - change is proposed
-        subject.change(change)
+        subject.change(change, 1)
         // then - change should be done
-        expectThat(subject.getLastChange()).isEqualTo(change)
+        expectThat(subject.getLastChange()).isEqualTo(ChangeWithAcceptNum(change, 1))
     }
 
     @Test
@@ -35,7 +36,7 @@ class InMemoryHistoryManagementSpec {
         consensusProtocol.setResponse(ConsensusFailure)
 
         // when - change is proposed
-        subject.change(change)
+        subject.change(change, 1)
 
         // then - change should not be added
         expectThat(subject.getLastChange()).isNull()

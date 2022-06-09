@@ -10,7 +10,7 @@ class ProtocolTimerImpl(
     private val delay: Int
 ): ProtocolTimer {
 
-    private lateinit var task: Job
+    private var task: Job? = null
 
     override fun startCounting(action: suspend () -> Unit) {
         task = GlobalScope.launch {
@@ -20,6 +20,6 @@ class ProtocolTimerImpl(
     }
 
     override fun cancelCounting() {
-        this.task.cancel()
+        this.task?.cancel()
     }
 }

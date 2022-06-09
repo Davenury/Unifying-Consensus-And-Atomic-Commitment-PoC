@@ -1,7 +1,7 @@
 package com.example.domain
 
 interface ConsensusProtocol<A, B> {
-    fun proposeChange(change: A): ConsensusResult
+    fun proposeChange(change: A, acceptNum: Int? = null): ConsensusResult
 
     fun getState(): B?
 }

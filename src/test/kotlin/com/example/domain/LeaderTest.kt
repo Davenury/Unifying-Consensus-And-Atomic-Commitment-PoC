@@ -4,6 +4,7 @@ import com.example.getOtherPeers
 import com.example.httpClient
 import com.example.infrastructure.InMemoryHistoryManagement
 import com.example.infrastructure.ProtocolTimerImpl
+import com.example.raft.ChangeWithAcceptNum
 import com.example.utils.DummyConsensusProtocol
 import com.example.utils.PeerThree
 import com.example.utils.PeerTwo
@@ -91,7 +92,7 @@ class LeaderTest {
             subject.performProtocolAsLeader(changeDto)
         }
 
-        expectThat(historyManagement.getLastChange()).isEqualTo(changeDto.toChange())
+        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(changeDto.toChange(), 1))
     }
 
     private val allPeers = listOf(listOf("localhost:8081", "localhost:8082", "localhost:8083"))
