@@ -31,7 +31,7 @@ abstract class RaftNode(
         //create a property object
         val properties = RaftProperties()
 
-        peer = Constants.getPeers()[peerId - 1]
+        peer = Constants.PEERS[peerId - 1]
 
         //set the storage directory (different for each peer) in RaftProperty object
         RaftServerConfigKeys.setStorageDir(properties, listOf(storageDir))
@@ -44,7 +44,7 @@ abstract class RaftNode(
 
         //create and start the Raft server
         server = RaftServer.newBuilder()
-            .setGroup(Constants.getRaftGroup())
+            .setGroup(Constants.RAFT_GROUP)
             .setProperties(properties)
             .setServerId(peer.id)
             .setStateMachine(stateMachine)
