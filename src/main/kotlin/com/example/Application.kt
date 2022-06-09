@@ -4,6 +4,7 @@ import com.example.api.configureSampleRouting
 import com.example.api.protocolRouting
 import com.example.domain.*
 import com.example.infrastructure.RatisHistoryManagement
+import com.example.raft.Constants
 import com.example.raft.HistoryRaftNode
 import io.ktor.application.*
 import io.ktor.features.*
@@ -23,16 +24,22 @@ fun startApplication(
     additionalActions: Map<TestAddon, AdditionalAction> = emptyMap(),
     eventListeners: List<EventListener> = emptyList()
 ) {
-    val conf = getIdAndOffset(args)
+    val config = loadConfig()
+    val conf = getIdAndOffset(args, config)
+    Constants.loadConfig(conf.peersetId)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
-        val raftNode = HistoryRaftNode(conf.nodeId)
+        val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId)
         val historyManagement = RatisHistoryManagement(raftNode)
-
-        val config = loadConfig()
         val eventPublisher = EventPublisher(eventListeners)
         val protocol =
-            GPACProtocolImpl(historyManagement, config.peers.maxLeaderElectionTries, httpClient, additionalActions, eventPublisher)
-        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId)
+            GPACProtocolImpl(
+                historyManagement,
+                config.peers.maxLeaderElectionTries,
+                httpClient,
+                additionalActions,
+                eventPublisher
+            )
+        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId, conf.peersetId)
 
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
@@ -93,19 +100,40 @@ fun startApplication(
 
 data class NodeIdAndPortOffset(
     val nodeId: Int,
-    val portOffset: Int
+    val portOffset: Int,
+    val peersetId: Int
 )
 
-fun getIdAndOffset(args: Array<String>): NodeIdAndPortOffset {
+fun getIdAndOffset(args: Array<String>, config: Config): NodeIdAndPortOffset {
+
     if (args.isNotEmpty()) {
-        return NodeIdAndPortOffset(nodeId = args[0].toInt(), portOffset = args[0].toInt())
+        val peersetId = args[1].toInt()
+        val portOffsetFromPreviousPeersets: Int =
+            config.peers.peersAddresses.foldIndexed(0) { index, acc, strings -> if (index <= peersetId - 2) acc + strings.size  else acc + 0 }
+        return NodeIdAndPortOffset(nodeId = args[0].toInt(), portOffset = args[0].toInt() + portOffsetFromPreviousPeersets, peersetId)
     }
+
+    val peersetId = System.getenv()["PEERSET_ID"]?.toInt()
+        ?: throw RuntimeException("Provide PEERSET_ID env variable to represent id of node")
 
     val id = System.getenv()["RAFT_NODE_ID"]?.toInt()
         ?: throw RuntimeException("Provide either arg or RAFT_NODE_ID env variable to represent id of node")
 
-    return NodeIdAndPortOffset(nodeId = id, portOffset = 0)
+    return NodeIdAndPortOffset(nodeId = id, portOffset = 0, peersetId)
 }
 
-fun getOtherPeers(peersAddresses: List<String>, nodeId: Int): List<String> =
-    peersAddresses.filterNot { it.contains("peer$nodeId") || it.contains("${8080 + nodeId}") }
+fun getOtherPeers(peersAddresses: List<List<String>>, nodeId: Int, peersetId: Int): List<List<String>> =
+    try {
+        peersAddresses.foldIndexed(mutableListOf()) { index, acc, strings ->
+            if (index == peersetId - 1) {
+                acc += strings.filterNot { it.contains("peer$nodeId") || it.contains("${8080 + nodeId}") }
+                acc
+            } else {
+                acc += strings
+                acc
+            }
+        }
+    } catch (e: java.lang.IndexOutOfBoundsException) {
+        println("Peers addresses doesn't have enough elements in list - peers addresses length: ${peersAddresses.size}, index: ${peersetId - 1}")
+        throw IllegalStateException()
+    }

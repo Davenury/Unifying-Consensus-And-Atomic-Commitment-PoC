@@ -61,7 +61,7 @@ class IntegrationTest {
     }
 
     @Test
-    fun `second leader comes with its transaction before first leader goes into ft-agree phase`(): Unit = runBlocking {
+    fun `second leader tries to become leader before first leader goes into ft-agree phase`(): Unit = runBlocking {
 
         val eventListener = object : EventListener {
             override fun onSignal(signal: Signal, subject: SignalSubject) {

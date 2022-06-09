@@ -30,24 +30,26 @@ import java.util.*
  * Constants across servers and clients
  */
 object Constants {
-    val PEERS: List<RaftPeer>
-    val PATH: String
-    val CLUSTER_GROUP_ID: UUID
-    val RAFT_GROUP: RaftGroup
-
-    init {
-        val config = loadConfig()
-        PATH = config.raft.server.root.storage.path
-        PEERS = config.raft.server.addresses.mapIndexed { index, address ->
-            RaftPeer.newBuilder().setId("n$index").setAddress(address).build()
-        }
-        CLUSTER_GROUP_ID = UUID.fromString(config.raft.clusterGroupId)
-        RAFT_GROUP = RaftGroup.valueOf(RaftGroupId.valueOf(CLUSTER_GROUP_ID), PEERS)
-    }
+    lateinit var PEERS: List<RaftPeer>
+        private set
+    private lateinit var PATH: String
+    private lateinit var CLUSTER_GROUP_ID: UUID
+    lateinit var RAFT_GROUP: RaftGroup
+        private set
 
     fun oneNodeGroup(peer: RaftPeer): RaftGroup {
         return RaftGroup.valueOf(
             RaftGroupId.valueOf(CLUSTER_GROUP_ID), peer
         )
+    }
+
+    fun loadConfig(peersetId: Int) {
+        val config = loadConfig()
+        PATH = config.raft.server.root.storage.path
+        PEERS = config.raft.server.addresses[peersetId - 1].mapIndexed { index, address ->
+            RaftPeer.newBuilder().setId("n$index").setAddress(address).build()
+        }
+        CLUSTER_GROUP_ID = UUID.fromString(config.raft.clusterGroupIds[peersetId - 1])
+        RAFT_GROUP = RaftGroup.valueOf(RaftGroupId.valueOf(CLUSTER_GROUP_ID), PEERS)
     }
 }

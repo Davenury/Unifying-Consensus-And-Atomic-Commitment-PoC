@@ -25,16 +25,27 @@ class LeaderTest {
     @Test
     fun `should load only other peers`() {
         val nodeId = 2
+        val peersetId = 1
 
-        val allPeers = listOf("peer1:8080", "peer2:8080", "peer3:8080")
-        expectThat(getOtherPeers(allPeers, nodeId)).containsExactlyInAnyOrder("peer1:8080", "peer3:8080")
+        val allPeers = listOf(listOf("peer1:8080", "peer2:8080", "peer3:8080"))
+        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten()).containsExactlyInAnyOrder("peer1:8080", "peer3:8080")
+    }
+
+    @Test
+    fun `should load only other peers - mutliple peersets`() {
+        val nodeId = 2
+        val peersetId = 1
+
+        val allPeers = listOf(listOf("peer1:8080", "peer2:8080", "peer3:8080"), listOf("peer4:8080", "peer5:8080", "peer6:8080"))
+        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten()).containsExactlyInAnyOrder("peer1:8080", "peer3:8080", "peer4:8080", "peer5:8080", "peer6:8080")
     }
 
     @Test
     fun `should load only other peers - localhost version`() {
         val nodeId = 2
+        val peersetId = 1
 
-        expectThat(getOtherPeers(allPeers, nodeId)).containsExactlyInAnyOrder("localhost:8081", "localhost:8083")
+        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten()).containsExactlyInAnyOrder("localhost:8081", "localhost:8083")
     }
 
     @Test
@@ -67,7 +78,7 @@ class LeaderTest {
     }
 
     @Test
-    fun `should perform operation to the end`() = runBlocking {
+    fun `should perform operation to the end`(): Unit = runBlocking {
         PeerTwo.stubForElectMe(10, Accept.COMMIT, 10, null, false)
         PeerThree.stubForElectMe(10, Accept.COMMIT, 10, null, false)
         PeerTwo.stubForAgree(10, Accept.COMMIT)
@@ -82,8 +93,8 @@ class LeaderTest {
         expectThat(historyManagement.getLastChange()).isEqualTo(changeDto.toChange())
     }
 
-    private val allPeers = listOf("localhost:8081", "localhost:8082", "localhost:8083")
-    private val otherPeers = getOtherPeers(allPeers, 1)
+    private val allPeers = listOf(listOf("localhost:8081", "localhost:8082", "localhost:8083"))
+    private val otherPeers = getOtherPeers(allPeers, 1, 1)
     private val consensusProtocol = DummyConsensusProtocol
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
     private var subject = GPACProtocolImpl(historyManagement, 3, httpClient)
