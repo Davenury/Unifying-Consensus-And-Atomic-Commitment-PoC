@@ -93,10 +93,14 @@ fun startApplication(
                 )
             }
             exception<Throwable> { cause ->
-                call.respond(
-                    status = HttpStatusCode.InternalServerError,
-                    ErrorMessage("UnexpectedError, $cause")
-                )
+                if (cause is KillApplicationException) {
+                    Thread.currentThread().interrupt()
+                } else {
+                    call.respond(
+                        status = HttpStatusCode.InternalServerError,
+                        ErrorMessage("UnexpectedError, $cause")
+                    )
+                }
             }
         }
 

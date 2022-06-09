@@ -8,4 +8,7 @@ class TooFewResponsesException: Exception()
 class HistoryCannotBeBuildException: Exception()
 class AlreadyLockedException: Exception()
 
+// Use only in tests for killing leader!!!!!!!!!!!!
+class KillApplicationException: Exception()
+
 data class ErrorMessage(val msg: String)

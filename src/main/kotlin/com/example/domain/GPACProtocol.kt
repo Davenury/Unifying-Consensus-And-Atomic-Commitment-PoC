@@ -13,6 +13,7 @@ interface GPACProtocol : SignalSubject {
     suspend fun handleAgree(message: Agree): Agreed
     suspend fun handleApply(message: Apply)
     suspend fun performProtocolAsLeader(change: ChangeDto)
+    suspend fun performProtocolAsRecoveryLeader(change: ChangeDto)
     fun getTransaction(): Transaction
     fun getBallotNumber(): Int
 }
@@ -110,7 +111,7 @@ class GPACProtocolImpl(
     }
 
     private fun leaderFailTimeoutStart(change: ChangeDto) {
-        timer.startCounting { performProtocolAsLeader(change) }
+        timer.startCounting { performProtocolAsRecoveryLeader(change) }
     }
     private fun leaderFailTimeoutStop() {
         transactionBlocker.releaseBlock()
@@ -121,40 +122,11 @@ class GPACProtocolImpl(
     override suspend fun performProtocolAsLeader(
         change: ChangeDto
     ) {
-        var electResponses = electMePhase(change) { responses -> superMajority(responses) }
+        val electResponses = electMePhase(change) { responses -> superSet(responses) }
 
-        // TODO - check for decision true
-        val messageWithDecision = electResponses.flatten().find { it.decision }
-        if (messageWithDecision != null) {
-            // end of protocol, this cohort only needs to send apply once more to all the other peers
-            val applyMessages = applyPhase(change, messageWithDecision.acceptVal!!)
-            return
-        }
+        val acceptVal = if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
 
-        // recovery - get rid of if, your voice is the most important with acceptVal
-        var acceptVal = if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
-
-        if (acceptVal == Accept.COMMIT) {
-            // someone got to ft-agree phase
-            this.transaction = this.transaction.copy(acceptVal = acceptVal)
-            signal(TestAddon.BeforeSendingAgree, this.transaction)
-
-            val agreedResponses = ftAgreePhase(change, acceptVal)
-
-            signal(TestAddon.BeforeSendingApply, this.transaction)
-
-            val applyResponses = applyPhase(change, acceptVal)
-
-            return
-        }
-
-        if (!superSet(electResponses)) {
-            logger.info("Got super majority from electing first time but not super set")
-            electResponses = electMePhase(change) { responses -> superSet(responses) }
-        }
-
-        acceptVal = if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
-        this.transaction = this.transaction.copy(acceptVal = acceptVal)
+        this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
 
         signal(TestAddon.BeforeSendingAgree, this.transaction)
 
@@ -163,6 +135,37 @@ class GPACProtocolImpl(
         signal(TestAddon.BeforeSendingApply, this.transaction)
 
         val applyResponses = applyPhase(change, acceptVal)
+    }
+
+    override suspend fun performProtocolAsRecoveryLeader(change: ChangeDto) {
+        val electResponses = electMePhase(change) { responses -> superMajority(responses) }
+
+        // TODO - check for decision true
+        val messageWithDecision = electResponses.flatten().find { it.decision }
+        if (messageWithDecision != null) {
+            // someone got to ft-agree phase
+            this.transaction = this.transaction.copy(acceptVal = messageWithDecision.acceptVal)
+            signal(TestAddon.BeforeSendingAgree, this.transaction)
+
+            val agreedResponses = ftAgreePhase(change, messageWithDecision.acceptVal!!)
+
+            signal(TestAddon.BeforeSendingApply, this.transaction)
+
+            val applyResponses = applyPhase(change, messageWithDecision.acceptVal)
+
+            return
+        }
+
+        // I got to ft-agree phase, so my voice of this is crucial
+        signal(TestAddon.BeforeSendingAgree, this.transaction)
+
+        val agreedResponses = ftAgreePhase(change, this.transaction.acceptVal!!)
+
+        signal(TestAddon.BeforeSendingApply, this.transaction)
+
+        val applyResponses = applyPhase(change, this.transaction.acceptVal!!)
+
+        return
     }
 
     private suspend fun electMePhase(change: ChangeDto, superFunction: (List<List<ElectedYou>>) -> Boolean): List<List<ElectedYou>> {
