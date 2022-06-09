@@ -116,9 +116,11 @@ class GPACProtocolImpl(
         timer.startCounting { performProtocolAsLeader(change) }
     }
     private fun recover() {
+        transactionBlocker.releaseBlock()
         timer.cancelCounting()
     }
 
+    // TODO - make another function for recovery leader
     override suspend fun performProtocolAsLeader(
         change: ChangeDto
     ) {
@@ -132,7 +134,8 @@ class GPACProtocolImpl(
             return
         }
 
-        var acceptVal = if (electResponses.flatten().all { it.acceptVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+        // recovery - get rid of if, your voice is the most important with acceptVal
+        var acceptVal = if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
 
         if (acceptVal == Accept.COMMIT) {
             // someone got to ft-agree phase
