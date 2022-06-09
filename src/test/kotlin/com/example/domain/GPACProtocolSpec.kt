@@ -1,6 +1,7 @@
 package com.example.domain
 
 import com.example.infrastructure.InMemoryHistoryManagement
+import com.example.raft.ChangeWithAcceptNum
 import com.example.utils.DummyConsensusProtocol
 import io.mockk.Runs
 import io.mockk.every
@@ -45,7 +46,7 @@ class GPACProtocolSpec {
     @Test
     fun `should return elected you, when ballot number is lower than proposed`(): Unit = runBlocking {
 
-        every { transactionBlockerMock.assertICanSendElectedYou() } returns true
+        every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
 
@@ -62,7 +63,7 @@ class GPACProtocolSpec {
     @Test
     fun `should throw NotElectingYou when ballot number is higher than proposed`(): Unit = runBlocking {
 
-        every { transactionBlockerMock.assertICanSendElectedYou() } returns true
+        every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
 
@@ -78,7 +79,7 @@ class GPACProtocolSpec {
     @Test
     fun `should return elected you with commit init val, when history can be built`(): Unit = runBlocking {
 
-        every { transactionBlockerMock.assertICanSendElectedYou() } returns true
+        every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
 
@@ -93,9 +94,11 @@ class GPACProtocolSpec {
     @Test
     fun `should change ballot number and return agreed, when asked to ft-agree on change`(): Unit = runBlocking {
 
-        every { transactionBlockerMock.assertICanSendElectedYou() } returns true
+        every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
+        every { timerMock.startCounting(any()) } just Runs
+        every { timerMock.cancelCounting() } just Runs
 
         subject.handleElect(ElectMe(100, changeDto))
         val message = Agree(100, Accept.COMMIT, changeDto)
@@ -118,24 +121,28 @@ class GPACProtocolSpec {
     @Test
     fun `should apply change`(): Unit = runBlocking {
 
-        every { transactionBlockerMock.assertICanSendElectedYou() } returns true
+        every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
+        every { timerMock.startCounting(any()) } just Runs
+        every { timerMock.cancelCounting() } just Runs
 
         subject.handleElect(ElectMe(10, changeDto))
         subject.handleAgree(Agree(10, Accept.COMMIT, changeDto))
         val message = Apply(10, true, Accept.COMMIT, changeDto)
 
         subject.handleApply(message)
-        expectThat(historyManagement.getLastChange()).isEqualTo(AddUserChange("userName"))
+        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName"), 10))
     }
 
     @Test
     fun `should not apply change when acceptVal is abort`(): Unit = runBlocking {
 
-        every { transactionBlockerMock.assertICanSendElectedYou() } returns true
+        every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
+        every { timerMock.startCounting(any()) } just Runs
+        every { timerMock.cancelCounting() } just Runs
 
         subject.handleElect(ElectMe(10, changeDto))
         subject.handleAgree(Agree(10, Accept.ABORT, changeDto))

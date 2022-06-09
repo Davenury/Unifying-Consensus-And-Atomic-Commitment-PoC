@@ -5,7 +5,11 @@ import com.example.objectMapper
 import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.ObjectMapper
 
-typealias History = MutableList<Change>
+data class ChangeWithAcceptNum(
+    val change: Change,
+    val acceptNum: Int?
+)
+typealias History = MutableList<ChangeWithAcceptNum>
 
 
 class HistoryStateMachine(override var state: History = mutableListOf()) : StateMachine<History>(state) {
@@ -15,8 +19,11 @@ class HistoryStateMachine(override var state: History = mutableListOf()) : State
 
     override fun applyOperation(operation: String): String? =
         try {
-            val change: Change = Change.fromJson(operation)
-            state.add(change)
+            val map =  objectMapper.readValue(operation, HashMap<String, String>().javaClass)
+            val changeString = objectMapper.writeValueAsString(map["change"])
+            val change: Change = Change.fromJson(changeString)
+            val acceptNum = map["acceptNum"]?.toInt()
+            state.add(ChangeWithAcceptNum(change, acceptNum))
             null
         } catch (e: JsonMappingException) {
             e.message

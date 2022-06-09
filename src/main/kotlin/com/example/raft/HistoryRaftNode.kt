@@ -11,8 +11,8 @@ class HistoryRaftNode(peerId: Int, peersetId: Int) :
     RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId-$peersetId")),
     ConsensusProtocol<Change, History> {
 
-    override fun proposeChange(change: Change): ConsensusResult {
-        val msg = objectMapper.writeValueAsString(change)
+    override fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult {
+        val msg = objectMapper.writeValueAsString(ChangeWithAcceptNum(change, acceptNum))
         val result = applyTransaction(msg)
         return if (result == "INVALID_OPERATION") ConsensusFailure else ConsensusSuccess
     }
@@ -23,7 +23,7 @@ class HistoryRaftNode(peerId: Int, peersetId: Int) :
         return try {
             objectMapper
                 .readValue(result, mutableListOf<LinkedHashMap<String, String>>().javaClass)
-                .map { ChangeDto(it).toChange() }
+                .map { ChangeWithAcceptNum(ChangeDto(it).toChange(), it["acceptNum"]?.toInt()) }
                 .toMutableList()
         } catch (e: Exception) {
             logger.error("Can't parse result from state machine \n ${e.message}")

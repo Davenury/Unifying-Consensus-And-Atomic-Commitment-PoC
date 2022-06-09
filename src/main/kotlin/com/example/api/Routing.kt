@@ -17,7 +17,7 @@ fun Application.configureSampleRouting(historyManagement: HistoryManagement) {
         route("/change") {
             post {
                 val change = ChangeDto(call.receive())
-                val result = historyManagement.change(change.toChange())
+                val result = historyManagement.change(change.toChange(), 1)
                 call.respond(result.toString())
             }
             get {

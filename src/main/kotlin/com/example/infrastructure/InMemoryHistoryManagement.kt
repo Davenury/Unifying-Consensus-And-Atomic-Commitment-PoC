@@ -1,17 +1,18 @@
 package com.example.infrastructure
 
 import com.example.domain.*
+import com.example.raft.ChangeWithAcceptNum
 import com.example.raft.History
 import org.slf4j.LoggerFactory
 
 class InMemoryHistoryManagement(
     private val consensusProtocol: ConsensusProtocol<Change, History>
 ) : HistoryManagement(consensusProtocol) {
-    private val historyStorage: MutableList<Change> = mutableListOf()
+    private val historyStorage: MutableList<ChangeWithAcceptNum> = mutableListOf()
 
     // TODO: think about what's better - if change asks consensus protocol if it
     // can be done or if something higher asks and then calls change
-    override fun change(change: Change) =
+    override fun change(change: Change, acceptNum: Int?): HistoryChangeResult =
         consensusProtocol.proposeChange(change)
             .let {
                 when (it) {
@@ -19,19 +20,22 @@ class InMemoryHistoryManagement(
                         HistoryChangeResult.HistoryChangeFailure
                     }
                     ConsensusSuccess -> {
-                        historyStorage.add(change)
+                        historyStorage.add(ChangeWithAcceptNum(change, acceptNum))
                         HistoryChangeResult.HistoryChangeSuccess
                     }
                 }
             }
 
-    override fun getLastChange(): Change? =
+    override fun getLastChange(): ChangeWithAcceptNum? =
         try {
             historyStorage.last()
         } catch (ex: java.util.NoSuchElementException) {
             logger.error("History is empty!")
             null
         }
+
+    override fun getState(): History? =
+        this.historyStorage
 
     override fun canBeBuild(newChange: Change): Boolean
         = true

@@ -4,6 +4,7 @@ import com.example.objectMapper
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.slf4j.LoggerFactory
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class ChangeDto(
     val properties: Map<String, String>
 ) {
