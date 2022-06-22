@@ -26,11 +26,11 @@ data class ChangeDto(val properties: Map<String, String>) {
 sealed class Change(val operation: Operation) {
     companion object {
 
-        fun fromJson(json: String): Change =
+        fun fromJson(json: String): Change? =
                 objectMapper
                         .readValue(json, HashMap<String, String>().javaClass)
-                        .let { ChangeDto(it) }
-                        .toChange()
+                        ?.let { ChangeDto(it) }
+                        ?.toChange()
     }
 }
 

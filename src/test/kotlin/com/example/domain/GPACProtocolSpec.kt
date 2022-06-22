@@ -28,7 +28,8 @@ class GPACProtocolSpec {
         timerMock,
         protocolClientMock,
         transactionBlockerMock,
-        listOf(listOf("http://localhost:8080"))
+        listOf(listOf("http://localhost:8080")),
+        me = 8080
     )
 
     @BeforeEach
@@ -39,7 +40,8 @@ class GPACProtocolSpec {
             timerMock,
             protocolClientMock,
             transactionBlockerMock,
-            listOf(listOf("http://localhost:8080"))
+            listOf(listOf("http://localhost:8080")),
+            me = 8080
         )
     }
 

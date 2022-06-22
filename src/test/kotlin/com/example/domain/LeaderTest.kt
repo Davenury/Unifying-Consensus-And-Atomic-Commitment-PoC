@@ -21,7 +21,7 @@ class LeaderTest {
 
     @BeforeEach
     fun setup() {
-        subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers)
+        subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers, me = 8080)
     }
 
     @Test
@@ -102,7 +102,7 @@ class LeaderTest {
     private val timer = ProtocolTimerImpl(1)
     private val client = ProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
-    private var subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers)
+    private var subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers, me = 8080)
     private val changeDto = ChangeDto(mapOf(
         "operation" to "ADD_USER",
         "userName" to "userName"

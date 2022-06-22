@@ -30,8 +30,6 @@ fun startApplication(
     Constants.loadConfig(conf.peersetId)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
 
-
-
         val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId)
         val historyManagement = RatisHistoryManagement(raftNode)
         val eventPublisher = EventPublisher(eventListeners)
@@ -48,7 +46,8 @@ fun startApplication(
                 transactionBlocker,
                 otherPeers,
                 additionalActions,
-                eventPublisher
+                eventPublisher,
+                8080 + conf.portOffset
             )
 
         install(ContentNegotiation) {

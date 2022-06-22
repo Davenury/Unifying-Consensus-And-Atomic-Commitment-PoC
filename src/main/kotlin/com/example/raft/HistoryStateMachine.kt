@@ -18,7 +18,7 @@ class HistoryStateMachine(override var state: History = mutableListOf()) :
             try {
                 val map = objectMapper.readValue(operation, HashMap<String, Any>().javaClass)
                 val changeString = objectMapper.writeValueAsString(map["change"])
-                val change: Change = Change.fromJson(changeString)
+                val change: Change = Change.fromJson(changeString)!!
                 val acceptNum = map["acceptNum"] as Int?
                 state.add(ChangeWithAcceptNum(change, acceptNum))
                 null

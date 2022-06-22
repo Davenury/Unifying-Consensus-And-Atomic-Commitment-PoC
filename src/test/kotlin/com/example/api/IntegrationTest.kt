@@ -3,17 +3,15 @@ package com.example.api
 import com.example.*
 import com.example.domain.*
 import com.example.raft.ChangeWithAcceptNum
-import com.example.utils.eventually
+import com.example.raft.History
+import com.fasterxml.jackson.module.kotlin.readValue
+import io.ktor.client.call.*
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.client.utils.EmptyContent.contentType
 import io.ktor.http.*
-import io.ktor.server.netty.*
 import kotlinx.coroutines.*
 import org.apache.commons.io.FileUtils
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expect
 import strikt.api.expectCatching
@@ -21,10 +19,8 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.isEqualTo
 import strikt.assertions.isFailure
-import strikt.assertions.isNotNull
 import strikt.assertions.isSuccess
 import java.io.File
-import java.io.FileFilter
 
 class IntegrationTest {
 
@@ -186,7 +182,7 @@ class IntegrationTest {
 
             val map = objectMapper.readValue(response, HashMap<String, Any>().javaClass)
             val changeString = objectMapper.writeValueAsString(map["change"])
-            val change: Change = Change.fromJson(changeString)
+            val change: Change = Change.fromJson(changeString)!!
             expectThat(change).isEqualTo(AddUserChange("userName"))
 
             listOf(app1, app2, app3)
@@ -194,62 +190,75 @@ class IntegrationTest {
         }
     }
 
-    //buggy for now
-//    @Test
-//    fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
-//        val firstLeaderAction: suspend (Transaction?) -> Unit = {
-//            val url = "http://localhost:8082/apply"
-//            val response = httpClient.post<HttpStatement>(url) {
-//                contentType(ContentType.Application.Json)
-//                accept(ContentType.Application.Json)
-//                body = Apply(it!!.ballotNumber, true, Accept.COMMIT, changeDto)
-//            }
-//            println("Localhost 8082 sent response to apply: $response")
-//            throw KillApplicationException()
-//        }
-//        val firstLeaderCallbacks: Map<TestAddon, suspend (Transaction?) -> Unit> = mapOf(
-//            TestAddon.BeforeSendingApply to firstLeaderAction
-//        )
-//        val app1 = GlobalScope.launch { startApplication(arrayOf("1", "1"), firstLeaderCallbacks) }
-//        val app2 = GlobalScope.launch { startApplication(arrayOf("2", "1"), emptyMap()) }
-//        val app3 = GlobalScope.launch { startApplication(arrayOf("3", "1"), emptyMap()) }
-//
-//        // application will start
-//        delay(5000)
-//
-//        // change that will cause leader to fall according to action
-//        try {
-//            executeChange("http://localhost:8081/create_change")
-//        } catch (e: Exception) {
-//            println("Leader 1 fails: $e")
-//        }
-//
-//        // leader timeout is 3 seconds for integration tests
-//        delay(7000)
-//
-//        val response = httpClient.get<String>("http://localhost:8082/change") {
-//            contentType(ContentType.Application.Json)
-//            accept(ContentType.Application.Json)
-//        }
-//
-//        val map = objectMapper.readValue(response, HashMap<String, Any>().javaClass)
-//        val changeString = objectMapper.writeValueAsString(map["change"])
-//        val change: Change = Change.fromJson(changeString)
-//        expectThat(change).isEqualTo(AddUserChange("userName"))
-//
-//        // and should not execute this change couple of times
-//        val response2 = httpClient.get<String>("http://localhost:8082/changes") {
-//            contentType(ContentType.Application.Json)
-//            accept(ContentType.Application.Json)
-//        }
-//        println("here: $response2")
-////        val map = objectMapper.readValue(response, HashMap<String, Any>().javaClass)
-////        val changeString = objectMapper.writeValueAsString(map["change"])
-////        val change: Change = Change.fromJson(changeString)
-////        expectThat(change).isEqualTo(AddUserChange("userName"))
-//
-//        listOf(app1, app2, app3).forEach { app -> app.cancel(CancellationException("Test is over")) }
-//    }
+    @Test
+    fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
+
+        deleteRaftHistories()
+
+        val firstLeaderAction: suspend (Transaction?) -> Unit = {
+            val url = "http://localhost:8082/apply"
+            runBlocking {
+                httpClient.post<HttpResponse>(url) {
+                    contentType(ContentType.Application.Json)
+                    accept(ContentType.Application.Json)
+                    body = Apply(it!!.ballotNumber, true, Accept.COMMIT, changeDto)
+                }.also {
+                    println("Got response ${it.status.value}")
+                }
+            }
+            println("Localhost 8082 sent response to apply")
+            throw RuntimeException()
+        }
+        val firstLeaderCallbacks: Map<TestAddon, suspend (Transaction?) -> Unit> = mapOf(
+            TestAddon.BeforeSendingApply to firstLeaderAction
+        )
+        // this won't work because of config. Think about config with overrides from startApplication function invocation
+        val app1 = GlobalScope.launch { startApplication(arrayOf("1", "1"), firstLeaderCallbacks) }
+        val app2 = GlobalScope.launch { startApplication(arrayOf("2", "1"), emptyMap()) }
+        val app3 = GlobalScope.launch { startApplication(arrayOf("3", "1"), emptyMap()) }
+//        val app4 = GlobalScope.launch { startApplication(arrayOf("4", "1"), emptyMap()) }
+//        val app5 = GlobalScope.launch { startApplication(arrayOf("5", "1"), emptyMap()) }
+
+        // application will start
+        delay(5000)
+
+        // change that will cause leader to fall according to action
+        try {
+            executeChange("http://localhost:8081/create_change")
+        } catch (e: Exception) {
+            println("Leader 1 fails: $e")
+        }
+
+        // leader timeout is 3 seconds for integration tests - in the meantime third leader should execute transaction
+        delay(7000)
+
+        val response = httpClient.get<String>("http://localhost:8082/change") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }
+
+        val map = objectMapper.readValue(response, HashMap<String, Any>().javaClass)
+        val changeString = objectMapper.writeValueAsString(map["change"])
+        val change: Change = Change.fromJson(changeString)!!
+        expectThat(change).isEqualTo(AddUserChange("userName"))
+
+        // and should not execute this change couple of times
+        val response2 = httpClient.get<String>("http://localhost:8082/changes") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }
+        println("here: $response2")
+        val values: History = objectMapper.readValue(response)
+
+        // only one change and this change shouldn't be applied for 8082 two times
+        expect {
+            that(values.size).isEqualTo(1)
+            that(values[0]).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName"), 1))
+        }
+
+
+        listOf(app1, app2, app3).forEach { app -> app.cancel(CancellationException("Test is over")) }
+    }
 
     private suspend fun executeChange(uri: String) =
         httpClient.post<String>(uri) {

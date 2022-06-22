@@ -27,7 +27,8 @@ class GPACProtocolImpl(
     private val transactionBlocker: TransactionBlocker,
     private val otherPeers: List<List<String>>,
     private val addons: Map<TestAddon, AdditionalAction> = emptyMap(),
-    private val eventPublisher: EventPublisher = EventPublisher(emptyList())
+    private val eventPublisher: EventPublisher = EventPublisher(emptyList()),
+    private val me: Int
 ) : GPACProtocol {
 
     private var myBallotNumber: Int = 0
@@ -91,12 +92,12 @@ class GPACProtocolImpl(
                 acceptNum = message.ballotNumber
             )
 
-        logger.info("Cohort transaction state: ${this.transaction}")
+        logger.info("$me state transaction state: ${this.transaction}")
 
         myBallotNumber = message.ballotNumber
 
         transactionBlocker.tryToBlock()
-        logger.info("Lock aquired: ${message.ballotNumber}")
+        logger.info("$me Lock aquired: ${message.ballotNumber}")
 
         signal(TestAddon.OnHandlingAgreeEnd, transaction)
 
@@ -119,7 +120,7 @@ class GPACProtocolImpl(
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT)
 
-            logger.info("Releasing semaphore as cohort")
+            logger.info("$me Releasing semaphore as cohort")
             transactionBlocker.releaseBlock()
 
             signal(TestAddon.OnHandlingApplyEnd, transaction)
@@ -130,12 +131,13 @@ class GPACProtocolImpl(
 
     private fun leaderFailTimeoutStart(change: ChangeDto) {
         timer.startCounting {
-            logger.info("Recovery leader starts")
+            logger.info("$me Recovery leader starts")
             transactionBlocker.releaseBlock()
             performProtocolAsRecoveryLeader(change)
         }
     }
     private fun leaderFailTimeoutStop() {
+        logger.info("$me Stop counter")
         timer.cancelCounting()
     }
 
@@ -162,7 +164,7 @@ class GPACProtocolImpl(
 
         val messageWithDecision = electResponses.flatten().find { it.decision }
         if (messageWithDecision != null) {
-            logger.info("Got hit with message with decision true")
+            logger.info("$me Got hit with message with decision true")
             // someone got to ft-agree phase
             this.transaction = this.transaction.copy(acceptVal = messageWithDecision.acceptVal)
             signal(TestAddon.BeforeSendingAgree, this.transaction)
@@ -179,7 +181,7 @@ class GPACProtocolImpl(
         // I got to ft-agree phase, so my voice of this is crucial
         signal(TestAddon.BeforeSendingAgree, this.transaction)
 
-        logger.debug("Recovery leader transaction state: ${this.transaction}")
+        logger.debug("$me Recovery leader transaction state: ${this.transaction}")
         val agreedResponses = ftAgreePhase(change, this.transaction.acceptVal!!)
 
         signal(TestAddon.BeforeSendingApply, this.transaction)
