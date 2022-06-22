@@ -29,6 +29,9 @@ fun startApplication(
     val conf = getIdAndOffset(args, config)
     Constants.loadConfig(conf.peersetId)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
+
+
+
         val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId)
         val historyManagement = RatisHistoryManagement(raftNode)
         val eventPublisher = EventPublisher(eventListeners)
@@ -92,16 +95,12 @@ fun startApplication(
                     ErrorMessage("We cannot perform your transaction, as another transaction is currently running")
                 )
             }
-            exception<Throwable> { cause ->
-                if (cause is KillApplicationException) {
-                    Thread.currentThread().interrupt()
-                } else {
-                    call.respond(
-                        status = HttpStatusCode.InternalServerError,
-                        ErrorMessage("UnexpectedError, $cause")
-                    )
-                }
-            }
+//            exception<Throwable> { cause ->
+//                call.respond(
+//                    status = HttpStatusCode.InternalServerError,
+//                    ErrorMessage("UnexpectedError, $cause")
+//                )
+//            }
         }
 
         configureSampleRouting(historyManagement)

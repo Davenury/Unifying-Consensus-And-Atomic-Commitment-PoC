@@ -42,6 +42,20 @@ class GPACProtocolImpl(
     override fun getBallotNumber(): Int = myBallotNumber
 
     override suspend fun handleElect(message: ElectMe): ElectedYou {
+        val state = historyManagement.getState()
+        val decision = message.acceptNum?.let { acceptNum ->
+            state?.find { it.acceptNum == acceptNum }
+        }
+        if (decision != null) {
+            // meaning that I'm the cohort that got apply for transaction of original leader
+            return ElectedYou(
+                message.ballotNumber,
+                Accept.COMMIT,
+                message.acceptNum,
+                Accept.COMMIT,
+                true
+            )
+        }
 
         signal(TestAddon.OnHandlingElectBegin, null)
 
@@ -77,7 +91,7 @@ class GPACProtocolImpl(
                 acceptNum = message.ballotNumber
             )
 
-        println("Cohort transaction state: ${this.transaction}")
+        logger.info("Cohort transaction state: ${this.transaction}")
 
         myBallotNumber = message.ballotNumber
 
