@@ -23,11 +23,12 @@ fun main(args: Array<String>) {
 fun startApplication(
     args: Array<String>,
     additionalActions: Map<TestAddon, AdditionalAction> = emptyMap(),
-    eventListeners: List<EventListener> = emptyList()
+    eventListeners: List<EventListener> = emptyList(),
+    configOverrides: Map<String, Any> = emptyMap()
 ) {
-    val config = loadConfig()
+    val config = loadConfig(configOverrides)
     val conf = getIdAndOffset(args, config)
-    Constants.loadConfig(conf.peersetId)
+    Constants.loadConfig(conf.peersetId, configOverrides)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
 
         val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId)

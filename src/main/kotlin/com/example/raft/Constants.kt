@@ -43,8 +43,8 @@ object Constants {
         )
     }
 
-    fun loadConfig(peersetId: Int) {
-        val config = loadConfig()
+    fun loadConfig(peersetId: Int, overrides: Map<String, Any> = emptyMap()) {
+        val config = loadConfig(overrides)
         PATH = config.raft.server.root.storage.path
         PEERS = config.raft.server.addresses[peersetId - 1].mapIndexed { index, address ->
             RaftPeer.newBuilder().setId("n$index").setAddress(address).build()

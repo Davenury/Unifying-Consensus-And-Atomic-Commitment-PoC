@@ -3,9 +3,7 @@ package com.example.api
 import com.example.*
 import com.example.domain.*
 import com.example.raft.ChangeWithAcceptNum
-import com.example.raft.History
 import com.fasterxml.jackson.module.kotlin.readValue
-import io.ktor.client.call.*
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -22,7 +20,7 @@ import strikt.assertions.isFailure
 import strikt.assertions.isSuccess
 import java.io.File
 
-class IntegrationTest {
+class SinglePeersetIntegrationTest {
 
     @Test
     fun `should react to event`(): Unit = runBlocking {
@@ -180,10 +178,10 @@ class IntegrationTest {
                 accept(ContentType.Application.Json)
             }
 
-            val map = objectMapper.readValue(response, HashMap<String, Any>().javaClass)
-            val changeString = objectMapper.writeValueAsString(map["change"])
-            val change: Change = Change.fromJson(changeString)!!
-            expectThat(change).isEqualTo(AddUserChange("userName"))
+            val change = objectMapper.readValue<ChangeWithAcceptNumDto>(response).let {
+                ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)
+            }
+            expectThat(change.change).isEqualTo(AddUserChange("userName"))
 
             listOf(app1, app2, app3)
                 .forEach { app -> app.cancel(CancellationException()) }
@@ -195,13 +193,18 @@ class IntegrationTest {
 
         deleteRaftHistories()
 
+        val configOverrides = mapOf<String, Any>(
+            "peers.peersAddresses" to listOf(createPeersInRange(5)),
+            "raft.server.addresses" to listOf(List(5) { "localhost:${it + 11124}" })
+        )
+
         val firstLeaderAction: suspend (Transaction?) -> Unit = {
             val url = "http://localhost:8082/apply"
             runBlocking {
                 httpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
-                    body = Apply(it!!.ballotNumber, true, Accept.COMMIT, changeDto)
+                    body = Apply(it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name")))
                 }.also {
                     println("Got response ${it.status.value}")
                 }
@@ -212,59 +215,62 @@ class IntegrationTest {
         val firstLeaderCallbacks: Map<TestAddon, suspend (Transaction?) -> Unit> = mapOf(
             TestAddon.BeforeSendingApply to firstLeaderAction
         )
-        // this won't work because of config. Think about config with overrides from startApplication function invocation
-        val app1 = GlobalScope.launch { startApplication(arrayOf("1", "1"), firstLeaderCallbacks) }
-        val app2 = GlobalScope.launch { startApplication(arrayOf("2", "1"), emptyMap()) }
-        val app3 = GlobalScope.launch { startApplication(arrayOf("3", "1"), emptyMap()) }
-//        val app4 = GlobalScope.launch { startApplication(arrayOf("4", "1"), emptyMap()) }
-//        val app5 = GlobalScope.launch { startApplication(arrayOf("5", "1"), emptyMap()) }
+
+        val app1 = GlobalScope.launch { startApplication(arrayOf("1", "1"), firstLeaderCallbacks, configOverrides = configOverrides) }
+        val app2 = GlobalScope.launch { startApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides) }
+        val app3 = GlobalScope.launch { startApplication(arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides) }
+        val app4 = GlobalScope.launch { startApplication(arrayOf("4", "1"), emptyMap(), configOverrides = configOverrides) }
+        val app5 = GlobalScope.launch { startApplication(arrayOf("5", "1"), emptyMap(), configOverrides = configOverrides) }
 
         // application will start
         delay(5000)
 
         // change that will cause leader to fall according to action
         try {
-            executeChange("http://localhost:8081/create_change")
+            executeChange("http://localhost:8081/create_change", mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
         } catch (e: Exception) {
             println("Leader 1 fails: $e")
         }
 
         // leader timeout is 3 seconds for integration tests - in the meantime third leader should execute transaction
-        delay(7000)
+        delay(17000)
 
-        val response = httpClient.get<String>("http://localhost:8082/change") {
+        val response = httpClient.get<String>("http://localhost:8084/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
 
-        val map = objectMapper.readValue(response, HashMap<String, Any>().javaClass)
-        val changeString = objectMapper.writeValueAsString(map["change"])
-        val change: Change = Change.fromJson(changeString)!!
-        expectThat(change).isEqualTo(AddUserChange("userName"))
+        val change = objectMapper.readValue(response, ChangeWithAcceptNumDto::class.java)
+        expectThat(change.change.toChange()).isEqualTo(AddGroupChange("name"))
 
         // and should not execute this change couple of times
         val response2 = httpClient.get<String>("http://localhost:8082/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
-        println("here: $response2")
-        val values: History = objectMapper.readValue(response)
+
+        val values: List<ChangeWithAcceptNum> = objectMapper.readValue<HistoryDto>(response2).changes.map {
+            ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)
+        }
 
         // only one change and this change shouldn't be applied for 8082 two times
         expect {
             that(values.size).isEqualTo(1)
-            that(values[0]).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName"), 1))
+            that(values[0]).isEqualTo(ChangeWithAcceptNum(AddGroupChange("name"), 1))
         }
 
 
-        listOf(app1, app2, app3).forEach { app -> app.cancel(CancellationException("Test is over")) }
+        listOf(app1, app2, app3, app4, app5).forEach { app -> app.cancel(CancellationException("Test is over")) }
     }
 
-    private suspend fun executeChange(uri: String) =
+    private fun createPeersInRange(range: Int): List<String> =
+        List(range) { "localhost:${8081+it}" }
+
+    private suspend fun executeChange(uri: String, change: Map<String, Any> = changeDto.properties) =
         httpClient.post<String>(uri) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-            body = changeDto.properties
+            body = change
         }
 
     private val changeDto = ChangeDto(

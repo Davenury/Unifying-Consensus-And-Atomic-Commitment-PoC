@@ -130,6 +130,7 @@ class GPACProtocolImpl(
         historyManagement.getState()?.any { it.acceptNum == this.transaction.acceptNum } == true
 
     private fun leaderFailTimeoutStart(change: ChangeDto) {
+        logger.info("$me Start counting")
         timer.startCounting {
             logger.info("$me Recovery leader starts")
             transactionBlocker.releaseBlock()

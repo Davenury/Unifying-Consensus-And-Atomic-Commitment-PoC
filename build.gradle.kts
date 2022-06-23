@@ -82,7 +82,7 @@ tasks.withType<Jar> {
 tasks {
     "test"(Test::class) {
         filter {
-            excludeTestsMatching("com.example.api.IntegrationTest")
+            excludeTestsMatching("com.example.api.SinglePeersetIntegrationTest")
         }
     }
 }
@@ -97,7 +97,7 @@ tasks.register<Test>("singlePeersetIntegrationTest") {
     environment("CONFIG_FILE", "single_peerset_application.conf")
 
     filter {
-        includeTestsMatching("com.example.api.IntegrationTest")
+        includeTestsMatching("com.example.api.SinglePeersetIntegrationTest")
     }
 }
 
