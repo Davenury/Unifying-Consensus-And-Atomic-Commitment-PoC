@@ -1,0 +1,15 @@
+name: Gradle
+
+on: [ push, pull_request ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+          distribution: 'adopt'
+      - uses: actions/checkout@v2
+      - name: Build with Gradle
+        run: ./gradlew build --info --no-daemon
