@@ -23,49 +23,9 @@ import java.io.File
 class SinglePeersetIntegrationTest {
 
     @Test
-    fun `should react to event`(): Unit = runBlocking {
-
-        val receivedSignals = mutableListOf<TestAddon>()
-        val eventListener = object : EventListener {
-            override fun onSignal(signal: Signal, subject: SignalSubject) {
-                if (signal.addon == TestAddon.OnHandlingApplyEnd)
-                    receivedSignals.add(signal.addon)
-            }
-        }
-
-        // given - leader application
-        val sniffedTransactions = mutableListOf<Transaction?>()
-        val transactionSniffer: suspend (Transaction?) -> Unit = { transaction -> sniffedTransactions.add(transaction) }
-        val app1 = GlobalScope.launch {
-            startApplication(
-                arrayOf("1"),
-                mapOf(TestAddon.BeforeSendingElect to transactionSniffer),
-                listOf(eventListener)
-            )
-        }
-        val app2 = GlobalScope.launch { startApplication(arrayOf("2"), emptyMap()) }
-        val app3 = GlobalScope.launch { startApplication(arrayOf("3"), emptyMap()) }
-
-        delay(5000)
-
-        httpClient.post<String>("http://0.0.0.0:8081/create_change") {
-            contentType(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
-            body = changeDto.properties
-        }
-
-        expect {
-            that(sniffedTransactions.size).isEqualTo(1)
-            that(sniffedTransactions[0]).isEqualTo(Transaction(1, Accept.COMMIT))
-            that(receivedSignals.size).isEqualTo(1)
-            that(receivedSignals[0]).isEqualTo(TestAddon.OnHandlingApplyEnd)
-        }
-
-        listOf(app1, app2, app3).forEach { app -> app.cancel(CancellationException("Test is over")) }
-    }
-
-    @Test
     fun `second leader tries to become leader before first leader goes into ft-agree phase`(): Unit = runBlocking {
+
+        deleteRaftHistories()
 
         val eventListener = object : EventListener {
             override fun onSignal(signal: Signal, subject: SignalSubject) {
@@ -102,7 +62,7 @@ class SinglePeersetIntegrationTest {
     @Test
     fun `first leader is already in ft-agree phase and second leader tries to execute its transaction - second should be rejected`(): Unit =
         runBlocking {
-
+            deleteRaftHistories()
             val eventListener = object : EventListener {
                 override fun onSignal(signal: Signal, subject: SignalSubject) {
                     if (signal.addon == TestAddon.BeforeSendingApply) {
@@ -194,8 +154,8 @@ class SinglePeersetIntegrationTest {
         deleteRaftHistories()
 
         val configOverrides = mapOf<String, Any>(
-            "peers.peersAddresses" to listOf(createPeersInRange(5)),
-            "raft.server.addresses" to listOf(List(5) { "localhost:${it + 11124}" })
+            "peers.peersAddresses" to listOf(createPeersInRange(4)),
+            "raft.server.addresses" to listOf(List(4) { "localhost:${it + 11124}" })
         )
 
         val firstLeaderAction: suspend (Transaction?) -> Unit = {
@@ -216,11 +176,12 @@ class SinglePeersetIntegrationTest {
             TestAddon.BeforeSendingApply to firstLeaderAction
         )
 
-        val app1 = GlobalScope.launch { startApplication(arrayOf("1", "1"), firstLeaderCallbacks, configOverrides = configOverrides) }
-        val app2 = GlobalScope.launch { startApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides) }
-        val app3 = GlobalScope.launch { startApplication(arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides) }
-        val app4 = GlobalScope.launch { startApplication(arrayOf("4", "1"), emptyMap(), configOverrides = configOverrides) }
-        val app5 = GlobalScope.launch { startApplication(arrayOf("5", "1"), emptyMap(), configOverrides = configOverrides) }
+        // when using just launch (without Global Scope) tests won't end, but we cannot use 5 apps on GlobalScope
+        val app1 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("1", "1"), firstLeaderCallbacks, configOverrides = configOverrides) }
+        val app2 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides) }
+        val app3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides) }
+        val app4 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "1"), emptyMap(), configOverrides = configOverrides) }
+        //val app5 = launch(Dispatchers.IO) { startApplication(arrayOf("5", "1"), emptyMap(), configOverrides = configOverrides) }
 
         // application will start
         delay(5000)
@@ -232,8 +193,8 @@ class SinglePeersetIntegrationTest {
             println("Leader 1 fails: $e")
         }
 
-        // leader timeout is 3 seconds for integration tests - in the meantime third leader should execute transaction
-        delay(17000)
+        // leader timeout is 5 seconds for integration tests - in the meantime third leader should execute transaction
+        delay(7000)
 
         val response = httpClient.get<String>("http://localhost:8084/change") {
             contentType(ContentType.Application.Json)
@@ -249,18 +210,19 @@ class SinglePeersetIntegrationTest {
             accept(ContentType.Application.Json)
         }
 
+        println("stopping apps")
+        listOf(app1, app2, app3, app4).forEach { app -> app.cancel() }
+
         val values: List<ChangeWithAcceptNum> = objectMapper.readValue<HistoryDto>(response2).changes.map {
             ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)
         }
-
+        println(values)
         // only one change and this change shouldn't be applied for 8082 two times
         expect {
             that(values.size).isEqualTo(1)
             that(values[0]).isEqualTo(ChangeWithAcceptNum(AddGroupChange("name"), 1))
         }
-
-
-        listOf(app1, app2, app3, app4, app5).forEach { app -> app.cancel(CancellationException("Test is over")) }
+        println("here")
     }
 
     private fun createPeersInRange(range: Int): List<String> =

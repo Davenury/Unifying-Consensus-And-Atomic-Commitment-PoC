@@ -3,10 +3,7 @@ package com.example.domain
 import com.example.infrastructure.InMemoryHistoryManagement
 import com.example.raft.ChangeWithAcceptNum
 import com.example.utils.DummyConsensusProtocol
-import io.mockk.Runs
-import io.mockk.every
-import io.mockk.just
-import io.mockk.mockk
+import io.mockk.*
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -99,7 +96,7 @@ class GPACProtocolSpec {
         every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
-        every { timerMock.startCounting(any()) } just Runs
+        coEvery { timerMock.startCounting(any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
         subject.handleElect(ElectMe(100, changeDto))
@@ -126,7 +123,7 @@ class GPACProtocolSpec {
         every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
-        every { timerMock.startCounting(any()) } just Runs
+        coEvery { timerMock.startCounting(any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
         subject.handleElect(ElectMe(10, changeDto))
@@ -143,7 +140,7 @@ class GPACProtocolSpec {
         every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
-        every { timerMock.startCounting(any()) } just Runs
+        coEvery { timerMock.startCounting(any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
         subject.handleElect(ElectMe(10, changeDto))

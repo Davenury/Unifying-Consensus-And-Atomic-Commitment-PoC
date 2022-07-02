@@ -13,7 +13,7 @@ data class RaftConfig(val server: ServerConfig, val clusterGroupIds: List<String
 data class ServerConfig(val addresses: List<List<String>>, val root: RootConfig)
 data class RootConfig(val storage: StorageConfig)
 data class StorageConfig(val path: String)
-data class ProtocolConfig(val leaderFailTimeoutInSecs: Int)
+data class ProtocolConfig(val leaderFailTimeoutInSecs: Int, val backoffBound: Long)
 
 fun loadConfig(overrides: Map<String, Any> = emptyMap()) =
     ConfigLoaderBuilder
@@ -22,3 +22,4 @@ fun loadConfig(overrides: Map<String, Any> = emptyMap()) =
         .addResourceSource("/${System.getenv("CONFIG_FILE") ?: "application.conf"}")
         .build()
         .loadConfigOrThrow<Config>()
+        .also { println(it) }

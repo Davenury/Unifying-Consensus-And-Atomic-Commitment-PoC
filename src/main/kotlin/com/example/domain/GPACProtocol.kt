@@ -4,10 +4,8 @@ import com.example.AdditionalAction
 import com.example.EventPublisher
 import com.example.SignalSubject
 import com.example.TestAddon
-import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
-
-// TODO - ask if we should reject transaction or just wait
+import kotlin.math.max
 
 interface GPACProtocol : SignalSubject {
     suspend fun handleElect(message: ElectMe): ElectedYou
@@ -62,7 +60,7 @@ class GPACProtocolImpl(
 
         transactionBlocker.assertICanSendElectedYou()
 
-        if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber)
+        if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber, message.ballotNumber)
         val initVal = if (historyManagement.canBeBuild(message.change.toChange())) Accept.COMMIT else Accept.ABORT
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal)
@@ -83,21 +81,23 @@ class GPACProtocolImpl(
         signal(TestAddon.OnHandlingAgreeBegin, transaction)
 
         if (!checkBallotNumber(message.ballotNumber)) {
-            throw NotElectingYou(myBallotNumber)
+            throw NotElectingYou(myBallotNumber, message.ballotNumber)
         }
         this.transaction =
             this.transaction.copy(
                 ballotNumber = message.ballotNumber,
                 acceptVal = message.acceptVal,
-                acceptNum = message.ballotNumber
+                acceptNum = message.acceptNum ?: message.ballotNumber
             )
 
         logger.info("$me state transaction state: ${this.transaction}")
 
         myBallotNumber = message.ballotNumber
 
-        transactionBlocker.tryToBlock()
-        logger.info("$me Lock aquired: ${message.ballotNumber}")
+        if (!message.decision) {
+            transactionBlocker.tryToBlock()
+            logger.info("$me Lock aquired: ${message.ballotNumber}")
+        }
 
         signal(TestAddon.OnHandlingAgreeEnd, transaction)
 
@@ -126,10 +126,11 @@ class GPACProtocolImpl(
             signal(TestAddon.OnHandlingApplyEnd, transaction)
         }
     }
+
     private fun transactionWasAppliedBefore() =
         historyManagement.getState()?.any { it.acceptNum == this.transaction.acceptNum } == true
 
-    private fun leaderFailTimeoutStart(change: ChangeDto) {
+    private suspend fun leaderFailTimeoutStart(change: ChangeDto) {
         logger.info("$me Start counting")
         timer.startCounting {
             logger.info("$me Recovery leader starts")
@@ -137,6 +138,7 @@ class GPACProtocolImpl(
             performProtocolAsRecoveryLeader(change)
         }
     }
+
     private fun leaderFailTimeoutStop() {
         logger.info("$me Stop counter")
         timer.cancelCounting()
@@ -147,7 +149,8 @@ class GPACProtocolImpl(
     ) {
         val electResponses = electMePhase(change, { responses -> superSet(responses) })
 
-        val acceptVal = if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+        val acceptVal =
+            if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
 
         this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
 
@@ -161,7 +164,12 @@ class GPACProtocolImpl(
     }
 
     override suspend fun performProtocolAsRecoveryLeader(change: ChangeDto) {
-        val electResponses = electMePhase(change, { responses -> superMajority(responses) }, this.transaction)
+        val electResponses = electMePhase(
+            change,
+            { responses -> superMajority(responses) },
+            this.transaction,
+            this.transaction.acceptNum
+        )
 
         val messageWithDecision = electResponses.flatten().find { it.decision }
         if (messageWithDecision != null) {
@@ -170,7 +178,12 @@ class GPACProtocolImpl(
             this.transaction = this.transaction.copy(acceptVal = messageWithDecision.acceptVal)
             signal(TestAddon.BeforeSendingAgree, this.transaction)
 
-            val agreedResponses = ftAgreePhase(change, messageWithDecision.acceptVal!!)
+            val agreedResponses = ftAgreePhase(
+                change,
+                messageWithDecision.acceptVal!!,
+                decision = messageWithDecision.decision,
+                acceptNum = this.transaction.acceptNum
+            )
 
             signal(TestAddon.BeforeSendingApply, this.transaction)
 
@@ -192,7 +205,12 @@ class GPACProtocolImpl(
         return
     }
 
-    private suspend fun electMePhase(change: ChangeDto, superFunction: (List<List<ElectedYou>>) -> Boolean, transaction: Transaction? = null): List<List<ElectedYou>> {
+    private suspend fun electMePhase(
+        change: ChangeDto,
+        superFunction: (List<List<ElectedYou>>) -> Boolean,
+        transaction: Transaction? = null,
+        acceptNum: Int? = null
+    ): List<List<ElectedYou>> {
         var tries = 0
         var electResponses: List<List<ElectedYou>>
 
@@ -205,19 +223,38 @@ class GPACProtocolImpl(
             if (!historyManagement.canBeBuild(change.toChange())) throw HistoryCannotBeBuildException()
             this.transaction = transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
             signal(TestAddon.BeforeSendingElect, this.transaction)
-            electResponses = getElectedYouResponses(change, otherPeers)
+            logger.info("$me - sending ballot number: $myBallotNumber")
+            val (responses, maxBallotNumber) = getElectedYouResponses(change, otherPeers, acceptNum)
+            electResponses = responses
             tries++
+            if (electResponses.flatten().isNotEmpty()) {
+                logger.info(
+                    "$me My ballot number is: $myBallotNumber, max of responses is ${
+                        electResponses.flatten().maxOf { it.ballotNumber }
+                    }"
+                )
+                myBallotNumber = max(maxBallotNumber, myBallotNumber)
+                logger.info("$me Bumped ballot number to: $myBallotNumber")
+            }
         } while (!superFunction(electResponses) && tries < maxLeaderElectionTries)
 
-        if (tries >= maxLeaderElectionTries) throw MaxTriesExceededException()
+        if (tries >= maxLeaderElectionTries) {
+            transactionBlocker.releaseBlock()
+            throw MaxTriesExceededException()
+        }
 
         return electResponses
     }
 
-    private suspend fun ftAgreePhase(change: ChangeDto, acceptVal: Accept): List<List<Agreed>> {
+    private suspend fun ftAgreePhase(
+        change: ChangeDto,
+        acceptVal: Accept,
+        decision: Boolean = false,
+        acceptNum: Int? = null
+    ): List<List<Agreed>> {
         transactionBlocker.tryToBlock()
 
-        val agreedResponses = getAgreedResponses(change, otherPeers, acceptVal)
+        val agreedResponses = getAgreedResponses(change, otherPeers, acceptVal, decision, acceptNum)
         if (!superSet(agreedResponses)) throw TooFewResponsesException()
 
         this.transaction = this.transaction.copy(decision = true)
@@ -240,19 +277,23 @@ class GPACProtocolImpl(
 
     private suspend fun getElectedYouResponses(
         change: ChangeDto,
-        otherPeers: List<List<String>>
-    ): List<List<ElectedYou>> =
+        otherPeers: List<List<String>>,
+        acceptNum: Int? = null
+    ): ResponsesWithErrorAggregation<ElectedYou> =
         protocolClient.sendElectMe(
-            otherPeers.filterIndexed { index, _ -> isInTransaction(index) }, ElectMe(myBallotNumber, change)
+            otherPeers.filterIndexed { index, _ -> isInTransaction(index) }, ElectMe(myBallotNumber, change, acceptNum)
         )
 
     private suspend fun getAgreedResponses(
         change: ChangeDto,
         otherPeers: List<List<String>>,
-        acceptVal: Accept
+        acceptVal: Accept,
+        decision: Boolean = false,
+        acceptNum: Int? = null
     ): List<List<Agreed>> =
         protocolClient.sendFTAgree(
-            otherPeers.filterIndexed { index, _ -> isInTransaction(index) }, Agree(myBallotNumber, acceptVal, change)
+            otherPeers.filterIndexed { index, _ -> isInTransaction(index) },
+            Agree(myBallotNumber, acceptVal, change, decision, acceptNum)
         )
 
     private suspend fun sendApplyMessages(change: ChangeDto, otherPeers: List<List<String>>, acceptVal: Accept) =

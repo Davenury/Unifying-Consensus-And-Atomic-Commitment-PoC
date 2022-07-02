@@ -99,7 +99,7 @@ class LeaderTest {
     private val otherPeers = getOtherPeers(allPeers, 1, 1)
     private val consensusProtocol = DummyConsensusProtocol
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-    private val timer = ProtocolTimerImpl(1)
+    private val timer = ProtocolTimerImpl(1, 1)
     private val client = ProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
     private var subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers, me = 8080)

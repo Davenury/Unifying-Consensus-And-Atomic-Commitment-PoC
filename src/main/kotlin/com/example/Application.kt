@@ -34,7 +34,7 @@ fun startApplication(
         val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId)
         val historyManagement = RatisHistoryManagement(raftNode)
         val eventPublisher = EventPublisher(eventListeners)
-        val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs)
+        val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
         val protocolClient = ProtocolClientImpl()
         val transactionBlocker = TransactionBlockerImpl()
         val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId, conf.peersetId)
@@ -68,7 +68,7 @@ fun startApplication(
             exception<NotElectingYou> { cause ->
                 call.respond(
                     status = HttpStatusCode.UnprocessableEntity,
-                    ErrorMessage("You're not valid leader. My Ballot Number is: ${cause.ballotNumber}")
+                    ErrorMessage("You're not valid leader. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}")
                 )
             }
             exception<MaxTriesExceededException> {

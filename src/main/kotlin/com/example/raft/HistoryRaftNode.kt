@@ -5,9 +5,11 @@ import com.example.infrastructure.RatisHistoryManagement
 import com.example.objectMapper
 import java.io.File
 import org.slf4j.LoggerFactory
+import java.util.*
+import kotlin.collections.LinkedHashMap
 
 class HistoryRaftNode(peerId: Int, peersetId: Int) :
-        RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId-$peersetId")),
+        RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId-$peersetId-${UUID.randomUUID()}")),
         ConsensusProtocol<Change, History> {
 
     override fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult {
