@@ -35,7 +35,7 @@ class SinglePeersetIntegrationTest {
             override fun onSignal(signal: Signal, subject: SignalSubject) {
                 if (signal.addon == TestAddon.BeforeSendingAgree) {
                     expectCatching {
-                        executeChange("http://localhost:8082/create_change")
+                        executeChange("$peer2/create_change")
                     }.isSuccess()
                 }
             }
@@ -57,7 +57,7 @@ class SinglePeersetIntegrationTest {
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
         expectThrows<ServerResponseException> {
-            executeChange("http://localhost:8081/create_change")
+            executeChange("$peer1/create_change")
         }
 
         listOf(app1, app2, app3).forEach { app -> app.cancel(CancellationException("Test is over")) }
@@ -90,7 +90,7 @@ class SinglePeersetIntegrationTest {
             delay(5000)
 
             expectCatching {
-                executeChange("http://localhost:8081/create_change")
+                executeChange("$peer1/create_change")
             }.isSuccess()
 
             listOf(app1, app2, app3).forEach { app -> app.cancel(CancellationException("Test is over")) }
@@ -103,7 +103,7 @@ class SinglePeersetIntegrationTest {
             lateinit var app1: Job
 
             val firstLeaderAction: suspend (Transaction?) -> Unit = {
-                val url = "http://localhost:8082/ft-agree"
+                val url = "$peer2/ft-agree"
                 val response = httpClient.post<Agreed>(url) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
@@ -125,7 +125,7 @@ class SinglePeersetIntegrationTest {
 
             // change that will cause leader to fall according to action
             try {
-                executeChange("http://localhost:8081/create_change")
+                executeChange("$peer1/create_change")
             } catch (e: Exception) {
                 println("Leader 1 fails: $e")
             }
@@ -133,7 +133,7 @@ class SinglePeersetIntegrationTest {
             // leader timeout is 3 seconds for integration tests
             delay(7000)
 
-            val response = httpClient.get<String>("http://localhost:8083/change") {
+            val response = httpClient.get<String>("$peer3/change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }
@@ -157,7 +157,7 @@ class SinglePeersetIntegrationTest {
         )
 
         val firstLeaderAction: suspend (Transaction?) -> Unit = {
-            val url = "http://localhost:8082/apply"
+            val url = "$peer2/apply"
             runBlocking {
                 httpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
@@ -186,15 +186,15 @@ class SinglePeersetIntegrationTest {
 
         // change that will cause leader to fall according to action
         try {
-            executeChange("http://localhost:8081/create_change", mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
+            executeChange("$peer1/create_change", mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
         } catch (e: Exception) {
             println("Leader 1 fails: $e")
         }
 
-        // leader timeout is 5 seconds for integration tests - in the meantime third leader should execute transaction
+        // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
         delay(7000)
 
-        val response = httpClient.get<String>("http://localhost:8084/change") {
+        val response = httpClient.get<String>("$peer4/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -203,24 +203,21 @@ class SinglePeersetIntegrationTest {
         expectThat(change.change.toChange()).isEqualTo(AddGroupChange("name"))
 
         // and should not execute this change couple of times
-        val response2 = httpClient.get<String>("http://localhost:8082/changes") {
+        val response2 = httpClient.get<String>("$peer2/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
 
-        println("stopping apps")
         listOf(app1, app2, app3, app4).forEach { app -> app.cancel() }
 
         val values: List<ChangeWithAcceptNum> = objectMapper.readValue<HistoryDto>(response2).changes.map {
             ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)
         }
-        println(values)
         // only one change and this change shouldn't be applied for 8082 two times
         expect {
             that(values.size).isEqualTo(1)
             that(values[0]).isEqualTo(ChangeWithAcceptNum(AddGroupChange("name"), 1))
         }
-        println("here")
     }
 
     private fun createPeersInRange(range: Int): List<String> =
@@ -239,6 +236,12 @@ class SinglePeersetIntegrationTest {
             "userName" to "userName"
         )
     )
+
+    private val peer1 = "http://localhost:8081"
+    private val peer2 = "http://localhost:8082"
+    private val peer3 = "http://localhost:8083"
+    private val peer4 = "http://localhost:8084"
+    private val peer5 = "http://localhost:8085"
 
     private fun deleteRaftHistories() {
         File(System.getProperty("user.dir")).listFiles { pathname -> pathname?.name?.startsWith("history") == true }
