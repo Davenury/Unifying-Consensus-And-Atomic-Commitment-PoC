@@ -13,6 +13,7 @@ class ProtocolTimerImpl(
 ) : ProtocolTimer {
 
     private var task: Job? = null
+    private val millisInSecond = 1000
 
     companion object {
         private val randomGenerator = Random()
@@ -21,7 +22,7 @@ class ProtocolTimerImpl(
     override suspend fun startCounting(action: suspend () -> Unit) {
         cancelCounting()
         task = GlobalScope.launch {
-            delay((delay + randomGenerator.nextLong() % backoffBound) * 1000)
+            delay((delay + randomGenerator.nextLong() % backoffBound) * millisInSecond)
             action()
         }
     }
