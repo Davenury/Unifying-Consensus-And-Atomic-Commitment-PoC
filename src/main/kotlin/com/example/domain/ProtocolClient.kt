@@ -68,6 +68,9 @@ class ProtocolClientImpl : ProtocolClient {
                             body = requestBody!!
                         }
                     } catch (e: ClientRequestException) {
+                        // since we're updating ballot number in electing phase, this mechanism lets us
+                        // get any aggregation from all responses from "Not electing you" response, so we can get
+                        // max of all ballotNumbers sent back to the leader
                         logger.error(errorMessage(it, e))
                         if (e.response.status.value == 422) {
                             val value = e.response.content.readUTF8Line()?.let {
@@ -77,10 +80,8 @@ class ProtocolClientImpl : ProtocolClient {
                                     .map { it.toInt() }
                             }?.get(0) ?: 0
                             acc = aggregateErrors(acc, value)
-                            null
-                        } else {
-                            null
                         }
+                        null
                     } catch (e: Exception) {
                         logger.error(errorMessage(it, e))
                         null
