@@ -10,6 +10,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
 import org.apache.commons.io.FileUtils
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expect
 import strikt.api.expectCatching
@@ -22,10 +23,13 @@ import java.io.File
 
 class SinglePeersetIntegrationTest {
 
+    @BeforeEach
+    fun setup() {
+        deleteRaftHistories()
+    }
+
     @Test
     fun `second leader tries to become leader before first leader goes into ft-agree phase`(): Unit = runBlocking {
-
-        deleteRaftHistories()
 
         val eventListener = object : EventListener {
             override fun onSignal(signal: Signal, subject: SignalSubject) {
@@ -62,7 +66,6 @@ class SinglePeersetIntegrationTest {
     @Test
     fun `first leader is already in ft-agree phase and second leader tries to execute its transaction - second should be rejected`(): Unit =
         runBlocking {
-            deleteRaftHistories()
             val eventListener = object : EventListener {
                 override fun onSignal(signal: Signal, subject: SignalSubject) {
                     if (signal.addon == TestAddon.BeforeSendingApply) {
@@ -95,9 +98,6 @@ class SinglePeersetIntegrationTest {
 
     @Test
     fun `should be able to execute transaction even if leader fails after first ft-agree`() {
-
-        deleteRaftHistories()
-
         runBlocking {
 
             lateinit var app1: Job
@@ -150,8 +150,6 @@ class SinglePeersetIntegrationTest {
 
     @Test
     fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
-
-        deleteRaftHistories()
 
         val configOverrides = mapOf<String, Any>(
             "peers.peersAddresses" to listOf(createPeersInRange(4)),
