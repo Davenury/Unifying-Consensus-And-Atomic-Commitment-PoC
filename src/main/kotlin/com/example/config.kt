@@ -22,4 +22,3 @@ fun loadConfig(overrides: Map<String, Any> = emptyMap()) =
         .addResourceSource("/${System.getenv("CONFIG_FILE") ?: "application.conf"}")
         .build()
         .loadConfigOrThrow<Config>()
-        .also { println(it) }
