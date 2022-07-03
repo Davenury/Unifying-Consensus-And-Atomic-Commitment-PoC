@@ -5,7 +5,17 @@ import com.example.objectMapper
 import com.fasterxml.jackson.databind.JsonMappingException
 import org.slf4j.LoggerFactory
 
-data class ChangeWithAcceptNum(val change: Change, val acceptNum: Int?)
+data class ChangeWithAcceptNum(val change: Change, val acceptNum: Int?) {
+    companion object {
+        fun fromJson(json: String): ChangeWithAcceptNum {
+            val map = objectMapper.readValue(json, HashMap<String, Any>().javaClass)
+            val changeString = objectMapper.writeValueAsString(map["change"])
+            val change: Change = Change.fromJson(changeString)!!
+            val acceptNum = map["acceptNum"] as Int?
+            return ChangeWithAcceptNum(change, acceptNum)
+        }
+    }
+}
 
 typealias History = MutableList<ChangeWithAcceptNum>
 
@@ -16,11 +26,7 @@ class HistoryStateMachine(override var state: History = mutableListOf()) :
 
     override fun applyOperation(operation: String): String? =
             try {
-                val map = objectMapper.readValue(operation, HashMap<String, Any>().javaClass)
-                val changeString = objectMapper.writeValueAsString(map["change"])
-                val change: Change = Change.fromJson(changeString)!!
-                val acceptNum = map["acceptNum"] as Int?
-                state.add(ChangeWithAcceptNum(change, acceptNum))
+                state.add(ChangeWithAcceptNum.fromJson(operation))
                 null
             } catch (e: JsonMappingException) {
                 logger.error("Error during applyOperation ${e.message}")
