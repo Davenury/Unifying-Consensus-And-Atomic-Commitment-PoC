@@ -65,7 +65,7 @@ fun startApplication(
                     ErrorMessage("Unknown operation to perform: ${cause.desiredOperationName}")
                 )
             }
-            exception<NotElectingYou> { cause ->
+            exception<NotValidLeader> { cause ->
                 call.respond(
                     status = HttpStatusCode.UnprocessableEntity,
                     ErrorMessage("You're not valid leader. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}")

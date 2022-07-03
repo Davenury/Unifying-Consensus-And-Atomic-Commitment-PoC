@@ -60,7 +60,7 @@ class GPACProtocolImpl(
 
         transactionBlocker.assertICanSendElectedYou()
 
-        if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber, message.ballotNumber)
+        if (!this.checkBallotNumber(message.ballotNumber)) throw NotValidLeader(myBallotNumber, message.ballotNumber)
         val initVal = if (historyManagement.canBeBuild(message.change.toChange())) Accept.COMMIT else Accept.ABORT
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal)
@@ -81,7 +81,7 @@ class GPACProtocolImpl(
         signal(TestAddon.OnHandlingAgreeBegin, transaction)
 
         if (!checkBallotNumber(message.ballotNumber)) {
-            throw NotElectingYou(myBallotNumber, message.ballotNumber)
+            throw NotValidLeader(myBallotNumber, message.ballotNumber)
         }
         this.transaction =
             this.transaction.copy(

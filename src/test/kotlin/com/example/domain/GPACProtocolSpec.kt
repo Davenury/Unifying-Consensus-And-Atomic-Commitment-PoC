@@ -70,7 +70,7 @@ class GPACProtocolSpec {
         // with functionality of changing state is not the way
         val message = ElectMe(-1, changeDto)
 
-        expectThrows<NotElectingYou> {
+        expectThrows<NotValidLeader> {
             subject.handleElect(message)
         }
     }
@@ -112,7 +112,7 @@ class GPACProtocolSpec {
     @Test
     fun `should throw not electing you, when proposed ballot number is less than state's`(): Unit = runBlocking {
         val message = Agree(-1, Accept.COMMIT, changeDto)
-        expectThrows<NotElectingYou> {
+        expectThrows<NotValidLeader> {
             subject.handleAgree(message)
         }
     }
