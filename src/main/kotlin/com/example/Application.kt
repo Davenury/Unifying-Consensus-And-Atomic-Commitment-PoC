@@ -3,6 +3,7 @@ package com.example
 import com.example.api.configureSampleRouting
 import com.example.api.protocolRouting
 import com.example.domain.*
+import com.example.infrastructure.ProtocolTimerImpl
 import com.example.infrastructure.RatisHistoryManagement
 import com.example.raft.Constants
 import com.example.raft.HistoryRaftNode
@@ -22,24 +23,33 @@ fun main(args: Array<String>) {
 fun startApplication(
     args: Array<String>,
     additionalActions: Map<TestAddon, AdditionalAction> = emptyMap(),
-    eventListeners: List<EventListener> = emptyList()
+    eventListeners: List<EventListener> = emptyList(),
+    configOverrides: Map<String, Any> = emptyMap()
 ) {
-    val config = loadConfig()
+    val config = loadConfig(configOverrides)
     val conf = getIdAndOffset(args, config)
-    Constants.loadConfig(conf.peersetId)
+    Constants.loadConfig(conf.peersetId, configOverrides)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
+
         val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId)
         val historyManagement = RatisHistoryManagement(raftNode)
         val eventPublisher = EventPublisher(eventListeners)
+        val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
+        val protocolClient = ProtocolClientImpl()
+        val transactionBlocker = TransactionBlockerImpl()
+        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId, conf.peersetId)
         val protocol =
             GPACProtocolImpl(
                 historyManagement,
                 config.peers.maxLeaderElectionTries,
-                httpClient,
+                timer,
+                protocolClient,
+                transactionBlocker,
+                otherPeers,
                 additionalActions,
-                eventPublisher
+                eventPublisher,
+                8080 + conf.portOffset
             )
-        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.nodeId, conf.peersetId)
 
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
@@ -58,7 +68,13 @@ fun startApplication(
             exception<NotElectingYou> { cause ->
                 call.respond(
                     status = HttpStatusCode.UnprocessableEntity,
-                    ErrorMessage("You're not valid leader. My Ballot Number is: ${cause.ballotNumber}")
+                    ErrorMessage("You're not valid leader-to-be. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}")
+                )
+            }
+            exception<NotValidLeader> { cause ->
+                call.respond(
+                    status = HttpStatusCode.UnprocessableEntity,
+                    ErrorMessage("You're not valid leader. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}")
                 )
             }
             exception<MaxTriesExceededException> {
@@ -85,16 +101,16 @@ fun startApplication(
                     ErrorMessage("We cannot perform your transaction, as another transaction is currently running")
                 )
             }
-            exception<Throwable> { cause ->
-                call.respond(
-                    status = HttpStatusCode.InternalServerError,
-                    ErrorMessage("UnexpectedError, $cause")
-                )
-            }
+//            exception<Throwable> { cause ->
+//                call.respond(
+//                    status = HttpStatusCode.InternalServerError,
+//                    ErrorMessage("UnexpectedError, $cause")
+//                )
+//            }
         }
 
         configureSampleRouting(historyManagement)
-        protocolRouting(protocol, otherPeers)
+        protocolRouting(protocol)
     }.start(wait = true)
 }
 

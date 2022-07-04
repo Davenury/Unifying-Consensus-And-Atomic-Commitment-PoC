@@ -1,11 +1,12 @@
 package com.example.domain
 
+import com.example.raft.ChangeWithAcceptNum
 import com.example.raft.History
 
 
 abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
-    open fun change(change: Change) =
-        consensusProtocol.proposeChange(change)
+    open fun change(change: Change, acceptNum: Int?) =
+        consensusProtocol.proposeChange(change, acceptNum)
             .let {
                 when (it) {
                     ConsensusFailure -> {
@@ -17,7 +18,8 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
                 }
             }
 
-    abstract fun getLastChange(): Change?
+    abstract fun getLastChange(): ChangeWithAcceptNum?
+    abstract fun getState(): History?
 
     /**
      * function used to check if history can be build given another change to perform

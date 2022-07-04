@@ -55,6 +55,8 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.8.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("io.strikt:strikt-core:0.34.0")
+    testImplementation("io.mockk:mockk:1.12.4")
+    testImplementation("org.awaitility:awaitility:4.2.0")
 
     // wiremock
     testImplementation("com.github.tomakehurst:wiremock-jre8:2.33.2")
@@ -80,20 +82,33 @@ tasks.withType<Jar> {
 tasks {
     "test"(Test::class) {
         filter {
-            excludeTestsMatching("com.example.api.IntegrationTest")
+            excludeTestsMatching("com.example.api.SinglePeersetIntegrationTest")
         }
     }
 }
 
-val integrationTest = sourceSets.create("singlePeersetIntegrationTest")
+val singlePeersetIntegrationTest = sourceSets.create("singlePeersetIntegrationTest")
 tasks.register<Test>("singlePeersetIntegrationTest") {
     group = "verification"
 
     shouldRunAfter(tasks.test)
     useJUnitPlatform()
 
-    environment("PEERSET_ID", "1")
     environment("CONFIG_FILE", "single_peerset_application.conf")
+
+    filter {
+        includeTestsMatching("com.example.api.SinglePeersetIntegrationTest")
+    }
+}
+
+val integrationTest = sourceSets.create("integrationTest")
+tasks.register<Test>("integrationTest") {
+    group = "verification"
+
+    shouldRunAfter(tasks.test)
+    useJUnitPlatform()
+
+    environment("CONFIG_FILE", "application-integration.conf")
 
     filter {
         includeTestsMatching("com.example.api.IntegrationTest")

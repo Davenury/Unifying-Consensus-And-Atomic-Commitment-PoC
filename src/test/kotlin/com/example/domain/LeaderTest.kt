@@ -3,6 +3,8 @@ package com.example.domain
 import com.example.getOtherPeers
 import com.example.httpClient
 import com.example.infrastructure.InMemoryHistoryManagement
+import com.example.infrastructure.ProtocolTimerImpl
+import com.example.raft.ChangeWithAcceptNum
 import com.example.utils.DummyConsensusProtocol
 import com.example.utils.PeerThree
 import com.example.utils.PeerTwo
@@ -19,7 +21,7 @@ class LeaderTest {
 
     @BeforeEach
     fun setup() {
-        subject = GPACProtocolImpl(historyManagement, 3, httpClient)
+        subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers, me = 8080)
     }
 
     @Test
@@ -54,7 +56,7 @@ class LeaderTest {
         PeerThree.stubForNotElectingYou()
 
         expectThrows<MaxTriesExceededException> {
-            subject.performProtocolAsLeader(changeDto, otherPeers)
+            subject.performProtocolAsLeader(changeDto)
         }
 
         // assert that we're actually asking 3 times
@@ -70,7 +72,7 @@ class LeaderTest {
         PeerThree.stubForNotAgree()
 
         expectThrows<TooFewResponsesException> {
-            subject.performProtocolAsLeader(changeDto, otherPeers)
+            subject.performProtocolAsLeader(changeDto)
         }
 
         PeerTwo.verifyAgreeStub(1)
@@ -87,17 +89,20 @@ class LeaderTest {
         PeerThree.stubForApply()
 
         runBlocking {
-            subject.performProtocolAsLeader(changeDto, otherPeers)
+            subject.performProtocolAsLeader(changeDto)
         }
 
-        expectThat(historyManagement.getLastChange()).isEqualTo(changeDto.toChange())
+        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(changeDto.toChange(), 1))
     }
 
     private val allPeers = listOf(listOf("localhost:8081", "localhost:8082", "localhost:8083"))
     private val otherPeers = getOtherPeers(allPeers, 1, 1)
     private val consensusProtocol = DummyConsensusProtocol
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-    private var subject = GPACProtocolImpl(historyManagement, 3, httpClient)
+    private val timer = ProtocolTimerImpl(1, 1)
+    private val client = ProtocolClientImpl()
+    private val transactionBlocker = TransactionBlockerImpl()
+    private var subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers, me = 8080)
     private val changeDto = ChangeDto(mapOf(
         "operation" to "ADD_USER",
         "userName" to "userName"

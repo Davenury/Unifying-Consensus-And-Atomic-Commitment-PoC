@@ -3,19 +3,21 @@ package com.example.infrastructure
 import com.example.domain.Change
 import com.example.domain.HistoryChangeResult
 import com.example.domain.HistoryManagement
+import com.example.raft.ChangeWithAcceptNum
+import com.example.raft.History
 import com.example.raft.HistoryRaftNode
 import org.slf4j.LoggerFactory
 
 class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : HistoryManagement(historyRaftNode) {
-    override fun getLastChange(): Change? = try {
+    override fun getLastChange(): ChangeWithAcceptNum? = try {
         historyRaftNode.getState()?.last()
     } catch (ex: java.util.NoSuchElementException) {
         logger.error("History is empty!")
         null
     }
 
-    override fun change(change: Change): HistoryChangeResult {
-        return super.change(change)
+    override fun change(change: Change, acceptNum: Int?): HistoryChangeResult {
+        return super.change(change, acceptNum)
     }
 
     /**
@@ -24,6 +26,9 @@ class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : His
      * */
     override fun canBeBuild(newChange: Change): Boolean
         = true
+
+    override fun getState(): History? =
+        historyRaftNode.getState()
 
     override fun build() {}
 

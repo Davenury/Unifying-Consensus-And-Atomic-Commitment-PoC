@@ -4,16 +4,19 @@ import com.example.domain.Change
 import com.example.domain.ConsensusProtocol
 import com.example.domain.ConsensusResult
 import com.example.domain.ConsensusSuccess
+import com.example.raft.ChangeWithAcceptNum
 
-object DummyConsensusProtocol: ConsensusProtocol<Change, MutableList<Change>> {
+object DummyConsensusProtocol: ConsensusProtocol<Change, MutableList<ChangeWithAcceptNum>> {
     private var response: ConsensusResult = ConsensusSuccess
 
-    override fun proposeChange(change: Change): ConsensusResult
+    override fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult
             = response
+
+
 
     fun setResponse(response: ConsensusResult) {
         this.response = response
     }
 
-    override fun getState(): MutableList<Change> = mutableListOf()
+    override fun getState(): MutableList<ChangeWithAcceptNum> = mutableListOf()
 }
