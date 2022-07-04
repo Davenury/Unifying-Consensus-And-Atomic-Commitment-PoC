@@ -60,7 +60,7 @@ class GPACProtocolImpl(
 
         transactionBlocker.assertICanSendElectedYou()
 
-        if (!this.checkBallotNumber(message.ballotNumber)) throw NotValidLeader(myBallotNumber, message.ballotNumber)
+        if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber, message.ballotNumber)
         val initVal = if (historyManagement.canBeBuild(message.change.toChange())) Accept.COMMIT else Accept.ABORT
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal)
@@ -227,6 +227,9 @@ class GPACProtocolImpl(
             val (responses, maxBallotNumber) = getElectedYouResponses(change, otherPeers, acceptNum)
             electResponses = responses
             tries++
+            if (superFunction(electResponses)) {
+                return electResponses
+            }
             if (electResponses.flatten().isNotEmpty()) {
                 logger.info(
                     "$me My ballot number is: $myBallotNumber, max of responses is ${
@@ -236,14 +239,10 @@ class GPACProtocolImpl(
                 myBallotNumber = max(maxBallotNumber, myBallotNumber)
                 logger.info("$me Bumped ballot number to: $myBallotNumber")
             }
-        } while (!superFunction(electResponses) && tries < maxLeaderElectionTries)
+        } while (tries < maxLeaderElectionTries)
 
-        if (tries >= maxLeaderElectionTries) {
-            transactionBlocker.releaseBlock()
-            throw MaxTriesExceededException()
-        }
-
-        return electResponses
+        transactionBlocker.releaseBlock()
+        throw MaxTriesExceededException()
     }
 
     private suspend fun ftAgreePhase(

@@ -70,7 +70,7 @@ class GPACProtocolSpec {
         // with functionality of changing state is not the way
         val message = ElectMe(-1, changeDto)
 
-        expectThrows<NotValidLeader> {
+        expectThrows<NotElectingYou> {
             subject.handleElect(message)
         }
     }
