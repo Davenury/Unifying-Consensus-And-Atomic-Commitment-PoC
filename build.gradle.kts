@@ -111,6 +111,6 @@ tasks.register<Test>("integrationTest") {
     environment("CONFIG_FILE", "application-integration.conf")
 
     filter {
-        includeTestsMatching("com.example.api.IntegrationTest")
+        includeTestsMatching("com.example.api.MultiplePeersetSpec")
     }
 }

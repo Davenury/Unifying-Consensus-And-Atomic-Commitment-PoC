@@ -3,14 +3,13 @@ package com.example.raft
 import com.example.domain.*
 import com.example.infrastructure.RatisHistoryManagement
 import com.example.objectMapper
-import java.io.File
 import org.slf4j.LoggerFactory
+import java.io.File
 import java.util.*
-import kotlin.collections.LinkedHashMap
 
-class HistoryRaftNode(peerId: Int, peersetId: Int) :
-        RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId-$peersetId-${UUID.randomUUID()}")),
-        ConsensusProtocol<Change, History> {
+class HistoryRaftNode(peerId: Int, peersetId: Int, constants: RaftConstants) :
+    RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId-$peersetId-${UUID.randomUUID()}"), constants),
+    ConsensusProtocol<Change, History> {
 
     override fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult {
         val msg = objectMapper.writeValueAsString(ChangeWithAcceptNum(change, acceptNum))
@@ -23,14 +22,14 @@ class HistoryRaftNode(peerId: Int, peersetId: Int) :
         val result = queryData(msg)
         return try {
             objectMapper
-                    .readValue(result, mutableListOf<LinkedHashMap<String, Any>>().javaClass)
-                    .map {
-                        ChangeWithAcceptNum(
-                                ChangeDto(it["change"]!! as Map<String, String>).toChange(),
-                                it["acceptNum"] as Int
-                        )
-                    }
-                    .toMutableList()
+                .readValue(result, mutableListOf<LinkedHashMap<String, Any>>().javaClass)
+                .map {
+                    ChangeWithAcceptNum(
+                        ChangeDto(it["change"]!! as Map<String, String>).toChange(),
+                        it["acceptNum"] as Int
+                    )
+                }
+                .toMutableList()
         } catch (e: Exception) {
             logger.error("Can't parse result from state machine \n ${e.message}")
             null

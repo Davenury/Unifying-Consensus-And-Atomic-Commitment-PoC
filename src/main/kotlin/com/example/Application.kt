@@ -5,8 +5,8 @@ import com.example.api.protocolRouting
 import com.example.domain.*
 import com.example.infrastructure.ProtocolTimerImpl
 import com.example.infrastructure.RatisHistoryManagement
-import com.example.raft.Constants
 import com.example.raft.HistoryRaftNode
+import com.example.raft.RaftConstants
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -28,10 +28,10 @@ fun startApplication(
 ) {
     val config = loadConfig(configOverrides)
     val conf = getIdAndOffset(args, config)
-    Constants.loadConfig(conf.peersetId, configOverrides)
+    val peerConstants = RaftConstants(conf.peersetId, configOverrides)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
 
-        val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId)
+        val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
         val historyManagement = RatisHistoryManagement(raftNode)
         val eventPublisher = EventPublisher(eventListeners)
         val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)

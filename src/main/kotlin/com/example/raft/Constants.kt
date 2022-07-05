@@ -24,26 +24,17 @@ import java.util.*
  * limitations under the License.
  */
 
+class RaftConstants(
+    peersetId: Int,
+    overrides: Map<String, Any> = emptyMap()
+) {
 
+    val PEERS: List<RaftPeer>
+    private val PATH: String
+    private val CLUSTER_GROUP_ID: UUID
+    val RAFT_GROUP: RaftGroup
 
-/**
- * Constants across servers and clients
- */
-object Constants {
-    lateinit var PEERS: List<RaftPeer>
-        private set
-    private lateinit var PATH: String
-    private lateinit var CLUSTER_GROUP_ID: UUID
-    lateinit var RAFT_GROUP: RaftGroup
-        private set
-
-    fun oneNodeGroup(peer: RaftPeer): RaftGroup {
-        return RaftGroup.valueOf(
-            RaftGroupId.valueOf(CLUSTER_GROUP_ID), peer
-        )
-    }
-
-    fun loadConfig(peersetId: Int, overrides: Map<String, Any> = emptyMap()) {
+    init {
         val config = loadConfig(overrides)
         PATH = config.raft.server.root.storage.path
         PEERS = config.raft.server.addresses[peersetId - 1].mapIndexed { index, address ->
@@ -52,4 +43,11 @@ object Constants {
         CLUSTER_GROUP_ID = UUID.fromString(config.raft.clusterGroupIds[peersetId - 1])
         RAFT_GROUP = RaftGroup.valueOf(RaftGroupId.valueOf(CLUSTER_GROUP_ID), PEERS)
     }
+
+    fun oneNodeGroup(peer: RaftPeer): RaftGroup {
+        return RaftGroup.valueOf(
+            RaftGroupId.valueOf(CLUSTER_GROUP_ID), peer
+        )
+    }
+
 }
