@@ -1,7 +1,6 @@
 package com.example.domain
 
 import com.example.getOtherPeers
-import com.example.httpClient
 import com.example.infrastructure.InMemoryHistoryManagement
 import com.example.infrastructure.ProtocolTimerImpl
 import com.example.raft.ChangeWithAcceptNum
@@ -16,12 +15,20 @@ import strikt.api.expectThrows
 import strikt.assertions.containsExactlyInAnyOrder
 import strikt.assertions.isEqualTo
 
-
 class LeaderTest {
 
     @BeforeEach
     fun setup() {
-        subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers, me = 8080)
+        subject =
+                GPACProtocolImpl(
+                        historyManagement,
+                        3,
+                        timer,
+                        client,
+                        transactionBlocker,
+                        otherPeers,
+                        me = 8080
+                )
     }
 
     @Test
@@ -30,7 +37,8 @@ class LeaderTest {
         val peersetId = 1
 
         val allPeers = listOf(listOf("peer1:8080", "peer2:8080", "peer3:8080"))
-        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten()).containsExactlyInAnyOrder("peer1:8080", "peer3:8080")
+        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten())
+                .containsExactlyInAnyOrder("peer1:8080", "peer3:8080")
     }
 
     @Test
@@ -38,8 +46,19 @@ class LeaderTest {
         val nodeId = 2
         val peersetId = 1
 
-        val allPeers = listOf(listOf("peer1:8080", "peer2:8080", "peer3:8080"), listOf("peer4:8080", "peer5:8080", "peer6:8080"))
-        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten()).containsExactlyInAnyOrder("peer1:8080", "peer3:8080", "peer4:8080", "peer5:8080", "peer6:8080")
+        val allPeers =
+                listOf(
+                        listOf("peer1:8080", "peer2:8080", "peer3:8080"),
+                        listOf("peer4:8080", "peer5:8080", "peer6:8080")
+                )
+        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten())
+                .containsExactlyInAnyOrder(
+                        "peer1:8080",
+                        "peer3:8080",
+                        "peer4:8080",
+                        "peer5:8080",
+                        "peer6:8080"
+                )
     }
 
     @Test
@@ -47,7 +66,8 @@ class LeaderTest {
         val nodeId = 2
         val peersetId = 1
 
-        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten()).containsExactlyInAnyOrder("localhost:8081", "localhost:8083")
+        expectThat(getOtherPeers(allPeers, nodeId, peersetId, 9090).flatten())
+                .containsExactlyInAnyOrder("localhost:9091", "localhost:9093")
     }
 
     @Test
@@ -55,9 +75,7 @@ class LeaderTest {
         PeerTwo.stubForNotElectingYou()
         PeerThree.stubForNotElectingYou()
 
-        expectThrows<MaxTriesExceededException> {
-            subject.performProtocolAsLeader(changeDto)
-        }
+        expectThrows<MaxTriesExceededException> { subject.performProtocolAsLeader(changeDto) }
 
         // assert that we're actually asking 3 times
         PeerTwo.verifyMaxRetriesForElectionPassed(3)
@@ -71,9 +89,7 @@ class LeaderTest {
         PeerTwo.stubForNotAgree()
         PeerThree.stubForNotAgree()
 
-        expectThrows<TooFewResponsesException> {
-            subject.performProtocolAsLeader(changeDto)
-        }
+        expectThrows<TooFewResponsesException> { subject.performProtocolAsLeader(changeDto) }
 
         PeerTwo.verifyAgreeStub(1)
         PeerThree.verifyAgreeStub(1)
@@ -88,24 +104,28 @@ class LeaderTest {
         PeerTwo.stubForApply()
         PeerThree.stubForApply()
 
-        runBlocking {
-            subject.performProtocolAsLeader(changeDto)
-        }
+        runBlocking { subject.performProtocolAsLeader(changeDto) }
 
-        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(changeDto.toChange(), 1))
+        expectThat(historyManagement.getLastChange())
+                .isEqualTo(ChangeWithAcceptNum(changeDto.toChange(), 1))
     }
 
-    private val allPeers = listOf(listOf("localhost:8081", "localhost:8082", "localhost:8083"))
-    private val otherPeers = getOtherPeers(allPeers, 1, 1)
+    private val allPeers = listOf(listOf("localhost:9091", "localhost:9092", "localhost:9093"))
+    private val otherPeers = getOtherPeers(allPeers, 1, 1, 9090)
     private val consensusProtocol = DummyConsensusProtocol
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
     private val timer = ProtocolTimerImpl(1, 1)
     private val client = ProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
-    private var subject = GPACProtocolImpl(historyManagement, 3, timer, client, transactionBlocker, otherPeers, me = 8080)
-    private val changeDto = ChangeDto(mapOf(
-        "operation" to "ADD_USER",
-        "userName" to "userName"
-    ))
-
+    private var subject =
+            GPACProtocolImpl(
+                    historyManagement,
+                    3,
+                    timer,
+                    client,
+                    transactionBlocker,
+                    otherPeers,
+                    me = 8080
+            )
+    private val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"))
 }

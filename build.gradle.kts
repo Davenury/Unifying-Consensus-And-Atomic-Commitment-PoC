@@ -83,6 +83,7 @@ tasks {
     "test"(Test::class) {
         filter {
             excludeTestsMatching("com.example.api.SinglePeersetIntegrationTest")
+            excludeTestsMatching("com.example.api.MultiplePeersetSpec")
         }
     }
 }
