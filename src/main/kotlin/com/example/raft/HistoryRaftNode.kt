@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.*
 
-class HistoryRaftNode(peerId: Int, peersetId: Int, constants: RaftConstants) :
+class HistoryRaftNode(peerId: Int, peersetId: Int, constants: RaftConfiguration) :
     RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId-$peersetId-${UUID.randomUUID()}"), constants),
     ConsensusProtocol<Change, History> {
 

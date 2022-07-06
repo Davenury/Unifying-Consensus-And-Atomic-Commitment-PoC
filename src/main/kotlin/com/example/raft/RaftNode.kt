@@ -20,7 +20,7 @@ abstract class RaftNode(
     peerId: Int,
     stateMachine: StateMachine<*>,
     storageDir: File?,
-    private val constants: RaftConstants
+    private val constants: RaftConfiguration
 ) : Closeable {
     private val server: RaftServer
 

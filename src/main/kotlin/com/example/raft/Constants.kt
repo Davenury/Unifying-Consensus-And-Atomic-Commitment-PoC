@@ -24,7 +24,7 @@ import java.util.*
  * limitations under the License.
  */
 
-class RaftConstants(
+class RaftConfiguration(
     peersetId: Int,
     overrides: Map<String, Any> = emptyMap()
 ) {
