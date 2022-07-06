@@ -466,7 +466,6 @@ class MultiplePeersetSpec {
         listOf(app1, app2, app3, app4, app5, app6, app7, app8).forEach { app -> app.cancel() }
     }
 
-    // TODO
     @Test
     fun `transaction should be processed and should be processed only once when one peerset applies its change and the other not`(): Unit =
         runBlocking {
