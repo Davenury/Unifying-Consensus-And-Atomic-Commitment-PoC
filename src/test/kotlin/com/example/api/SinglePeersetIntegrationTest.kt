@@ -18,6 +18,7 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.isEqualTo
 import strikt.assertions.isFailure
+import strikt.assertions.isGreaterThanOrEqualTo
 import strikt.assertions.isSuccess
 import java.io.File
 
@@ -104,7 +105,7 @@ class SinglePeersetIntegrationTest {
 
             val firstLeaderAction: suspend (Transaction?) -> Unit = {
                 val url = "$peer2/ft-agree"
-                val response = httpClient.post<Agreed>(url) {
+                val response = testHttpClient.post<Agreed>(url) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
                     body = Agree(it!!.ballotNumber, Accept.COMMIT, changeDto)
@@ -133,7 +134,7 @@ class SinglePeersetIntegrationTest {
             // leader timeout is 3 seconds for integration tests
             delay(7000)
 
-            val response = httpClient.get<String>("$peer3/change") {
+            val response = testHttpClient.get<String>("$peer3/change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }
@@ -152,14 +153,14 @@ class SinglePeersetIntegrationTest {
     fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
 
         val configOverrides = mapOf<String, Any>(
-            "peers.peersAddresses" to listOf(createPeersInRange(4)),
-            "raft.server.addresses" to listOf(List(4) { "localhost:${it + 11124}" })
+            "peers.peersAddresses" to listOf(createPeersInRange(5)),
+            "raft.server.addresses" to listOf(List(5) { "localhost:${it + 11124}" })
         )
 
         val firstLeaderAction: suspend (Transaction?) -> Unit = {
             val url = "$peer2/apply"
             runBlocking {
-                httpClient.post<HttpResponse>(url) {
+                testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
                     body = Apply(it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name")))
@@ -179,7 +180,7 @@ class SinglePeersetIntegrationTest {
         val app2 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides) }
         val app3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides) }
         val app4 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "1"), emptyMap(), configOverrides = configOverrides) }
-        //val app5 = launch(Dispatchers.IO) { startApplication(arrayOf("5", "1"), emptyMap(), configOverrides = configOverrides) }
+        val app5 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("5", "1"), emptyMap(), configOverrides = configOverrides) }
 
         // application will start
         delay(5000)
@@ -194,7 +195,7 @@ class SinglePeersetIntegrationTest {
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
         delay(7000)
 
-        val response = httpClient.get<String>("$peer4/change") {
+        val response = testHttpClient.get<String>("$peer4/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -203,19 +204,19 @@ class SinglePeersetIntegrationTest {
         expectThat(change.change.toChange()).isEqualTo(AddGroupChange("name"))
 
         // and should not execute this change couple of times
-        val response2 = httpClient.get<String>("$peer2/changes") {
+        val response2 = testHttpClient.get<String>("$peer2/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
 
-        listOf(app1, app2, app3, app4).forEach { app -> app.cancel() }
+        listOf(app1, app2, app3, app4, app5).forEach { app -> app.cancel() }
 
         val values: List<ChangeWithAcceptNum> = objectMapper.readValue<HistoryDto>(response2).changes.map {
             ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)
         }
         // only one change and this change shouldn't be applied for 8082 two times
         expect {
-            that(values.size).isEqualTo(1)
+            that(values.size).isGreaterThanOrEqualTo(1)
             that(values[0]).isEqualTo(ChangeWithAcceptNum(AddGroupChange("name"), 1))
         }
     }
@@ -224,7 +225,7 @@ class SinglePeersetIntegrationTest {
         List(range) { "localhost:${8081+it}" }
 
     private suspend fun executeChange(uri: String, change: Map<String, Any> = changeDto.properties) =
-        httpClient.post<String>(uri) {
+        testHttpClient.post<String>(uri) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = change
