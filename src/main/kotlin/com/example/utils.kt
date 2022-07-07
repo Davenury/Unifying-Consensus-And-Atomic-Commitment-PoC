@@ -15,6 +15,14 @@ val httpClient = HttpClient(OkHttp) {
         serializer = JacksonSerializer(objectMapper)
     }
     install(HttpTimeout) {
-        requestTimeoutMillis = 10000
+        requestTimeoutMillis = 2000
+    }
+}
+val testHttpClient = HttpClient(OkHttp) {
+    install(JsonFeature) {
+        serializer = JacksonSerializer(objectMapper)
+    }
+    install(HttpTimeout) {
+        requestTimeoutMillis = 15000
     }
 }

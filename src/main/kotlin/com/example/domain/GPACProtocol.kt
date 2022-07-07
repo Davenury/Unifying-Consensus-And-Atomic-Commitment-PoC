@@ -4,8 +4,10 @@ import com.example.AdditionalAction
 import com.example.EventPublisher
 import com.example.SignalSubject
 import com.example.TestAddon
+import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
 import kotlin.math.max
+import kotlin.random.Random
 
 interface GPACProtocol : SignalSubject {
     suspend fun handleElect(message: ElectMe): ElectedYou
@@ -26,7 +28,8 @@ class GPACProtocolImpl(
     private val otherPeers: List<List<String>>,
     private val addons: Map<TestAddon, AdditionalAction> = emptyMap(),
     private val eventPublisher: EventPublisher = EventPublisher(emptyList()),
-    private val me: Int
+    private val me: Int,
+    private val myPeersetId: Int
 ) : GPACProtocol {
 
     private var myBallotNumber: Int = 0
@@ -83,6 +86,7 @@ class GPACProtocolImpl(
         if (!checkBallotNumber(message.ballotNumber)) {
             throw NotValidLeader(myBallotNumber, message.ballotNumber)
         }
+        logger.info(message.toString())
         this.transaction =
             this.transaction.copy(
                 ballotNumber = message.ballotNumber,
@@ -113,6 +117,8 @@ class GPACProtocolImpl(
         try {
             this.transaction =
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
+
+            logger.info("$me - my state: ${historyManagement.getState()}")
 
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
                 historyManagement.change(message.change.toChange(), this.transaction.acceptNum)
@@ -195,8 +201,8 @@ class GPACProtocolImpl(
         // I got to ft-agree phase, so my voice of this is crucial
         signal(TestAddon.BeforeSendingAgree, this.transaction)
 
-        logger.debug("$me Recovery leader transaction state: ${this.transaction}")
-        val agreedResponses = ftAgreePhase(change, this.transaction.acceptVal!!)
+        logger.info("$me Recovery leader transaction state: ${this.transaction}")
+        val agreedResponses = ftAgreePhase(change, this.transaction.acceptVal!!, acceptNum = this.transaction.acceptNum)
 
         signal(TestAddon.BeforeSendingApply, this.transaction)
 
@@ -230,15 +236,8 @@ class GPACProtocolImpl(
             if (superFunction(electResponses)) {
                 return electResponses
             }
-            if (electResponses.flatten().isNotEmpty()) {
-                logger.info(
-                    "$me My ballot number is: $myBallotNumber, max of responses is ${
-                        electResponses.flatten().maxOf { it.ballotNumber }
-                    }"
-                )
-                myBallotNumber = max(maxBallotNumber, myBallotNumber)
-                logger.info("$me Bumped ballot number to: $myBallotNumber")
-            }
+            myBallotNumber = max(maxBallotNumber, myBallotNumber)
+            logger.info("$me Bumped ballot number to: $myBallotNumber")
         } while (tries < maxLeaderElectionTries)
 
         transactionBlocker.releaseBlock()
@@ -260,8 +259,8 @@ class GPACProtocolImpl(
         return agreedResponses
     }
 
-    private suspend fun applyPhase(change: ChangeDto, acceptVal: Accept): List<String> {
-        val applyMessages = sendApplyMessages(change, otherPeers, acceptVal).flatten().map { it.receive<String>() }
+    private suspend fun applyPhase(change: ChangeDto, acceptVal: Accept): List<Int> {
+        val applyMessages = sendApplyMessages(change, otherPeers, acceptVal)
         logger.info("Apply Messages Responses: $applyMessages")
         this.handleApply(
             Apply(
@@ -320,10 +319,14 @@ class GPACProtocolImpl(
 
     private fun <T> superFunction(responses: List<List<T>>, divider: Int): Boolean {
         val peersInTransaction = otherPeers.filterIndexed { index, _ -> isInTransaction(index) }
-        val allShards = peersInTransaction.size >= responses.size / divider
+        val allShards = peersInTransaction.size >= responses.size / divider.toDouble()
 
         return responses.withIndex()
-            .all { (index, value) -> value.size > peersInTransaction[index].size / 2 } && allShards
+            .all { (index, value) ->
+                val positiveResponses = if (index + 1 == myPeersetId) value.size + 1 else value.size
+                val allPeers = if (index + 1 == myPeersetId) peersInTransaction[index].size + 1 else peersInTransaction[index].size
+                positiveResponses > allPeers / 2F
+            } && allShards
     }
 
     companion object {
