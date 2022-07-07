@@ -2,15 +2,13 @@ package com.example.api
 
 import com.example.domain.ChangeDto
 import com.example.domain.ErrorMessage
+import com.example.domain.History
 import com.example.domain.HistoryManagement
-import com.example.objectMapper
-import com.example.raft.ChangeWithAcceptNum
-import com.example.raft.History
+import com.example.ratis.ChangeWithAcceptNum
 import io.ktor.application.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
-import kotlinx.coroutines.delay
 
 fun Application.configureSampleRouting(historyManagement: HistoryManagement) {
 

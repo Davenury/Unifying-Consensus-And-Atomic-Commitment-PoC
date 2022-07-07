@@ -1,7 +1,7 @@
 package com.example.domain
 
 import com.example.infrastructure.InMemoryHistoryManagement
-import com.example.raft.ChangeWithAcceptNum
+import com.example.ratis.ChangeWithAcceptNum
 import com.example.utils.DummyConsensusProtocol
 import io.mockk.*
 import kotlinx.coroutines.runBlocking

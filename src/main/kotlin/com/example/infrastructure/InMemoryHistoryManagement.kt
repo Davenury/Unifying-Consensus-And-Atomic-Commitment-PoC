@@ -1,8 +1,7 @@
 package com.example.infrastructure
 
 import com.example.domain.*
-import com.example.raft.ChangeWithAcceptNum
-import com.example.raft.History
+import com.example.ratis.ChangeWithAcceptNum
 import org.slf4j.LoggerFactory
 
 class InMemoryHistoryManagement(

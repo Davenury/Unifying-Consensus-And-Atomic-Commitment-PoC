@@ -3,7 +3,7 @@ package com.example.domain
 import com.example.getOtherPeers
 import com.example.infrastructure.InMemoryHistoryManagement
 import com.example.infrastructure.ProtocolTimerImpl
-import com.example.raft.ChangeWithAcceptNum
+import com.example.ratis.ChangeWithAcceptNum
 import com.example.utils.DummyConsensusProtocol
 import com.example.utils.PeerThree
 import com.example.utils.PeerTwo
