@@ -175,7 +175,6 @@ class SinglePeersetIntegrationTest {
             TestAddon.BeforeSendingApply to firstLeaderAction
         )
 
-        // when using just launch (without Global Scope) tests won't end, but we cannot use 5 apps on GlobalScope
         val app1 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("1", "1"), firstLeaderCallbacks, configOverrides = configOverrides) }
         val app2 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides) }
         val app3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides) }
