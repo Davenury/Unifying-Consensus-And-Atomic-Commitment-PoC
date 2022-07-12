@@ -1,8 +1,14 @@
 package com.example.api
 
 import com.example.*
-import com.example.domain.*
-import com.example.ratis.ChangeWithAcceptNum
+import com.example.common.AddUserChange
+import com.example.common.ChangeDto
+import com.example.consensus.ratis.ChangeWithAcceptNum
+import com.example.consensus.ratis.ChangeWithAcceptNumDto
+import com.example.consensus.ratis.HistoryDto
+import com.example.gpac.domain.Accept
+import com.example.gpac.domain.Apply
+import com.example.gpac.domain.Transaction
 import com.fasterxml.jackson.module.kotlin.readValue
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -485,7 +491,8 @@ class MultiplePeersetSpec {
                         body = Apply(it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(mapOf(
                             "operation" to "ADD_USER",
                             "userName" to "userName"
-                        )))
+                        ))
+                        )
                     }.also {
                         println("Got response ${it.status.value}")
                     }
@@ -499,7 +506,8 @@ class MultiplePeersetSpec {
                         body = Apply(it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(mapOf(
                             "operation" to "ADD_USER",
                             "userName" to "userName"
-                        )))
+                        ))
+                        )
                     }.also {
                         println("Got response ${it.status.value}")
                     }

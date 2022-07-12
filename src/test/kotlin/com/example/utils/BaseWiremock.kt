@@ -1,11 +1,9 @@
 package com.example.utils
 
-import com.example.domain.Accept
+import com.example.gpac.domain.Accept
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock.*
 import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
 
 abstract class BaseWiremock(
     PORT: Int

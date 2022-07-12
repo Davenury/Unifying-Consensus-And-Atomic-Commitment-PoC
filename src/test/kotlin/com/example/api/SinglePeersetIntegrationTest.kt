@@ -1,8 +1,13 @@
 package com.example.api
 
 import com.example.*
-import com.example.domain.*
-import com.example.ratis.ChangeWithAcceptNum
+import com.example.common.AddGroupChange
+import com.example.common.AddUserChange
+import com.example.common.ChangeDto
+import com.example.consensus.ratis.ChangeWithAcceptNum
+import com.example.consensus.ratis.ChangeWithAcceptNumDto
+import com.example.consensus.ratis.HistoryDto
+import com.example.gpac.domain.*
 import com.fasterxml.jackson.module.kotlin.readValue
 import io.ktor.client.features.*
 import io.ktor.client.request.*

@@ -1,5 +1,9 @@
 package com.example.domain
 
+import com.example.common.ChangeDto
+import com.example.common.MissingParameterException
+import com.example.common.Operation
+import com.example.common.UnknownOperationException
 import org.junit.jupiter.api.Test
 import strikt.api.expectCatching
 import strikt.api.expectThat

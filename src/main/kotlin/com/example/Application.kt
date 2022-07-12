@@ -1,13 +1,16 @@
 package com.example
 
-import com.example.api.configureSampleRouting
-import com.example.api.gpacProtocolRouting
-import com.example.api.consensusProtocolRouting
-import com.example.domain.*
-import com.example.infrastructure.ProtocolTimerImpl
-import com.example.infrastructure.RatisHistoryManagement
-import com.example.ratis.HistoryRaftNode
-import com.example.ratis.RaftConfiguration
+import com.example.common.*
+import com.example.consensus.ratis.ratisRouting
+import com.example.gpac.api.gpacProtocolRouting
+import com.example.consensus.raft.api.consensusProtocolRouting
+import com.example.gpac.infrastructure.ProtocolTimerImpl
+import com.example.consensus.ratis.RatisHistoryManagement
+import com.example.consensus.ratis.HistoryRaftNode
+import com.example.consensus.ratis.RaftConfiguration
+import com.example.gpac.domain.GPACProtocolImpl
+import com.example.gpac.domain.ProtocolClientImpl
+import com.example.gpac.domain.TransactionBlockerImpl
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -128,7 +131,7 @@ fun startApplication(
             }
         }
 
-        configureSampleRouting(historyManagement)
+        ratisRouting(historyManagement)
         gpacProtocolRouting(protocol)
         consensusProtocolRouting()
     }.start(wait = true)
