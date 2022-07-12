@@ -5,7 +5,7 @@ import com.example.common.MaxTriesExceededException
 import com.example.common.TooFewResponsesException
 import com.example.getOtherPeers
 import com.example.common.InMemoryHistoryManagement
-import com.example.gpac.infrastructure.ProtocolTimerImpl
+import com.example.gpac.infrastructure.GPACProtocolTimer
 import com.example.consensus.ratis.ChangeWithAcceptNum
 import com.example.gpac.domain.Accept
 import com.example.gpac.domain.GPACProtocolImpl
@@ -122,7 +122,7 @@ class LeaderTest {
     private val otherPeers = getOtherPeers(allPeers, 1, 1, 9090)
     private val consensusProtocol = DummyConsensusProtocol
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-    private val timer = ProtocolTimerImpl(1, 1)
+    private val timer = GPACProtocolTimer(1, 1)
     private val client = ProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
     private var subject =

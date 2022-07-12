@@ -14,11 +14,6 @@ import io.ktor.routing.*
 fun Application.gpacProtocolRouting(protocol: GPACProtocol) {
 
     routing {
-        post("/create_change") {
-            val change = ChangeDto(call.receive())
-            protocol.performProtocolAsLeader(change)
-            call.respond(HttpStatusCode.OK)
-        }
 
         post("/elect") {
             val message = call.receive<ElectMe>()

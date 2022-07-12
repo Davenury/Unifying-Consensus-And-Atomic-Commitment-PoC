@@ -1,6 +1,6 @@
 package com.example.infrastructure
 
-import com.example.gpac.infrastructure.ProtocolTimerImpl
+import com.example.gpac.infrastructure.GPACProtocolTimer
 import com.example.utils.atLeast
 import com.example.utils.eventually
 import kotlinx.coroutines.delay
@@ -14,7 +14,7 @@ class ProtocolTimerSpec {
     @Test
     fun `should execute in timeout`(): Unit = runBlocking {
         val delayInSeconds = 2
-        val subject = ProtocolTimerImpl(delayInSeconds, 1)
+        val subject = GPACProtocolTimer(delayInSeconds, 1)
 
         val list = mutableListOf<Int>()
 
@@ -28,7 +28,7 @@ class ProtocolTimerSpec {
     @Test
     fun `should not execute before timeout`(): Unit = runBlocking {
         val delayInSeconds = 2
-        val subject = ProtocolTimerImpl(delayInSeconds, 1)
+        val subject = GPACProtocolTimer(delayInSeconds, 1)
 
         val list = mutableListOf<Int>()
 
@@ -41,7 +41,7 @@ class ProtocolTimerSpec {
     @Test
     fun `should be able to cancel job`(): Unit = runBlocking {
         val delayInSeconds = 3
-        val subject = ProtocolTimerImpl(delayInSeconds, 1)
+        val subject = GPACProtocolTimer(delayInSeconds, 1)
 
         val list = mutableListOf<Int>()
 

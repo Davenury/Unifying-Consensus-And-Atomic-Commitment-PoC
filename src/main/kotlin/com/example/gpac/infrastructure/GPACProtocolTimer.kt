@@ -7,7 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.*
 
-class ProtocolTimerImpl(
+class GPACProtocolTimer(
     private val delay: Int,
     private val backoffBound: Long
 ) : ProtocolTimer {

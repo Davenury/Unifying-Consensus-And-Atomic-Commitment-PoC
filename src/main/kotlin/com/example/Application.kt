@@ -4,7 +4,8 @@ import com.example.common.*
 import com.example.consensus.ratis.ratisRouting
 import com.example.gpac.api.gpacProtocolRouting
 import com.example.consensus.raft.api.consensusProtocolRouting
-import com.example.gpac.infrastructure.ProtocolTimerImpl
+import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
+import com.example.gpac.infrastructure.GPACProtocolTimer
 import com.example.consensus.ratis.RatisHistoryManagement
 import com.example.consensus.ratis.HistoryRaftNode
 import com.example.consensus.ratis.RaftConfiguration
@@ -37,11 +38,11 @@ fun startApplication(
         val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
         val historyManagement = RatisHistoryManagement(raftNode)
         val eventPublisher = EventPublisher(eventListeners)
-        val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
+        val timer = GPACProtocolTimer(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
         val protocolClient = ProtocolClientImpl()
         val transactionBlocker = TransactionBlockerImpl()
         val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
-        val protocol =
+        val gpacProtocol =
             GPACProtocolImpl(
                 historyManagement,
                 config.peers.maxLeaderElectionTries,
@@ -54,6 +55,8 @@ fun startApplication(
                 8080 + conf.portOffset,
                 conf.peersetId
             )
+
+        val consensusProtocol = RaftConsensusProtocolImpl(conf.nodeId, conf.peersetId)
 
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
@@ -131,8 +134,9 @@ fun startApplication(
             }
         }
 
+        commonRouting(gpacProtocol, consensusProtocol)
         ratisRouting(historyManagement)
-        gpacProtocolRouting(protocol)
+        gpacProtocolRouting(gpacProtocol)
         consensusProtocolRouting()
     }.start(wait = true)
 }
