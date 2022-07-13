@@ -1,7 +1,6 @@
 package com.example.domain
 
-import com.example.raft.ChangeWithAcceptNum
-import com.example.raft.History
+import com.example.ratis.ChangeWithAcceptNum
 
 
 abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
@@ -31,3 +30,5 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
 enum class HistoryChangeResult {
     HistoryChangeSuccess, HistoryChangeFailure
 }
+
+typealias History = MutableList<ChangeWithAcceptNum>

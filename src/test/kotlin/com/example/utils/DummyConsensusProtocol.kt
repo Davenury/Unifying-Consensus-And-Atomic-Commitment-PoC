@@ -4,7 +4,7 @@ import com.example.domain.Change
 import com.example.domain.ConsensusProtocol
 import com.example.domain.ConsensusResult
 import com.example.domain.ConsensusSuccess
-import com.example.raft.ChangeWithAcceptNum
+import com.example.ratis.ChangeWithAcceptNum
 
 object DummyConsensusProtocol: ConsensusProtocol<Change, MutableList<ChangeWithAcceptNum>> {
     private var response: ConsensusResult = ConsensusSuccess

@@ -2,7 +2,7 @@ package com.example.api
 
 import com.example.*
 import com.example.domain.*
-import com.example.raft.ChangeWithAcceptNum
+import com.example.ratis.ChangeWithAcceptNum
 import com.fasterxml.jackson.module.kotlin.readValue
 import io.ktor.client.features.*
 import io.ktor.client.request.*

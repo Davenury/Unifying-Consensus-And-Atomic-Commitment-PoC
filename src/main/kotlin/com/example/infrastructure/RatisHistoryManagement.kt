@@ -3,9 +3,9 @@ package com.example.infrastructure
 import com.example.domain.Change
 import com.example.domain.HistoryChangeResult
 import com.example.domain.HistoryManagement
-import com.example.raft.ChangeWithAcceptNum
-import com.example.raft.History
-import com.example.raft.HistoryRaftNode
+import com.example.ratis.ChangeWithAcceptNum
+import com.example.ratis.History
+import com.example.ratis.HistoryRaftNode
 import org.slf4j.LoggerFactory
 
 class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : HistoryManagement(historyRaftNode) {
