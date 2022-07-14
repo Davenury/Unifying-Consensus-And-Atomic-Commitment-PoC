@@ -84,6 +84,7 @@ tasks {
         filter {
             excludeTestsMatching("com.example.api.SinglePeersetIntegrationTest")
             excludeTestsMatching("com.example.api.MultiplePeersetSpec")
+            excludeTestsMatching("com.example.consensus.ConsensusSpec")
         }
     }
 }
@@ -99,6 +100,7 @@ tasks.register<Test>("singlePeersetIntegrationTest") {
 
     filter {
         includeTestsMatching("com.example.api.SinglePeersetIntegrationTest")
+        includeTestsMatching("com.example.consensus.ConsensusSpec")
     }
 }
 
