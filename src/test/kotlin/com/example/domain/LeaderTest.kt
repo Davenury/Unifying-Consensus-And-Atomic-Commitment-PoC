@@ -11,7 +11,7 @@ import com.example.gpac.domain.Accept
 import com.example.gpac.domain.GPACProtocolImpl
 import com.example.gpac.domain.ProtocolClientImpl
 import com.example.gpac.domain.TransactionBlockerImpl
-import com.example.utils.DummyConsensusProtocol
+import com.example.consensus.raft.infrastructure.DummyConsensusProtocol
 import com.example.utils.PeerThree
 import com.example.utils.PeerTwo
 import kotlinx.coroutines.runBlocking
@@ -120,7 +120,7 @@ class LeaderTest {
 
     private val allPeers = listOf(listOf("localhost:9091", "localhost:9092", "localhost:9093"))
     private val otherPeers = getOtherPeers(allPeers, 1, 1, 9090)
-    private val consensusProtocol = DummyConsensusProtocol
+    private val consensusProtocol = DummyConsensusProtocol()
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
     private val timer = GPACProtocolTimer(1, 1)
     private val client = ProtocolClientImpl()
