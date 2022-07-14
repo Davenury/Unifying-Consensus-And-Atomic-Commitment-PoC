@@ -5,7 +5,6 @@ import com.example.consensus.ratis.ratisRouting
 import com.example.gpac.api.gpacProtocolRouting
 import com.example.consensus.raft.api.consensusProtocolRouting
 import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
-import com.example.gpac.infrastructure.GPACProtocolTimer
 import com.example.consensus.ratis.RatisHistoryManagement
 import com.example.consensus.ratis.HistoryRaftNode
 import com.example.consensus.ratis.RaftConfiguration
@@ -19,6 +18,7 @@ import io.ktor.jackson.*
 import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import kotlinx.coroutines.runBlocking
 
 fun main(args: Array<String>) {
     startApplication(args)
@@ -35,13 +35,22 @@ fun startApplication(
     val peerConstants = RaftConfiguration(conf.peersetId, configOverrides)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
 
-        val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
-        val historyManagement = RatisHistoryManagement(raftNode)
+        //val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
+
+        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
+
+        val consensusProtocol = RaftConsensusProtocolImpl(
+            conf.nodeId,
+            conf.peersetId,
+            ProtocolTimerImpl(0, 500L),
+            otherPeers[conf.peersetId - 1]
+        )
+
+        val historyManagement = InMemoryHistoryManagement(consensusProtocol) //RatisHistoryManagement(raftNode)
         val eventPublisher = EventPublisher(eventListeners)
-        val timer = GPACProtocolTimer(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
+        val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
         val protocolClient = ProtocolClientImpl()
         val transactionBlocker = TransactionBlockerImpl()
-        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
         val gpacProtocol =
             GPACProtocolImpl(
                 historyManagement,
@@ -55,8 +64,6 @@ fun startApplication(
                 8080 + conf.portOffset,
                 conf.peersetId
             )
-
-        val consensusProtocol = RaftConsensusProtocolImpl(conf.nodeId, conf.peersetId)
 
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
@@ -135,9 +142,13 @@ fun startApplication(
         }
 
         commonRouting(gpacProtocol, consensusProtocol)
-        ratisRouting(historyManagement)
+        //ratisRouting(historyManagement)
         gpacProtocolRouting(gpacProtocol)
-        consensusProtocolRouting()
+        consensusProtocolRouting(consensusProtocol)
+
+        runBlocking {
+            consensusProtocol.begin()
+        }
     }.start(wait = true)
 }
 

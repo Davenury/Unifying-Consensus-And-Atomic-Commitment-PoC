@@ -1,20 +1,28 @@
 package com.example.consensus.raft.api
 
+import com.example.consensus.raft.domain.ConsensusElectMe
+import com.example.consensus.raft.domain.ConsensusImTheLeader
+import com.example.consensus.raft.domain.RaftConsensusProtocol
 import io.ktor.application.*
+import io.ktor.request.*
+import io.ktor.response.*
 import io.ktor.routing.*
 
 
-fun Application.consensusProtocolRouting() {
+fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
 
     routing {
         // głosujemy na leadera
         post("/consensus/request_vote") {
-            // TODO
+            val message: ConsensusElectMe = call.receive()
+            call.respond(protocol.handleRequestVote(message))
         }
 
         // potwierdzenie że mamy leadera
         post("/consensus/leader") {
-            // TODO
+            val message: ConsensusImTheLeader = call.receive()
+            protocol.handleLeaderElected(message)
+            call.respond("OK")
         }
 
         post("/consensus/heartbeat") {
