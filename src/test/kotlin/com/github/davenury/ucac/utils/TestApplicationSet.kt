@@ -8,7 +8,7 @@ import kotlin.random.Random
 class TestApplicationSet(
     numberOfPeersets: Int,
     numberOfPeersInPeersets: List<Int>,
-    actions: Map<Int, Map<TestAddon, suspend (ProtocolTestInformation) -> Unit>> = emptyMap(),
+    actions: Map<Int, Map<TestAddon, AdditionalAction>> = emptyMap(),
     eventListeners: Map<Int, List<EventListener>> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap()
 ) {

@@ -7,6 +7,7 @@ plugins {
     application
     kotlin("jvm") version "1.6.21"
     kotlin("plugin.serialization") version "1.6.10"
+    id("com.adarshr.test-logger") version "3.2.0"
 }
 
 group = "com.example"
@@ -68,48 +69,10 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 tasks.test {
     useJUnitPlatform()
-    testLogging {
-        events("passed", "skipped", "failed")
-    }
 }
 
 tasks.withType<Jar> {
     manifest {
         attributes["Main-Class"] = "com.example.ApplicationKt"
-    }
-}
-
-tasks {
-    "test"(Test::class) {
-        filter {
-            excludeTestsMatching("com.github.davenury.ucac.api.SinglePeersetIntegrationTest")
-            excludeTestsMatching("com.github.davenury.ucac.api.MultiplePeersetSpec")
-            excludeTestsMatching("com.github.davenury.ucac.consensus.ConsensusSpec")
-        }
-    }
-}
-
-val singlePeersetIntegrationTest = sourceSets.create("singlePeersetIntegrationTest")
-tasks.register<Test>("singlePeersetIntegrationTest") {
-    group = "verification"
-
-    shouldRunAfter(tasks.test)
-    useJUnitPlatform()
-
-    filter {
-        includeTestsMatching("com.github.davenury.ucac.api.SinglePeersetIntegrationTest")
-        includeTestsMatching("com.github.davenury.ucac.consensus.ConsensusSpec")
-    }
-}
-
-val integrationTest = sourceSets.create("integrationTest")
-tasks.register<Test>("integrationTest") {
-    group = "verification"
-
-    shouldRunAfter(tasks.test)
-    useJUnitPlatform()
-
-    filter {
-        includeTestsMatching("com.github.davenury.ucac.api.MultiplePeersetSpec")
     }
 }
