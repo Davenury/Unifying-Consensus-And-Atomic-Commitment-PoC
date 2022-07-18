@@ -1,10 +1,10 @@
 package com.example.utils
 
-import com.example.domain.Change
-import com.example.domain.ConsensusProtocol
-import com.example.domain.ConsensusResult
-import com.example.domain.ConsensusSuccess
-import com.example.ratis.ChangeWithAcceptNum
+import com.example.common.Change
+import com.example.consensus.raft.domain.ConsensusProtocol
+import com.example.consensus.raft.domain.ConsensusResult
+import com.example.consensus.raft.domain.ConsensusSuccess
+import com.example.consensus.ratis.ChangeWithAcceptNum
 
 object DummyConsensusProtocol: ConsensusProtocol<Change, MutableList<ChangeWithAcceptNum>> {
     private var response: ConsensusResult = ConsensusSuccess

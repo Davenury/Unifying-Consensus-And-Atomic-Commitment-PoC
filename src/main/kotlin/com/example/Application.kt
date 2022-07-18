@@ -1,13 +1,16 @@
 package com.example
 
-import com.example.api.configureSampleRouting
-import com.example.api.gpacProtocolRouting
-import com.example.api.consensusProtocolRouting
-import com.example.domain.*
-import com.example.infrastructure.ProtocolTimerImpl
-import com.example.infrastructure.RatisHistoryManagement
-import com.example.ratis.HistoryRaftNode
-import com.example.ratis.RaftConfiguration
+import com.example.common.*
+import com.example.consensus.ratis.ratisRouting
+import com.example.gpac.api.gpacProtocolRouting
+import com.example.consensus.raft.api.consensusProtocolRouting
+import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
+import com.example.consensus.ratis.RatisHistoryManagement
+import com.example.consensus.ratis.HistoryRaftNode
+import com.example.consensus.ratis.RaftConfiguration
+import com.example.gpac.domain.GPACProtocolImpl
+import com.example.gpac.domain.ProtocolClientImpl
+import com.example.gpac.domain.TransactionBlockerImpl
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -15,6 +18,7 @@ import io.ktor.jackson.*
 import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import kotlinx.coroutines.runBlocking
 
 fun main(args: Array<String>) {
     startApplication(args)
@@ -32,13 +36,22 @@ fun startApplication(
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
 
         val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
-        val historyManagement = RatisHistoryManagement(raftNode)
+
+        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
+
+        val consensusProtocol = RaftConsensusProtocolImpl(
+            conf.nodeId,
+            conf.peersetId,
+            ProtocolTimerImpl(0, 500L),
+            otherPeers[conf.peersetId - 1]
+        )
+
+        val historyManagement = RatisHistoryManagement(raftNode) //InMemoryHistoryManagement(consensusProtocol)
         val eventPublisher = EventPublisher(eventListeners)
         val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
         val protocolClient = ProtocolClientImpl()
         val transactionBlocker = TransactionBlockerImpl()
-        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
-        val protocol =
+        val gpacProtocol =
             GPACProtocolImpl(
                 historyManagement,
                 config.peers.maxLeaderElectionTries,
@@ -128,9 +141,14 @@ fun startApplication(
             }
         }
 
-        configureSampleRouting(historyManagement)
-        gpacProtocolRouting(protocol)
-        consensusProtocolRouting()
+        commonRouting(gpacProtocol, consensusProtocol)
+        ratisRouting(historyManagement)
+        gpacProtocolRouting(gpacProtocol)
+        //consensusProtocolRouting(consensusProtocol)
+
+//        runBlocking {
+//            consensusProtocol.begin()
+//        }
     }.start(wait = true)
 }
 

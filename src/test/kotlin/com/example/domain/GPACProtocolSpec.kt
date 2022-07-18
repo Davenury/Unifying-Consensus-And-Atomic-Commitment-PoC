@@ -1,8 +1,10 @@
 package com.example.domain
 
-import com.example.infrastructure.InMemoryHistoryManagement
-import com.example.ratis.ChangeWithAcceptNum
-import com.example.utils.DummyConsensusProtocol
+import com.example.common.*
+import com.example.common.InMemoryHistoryManagement
+import com.example.consensus.ratis.ChangeWithAcceptNum
+import com.example.gpac.domain.*
+import com.example.consensus.raft.infrastructure.DummyConsensusProtocol
 import io.mockk.*
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
@@ -14,7 +16,7 @@ import strikt.assertions.isEqualTo
 
 class GPACProtocolSpec {
 
-    private val consensusProtocol = DummyConsensusProtocol
+    private val consensusProtocol = DummyConsensusProtocol()
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
     private val timerMock = mockk<ProtocolTimer>()
     private val protocolClientMock = mockk<ProtocolClient>()

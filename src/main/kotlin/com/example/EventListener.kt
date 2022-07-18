@@ -1,6 +1,6 @@
 package com.example
 
-import com.example.domain.Transaction
+import com.example.gpac.domain.Transaction
 
 typealias AdditionalAction = suspend (Transaction?) -> Unit
 
