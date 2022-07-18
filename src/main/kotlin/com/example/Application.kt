@@ -35,7 +35,7 @@ fun startApplication(
     val peerConstants = RaftConfiguration(conf.peersetId, configOverrides)
     embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
 
-        //val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
+        val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
 
         val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
 
@@ -46,7 +46,7 @@ fun startApplication(
             otherPeers[conf.peersetId - 1]
         )
 
-        val historyManagement = InMemoryHistoryManagement(consensusProtocol) //RatisHistoryManagement(raftNode)
+        val historyManagement = RatisHistoryManagement(raftNode) //InMemoryHistoryManagement(consensusProtocol)
         val eventPublisher = EventPublisher(eventListeners)
         val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
         val protocolClient = ProtocolClientImpl()
@@ -142,13 +142,13 @@ fun startApplication(
         }
 
         commonRouting(gpacProtocol, consensusProtocol)
-        //ratisRouting(historyManagement)
+        ratisRouting(historyManagement)
         gpacProtocolRouting(gpacProtocol)
-        consensusProtocolRouting(consensusProtocol)
+        //consensusProtocolRouting(consensusProtocol)
 
-        runBlocking {
-            consensusProtocol.begin()
-        }
+//        runBlocking {
+//            consensusProtocol.begin()
+//        }
     }.start(wait = true)
 }
 
