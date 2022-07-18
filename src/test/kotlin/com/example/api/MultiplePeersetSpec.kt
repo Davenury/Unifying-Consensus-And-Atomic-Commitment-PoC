@@ -18,6 +18,7 @@ import kotlinx.coroutines.*
 import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.fail
 import strikt.api.expect
 import strikt.api.expectThat
 import strikt.api.expectThrows
@@ -36,14 +37,16 @@ class MultiplePeersetSpec {
 
     @Test
     fun `should execute transaction in every peer from every of two peersets`(): Unit = runBlocking {
-
         // given - applications
-        val app1 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("1", "1"), emptyMap()) }
-        val app2 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "1"), emptyMap()) }
-        val app3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1"), emptyMap()) }
-        val app4 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("1", "2"), emptyMap()) }
-        val app5 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "2"), emptyMap()) }
-        val app6 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "2"), emptyMap()) }
+        val apps = listOf(
+            createApplication(arrayOf("1", "1"), emptyMap()),
+            createApplication(arrayOf("2", "1"), emptyMap()),
+            createApplication(arrayOf("3", "1"), emptyMap()),
+            createApplication(arrayOf("1", "2"), emptyMap()),
+            createApplication(arrayOf("2", "2"), emptyMap()),
+            createApplication(arrayOf("3", "2"), emptyMap()),
+        )
+        apps.forEach { app -> app.startNonblocking() }
 
         delay(5000)
 
@@ -91,16 +94,18 @@ class MultiplePeersetSpec {
                 }
             }
 
-        listOf(app1, app2, app3, app4, app5, app6).forEach { app -> app.cancel() }
+        apps.forEach { app -> app.stop() }
     }
 
     @Test
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
-
         // given - applications
-        val app1 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("1", "1"), emptyMap()) }
-        val app2 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "1"), emptyMap()) }
-        val app3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1"), emptyMap()) }
+        val apps = listOf(
+            createApplication(arrayOf("1", "1"), emptyMap()),
+            createApplication(arrayOf("2", "1"), emptyMap()),
+            createApplication(arrayOf("3", "1"), emptyMap())
+        )
+        apps.forEach { app -> app.startNonblocking() }
 
         // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
         // val app4 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("1", "2"), emptyMap()) }
@@ -112,6 +117,7 @@ class MultiplePeersetSpec {
         // when - executing transaction
         try {
             executeChange("$peer1/create_change")
+            fail("Exception not thrown")
         } catch (e: Exception) {
             expectThat(e).isA<ServerResponseException>()
             expectThat(e.message).isEqualTo("""Server error(http://localhost:8081/create_change: 503 Service Unavailable. Text: "{"msg":"Transaction failed due to too many retries of becoming a leader."}"""")
@@ -128,12 +134,11 @@ class MultiplePeersetSpec {
                 }
             }
 
-        listOf(app1, app2, app3).forEach { app -> app.cancel() }
+        apps.forEach { app -> app.stop() }
     }
 
     @Test
     fun `transaction should not pass when more than half peers of any peerset aren't responding`(): Unit = runBlocking {
-
         val configOverrides = mapOf(
             "peers.peersAddresses" to listOf(createPeersInRange(3), createPeersInRange(4, 3)),
             "raft.server.addresses" to listOf(
@@ -142,37 +147,33 @@ class MultiplePeersetSpec {
         )
 
         // given - applications
-        val app1 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("1", "1"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
-        val app2 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("2", "1"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
+        val app1 = createApplication(
+            arrayOf("1", "1"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val app2 = createApplication(
+            arrayOf("2", "1"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
         //val app3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1"), emptyMap()) }
 
         // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-        val app4 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("1", "2"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
-        val app5 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("2", "2"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
+        val app4 = createApplication(
+            arrayOf("1", "2"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val app5 = createApplication(
+            arrayOf("2", "2"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+
+        val apps = listOf(app1, app2, app4, app5)
+        apps.forEach { app -> app.startNonblocking() }
+
         // val app6 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "2"), emptyMap()) }
         // val app7 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "2"), emptyMap()) }
         // val app8 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("5", "2"), emptyMap()) }
@@ -198,12 +199,11 @@ class MultiplePeersetSpec {
                 }
             }
 
-        listOf(app1, app2, app4, app5).forEach { app -> app.cancel() }
+        apps.forEach { app -> app.stop(0, 0) }
     }
 
     @Test
     fun `transaction should pass when more than half peers of all peersets are operative`(): Unit = runBlocking {
-
         val configOverrides = mapOf(
             "peers.peersAddresses" to listOf(createPeersInRange(3), createPeersInRange(5, 3)),
             "raft.server.addresses" to listOf(
@@ -212,46 +212,38 @@ class MultiplePeersetSpec {
         )
 
         // given - applications
-        val app1 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("1", "1"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
-        val app2 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("2", "1"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
+        val app1 = createApplication(
+            arrayOf("1", "1"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val app2 = createApplication(
+            arrayOf("2", "1"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
         //val app3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1"), emptyMap()) }
 
         // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-        val app4 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("1", "2"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
-        val app5 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("2", "2"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
-        val app6 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("3", "2"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
+        val app4 = createApplication(
+            arrayOf("1", "2"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val app5 = createApplication(
+            arrayOf("2", "2"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val app6 = createApplication(
+            arrayOf("3", "2"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
         // val app7 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "2"), emptyMap()) }
         // val app8 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("5", "2"), emptyMap()) }
+        val apps = listOf(app1, app2, app4, app5, app6)
+        apps.forEach { app -> app.startNonblocking() }
 
         delay(5000)
 
@@ -278,7 +270,7 @@ class MultiplePeersetSpec {
                 }
             }
 
-        listOf(app1, app2, app4, app5, app6).forEach { app -> app.cancel() }
+        apps.forEach { app -> app.stop() }
     }
 
     @Test
@@ -296,64 +288,50 @@ class MultiplePeersetSpec {
             }
 
             // given - applications
-            val app1 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("1", "1"),
-                    emptyMap(),
-                    configOverrides = configOverrides
-                )
-            }
-            val app2 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("2", "1"),
-                    emptyMap(),
-                    configOverrides = configOverrides
-                )
-            }
-            val app3 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("3", "1"),
-                    emptyMap(),
-                    configOverrides = configOverrides
-                )
-            }
+            val app1 = createApplication(
+                arrayOf("1", "1"),
+                emptyMap(),
+                configOverrides = configOverrides
+            )
+            val app2 = createApplication(
+                arrayOf("2", "1"),
+                emptyMap(),
+                configOverrides = configOverrides
+            )
+            val app3 = createApplication(
+                arrayOf("3", "1"),
+                emptyMap(),
+                configOverrides = configOverrides
+            )
 
             // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-            val app4 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("1", "2"),
-                    mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
-                    configOverrides = configOverrides
-                )
-            }
-            val app5 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("2", "2"),
-                    mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
-                    configOverrides = configOverrides
-                )
-            }
-            val app6 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("3", "2"),
-                    mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
-                    configOverrides = configOverrides
-                )
-            }
-            val app7 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("4", "2"),
-                    mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
-                    configOverrides = configOverrides
-                )
-            }
-            val app8 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("5", "2"),
-                    mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
-                    configOverrides = configOverrides
-                )
-            }
+            val app4 = createApplication(
+                arrayOf("1", "2"),
+                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                configOverrides = configOverrides
+            )
+            val app5 = createApplication(
+                arrayOf("2", "2"),
+                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                configOverrides = configOverrides
+            )
+            val app6 = createApplication(
+                arrayOf("3", "2"),
+                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                configOverrides = configOverrides
+            )
+            val app7 = createApplication(
+                arrayOf("4", "2"),
+                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                configOverrides = configOverrides
+            )
+            val app8 = createApplication(
+                arrayOf("5", "2"),
+                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                configOverrides = configOverrides
+            )
+            val apps = listOf(app1, app2, app3, app4, app5, app6, app7, app8)
+            apps.forEach { app -> app.startNonblocking() }
 
             delay(5000)
 
@@ -374,7 +352,7 @@ class MultiplePeersetSpec {
                     }
             }
 
-            listOf(app1, app2, app3, app4, app5, app6, app7, app8).forEach { app -> app.cancel() }
+            apps.forEach { app -> app.stop() }
         }
 
     @Test
@@ -391,64 +369,50 @@ class MultiplePeersetSpec {
         }
 
         // given - applications
-        val app1 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("1", "1"),
-                mapOf(TestAddon.BeforeSendingApply to failAction),
-                configOverrides = configOverrides
-            )
-        }
-        val app2 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("2", "1"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
-        val app3 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("3", "1"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
+        val app1 = createApplication(
+            arrayOf("1", "1"),
+            mapOf(TestAddon.BeforeSendingApply to failAction),
+            configOverrides = configOverrides
+        )
+        val app2 = createApplication(
+            arrayOf("2", "1"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val app3 = createApplication(
+            arrayOf("3", "1"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
 
         // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-        val app4 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("1", "2"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
-        val app5 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("2", "2"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
-        val app6 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("3", "2"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
-        val app7 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("4", "2"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
-        val app8 = GlobalScope.launch(Dispatchers.IO) {
-            startApplication(
-                arrayOf("5", "2"),
-                emptyMap(),
-                configOverrides = configOverrides
-            )
-        }
+        val app4 = createApplication(
+            arrayOf("1", "2"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val app5 = createApplication(
+            arrayOf("2", "2"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val app6 = createApplication(
+            arrayOf("3", "2"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val app7 = createApplication(
+            arrayOf("4", "2"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val app8 = createApplication(
+            arrayOf("5", "2"),
+            emptyMap(),
+            configOverrides = configOverrides
+        )
+        val apps = listOf(app1, app2, app3, app4, app5, app6, app7, app8)
+        apps.forEach { app -> app.startNonblocking() }
 
         delay(5000)
 
@@ -470,7 +434,7 @@ class MultiplePeersetSpec {
                 }
         }
 
-        listOf(app1, app2, app3, app4, app5, app6, app7, app8).forEach { app -> app.cancel() }
+        apps.forEach { app -> app.stop() }
     }
 
     @Test
@@ -518,64 +482,50 @@ class MultiplePeersetSpec {
             }
 
             // given - applications
-            val app1 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("1", "1"),
-                    mapOf(TestAddon.BeforeSendingApply to leaderAction),
-                    configOverrides = configOverrides
-                )
-            }
-            val app2 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("2", "1"),
-                    emptyMap(),
-                    configOverrides = configOverrides
-                )
-            }
-            val app3 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("3", "1"),
-                    emptyMap(),
-                    configOverrides = configOverrides
-                )
-            }
+            val app1 = createApplication(
+                arrayOf("1", "1"),
+                mapOf(TestAddon.BeforeSendingApply to leaderAction),
+                configOverrides = configOverrides
+            )
+            val app2 = createApplication(
+                arrayOf("2", "1"),
+                emptyMap(),
+                configOverrides = configOverrides
+            )
+            val app3 = createApplication(
+                arrayOf("3", "1"),
+                emptyMap(),
+                configOverrides = configOverrides
+            )
 
             // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-            val app4 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("1", "2"),
-                    emptyMap(),
-                    configOverrides = configOverrides
-                )
-            }
-            val app5 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("2", "2"),
-                    emptyMap(),
-                    configOverrides = configOverrides
-                )
-            }
-            val app6 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("3", "2"),
-                    emptyMap(),
-                    configOverrides = configOverrides
-                )
-            }
-            val app7 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("4", "2"),
-                    emptyMap(),
-                    configOverrides = configOverrides
-                )
-            }
-            val app8 = GlobalScope.launch(Dispatchers.IO) {
-                startApplication(
-                    arrayOf("5", "2"),
-                    emptyMap(),
-                    configOverrides = configOverrides
-                )
-            }
+            val app4 = createApplication(
+                arrayOf("1", "2"),
+                emptyMap(),
+                configOverrides = configOverrides
+            )
+            val app5 = createApplication(
+                arrayOf("2", "2"),
+                emptyMap(),
+                configOverrides = configOverrides
+            )
+            val app6 = createApplication(
+                arrayOf("3", "2"),
+                emptyMap(),
+                configOverrides = configOverrides
+            )
+            val app7 = createApplication(
+                arrayOf("4", "2"),
+                emptyMap(),
+                configOverrides = configOverrides
+            )
+            val app8 = createApplication(
+                arrayOf("5", "2"),
+                emptyMap(),
+                configOverrides = configOverrides
+            )
+            val apps = listOf(app1, app2, app3, app4, app5, app6, app7, app8)
+            apps.forEach { app -> app.startNonblocking() }
 
             delay(5000)
 
@@ -597,7 +547,7 @@ class MultiplePeersetSpec {
                     }
             }
 
-            listOf(app1, app2, app3, app4, app5, app6, app7, app8).forEach { app -> app.cancel() }
+            apps.forEach { app -> app.stop() }
         }
 
 

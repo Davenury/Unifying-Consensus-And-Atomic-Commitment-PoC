@@ -17,6 +17,7 @@ import kotlinx.coroutines.*
 import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.fail
 import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
@@ -56,9 +57,12 @@ class SinglePeersetIntegrationTest {
             TestAddon.BeforeSendingAgree to firstLeaderAction
         )
 
-        val app1 = GlobalScope.launch { startApplication(arrayOf("1", "1"), firstLeaderCallbacks, listOf(eventListener)) }
-        val app2 = GlobalScope.launch { startApplication(arrayOf("2", "1"), emptyMap()) }
-        val app3 = GlobalScope.launch { startApplication(arrayOf("3", "1"), emptyMap()) }
+        val apps = listOf(
+            createApplication(arrayOf("1", "1"), firstLeaderCallbacks, listOf<EventListener>(eventListener)),
+            createApplication(arrayOf("2", "1"), emptyMap()),
+            createApplication(arrayOf("3", "1"), emptyMap()),
+        )
+        apps.forEach { app -> app.startNonblocking() }
 
         delay(5000)
 
@@ -67,7 +71,7 @@ class SinglePeersetIntegrationTest {
             executeChange("$peer1/create_change")
         }
 
-        listOf(app1, app2, app3).forEach { app -> app.cancel(CancellationException("Test is over")) }
+        apps.forEach { app -> app.stop() }
     }
 
     @Test
@@ -90,9 +94,12 @@ class SinglePeersetIntegrationTest {
             val firstLeaderCallbacks: Map<TestAddon, suspend (Transaction?) -> Unit> = mapOf(
                 TestAddon.BeforeSendingApply to firstLeaderAction
             )
-            val app1 = GlobalScope.launch { startApplication(arrayOf("1", "1"), firstLeaderCallbacks, listOf(eventListener)) }
-            val app2 = GlobalScope.launch { startApplication(arrayOf("2", "1"), emptyMap()) }
-            val app3 = GlobalScope.launch { startApplication(arrayOf("3", "1"), emptyMap()) }
+            val apps = listOf(
+                createApplication(arrayOf("1", "1"), firstLeaderCallbacks, listOf<EventListener>(eventListener)),
+                createApplication(arrayOf("2", "1"), emptyMap()),
+                createApplication(arrayOf("3", "1"), emptyMap()),
+            )
+            apps.forEach { app -> app.startNonblocking() }
 
             delay(5000)
 
@@ -100,15 +107,12 @@ class SinglePeersetIntegrationTest {
                 executeChange("$peer1/create_change")
             }.isSuccess()
 
-            listOf(app1, app2, app3).forEach { app -> app.cancel(CancellationException("Test is over")) }
+            apps.forEach { app -> app.stop() }
         }
 
     @Test
     fun `should be able to execute transaction even if leader fails after first ft-agree`() {
         runBlocking {
-
-            lateinit var app1: Job
-
             val firstLeaderAction: suspend (Transaction?) -> Unit = {
                 val url = "$peer2/ft-agree"
                 val response = testHttpClient.post<Agreed>(url) {
@@ -123,9 +127,12 @@ class SinglePeersetIntegrationTest {
             val firstLeaderCallbacks: Map<TestAddon, suspend (Transaction?) -> Unit> = mapOf(
                 TestAddon.BeforeSendingAgree to firstLeaderAction
             )
-            app1 = GlobalScope.launch { startApplication(arrayOf("1", "1"), firstLeaderCallbacks) }
-            val app2: Job = GlobalScope.launch { startApplication(arrayOf("2", "1"), emptyMap()) }
-            val app3: Job = GlobalScope.launch { startApplication(arrayOf("3", "1"), emptyMap()) }
+            val apps = listOf(
+                createApplication(arrayOf("1", "1"), firstLeaderCallbacks),
+                createApplication(arrayOf("2", "1"), emptyMap()),
+                createApplication(arrayOf("3", "1"), emptyMap()),
+            )
+            apps.forEach { app -> app.startNonblocking() }
 
             // application will start
             delay(5000)
@@ -133,6 +140,7 @@ class SinglePeersetIntegrationTest {
             // change that will cause leader to fall according to action
             try {
                 executeChange("$peer1/create_change")
+                fail("Didn't work")
             } catch (e: Exception) {
                 println("Leader 1 fails: $e")
             }
@@ -150,8 +158,7 @@ class SinglePeersetIntegrationTest {
             }
             expectThat(change.change).isEqualTo(AddUserChange("userName"))
 
-            listOf(app1, app2, app3)
-                .forEach { app -> app.cancel(CancellationException()) }
+            apps.forEach { app -> app.stop() }
         }
     }
 
@@ -181,11 +188,14 @@ class SinglePeersetIntegrationTest {
             TestAddon.BeforeSendingApply to firstLeaderAction
         )
 
-        val app1 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("1", "1"), firstLeaderCallbacks, configOverrides = configOverrides) }
-        val app2 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides) }
-        val app3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides) }
-        val app4 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "1"), emptyMap(), configOverrides = configOverrides) }
-        val app5 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("5", "1"), emptyMap(), configOverrides = configOverrides) }
+        val apps = listOf(
+            createApplication(arrayOf("1", "1"), firstLeaderCallbacks, configOverrides = configOverrides),
+            createApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides),
+            createApplication(arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides),
+            createApplication(arrayOf("4", "1"), emptyMap(), configOverrides = configOverrides),
+            createApplication(arrayOf("5", "1"), emptyMap(), configOverrides = configOverrides),
+        )
+        apps.forEach { app -> app.startNonblocking() }
 
         // application will start
         delay(5000)
@@ -214,7 +224,7 @@ class SinglePeersetIntegrationTest {
             accept(ContentType.Application.Json)
         }
 
-        listOf(app1, app2, app3, app4, app5).forEach { app -> app.cancel() }
+        apps.forEach { app -> app.stop() }
 
         val values: List<ChangeWithAcceptNum> = objectMapper.readValue<HistoryDto>(response2).changes.map {
             ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)

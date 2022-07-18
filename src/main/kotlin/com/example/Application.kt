@@ -1,13 +1,12 @@
 package com.example
 
 import com.example.common.*
-import com.example.consensus.ratis.ratisRouting
-import com.example.gpac.api.gpacProtocolRouting
-import com.example.consensus.raft.api.consensusProtocolRouting
 import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
-import com.example.consensus.ratis.RatisHistoryManagement
 import com.example.consensus.ratis.HistoryRaftNode
 import com.example.consensus.ratis.RaftConfiguration
+import com.example.consensus.ratis.RatisHistoryManagement
+import com.example.consensus.ratis.ratisRouting
+import com.example.gpac.api.gpacProtocolRouting
 import com.example.gpac.domain.GPACProtocolImpl
 import com.example.gpac.domain.ProtocolClientImpl
 import com.example.gpac.domain.TransactionBlockerImpl
@@ -18,10 +17,9 @@ import io.ktor.jackson.*
 import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
-import kotlinx.coroutines.runBlocking
 
 fun main(args: Array<String>) {
-    startApplication(args)
+    createApplication(args).startBlocking()
 }
 
 fun startApplication(
@@ -30,126 +28,16 @@ fun startApplication(
     eventListeners: List<EventListener> = emptyList(),
     configOverrides: Map<String, Any> = emptyMap()
 ) {
-    val config = loadConfig(configOverrides)
-    val conf = getIdAndOffset(args, config)
-    val peerConstants = RaftConfiguration(conf.peersetId, configOverrides)
-    embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
+    createApplication(args, additionalActions, eventListeners, configOverrides).startBlocking()
+}
 
-        val raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
-
-        val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
-
-        val consensusProtocol = RaftConsensusProtocolImpl(
-            conf.nodeId,
-            conf.peersetId,
-            ProtocolTimerImpl(0, 500L),
-            otherPeers[conf.peersetId - 1]
-        )
-
-        val historyManagement = RatisHistoryManagement(raftNode) //InMemoryHistoryManagement(consensusProtocol)
-        val eventPublisher = EventPublisher(eventListeners)
-        val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
-        val protocolClient = ProtocolClientImpl()
-        val transactionBlocker = TransactionBlockerImpl()
-        val gpacProtocol =
-            GPACProtocolImpl(
-                historyManagement,
-                config.peers.maxLeaderElectionTries,
-                timer,
-                protocolClient,
-                transactionBlocker,
-                otherPeers,
-                additionalActions,
-                eventPublisher,
-                8080 + conf.portOffset,
-                conf.peersetId
-            )
-
-        install(ContentNegotiation) {
-            register(ContentType.Application.Json, JacksonConverter(objectMapper))
-        }
-
-
-        install(StatusPages) {
-            exception<MissingParameterException> { cause ->
-                call.respond(
-                    status = HttpStatusCode.BadRequest,
-                    ErrorMessage("Missing parameter: ${cause.message}")
-                )
-            }
-            exception<UnknownOperationException> { cause ->
-                call.respond(
-                    status = HttpStatusCode.BadRequest,
-                    ErrorMessage(
-                        "Unknown operation to perform: ${cause.desiredOperationName}"
-                    )
-                )
-            }
-            exception<NotElectingYou> { cause ->
-                call.respond(
-                    status = HttpStatusCode.UnprocessableEntity,
-                    ErrorMessage(
-                        "You're not valid leader-to-be. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
-                    )
-                )
-            }
-            exception<NotValidLeader> { cause ->
-                call.respond(
-                    status = HttpStatusCode.UnprocessableEntity,
-                    ErrorMessage(
-                        "You're not valid leader. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
-                    )
-                )
-            }
-            exception<MaxTriesExceededException> {
-                call.respond(
-                    HttpStatusCode.ServiceUnavailable,
-                    ErrorMessage(
-                        "Transaction failed due to too many retries of becoming a leader."
-                    )
-                )
-            }
-            exception<TooFewResponsesException> {
-                call.respond(
-                    HttpStatusCode.ServiceUnavailable,
-                    ErrorMessage(
-                        "Transaction failed due to too few responses of ft phase."
-                    )
-                )
-            }
-            exception<HistoryCannotBeBuildException> {
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    ErrorMessage(
-                        "Change you're trying to perform is not applicable with current state"
-                    )
-                )
-            }
-            exception<AlreadyLockedException> {
-                call.respond(
-                    HttpStatusCode.Conflict,
-                    ErrorMessage(
-                        "We cannot perform your transaction, as another transaction is currently running"
-                    )
-                )
-            }
-            exception<Throwable> { cause ->
-                call.respond(
-                    status = HttpStatusCode.InternalServerError,
-                    ErrorMessage("UnexpectedError, $cause")
-                )
-            }
-        }
-
-        commonRouting(gpacProtocol, consensusProtocol)
-        ratisRouting(historyManagement)
-        gpacProtocolRouting(gpacProtocol)
-        //consensusProtocolRouting(consensusProtocol)
-
-//        runBlocking {
-//            consensusProtocol.begin()
-//        }
-    }.start(wait = true)
+fun createApplication(
+    args: Array<String>,
+    additionalActions: Map<TestAddon, AdditionalAction> = emptyMap(),
+    eventListeners: List<EventListener> = emptyList(),
+    configOverrides: Map<String, Any> = emptyMap()
+): Application {
+    return Application(args, additionalActions, eventListeners, configOverrides)
 }
 
 data class NodeIdAndPortOffset(val nodeId: Int, val portOffset: Int, val peersetId: Int)
@@ -209,3 +97,146 @@ fun getOtherPeers(
         )
         throw IllegalStateException()
     }
+
+class Application constructor(val args: Array<String>,
+                              val additionalActions: Map<TestAddon, AdditionalAction>,
+                              val eventListeners: List<EventListener>,
+                              val configOverrides: Map<String, Any>) {
+    private val config: Config = loadConfig(configOverrides)
+    private val conf: NodeIdAndPortOffset = getIdAndOffset(args, config)
+    private val peerConstants: RaftConfiguration = RaftConfiguration(conf.peersetId, configOverrides)
+    private val engine: NettyApplicationEngine
+    private lateinit var raftNode: HistoryRaftNode
+
+    init {
+        engine = embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
+            raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
+
+            val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
+
+            val consensusProtocol = RaftConsensusProtocolImpl(
+                conf.nodeId,
+                conf.peersetId,
+                ProtocolTimerImpl(0, 500L),
+                otherPeers[conf.peersetId - 1]
+            )
+
+            val historyManagement = RatisHistoryManagement(raftNode) //InMemoryHistoryManagement(consensusProtocol)
+            val eventPublisher = EventPublisher(eventListeners)
+            val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
+            val protocolClient = ProtocolClientImpl()
+            val transactionBlocker = TransactionBlockerImpl()
+            val gpacProtocol =
+                GPACProtocolImpl(
+                    historyManagement,
+                    config.peers.maxLeaderElectionTries,
+                    timer,
+                    protocolClient,
+                    transactionBlocker,
+                    otherPeers,
+                    additionalActions,
+                    eventPublisher,
+                    8080 + conf.portOffset,
+                    conf.peersetId
+                )
+
+            install(ContentNegotiation) {
+                register(ContentType.Application.Json, JacksonConverter(objectMapper))
+            }
+
+
+            install(StatusPages) {
+                exception<MissingParameterException> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.BadRequest,
+                        ErrorMessage("Missing parameter: ${cause.message}")
+                    )
+                }
+                exception<UnknownOperationException> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.BadRequest,
+                        ErrorMessage(
+                            "Unknown operation to perform: ${cause.desiredOperationName}"
+                        )
+                    )
+                }
+                exception<NotElectingYou> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.UnprocessableEntity,
+                        ErrorMessage(
+                            "You're not valid leader-to-be. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
+                        )
+                    )
+                }
+                exception<NotValidLeader> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.UnprocessableEntity,
+                        ErrorMessage(
+                            "You're not valid leader. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
+                        )
+                    )
+                }
+                exception<MaxTriesExceededException> {
+                    call.respond(
+                        HttpStatusCode.ServiceUnavailable,
+                        ErrorMessage(
+                            "Transaction failed due to too many retries of becoming a leader."
+                        )
+                    )
+                }
+                exception<TooFewResponsesException> {
+                    call.respond(
+                        HttpStatusCode.ServiceUnavailable,
+                        ErrorMessage(
+                            "Transaction failed due to too few responses of ft phase."
+                        )
+                    )
+                }
+                exception<HistoryCannotBeBuildException> {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorMessage(
+                            "Change you're trying to perform is not applicable with current state"
+                        )
+                    )
+                }
+                exception<AlreadyLockedException> {
+                    call.respond(
+                        HttpStatusCode.Conflict,
+                        ErrorMessage(
+                            "We cannot perform your transaction, as another transaction is currently running"
+                        )
+                    )
+                }
+                exception<Throwable> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.InternalServerError,
+                        ErrorMessage("UnexpectedError, $cause")
+                    )
+                }
+            }
+
+            commonRouting(gpacProtocol, consensusProtocol)
+            ratisRouting(historyManagement)
+            gpacProtocolRouting(gpacProtocol)
+            //consensusProtocolRouting(consensusProtocol)
+
+//        runBlocking {
+//            consensusProtocol.begin()
+//        }
+        }
+    }
+
+    fun startBlocking() {
+        engine.start(wait = true)
+    }
+
+    fun startNonblocking() {
+        engine.start(wait = false)
+    }
+
+    fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
+        engine.stop(gracePeriodMillis, timeoutMillis)
+        raftNode?.close()
+    }
+}
