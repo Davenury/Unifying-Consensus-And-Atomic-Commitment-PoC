@@ -10,6 +10,7 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expect
 import strikt.api.expectCatching
@@ -17,6 +18,11 @@ import strikt.assertions.isEqualTo
 import strikt.assertions.isSuccess
 
 class ConsensusSpec {
+
+    @BeforeEach
+    internal fun setUp() {
+        System.setProperty("configFile", "single_peerset_application.conf")
+    }
 
     @Test
     fun `happy path`(): Unit = runBlocking {

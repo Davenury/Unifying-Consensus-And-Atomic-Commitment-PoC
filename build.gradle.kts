@@ -96,8 +96,6 @@ tasks.register<Test>("singlePeersetIntegrationTest") {
     shouldRunAfter(tasks.test)
     useJUnitPlatform()
 
-    environment("CONFIG_FILE", "single_peerset_application.conf")
-
     filter {
         includeTestsMatching("com.example.api.SinglePeersetIntegrationTest")
         includeTestsMatching("com.example.consensus.ConsensusSpec")
@@ -110,8 +108,6 @@ tasks.register<Test>("integrationTest") {
 
     shouldRunAfter(tasks.test)
     useJUnitPlatform()
-
-    environment("CONFIG_FILE", "application-integration.conf")
 
     filter {
         includeTestsMatching("com.example.api.MultiplePeersetSpec")

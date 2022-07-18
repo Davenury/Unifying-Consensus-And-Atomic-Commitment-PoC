@@ -3,9 +3,7 @@ package com.example
 
 import com.sksamuel.hoplite.ConfigLoaderBuilder
 import com.sksamuel.hoplite.MapPropertySource
-import com.sksamuel.hoplite.addFileSource
 import com.sksamuel.hoplite.addResourceSource
-import java.io.File
 
 data class Config(val raft: RaftConfig, val peers: PeersConfig, val protocol: ProtocolConfig)
 data class PeersConfig(val peersAddresses: List<List<String>>, val maxLeaderElectionTries: Int)
@@ -15,10 +13,14 @@ data class RootConfig(val storage: StorageConfig)
 data class StorageConfig(val path: String)
 data class ProtocolConfig(val leaderFailTimeoutInSecs: Int, val backoffBound: Long)
 
-fun loadConfig(overrides: Map<String, Any> = emptyMap()) =
-    ConfigLoaderBuilder
+fun loadConfig(overrides: Map<String, Any> = emptyMap()): Config {
+    val configFile = System.getProperty("configFile")
+        ?: System.getenv("CONFIG_FILE")
+        ?: "application.conf"
+    return ConfigLoaderBuilder
         .default()
         .addSource(MapPropertySource(overrides))
-        .addResourceSource("/${System.getenv("CONFIG_FILE") ?: "application.conf"}")
+        .addResourceSource("/$configFile")
         .build()
-        .loadConfigOrThrow<Config>()
+        .loadConfigOrThrow()
+}

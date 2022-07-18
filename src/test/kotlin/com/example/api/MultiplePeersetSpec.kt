@@ -30,6 +30,7 @@ class MultiplePeersetSpec {
 
     @BeforeEach
     fun setup() {
+        System.setProperty("configFile", "application-integration.conf")
         deleteRaftHistories()
     }
 

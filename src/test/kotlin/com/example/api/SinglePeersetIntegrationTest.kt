@@ -31,6 +31,7 @@ class SinglePeersetIntegrationTest {
 
     @BeforeEach
     fun setup() {
+        System.setProperty("configFile", "single_peerset_application.conf")
         deleteRaftHistories()
     }
 
