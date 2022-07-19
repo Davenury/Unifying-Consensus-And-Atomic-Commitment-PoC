@@ -2,6 +2,7 @@ package com.example.consensus.ratis
 
 import com.example.common.Change
 import com.example.common.ChangeDto
+import com.example.common.ChangeWithAcceptNum
 import com.example.common.History
 import com.example.consensus.raft.domain.ConsensusFailure
 import com.example.consensus.raft.domain.ConsensusProtocol
@@ -16,7 +17,7 @@ class HistoryRaftNode(peerId: Int, peersetId: Int, constants: RaftConfiguration)
     RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId-$peersetId-${UUID.randomUUID()}"), constants),
     ConsensusProtocol<Change, History> {
 
-    override fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult {
+    override suspend fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult {
         val msg = objectMapper.writeValueAsString(ChangeWithAcceptNum(change, acceptNum))
         val result = applyTransaction(msg)
         return if (result == "INVALID_OPERATION") ConsensusFailure else ConsensusSuccess

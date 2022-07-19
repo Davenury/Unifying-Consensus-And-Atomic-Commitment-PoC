@@ -1,10 +1,10 @@
 package com.example.infrastructure
 
 import com.example.common.AddRelationChange
+import com.example.common.ChangeWithAcceptNum
 import com.example.common.InMemoryHistoryManagement
 import com.example.consensus.raft.domain.ConsensusFailure
 import com.example.consensus.raft.domain.ConsensusSuccess
-import com.example.consensus.ratis.ChangeWithAcceptNum
 import com.example.utils.DummyConsensusProtocol
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

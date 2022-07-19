@@ -1,7 +1,7 @@
 package com.example.consensus
 
 import com.example.common.AddUserChange
-import com.example.consensus.ratis.ChangeWithAcceptNum
+import com.example.common.ChangeWithAcceptNum
 import com.example.consensus.ratis.HistoryDto
 import com.example.objectMapper
 import com.example.startApplication
@@ -40,12 +40,19 @@ class ConsensusSpec {
         val peer4 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "1")) }
         val peer5 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("5", "1")) }
 
-        delay(5000)
+        val propagationDelay = 8_000L
+
+
+        delay(propagationDelay)
+        val peer1Address = "http://localhost:8081"
+        val peer2Address = "http://localhost:8082"
 
         // when: peer1 executed change
         expectCatching {
-            executeChange("$peer1/consensus/create_change")
+            executeChange("$peer1Address/consensus/create_change")
         }.isSuccess()
+
+        delay(propagationDelay)
 
         val changes = askForChanges("http://localhost:8083")
 
@@ -57,8 +64,10 @@ class ConsensusSpec {
 
         // when: peer2 executes change
         expectCatching {
-            executeChange("$peer2/consensus/create_change")
+            executeChange("$peer2Address/consensus/create_change")
         }.isSuccess()
+
+        delay(propagationDelay)
 
         val changes2 = askForChanges("http://localhost:8083")
 
@@ -87,6 +96,6 @@ class ConsensusSpec {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }.let { objectMapper.readValue<HistoryDto>(it) }
-            .changes.map { ChangeWithAcceptNum(it.change.toChange(), it.acceptNum) }
+            .changes.map { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
 }
