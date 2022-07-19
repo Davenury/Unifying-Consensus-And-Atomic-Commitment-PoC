@@ -1,6 +1,7 @@
 package com.example.common
 
 import com.example.consensus.raft.domain.ConsensusProtocol
+import com.example.consensus.ratis.toDto
 import com.example.gpac.domain.GPACProtocol
 import io.ktor.application.*
 import io.ktor.http.*
@@ -27,6 +28,9 @@ fun Application.commonRouting(
             call.respond(HttpStatusCode.OK)
         }
 
+        get("/changes") {
+            call.respond(consensusProtocol.getState()?.toDto() ?: listOf<ChangeWithAcceptNumDto>())
+        }
     }
 
 }

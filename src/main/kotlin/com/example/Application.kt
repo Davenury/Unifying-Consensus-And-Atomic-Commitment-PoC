@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.common.*
+import com.example.consensus.raft.api.consensusProtocolRouting
 import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.example.consensus.ratis.HistoryRaftNode
 import com.example.consensus.ratis.RaftConfiguration
@@ -22,6 +23,7 @@ import java.net.InetSocketAddress
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 import java.time.Duration
+import kotlinx.coroutines.runBlocking
 
 fun main(args: Array<String>) {
     createApplication(args).startBlocking()
@@ -77,6 +79,18 @@ fun getIdAndOffset(args: Array<String>, config: Config): NodeIdAndPortOffset {
     return NodeIdAndPortOffset(nodeId = id, portOffset = 0, peersetId)
 }
 
+fun getSelfAddress(
+    peersAddresses: List<List<String>>,
+    peerOffset: Int,
+    peersetId: Int,
+    basePort: Int = 8080
+): String =
+    peersAddresses[peersetId - 1].first { isMyAddress(it, peerOffset, basePort) }
+
+
+fun isMyAddress(address: String, peerOffset: Int, basePort: Int): Boolean =
+    address.contains("peer$peerOffset") || address.contains("${basePort + peerOffset}")
+
 fun getOtherPeers(
     peersAddresses: List<List<String>>,
     peerOffset: Int,
@@ -88,7 +102,7 @@ fun getOtherPeers(
             if (index == peersetId - 1) {
                 acc +=
                     strings.filterNot {
-                        it.contains("peer$peerOffset") || it.contains("${basePort + peerOffset}")
+                        isMyAddress(it, peerOffset, basePort)
                     }
                 acc
             } else {
@@ -103,10 +117,12 @@ fun getOtherPeers(
         throw IllegalStateException()
     }
 
-class Application constructor(val args: Array<String>,
-                              val additionalActions: Map<TestAddon, AdditionalAction>,
-                              val eventListeners: List<EventListener>,
-                              val configOverrides: Map<String, Any>) {
+class Application constructor(
+    val args: Array<String>,
+    val additionalActions: Map<TestAddon, AdditionalAction>,
+    val eventListeners: List<EventListener>,
+    val configOverrides: Map<String, Any>
+) {
     private val config: Config = loadConfig(configOverrides)
     private val conf: NodeIdAndPortOffset = getIdAndOffset(args, config)
     private val peerConstants: RaftConfiguration = RaftConfiguration(conf.peersetId, configOverrides)
@@ -115,18 +131,19 @@ class Application constructor(val args: Array<String>,
 
     init {
         engine = embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
-            raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
+//            raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
 
             val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
 
             val consensusProtocol = RaftConsensusProtocolImpl(
                 conf.nodeId,
-                conf.peersetId,
-                ProtocolTimerImpl(Duration.ZERO, Duration.ofSeconds(1)), // TODO move to config
+                getSelfAddress(config.peers.peersAddresses, conf.portOffset, conf.peersetId),
+                ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(2)), // TODO move to config
                 otherPeers[conf.peersetId - 1]
             )
 
-            val historyManagement = RatisHistoryManagement(raftNode) //InMemoryHistoryManagement(consensusProtocol)
+//            val historyManagement = RatisHistoryManagement(raftNode)
+            val historyManagement = InMemoryHistoryManagement(consensusProtocol)
             val eventPublisher = EventPublisher(eventListeners)
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound)
             val protocolClient = ProtocolClientImpl()
@@ -224,11 +241,11 @@ class Application constructor(val args: Array<String>,
             commonRouting(gpacProtocol, consensusProtocol)
             ratisRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
-            //consensusProtocolRouting(consensusProtocol)
+            consensusProtocolRouting(consensusProtocol)
 
-//        runBlocking {
-//            consensusProtocol.begin()
-//        }
+            runBlocking {
+                consensusProtocol.begin()
+            }
         }
     }
 
@@ -259,3 +276,4 @@ class Application constructor(val args: Array<String>,
         }
     }
 }
+

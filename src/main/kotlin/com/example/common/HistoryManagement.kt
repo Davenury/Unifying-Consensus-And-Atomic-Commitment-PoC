@@ -1,23 +1,26 @@
 package com.example.common
 
-import com.example.consensus.ratis.ChangeWithAcceptNum
 import com.example.consensus.raft.domain.ConsensusFailure
 import com.example.consensus.raft.domain.ConsensusProtocol
 import com.example.consensus.raft.domain.ConsensusSuccess
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.runBlocking
 
 abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
     open fun change(change: Change, acceptNum: Int?) =
-        consensusProtocol.proposeChange(change, acceptNum)
-            .let {
-                when (it) {
-                    ConsensusFailure -> {
-                        HistoryChangeResult.HistoryChangeFailure
-                    }
-                    ConsensusSuccess -> {
-                        HistoryChangeResult.HistoryChangeSuccess
+        runBlocking {
+            consensusProtocol.proposeChange(change, acceptNum)
+                .let {
+                    when (it) {
+                        ConsensusFailure -> {
+                            HistoryChangeResult.HistoryChangeFailure
+                        }
+                        ConsensusSuccess -> {
+                            HistoryChangeResult.HistoryChangeSuccess
+                        }
                     }
                 }
-            }
+        }
 
     abstract fun getLastChange(): ChangeWithAcceptNum?
     abstract fun getState(): History?

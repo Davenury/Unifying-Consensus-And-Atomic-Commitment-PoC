@@ -1,9 +1,6 @@
 package com.example.consensus.ratis
 
-import com.example.common.Change
-import com.example.common.History
-import com.example.common.HistoryChangeResult
-import com.example.common.HistoryManagement
+import com.example.common.*
 import org.slf4j.LoggerFactory
 
 class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : HistoryManagement(historyRaftNode) {

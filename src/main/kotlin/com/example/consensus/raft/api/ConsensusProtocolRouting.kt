@@ -1,13 +1,10 @@
 package com.example.consensus.raft.api
 
-import com.example.consensus.raft.domain.ConsensusElectMe
-import com.example.consensus.raft.domain.ConsensusImTheLeader
-import com.example.consensus.raft.domain.RaftConsensusProtocol
+import com.example.consensus.raft.domain.*
 import io.ktor.application.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
-
 
 fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
 
@@ -15,36 +12,34 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         // głosujemy na leadera
         post("/consensus/request_vote") {
             val message: ConsensusElectMe = call.receive()
-            call.respond(protocol.handleRequestVote(message))
+            call.respond(protocol.handleRequestVote(message.peerId, message.leaderIteration))
         }
 
         // potwierdzenie że mamy leadera
         post("/consensus/leader") {
             val message: ConsensusImTheLeader = call.receive()
-            protocol.handleLeaderElected(message)
+            protocol.handleLeaderElected(message.peerId, message.peerAddress, message.leaderIteration)
             call.respond("OK")
         }
 
         post("/consensus/heartbeat") {
-            // TODO
-        }
-
-        // leader proponuje zmianę bez pewności czy zostanie zaaplikowana
-        post("/consensus/propose_change") {
-            // TODO
-        }
-
-        // leader ma potwierdzenie że większość zaakceptowała zmianę i potwierdza reszcie
-        post("/consensus/apply_change") {
+            val message: ConsensusHeartbeat = call.receive()
+            protocol.handleHeartbeat(
+                message.peerId,
+                message.acceptedChanges.map { it.toChangeWithAcceptNum() },
+                message.proposedChanges.map { it.toChangeWithAcceptNum() })
+            call.respond("OK")
             // TODO
         }
 
         // kiedy nie jesteś leaderem to prosisz leadera o zmianę
         post("/consensus/request_apply_change") {
+            val message: ConsensusProposeChange = call.receive()
+            protocol.handleProposeChange(message.change.toChangeWithAcceptNum())
+            call.respond("OK")
             // TODO
         }
     }
-
 }
 
 /*

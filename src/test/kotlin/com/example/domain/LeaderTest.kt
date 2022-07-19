@@ -1,12 +1,7 @@
 package com.example.domain
 
-import com.example.common.ChangeDto
-import com.example.common.MaxTriesExceededException
-import com.example.common.TooFewResponsesException
+import com.example.common.*
 import com.example.getOtherPeers
-import com.example.common.InMemoryHistoryManagement
-import com.example.common.ProtocolTimerImpl
-import com.example.consensus.ratis.ChangeWithAcceptNum
 import com.example.gpac.domain.Accept
 import com.example.gpac.domain.GPACProtocolImpl
 import com.example.gpac.domain.ProtocolClientImpl
