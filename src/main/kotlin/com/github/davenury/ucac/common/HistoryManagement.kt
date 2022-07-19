@@ -7,17 +7,19 @@ import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
 
 abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
     open fun change(change: Change, acceptNum: Int?) =
-        consensusProtocol.proposeChange(change, acceptNum)
-            .let {
-                when (it) {
-                    ConsensusFailure -> {
-                        HistoryChangeResult.HistoryChangeFailure
-                    }
-                    ConsensusSuccess -> {
-                        HistoryChangeResult.HistoryChangeSuccess
+        runBlocking {
+            consensusProtocol.proposeChange(change, acceptNum)
+                .let {
+                    when (it) {
+                        ConsensusFailure -> {
+                            HistoryChangeResult.HistoryChangeFailure
+                        }
+                        ConsensusSuccess -> {
+                            HistoryChangeResult.HistoryChangeSuccess
+                        }
                     }
                 }
-            }
+        }
 
     abstract fun getLastChange(): ChangeWithAcceptNum?
     abstract fun getState(): History?

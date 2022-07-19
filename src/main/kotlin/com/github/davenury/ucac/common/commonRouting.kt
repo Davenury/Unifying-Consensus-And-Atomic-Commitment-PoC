@@ -27,6 +27,9 @@ fun Application.commonRouting(
             call.respond(HttpStatusCode.OK)
         }
 
+        get("/changes") {
+            call.respond(consensusProtocol.getState()?.toDto() ?: listOf<ChangeWithAcceptNumDto>())
+        }
     }
 
 }

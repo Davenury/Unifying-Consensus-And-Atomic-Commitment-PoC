@@ -45,12 +45,19 @@ class ConsensusSpec {
         val apps = listOf(app1, app2, app3, app4, app5)
         apps.forEach { app -> app.startNonblocking() }
 
-        delay(5000)
+        val propagationDelay = 8_000L
+
+
+        delay(propagationDelay)
+        val peer1Address = "http://localhost:8081"
+        val peer2Address = "http://localhost:8082"
 
         // when: peer1 executed change
         expectCatching {
-            executeChange("$peer1/consensus/create_change")
+            executeChange("$peer1Address/consensus/create_change")
         }.isSuccess()
+
+        delay(propagationDelay)
 
         val changes = askForChanges("http://localhost:8083")
 
@@ -62,8 +69,10 @@ class ConsensusSpec {
 
         // when: peer2 executes change
         expectCatching {
-            executeChange("$peer2/consensus/create_change")
+            executeChange("$peer2Address/consensus/create_change")
         }.isSuccess()
+
+        delay(propagationDelay)
 
         val changes2 = askForChanges("http://localhost:8083")
 
@@ -93,7 +102,7 @@ class ConsensusSpec {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }.let { objectMapper.readValue<HistoryDto>(it) }
-            .changes.map { ChangeWithAcceptNum(it.change.toChange(), it.acceptNum) }
+            .changes.map { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
     private val peer1 = "http://localhost:8081"
     private val peer2 = "http://localhost:8082"

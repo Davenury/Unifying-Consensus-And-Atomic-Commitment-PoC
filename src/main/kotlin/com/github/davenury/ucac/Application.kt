@@ -26,6 +26,7 @@ import java.time.Duration
 import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
+import java.time.Duration
 
 fun main(args: Array<String>) {
     createApplication(args).startBlocking()
@@ -164,7 +165,7 @@ class Application constructor(
             commonRouting(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
             ratisRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
-            //consensusProtocolRouting(consensusProtocol)
+            consensusProtocolRouting(consensusProtocol)
 
             if (mode !is TestApplicationMode) {
     //        runBlocking {

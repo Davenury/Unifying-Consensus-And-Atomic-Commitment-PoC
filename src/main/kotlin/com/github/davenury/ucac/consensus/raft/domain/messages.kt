@@ -1,5 +1,19 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
-data class ConsensusElectMe(val peerId: Int)
+import com.example.common.ChangeWithAcceptNumDto
+
+
+data class ConsensusElectMe(val peerId: Int, val leaderIteration: Int)
+
 data class ConsensusElectedYou(val peerId: Int, val voteGranted: Boolean)
-data class ConsensusImTheLeader(val peerId: Int)
+
+data class ConsensusImTheLeader(val peerId: Int, val peerAddress: String, val leaderIteration: Int)
+
+
+data class ConsensusHeartbeat(
+    val peerId: Int,
+    val acceptedChanges: List<ChangeWithAcceptNumDto>,
+    val proposedChanges: List<ChangeWithAcceptNumDto>
+)
+
+data class ConsensusProposeChange(val change: ChangeWithAcceptNumDto)

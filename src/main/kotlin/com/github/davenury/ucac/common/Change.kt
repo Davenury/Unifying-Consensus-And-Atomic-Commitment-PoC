@@ -4,6 +4,27 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory
 
+data class ChangeWithAcceptNum(val change: Change, val acceptNum: Int?) {
+    companion object {
+        fun fromJson(json: String): ChangeWithAcceptNum {
+            val map = objectMapper.readValue(json, HashMap<String, Any>().javaClass)
+            val changeString = objectMapper.writeValueAsString(map["change"])
+            val change: Change = Change.fromJson(changeString)!!
+            val acceptNum = map["acceptNum"] as Int?
+            return ChangeWithAcceptNum(change, acceptNum)
+        }
+    }
+
+    fun toDto(): ChangeWithAcceptNumDto = ChangeWithAcceptNumDto(change.toDto(), acceptNum)
+}
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class ChangeWithAcceptNumDto(val changeDto: ChangeDto, val acceptNum: Int?) {
+
+    fun toChangeWithAcceptNum(): ChangeWithAcceptNum = ChangeWithAcceptNum(changeDto.toChange(), acceptNum)
+}
+
+
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ChangeDto(val properties: Map<String, String>) {
     fun toChange(): Change =

@@ -6,17 +6,6 @@ import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory
 
-data class ChangeWithAcceptNum(val change: Change, val acceptNum: Int?) {
-    companion object {
-        fun fromJson(json: String): ChangeWithAcceptNum {
-            val map = objectMapper.readValue(json, HashMap<String, Any>().javaClass)
-            val changeString = objectMapper.writeValueAsString(map["change"])
-            val change: Change = Change.fromJson(changeString)!!
-            val acceptNum = map["acceptNum"] as Int?
-            return ChangeWithAcceptNum(change, acceptNum)
-        }
-    }
-}
 
 class HistoryStateMachine(override var state: History = mutableListOf()) :
     StateMachine<History>(state) {
