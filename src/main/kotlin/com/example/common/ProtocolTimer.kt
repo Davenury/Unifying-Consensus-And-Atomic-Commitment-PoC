@@ -2,14 +2,16 @@ package com.example.common
 
 import java.util.*
 import kotlinx.coroutines.*
+import kotlin.math.absoluteValue
 
 interface ProtocolTimer {
     suspend fun startCounting(action: suspend () -> Unit)
     fun cancelCounting()
     fun setDelay(delay: Int)
+    fun setBackOffBound(backoffBound: Long)
 }
 
-class ProtocolTimerImpl(private var delay: Int, private val backoffBound: Long) : ProtocolTimer {
+class ProtocolTimerImpl(private var delay: Int, private var backoffBound: Long) : ProtocolTimer {
 
     private var task: Job? = null
 
@@ -22,7 +24,9 @@ class ProtocolTimerImpl(private var delay: Int, private val backoffBound: Long) 
         cancelCounting()
         task =
             GlobalScope.launch(Dispatchers.IO) {
-                delay(delay + randomGenerator.nextLong() % backoffBound)
+                val miliseconds = delay + randomGenerator.nextLong().absoluteValue % backoffBound
+//                println("Delay: $delay, backoff: $backoffBound, milliseconds: $miliseconds")
+                delay(miliseconds)
                 action()
             }
     }
@@ -33,5 +37,9 @@ class ProtocolTimerImpl(private var delay: Int, private val backoffBound: Long) 
 
     override fun setDelay(delay: Int) {
         this.delay = delay
+    }
+
+    override fun setBackOffBound(backoffBound: Long) {
+        this.backoffBound = backoffBound
     }
 }

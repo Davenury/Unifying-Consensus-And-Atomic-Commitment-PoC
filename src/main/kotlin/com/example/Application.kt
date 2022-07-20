@@ -133,7 +133,7 @@ class Application constructor(
             val consensusProtocol = RaftConsensusProtocolImpl(
                 conf.nodeId,
                 getSelfAddress(config.peers.peersAddresses, conf.portOffset, conf.peersetId),
-                ProtocolTimerImpl(1_000, 2_000),
+                ProtocolTimerImpl(1_000, 1_000),
                 otherPeers[conf.peersetId - 1]
             )
 
@@ -239,7 +239,7 @@ class Application constructor(
             }
 
             commonRouting(gpacProtocol, consensusProtocol)
-            ratisRouting(historyManagement)
+//            ratisRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
             consensusProtocolRouting(consensusProtocol)
 

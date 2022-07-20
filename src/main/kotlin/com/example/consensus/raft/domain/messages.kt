@@ -12,8 +12,8 @@ data class ConsensusImTheLeader(val peerId: Int, val peerAddress: String, val le
 
 data class ConsensusHeartbeat(
     val peerId: Int,
-    val acceptedChanges: List<ChangeWithAcceptNumDto>,
-    val proposedChanges: List<ChangeWithAcceptNumDto>
+    val acceptedChanges: List<LedgerItemDto>,
+    val proposedChanges: List<LedgerItemDto>
 )
 
 data class ConsensusProposeChange(val change: ChangeWithAcceptNumDto)
