@@ -12,6 +12,8 @@ import java.time.Duration
 
 class ProtocolTimerSpec {
 
+    private val backoffBound = 1_000L
+
     @Test
     fun `should execute in timeout`(): Unit = runBlocking {
         val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1))
