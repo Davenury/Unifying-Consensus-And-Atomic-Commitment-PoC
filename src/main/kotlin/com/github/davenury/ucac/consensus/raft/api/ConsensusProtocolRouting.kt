@@ -28,8 +28,8 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             val message: ConsensusHeartbeat = call.receive()
             protocol.handleHeartbeat(
                 message.peerId,
-                message.acceptedChanges.map { it.toChangeWithAcceptNum() },
-                message.proposedChanges.map { it.toChangeWithAcceptNum() })
+                message.acceptedChanges.map { it.toLedgerItem() },
+                message.proposedChanges.map { it.toLedgerItem() })
             call.respond("OK")
             // TODO
         }

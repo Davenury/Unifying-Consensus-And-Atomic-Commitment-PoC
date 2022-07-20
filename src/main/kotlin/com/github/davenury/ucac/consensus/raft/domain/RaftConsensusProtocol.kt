@@ -7,8 +7,8 @@ interface RaftConsensusProtocol {
     suspend fun handleLeaderElected(peerId: Int, peerAddress: String, iteration: Int)
     suspend fun handleHeartbeat(
         peerId: Int,
-        acceptedChanges: List<ChangeWithAcceptNum>,
-        proposedChanges: List<ChangeWithAcceptNum>
+        acceptedChanges: List<LedgerItem>,
+        proposedChanges: List<LedgerItem>
     )
 
     suspend fun handleProposeChange(change: ChangeWithAcceptNum)
