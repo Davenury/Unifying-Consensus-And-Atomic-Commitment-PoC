@@ -21,12 +21,11 @@ class RaftConsensusProtocolImpl(
 
     private var leaderIteration: Int = 0
     private val voteGranted: Map<PeerId, ConsensusPeer> = mutableMapOf()
-    private val peerUrlToLastAcceptedIndex: MutableMap<String, Int> = mutableMapOf()
-    private val acceptedIndexToVoteGranted: MutableMap<Int, Int> = mutableMapOf()
+    private val peerUrlToLastAcknowledgedIndex: MutableMap<String, Int> = mutableMapOf()
+    private val ledgerIdToVoteGranted: MutableMap<Int, Int> = mutableMapOf()
     private var leader: Int? = null
     private var leaderAddress: String? = null
-    private var state: History = mutableListOf()
-    private var proposedChanges: History = mutableListOf()
+    private var state: Ledger = Ledger()
 
     override suspend fun begin() {
         logger.info("Scheduling task")
@@ -36,7 +35,6 @@ class RaftConsensusProtocolImpl(
     private suspend fun sendLeaderRequest() {
         leaderIteration += 1
         leader = peerId
-        timer.setDelay(heartbeatDue.toMillis().toInt())
         val responses =
             consensusPeers
                 .mapNotNull { peerUrl ->
@@ -59,6 +57,7 @@ class RaftConsensusProtocolImpl(
 
         if (!checkHalfOfPeerSet(responses.size)) {
             leader = null
+            timer.setDelay(heartbeatDue.toMillis().toInt())
             restartLeaderTimeout()
             return
         }
@@ -108,11 +107,12 @@ class RaftConsensusProtocolImpl(
 
     override suspend fun handleHeartbeat(
         peerId: Int,
-        acceptedChanges: List<ChangeWithAcceptNum>,
-        proposedChanges: List<ChangeWithAcceptNum>
+        acceptedChanges: List<LedgerItem>,
+        proposedChanges: List<LedgerItem>
     ) {
         logger.info("${this.peerId} - Received heartbeat with \n newAcceptedChanges: $acceptedChanges \n newProposedChanges $proposedChanges")
-        state.addAll(proposedChanges)
+        state.updateLedger(acceptedChanges, proposedChanges)
+
         restartLeaderTimeout()
     }
 
@@ -121,48 +121,44 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun sendHeartbeat() {
-        val changes = state + proposedChanges
         consensusPeers.map { peerUrl ->
             try {
-                val acceptedIndex: Int = peerUrlToLastAcceptedIndex.getOrDefault(peerUrl, -1)
-                val newPeerChanges = changes.filterIndexed { index, _ -> index > acceptedIndex }
-                val newProposedChanges = proposedChanges.filterIndexed { index, _ -> index > acceptedIndex }
+                val acceptedIndex: Int = peerUrlToLastAcknowledgedIndex.getOrDefault(peerUrl, -1)
+                val newAcceptedChanges = state.getNewAcceptedItems(acceptedIndex)
+                val newProposedChanges = state.getNewProposedItems(acceptedIndex)
 
                 val response = httpClient.post<String>("http://$peerUrl/consensus/heartbeat") {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
                     body = ConsensusHeartbeat(
                         peerId,
-                        newPeerChanges.map { it.toDto() },
+                        newAcceptedChanges.map { it.toDto() },
                         newProposedChanges.map { it.toDto() })
                 }
 
-                if (response == "OK" && newProposedChanges.isNotEmpty()) {
-                    val previousAcceptedIndex = peerUrlToLastAcceptedIndex.getOrDefault(peerUrl, 0)
-                    val newAcceptedIndex = previousAcceptedIndex + newPeerChanges.size + newProposedChanges.size
 
-                    peerUrlToLastAcceptedIndex[peerUrl] = newAcceptedIndex
+                if (newProposedChanges.isNotEmpty()) {
                     newProposedChanges.forEach {
-                        acceptedIndexToVoteGranted[newAcceptedIndex] =
-                            acceptedIndexToVoteGranted.getOrDefault(it.acceptNum, 1) + 1
+                        ledgerIdToVoteGranted[it.id] =
+                            ledgerIdToVoteGranted.getOrDefault(it.id, 1) + 1
                     }
+                }
+                if (newAcceptedChanges.isNotEmpty()) {
+                    val previousAcceptedIndex = peerUrlToLastAcknowledgedIndex.getOrDefault(peerUrl, -1)
+                    val newAcceptedIndex = newAcceptedChanges.lastOrNull()?.id ?: previousAcceptedIndex
+                    peerUrlToLastAcknowledgedIndex[peerUrl] = newAcceptedIndex
                 }
 
             } catch (e: Exception) {
                 logger.warn("$peerId - $e")
             }
         }
-        val acceptedIndexes: List<Int> = acceptedIndexToVoteGranted
+        val acceptedIndexes: List<Int> = ledgerIdToVoteGranted
             .filter { (key, value) -> checkHalfOfPeerSet(value) }
             .map { it.key }
 
-        val offset = state.size
+        state.acceptItems(acceptedIndexes)
 
-        val acceptedChanges =
-            proposedChanges.filterIndexed { index, _ -> acceptedIndexes.contains(index + offset) }
-
-        proposedChanges.removeAll(acceptedChanges)
-        state.addAll(acceptedChanges)
         timer.startCounting { sendHeartbeat() }
     }
 
@@ -181,8 +177,9 @@ class RaftConsensusProtocolImpl(
         logger.info("$peerId received change: $changeWithAcceptNum")
         if (amILeader()) {
 
-            proposedChanges.add(changeWithAcceptNum)
-            acceptedIndexToVoteGranted[state.size + proposedChanges.size] = 1
+            val id = state.proposeChange(changeWithAcceptNum)
+
+            ledgerIdToVoteGranted[id] = 1
 
             timer.cancelCounting()
             sendHeartbeat()
@@ -206,8 +203,9 @@ class RaftConsensusProtocolImpl(
     }
 
     override fun getState(): History? {
-        logger.info("$peerId - request for state: $state")
-        return state
+        val history = state.getHistory()
+        logger.info("$peerId - request for state: $history")
+        return history
     }
 
     private fun checkHalfOfPeerSet(value: Int): Boolean = value + 1 > (consensusPeers.size + 1).toFloat() / 2F
@@ -219,7 +217,6 @@ class RaftConsensusProtocolImpl(
         private val heartbeatDue = Duration.ofSeconds(4)
     }
 }
-
 
 data class PeerId(val id: Int)
 

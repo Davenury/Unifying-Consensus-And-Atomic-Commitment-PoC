@@ -239,7 +239,7 @@ class Application constructor(
             }
 
             commonRouting(gpacProtocol, consensusProtocol)
-            ratisRouting(historyManagement)
+//            ratisRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
             consensusProtocolRouting(consensusProtocol)
 
