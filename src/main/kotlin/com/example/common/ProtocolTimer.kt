@@ -24,9 +24,8 @@ class ProtocolTimerImpl(private var delay: Int, private var backoffBound: Long) 
         cancelCounting()
         task =
             GlobalScope.launch(Dispatchers.IO) {
-                val miliseconds = delay + randomGenerator.nextLong().absoluteValue % backoffBound
-//                println("Delay: $delay, backoff: $backoffBound, milliseconds: $miliseconds")
-                delay(miliseconds)
+                val milliseconds = delay + randomGenerator.nextLong().absoluteValue % backoffBound
+                delay(milliseconds)
                 action()
             }
     }
