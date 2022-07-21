@@ -21,7 +21,7 @@ class ConsensusSpec {
 
     @BeforeEach
     internal fun setUp() {
-        System.setProperty("configFile", "single_peerset_application.conf")
+        System.setProperty("configFile", "consensus_application.conf")
     }
 
     @Test
@@ -60,6 +60,7 @@ class ConsensusSpec {
         expect {
             that(changes.size).isEqualTo(1)
             that(changes[0].change).isEqualTo(AddUserChange("userName"))
+            that(changes[0].acceptNum).isEqualTo(null)
         }
 
         // when: peer2 executes change
@@ -75,16 +76,25 @@ class ConsensusSpec {
         expect {
             that(changes2.size).isEqualTo(2)
             that(changes2[1].change).isEqualTo(AddUserChange("userName"))
+            that(changes2[1].acceptNum).isEqualTo(null)
         }
 
     }
 
-    private val change = mapOf(
-        "operation" to "ADD_USER",
-        "userName" to "userName"
+    private val change =
+        mapOf(
+            "operation" to "ADD_USER",
+            "userName" to "userName"
+        )
+
+
+    private fun createChangeWithAcceptNum(acceptNum: Int?) = mapOf(
+        "change" to change,
+        "acceptNum" to acceptNum
     )
 
-    private suspend fun executeChange(uri: String, requestBody: Map<String, Any> = change) =
+
+    private suspend fun executeChange(uri: String, requestBody: Map<String, Any?> = change) =
         testHttpClient.post<String>(uri) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
