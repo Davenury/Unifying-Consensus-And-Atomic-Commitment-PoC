@@ -51,13 +51,13 @@ class RaftConsensusProtocolImpl(
                         null
                     }
                 }
-                .filter { it.voteGranted }
 
         logger.info("Responses from leader request for $peerId: $responses in iteration $leaderIteration")
 
-        if (!checkHalfOfPeerSet(responses.size)) {
+        val positiveResponses = responses.filter { it.voteGranted }
+
+        if (!checkHalfOfPeerSet(positiveResponses.size)) {
             leader = null
-            timer.setDelay(heartbeatDue.toMillis().toInt())
             restartLeaderTimeout()
             return
         }
@@ -82,7 +82,7 @@ class RaftConsensusProtocolImpl(
         logger.info("Affirmations responses: $leaderAffirmationReactions")
 
         // TODO - schedule heartbeat sending by leader
-        val halfDelay: Int = heartbeatDue.toMillis().toInt() / 2
+        val halfDelay: Duration = heartbeatDue.dividedBy(2)
         timer.setDelay(halfDelay)
         timer.startCounting { sendHeartbeat() }
     }
@@ -164,7 +164,7 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun restartLeaderTimeout() {
         timer.cancelCounting()
-        timer.setDelay(heartbeatDue.toMillis().toInt())
+        timer.setDelay(heartbeatDue)
         timer.startCounting {
             sendLeaderRequest()
         }
