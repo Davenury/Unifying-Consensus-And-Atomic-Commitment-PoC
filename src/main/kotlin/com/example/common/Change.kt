@@ -32,7 +32,7 @@ data class ChangeDto(val properties: Map<String, String>) {
             try {
                 Operation.valueOf(it).toChange(this)
             } catch (ex: IllegalArgumentException) {
-                logger.debug("Error while creating Change class - unknown operation $it")
+                logger.error("Error while creating Change class - unknown operation $it")
                 throw UnknownOperationException(it)
             }
         }

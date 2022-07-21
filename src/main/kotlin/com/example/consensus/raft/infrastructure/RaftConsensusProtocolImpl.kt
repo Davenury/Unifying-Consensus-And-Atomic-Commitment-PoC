@@ -51,13 +51,13 @@ class RaftConsensusProtocolImpl(
                         null
                     }
                 }
-                .filter { it.voteGranted }
 
         logger.info("Responses from leader request for $peerId: $responses in iteration $leaderIteration")
 
-        if (!checkHalfOfPeerSet(responses.size)) {
+        val positiveResponses = responses.filter { it.voteGranted }
+
+        if (!checkHalfOfPeerSet(positiveResponses.size)) {
             leader = null
-            timer.setDelay(heartbeatDue.toMillis().toInt())
             restartLeaderTimeout()
             return
         }

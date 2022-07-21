@@ -8,7 +8,6 @@ interface ProtocolTimer {
     suspend fun startCounting(action: suspend () -> Unit)
     fun cancelCounting()
     fun setDelay(delay: Int)
-    fun setBackOffBound(backoffBound: Long)
 }
 
 class ProtocolTimerImpl(private var delay: Int, private var backoffBound: Long) : ProtocolTimer {
@@ -36,9 +35,5 @@ class ProtocolTimerImpl(private var delay: Int, private var backoffBound: Long) 
 
     override fun setDelay(delay: Int) {
         this.delay = delay
-    }
-
-    override fun setBackOffBound(backoffBound: Long) {
-        this.backoffBound = backoffBound
     }
 }

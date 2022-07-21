@@ -7,8 +7,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.runBlocking
 
 abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
-    open fun change(change: Change, acceptNum: Int?) =
-        runBlocking {
+    open suspend fun change(change: Change, acceptNum: Int?) =
             consensusProtocol.proposeChange(change, acceptNum)
                 .let {
                     when (it) {
@@ -20,7 +19,6 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
                         }
                     }
                 }
-        }
 
     abstract fun getLastChange(): ChangeWithAcceptNum?
     abstract fun getState(): History?
