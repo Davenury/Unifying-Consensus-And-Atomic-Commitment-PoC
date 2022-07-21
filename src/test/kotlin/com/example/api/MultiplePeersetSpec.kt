@@ -575,7 +575,7 @@ class MultiplePeersetSpec {
         }
 
     private suspend fun askForChanges(peer: String) =
-        testHttpClient.get<String>("$peer/changes") {
+        testHttpClient.get<String>("$peer/consensus/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }.let { objectMapper.readValue<HistoryDto>(it) }

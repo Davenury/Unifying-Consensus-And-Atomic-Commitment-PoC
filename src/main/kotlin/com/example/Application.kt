@@ -122,7 +122,7 @@ class Application constructor(
     private val conf: NodeIdAndPortOffset = getIdAndOffset(args, config)
     private val peerConstants: RaftConfiguration = RaftConfiguration(conf.peersetId, configOverrides)
     private val engine: NettyApplicationEngine
-    private lateinit var raftNode: HistoryRaftNode
+    private var raftNode: HistoryRaftNode? = null
 
     init {
         engine = embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
