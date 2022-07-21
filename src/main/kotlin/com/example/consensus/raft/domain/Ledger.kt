@@ -36,6 +36,7 @@ data class Ledger(
     fun getHistory(): History =
         (acceptedItems + proposedItems).map { it.change }.toMutableList()
 
+
 }
 
 data class LedgerItemDto(val id: Int, val change: ChangeWithAcceptNumDto) {

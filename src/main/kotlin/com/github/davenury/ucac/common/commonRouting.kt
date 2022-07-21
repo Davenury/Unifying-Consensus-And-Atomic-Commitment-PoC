@@ -30,6 +30,9 @@ fun Application.commonRouting(
         get("/consensus/changes") {
             call.respond(consensusProtocol.getState()?.toDto() ?: listOf<ChangeWithAcceptNumDto>())
         }
+        get("/consensus/change") {
+            call.respond(consensusProtocol.getState()?.lastOrNull()?.toDto() ?: "")
+        }
     }
 
 }
