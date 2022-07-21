@@ -5,8 +5,8 @@ import com.example.common.ChangeWithAcceptNumDto
 import com.example.common.History
 
 data class Ledger(
-    var acceptedItems: MutableList<LedgerItem> = mutableListOf(),
-    var proposedItems: MutableList<LedgerItem> = mutableListOf()
+    val acceptedItems: MutableList<LedgerItem> = mutableListOf(),
+    val proposedItems: MutableList<LedgerItem> = mutableListOf()
 ) {
 
     fun updateLedger(acceptedItems: List<LedgerItem>, proposedItems: List<LedgerItem>) {
@@ -21,9 +21,9 @@ data class Ledger(
     fun getNewProposedItems(id: Int) = proposedItems.filter { it.id > id }
 
     fun acceptItems(acceptedIndexes: List<Int>) {
-        val pair = proposedItems.partition { acceptedIndexes.contains(it.id) }
-        acceptedItems.addAll(pair.first)
-        proposedItems = pair.second.toMutableList()
+        val newAcceptedItems = proposedItems.filter { acceptedIndexes.contains(it.id) }
+        acceptedItems.addAll(newAcceptedItems)
+        proposedItems.removeAll(newAcceptedItems)
     }
 
     fun proposeChange(change: ChangeWithAcceptNum): Int {

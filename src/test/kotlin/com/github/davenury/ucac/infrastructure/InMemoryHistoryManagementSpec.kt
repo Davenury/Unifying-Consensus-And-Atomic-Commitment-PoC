@@ -26,8 +26,9 @@ class InMemoryHistoryManagementSpec {
         // and - consensus protocol that's ok with changes
         consensusProtocol.setResponse(ConsensusSuccess)
         // when - change is proposed
-        subject.change(change, 1)
-        // then - change should be done
+        runBlocking {
+            subject.change(change, 1)
+        }// then - change should be done
         expectThat(subject.getLastChange()).isEqualTo(ChangeWithAcceptNum(change, 1))
     }
 
@@ -39,8 +40,9 @@ class InMemoryHistoryManagementSpec {
         consensusProtocol.setResponse(ConsensusFailure)
 
         // when - change is proposed
-        subject.change(change, 1)
-
+        runBlocking {
+            subject.change(change, 1)
+        }
         // then - change should not be added
         expectThat(subject.getLastChange()).isNull()
     }

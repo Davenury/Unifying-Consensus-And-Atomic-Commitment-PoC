@@ -14,10 +14,6 @@ class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : His
         null
     }
 
-    override fun change(change: Change, acceptNum: Int?): HistoryChangeResult {
-        return super.change(change, acceptNum)
-    }
-
     /**
      * Dummy implementation for simplicity of protocol. Change to correct implementation with actually building history
      * and checking if history can be built (e.g. not having conflicting changes etc.).
