@@ -54,7 +54,7 @@ class ConsensusSpec {
 
         // when: peer1 executed change
         expectCatching {
-            executeChange("$peer1Address/consensus/create_change")
+            executeChange("$peer1Address/consensus/create_change", createChangeWithAcceptNum(null))
         }.isSuccess()
 
         delay(propagationDelay)
@@ -70,7 +70,7 @@ class ConsensusSpec {
 
         // when: peer2 executes change
         expectCatching {
-            executeChange("$peer2Address/consensus/create_change")
+            executeChange("$peer2Address/consensus/create_change", createChangeWithAcceptNum(1))
         }.isSuccess()
 
         delay(propagationDelay)
@@ -81,7 +81,7 @@ class ConsensusSpec {
         expect {
             that(changes2.size).isEqualTo(2)
             that(changes2[1].change).isEqualTo(AddUserChange("userName"))
-            that(changes2[1].acceptNum).isEqualTo(null)
+            that(changes2[1].acceptNum).isEqualTo(1)
         }
 
         apps.forEach { app -> app.stop() }
@@ -100,7 +100,7 @@ class ConsensusSpec {
     )
 
 
-    private suspend fun executeChange(uri: String, requestBody: Map<String, Any?> = change) =
+    private suspend fun executeChange(uri: String, requestBody: Map<String, Any?>) =
         testHttpClient.post<String>(uri) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
