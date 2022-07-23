@@ -1,11 +1,13 @@
 package com.example.consensus.raft.domain
 
 interface ConsensusProtocol<A, B> {
-    fun proposeChange(change: A, acceptNum: Int? = null): ConsensusResult
+    suspend fun proposeChange(change: A, acceptNum: Int?): ConsensusResult
 
     fun getState(): B?
 }
 
 sealed class ConsensusResult
+
 object ConsensusSuccess : ConsensusResult()
+
 object ConsensusFailure : ConsensusResult()

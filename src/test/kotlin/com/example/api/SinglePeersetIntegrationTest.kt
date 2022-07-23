@@ -1,11 +1,7 @@
 package com.example.api
 
 import com.example.*
-import com.example.common.AddGroupChange
-import com.example.common.AddUserChange
-import com.example.common.ChangeDto
-import com.example.consensus.ratis.ChangeWithAcceptNum
-import com.example.consensus.ratis.ChangeWithAcceptNumDto
+import com.example.common.*
 import com.example.consensus.ratis.HistoryDto
 import com.example.gpac.domain.*
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -146,15 +142,15 @@ class SinglePeersetIntegrationTest {
             }
 
             // leader timeout is 3 seconds for integration tests
-            delay(7000)
+            delay(12_000)
 
-            val response = testHttpClient.get<String>("$peer3/change") {
+            val response = testHttpClient.get<String>("$peer3/consensus/change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }
 
             val change = objectMapper.readValue<ChangeWithAcceptNumDto>(response).let {
-                ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)
+                ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum)
             }
             expectThat(change.change).isEqualTo(AddUserChange("userName"))
 
@@ -208,18 +204,18 @@ class SinglePeersetIntegrationTest {
         }
 
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
-        delay(7000)
+        delay(10_000)
 
-        val response = testHttpClient.get<String>("$peer4/change") {
+        val response = testHttpClient.get<String>("$peer4/consensus/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
 
         val change = objectMapper.readValue(response, ChangeWithAcceptNumDto::class.java)
-        expectThat(change.change.toChange()).isEqualTo(AddGroupChange("name"))
+        expectThat(change.changeDto.toChange()).isEqualTo(AddGroupChange("name"))
 
         // and should not execute this change couple of times
-        val response2 = testHttpClient.get<String>("$peer2/changes") {
+        val response2 = testHttpClient.get<String>("$peer2/consensus/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -227,10 +223,11 @@ class SinglePeersetIntegrationTest {
         apps.forEach { app -> app.stop() }
 
         val values: List<ChangeWithAcceptNum> = objectMapper.readValue<HistoryDto>(response2).changes.map {
-            ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)
+            ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum)
         }
         // only one change and this change shouldn't be applied for 8082 two times
         expect {
+            println("Values: $values")
             that(values.size).isGreaterThanOrEqualTo(1)
             that(values[0]).isEqualTo(ChangeWithAcceptNum(AddGroupChange("name"), 1))
         }

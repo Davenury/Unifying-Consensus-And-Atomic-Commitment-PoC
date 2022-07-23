@@ -3,8 +3,8 @@ package com.example.api
 import com.example.*
 import com.example.common.AddUserChange
 import com.example.common.ChangeDto
-import com.example.consensus.ratis.ChangeWithAcceptNum
-import com.example.consensus.ratis.ChangeWithAcceptNumDto
+import com.example.common.ChangeWithAcceptNum
+import com.example.common.ChangeWithAcceptNumDto
 import com.example.consensus.ratis.HistoryDto
 import com.example.gpac.domain.Accept
 import com.example.gpac.domain.Apply
@@ -59,7 +59,7 @@ class MultiplePeersetSpec {
             accept(ContentType.Application.Json)
         }
             .let { objectMapper.readValue<ChangeWithAcceptNumDto>(it) }
-            .let { ChangeWithAcceptNum(it.change.toChange(), it.acceptNum) }
+            .let { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
         expect {
             that(peer2Change.change).isEqualTo(AddUserChange("userName"))
@@ -71,7 +71,7 @@ class MultiplePeersetSpec {
             accept(ContentType.Application.Json)
         }
             .let { objectMapper.readValue<ChangeWithAcceptNumDto>(it) }
-            .let { ChangeWithAcceptNum(it.change.toChange(), it.acceptNum) }
+            .let { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
         expect {
             that(peer4Change.change).isEqualTo(AddUserChange("userName"))
@@ -453,10 +453,13 @@ class MultiplePeersetSpec {
                     testHttpClient.post<HttpResponse>(url2) {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
-                        body = Apply(it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(mapOf(
-                            "operation" to "ADD_USER",
-                            "userName" to "userName"
-                        ))
+                        body = Apply(
+                            it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(
+                                mapOf(
+                                    "operation" to "ADD_USER",
+                                    "userName" to "userName"
+                                )
+                            )
                         )
                     }.also {
                         println("Got response ${it.status.value}")
@@ -468,10 +471,13 @@ class MultiplePeersetSpec {
                     testHttpClient.post<HttpResponse>(url3) {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
-                        body = Apply(it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(mapOf(
-                            "operation" to "ADD_USER",
-                            "userName" to "userName"
-                        ))
+                        body = Apply(
+                            it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(
+                                mapOf(
+                                    "operation" to "ADD_USER",
+                                    "userName" to "userName"
+                                )
+                            )
                         )
                     }.also {
                         println("Got response ${it.status.value}")
@@ -569,11 +575,11 @@ class MultiplePeersetSpec {
         }
 
     private suspend fun askForChanges(peer: String) =
-        testHttpClient.get<String>("$peer/changes") {
+        testHttpClient.get<String>("$peer/consensus/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }.let { objectMapper.readValue<HistoryDto>(it) }
-            .changes.map { ChangeWithAcceptNum(it.change.toChange(), it.acceptNum) }
+            .changes.map { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
     private fun createPeersInRange(range: Int, offset: Int = 0): List<String> =
         List(range) { "localhost:${8081 + it + offset}" }

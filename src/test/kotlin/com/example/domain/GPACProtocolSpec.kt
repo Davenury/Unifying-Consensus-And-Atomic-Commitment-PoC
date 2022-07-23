@@ -2,7 +2,6 @@ package com.example.domain
 
 import com.example.common.*
 import com.example.common.InMemoryHistoryManagement
-import com.example.consensus.ratis.ChangeWithAcceptNum
 import com.example.gpac.domain.*
 import com.example.consensus.raft.infrastructure.DummyConsensusProtocol
 import io.mockk.*

@@ -11,10 +11,12 @@ import strikt.assertions.isEqualTo
 
 class ProtocolTimerSpec {
 
+    private val backoffBound = 1_000L
+
     @Test
     fun `should execute in timeout`(): Unit = runBlocking {
-        val delayInSeconds = 2
-        val subject = ProtocolTimerImpl(delayInSeconds, 1)
+        val delayInMilliseconds = 2_000
+        val subject = ProtocolTimerImpl(delayInMilliseconds, backoffBound)
 
         val list = mutableListOf<Int>()
 
@@ -27,8 +29,8 @@ class ProtocolTimerSpec {
 
     @Test
     fun `should not execute before timeout`(): Unit = runBlocking {
-        val delayInSeconds = 2
-        val subject = ProtocolTimerImpl(delayInSeconds, 1)
+        val delayInMilliseconds = 2_000
+        val subject = ProtocolTimerImpl(delayInMilliseconds, backoffBound)
 
         val list = mutableListOf<Int>()
 
@@ -40,8 +42,8 @@ class ProtocolTimerSpec {
 
     @Test
     fun `should be able to cancel job`(): Unit = runBlocking {
-        val delayInSeconds = 3
-        val subject = ProtocolTimerImpl(delayInSeconds, 1)
+        val delayInMilliseconds = 3_000
+        val subject = ProtocolTimerImpl(delayInMilliseconds, backoffBound)
 
         val list = mutableListOf<Int>()
 

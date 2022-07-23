@@ -1,11 +1,12 @@
 package com.example.infrastructure
 
 import com.example.common.AddRelationChange
+import com.example.common.ChangeWithAcceptNum
 import com.example.common.InMemoryHistoryManagement
 import com.example.consensus.raft.domain.ConsensusFailure
 import com.example.consensus.raft.domain.ConsensusSuccess
-import com.example.consensus.ratis.ChangeWithAcceptNum
 import com.example.utils.DummyConsensusProtocol
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
@@ -26,8 +27,9 @@ class InMemoryHistoryManagementSpec {
         // and - consensus protocol that's ok with changes
         consensusProtocol.setResponse(ConsensusSuccess)
         // when - change is proposed
-        subject.change(change, 1)
-        // then - change should be done
+        runBlocking {
+            subject.change(change, 1)
+        }// then - change should be done
         expectThat(subject.getLastChange()).isEqualTo(ChangeWithAcceptNum(change, 1))
     }
 
@@ -39,8 +41,9 @@ class InMemoryHistoryManagementSpec {
         consensusProtocol.setResponse(ConsensusFailure)
 
         // when - change is proposed
-        subject.change(change, 1)
-
+        runBlocking {
+            subject.change(change, 1)
+        }
         // then - change should not be added
         expectThat(subject.getLastChange()).isNull()
     }

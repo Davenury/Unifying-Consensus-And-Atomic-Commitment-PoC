@@ -1,9 +1,6 @@
 package com.example.consensus.ratis
 
-import com.example.common.Change
-import com.example.common.History
-import com.example.common.HistoryChangeResult
-import com.example.common.HistoryManagement
+import com.example.common.*
 import org.slf4j.LoggerFactory
 
 class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : HistoryManagement(historyRaftNode) {
@@ -12,10 +9,6 @@ class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : His
     } catch (ex: java.util.NoSuchElementException) {
         logger.error("History is empty!")
         null
-    }
-
-    override fun change(change: Change, acceptNum: Int?): HistoryChangeResult {
-        return super.change(change, acceptNum)
     }
 
     /**

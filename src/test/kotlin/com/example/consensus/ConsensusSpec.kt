@@ -1,7 +1,7 @@
 package com.example.consensus
 
 import com.example.common.AddUserChange
-import com.example.consensus.ratis.ChangeWithAcceptNum
+import com.example.common.ChangeWithAcceptNum
 import com.example.consensus.ratis.HistoryDto
 import com.example.objectMapper
 import com.example.startApplication
@@ -21,7 +21,7 @@ class ConsensusSpec {
 
     @BeforeEach
     internal fun setUp() {
-        System.setProperty("configFile", "single_peerset_application.conf")
+        System.setProperty("configFile", "consensus_application.conf")
     }
 
     @Test
@@ -40,12 +40,19 @@ class ConsensusSpec {
         val peer4 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "1")) }
         val peer5 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("5", "1")) }
 
-        delay(5000)
+        val propagationDelay = 8_000L
+
+
+        delay(propagationDelay)
+        val peer1Address = "http://localhost:8081"
+        val peer2Address = "http://localhost:8082"
 
         // when: peer1 executed change
         expectCatching {
-            executeChange("$peer1/consensus/create_change")
+            executeChange("$peer1Address/consensus/create_change", createChangeWithAcceptNum(null))
         }.isSuccess()
+
+        delay(propagationDelay)
 
         val changes = askForChanges("http://localhost:8083")
 
@@ -53,12 +60,15 @@ class ConsensusSpec {
         expect {
             that(changes.size).isEqualTo(1)
             that(changes[0].change).isEqualTo(AddUserChange("userName"))
+            that(changes[0].acceptNum).isEqualTo(null)
         }
 
         // when: peer2 executes change
         expectCatching {
-            executeChange("$peer2/consensus/create_change")
+            executeChange("$peer2Address/consensus/create_change", createChangeWithAcceptNum(1))
         }.isSuccess()
+
+        delay(propagationDelay)
 
         val changes2 = askForChanges("http://localhost:8083")
 
@@ -66,16 +76,25 @@ class ConsensusSpec {
         expect {
             that(changes2.size).isEqualTo(2)
             that(changes2[1].change).isEqualTo(AddUserChange("userName"))
+            that(changes2[1].acceptNum).isEqualTo(1)
         }
 
     }
 
-    private val change = mapOf(
-        "operation" to "ADD_USER",
-        "userName" to "userName"
+    private val change =
+        mapOf(
+            "operation" to "ADD_USER",
+            "userName" to "userName"
+        )
+
+
+    private fun createChangeWithAcceptNum(acceptNum: Int?) = mapOf(
+        "change" to change,
+        "acceptNum" to acceptNum
     )
 
-    private suspend fun executeChange(uri: String, requestBody: Map<String, Any> = change) =
+
+    private suspend fun executeChange(uri: String, requestBody: Map<String, Any?>) =
         testHttpClient.post<String>(uri) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
@@ -83,10 +102,10 @@ class ConsensusSpec {
         }
 
     private suspend fun askForChanges(peer: String) =
-        testHttpClient.get<String>("$peer/changes") {
+        testHttpClient.get<String>("$peer/consensus/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }.let { objectMapper.readValue<HistoryDto>(it) }
-            .changes.map { ChangeWithAcceptNum(it.change.toChange(), it.acceptNum) }
+            .changes.map { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
 }

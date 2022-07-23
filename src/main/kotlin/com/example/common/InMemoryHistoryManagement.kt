@@ -3,7 +3,7 @@ package com.example.common
 import com.example.consensus.raft.domain.ConsensusFailure
 import com.example.consensus.raft.domain.ConsensusProtocol
 import com.example.consensus.raft.domain.ConsensusSuccess
-import com.example.consensus.ratis.ChangeWithAcceptNum
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 
 class InMemoryHistoryManagement(
@@ -13,19 +13,19 @@ class InMemoryHistoryManagement(
 
     // TODO: think about what's better - if change asks consensus protocol if it
     // can be done or if something higher asks and then calls change
-    override fun change(change: Change, acceptNum: Int?): HistoryChangeResult =
-        consensusProtocol.proposeChange(change)
-            .let {
-                when (it) {
-                    ConsensusFailure -> {
-                        HistoryChangeResult.HistoryChangeFailure
-                    }
-                    ConsensusSuccess -> {
-                        historyStorage.add(ChangeWithAcceptNum(change, acceptNum))
-                        HistoryChangeResult.HistoryChangeSuccess
+    override suspend fun change(change: Change, acceptNum: Int?): HistoryChangeResult =
+            consensusProtocol.proposeChange(change,acceptNum)
+                .let {
+                    when (it) {
+                        ConsensusFailure -> {
+                            HistoryChangeResult.HistoryChangeFailure
+                        }
+                        ConsensusSuccess -> {
+                            historyStorage.add(ChangeWithAcceptNum(change, acceptNum))
+                            HistoryChangeResult.HistoryChangeSuccess
+                        }
                     }
                 }
-            }
 
     override fun getLastChange(): ChangeWithAcceptNum? =
         try {
@@ -38,8 +38,7 @@ class InMemoryHistoryManagement(
     override fun getState(): History? =
         this.historyStorage
 
-    override fun canBeBuild(newChange: Change): Boolean
-        = true
+    override fun canBeBuild(newChange: Change): Boolean = true
 
     override fun build() {}
 
