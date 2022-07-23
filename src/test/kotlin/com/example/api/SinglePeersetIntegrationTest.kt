@@ -204,7 +204,7 @@ class SinglePeersetIntegrationTest {
         }
 
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
-        delay(7000)
+        delay(10_000)
 
         val response = testHttpClient.get<String>("$peer4/consensus/change") {
             contentType(ContentType.Application.Json)
@@ -227,6 +227,7 @@ class SinglePeersetIntegrationTest {
         }
         // only one change and this change shouldn't be applied for 8082 two times
         expect {
+            println("Values: $values")
             that(values.size).isGreaterThanOrEqualTo(1)
             that(values[0]).isEqualTo(ChangeWithAcceptNum(AddGroupChange("name"), 1))
         }
