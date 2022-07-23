@@ -181,6 +181,7 @@ class RaftConsensusProtocolImpl(
         logger.info("$peerId received change: $changeWithAcceptNum")
         if (amILeader()) {
 
+            if (state.changeAlreadyProposed(changeWithAcceptNum)) return ConsensusFailure
             val id = state.proposeChange(changeWithAcceptNum)
 
             ledgerIdToVoteGranted[id] = 1
