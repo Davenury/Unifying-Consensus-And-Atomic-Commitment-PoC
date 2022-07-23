@@ -142,7 +142,7 @@ class SinglePeersetIntegrationTest {
             }
 
             // leader timeout is 3 seconds for integration tests
-            delay(7000)
+            delay(12_000)
 
             val response = testHttpClient.get<String>("$peer3/consensus/change") {
                 contentType(ContentType.Application.Json)
