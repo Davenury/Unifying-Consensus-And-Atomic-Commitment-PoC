@@ -14,7 +14,7 @@ class InMemoryHistoryManagement(
     // TODO: think about what's better - if change asks consensus protocol if it
     // can be done or if something higher asks and then calls change
     override suspend fun change(change: Change, acceptNum: Int?): HistoryChangeResult =
-            consensusProtocol.proposeChange(change)
+            consensusProtocol.proposeChange(change,acceptNum)
                 .let {
                     when (it) {
                         ConsensusFailure -> {
