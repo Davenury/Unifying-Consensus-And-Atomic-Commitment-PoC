@@ -32,7 +32,7 @@ class RaftConsensusProtocolImpl(
     private var state: Ledger = Ledger()
 
     override suspend fun begin() {
-        logger.info("Scheduling task")
+        logger.info("$peerId - Start raft on address $peerAddress, other peers: $consensusPeers")
         timer.startCounting { sendLeaderRequest() }
     }
 
@@ -121,7 +121,7 @@ class RaftConsensusProtocolImpl(
     }
 
     override suspend fun handleProposeChange(change: ChangeWithAcceptNum) {
-        proposeChange(change.change, change.acceptNum)
+        if (amILeader()) proposeChange(change.change, change.acceptNum)
     }
 
     private suspend fun sendHeartbeat() {
