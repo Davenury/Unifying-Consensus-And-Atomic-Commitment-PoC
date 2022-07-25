@@ -17,6 +17,10 @@ import io.ktor.jackson.*
 import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.netty.channel.socket.nio.NioServerSocketChannel
+import java.net.InetSocketAddress
+import kotlin.reflect.full.declaredMemberProperties
+import kotlin.reflect.jvm.isAccessible
 
 fun main(args: Array<String>) {
     createApplication(args).startBlocking()
@@ -238,5 +242,19 @@ class Application constructor(val args: Array<String>,
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
         engine.stop(gracePeriodMillis, timeoutMillis)
         raftNode?.close()
+    }
+
+    fun getBoundAddress(): InetSocketAddress {
+        val channelsProperty =
+            NettyApplicationEngine::class.declaredMemberProperties.single { it.name == "channels" }
+        val oldAccessible = channelsProperty.isAccessible
+        try {
+            channelsProperty.isAccessible = true
+            val channels = channelsProperty.get(engine) as List<*>
+            val channel = channels.single() as NioServerSocketChannel
+            return channel.localAddress()!!
+        } finally {
+            channelsProperty.isAccessible = oldAccessible
+        }
     }
 }
