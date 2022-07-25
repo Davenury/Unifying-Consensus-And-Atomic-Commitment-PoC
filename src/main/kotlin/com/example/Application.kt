@@ -139,8 +139,8 @@ class Application constructor(
                 otherPeers[conf.peersetId - 1]
             )
 
-//            val historyManagement = RatisHistoryManagement(raftNode)
-            val historyManagement = InMemoryHistoryManagement(consensusProtocol)
+            val historyManagement = RatisHistoryManagement(raftNode!!)
+//            val historyManagement = InMemoryHistoryManagement(consensusProtocol)
             val eventPublisher = EventPublisher(eventListeners)
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = ProtocolClientImpl()
