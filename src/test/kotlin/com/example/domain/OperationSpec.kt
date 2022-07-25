@@ -65,7 +65,8 @@ class OperationSpec {
 
     @Test
     fun `should not throw missing parameter exception, when there's some garbage in message`() {
-        val changeDto = ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "groupName", "some_garbage" to "gfasdds"))
+        val changeDto =
+            ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "groupName", "some_garbage" to "gfasdds"))
 
         expectCatching {
             changeDto.toChange()
