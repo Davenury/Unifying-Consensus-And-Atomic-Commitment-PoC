@@ -3,6 +3,7 @@ package com.example.consensus
 import com.example.common.AddUserChange
 import com.example.common.ChangeWithAcceptNum
 import com.example.consensus.ratis.HistoryDto
+import com.example.createApplication
 import com.example.objectMapper
 import com.example.startApplication
 import com.example.testHttpClient
@@ -34,13 +35,16 @@ class ConsensusSpec {
         //* peer 1 proponuje zmianę (akceptowana)
         //* peer 2 proponuje zmianę (akceptowana)
 
-        val peer1 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("1", "1")) }
-        val peer2 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "1")) }
-        val peer3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1")) }
-        val peer4 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "1")) }
-        val peer5 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("5", "1")) }
+        val peer1 = createApplication(arrayOf("1", "1"))
+        val peer2 = createApplication(arrayOf("2", "1"))
+        val peer3 = createApplication(arrayOf("3", "1"))
+        val peer4 = createApplication(arrayOf("4", "1"))
+        val peer5 = createApplication(arrayOf("5", "1"))
 
-        val propagationDelay = 8_000L
+        val peers = listOf(peer1,peer2,peer3,peer4,peer5)
+        peers.forEach { it.startNonblocking() }
+
+        val propagationDelay = 7_000L
 
 
         delay(propagationDelay)
@@ -78,6 +82,8 @@ class ConsensusSpec {
             that(changes2[1].change).isEqualTo(AddUserChange("userName"))
             that(changes2[1].acceptNum).isEqualTo(1)
         }
+
+        peers.forEach { it.stop() }
 
     }
 

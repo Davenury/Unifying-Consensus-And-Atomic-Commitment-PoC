@@ -5,8 +5,6 @@ import com.example.consensus.raft.api.consensusProtocolRouting
 import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.example.consensus.ratis.HistoryRaftNode
 import com.example.consensus.ratis.RaftConfiguration
-import com.example.consensus.ratis.RatisHistoryManagement
-import com.example.consensus.ratis.ratisRouting
 import com.example.gpac.api.gpacProtocolRouting
 import com.example.gpac.domain.GPACProtocolImpl
 import com.example.gpac.domain.ProtocolClientImpl
@@ -19,11 +17,15 @@ import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.netty.channel.socket.nio.NioServerSocketChannel
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.newSingleThreadContext
 import java.net.InetSocketAddress
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 import java.time.Duration
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.Executors
 
 fun main(args: Array<String>) {
     createApplication(args).startBlocking()
@@ -128,6 +130,7 @@ class Application constructor(
     private val peerConstants: RaftConfiguration = RaftConfiguration(conf.peersetId, configOverrides)
     private val engine: NettyApplicationEngine
     private var raftNode: HistoryRaftNode? = null
+    private lateinit var ctx: ExecutorCoroutineDispatcher
 
     init {
         engine = embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
@@ -135,17 +138,21 @@ class Application constructor(
 
             val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
 
+            val nodeIdOffset: Int = otherPeers.take(conf.peersetId - 1).map { it.size }.sum()
+
+            ctx = Executors.newFixedThreadPool(2).asCoroutineDispatcher()
+
             val consensusProtocol = RaftConsensusProtocolImpl(
-                conf.nodeId,
+                nodeIdOffset + conf.nodeId,
                 getSelfAddress(config.peers.peersAddresses, conf.portOffset, conf.peersetId),
-                ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(2)), // TODO move to config
+                ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(2), ctx), // TODO move to config
                 otherPeers[conf.peersetId - 1]
             )
 
 //            val historyManagement = RatisHistoryManagement(raftNode)
             val historyManagement = InMemoryHistoryManagement(consensusProtocol)
             val eventPublisher = EventPublisher(eventListeners)
-            val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound)
+            val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = ProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
             val gpacProtocol =
@@ -260,6 +267,7 @@ class Application constructor(
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
         engine.stop(gracePeriodMillis, timeoutMillis)
         raftNode?.close()
+        ctx.close()
     }
 
     fun getBoundAddress(): InetSocketAddress {

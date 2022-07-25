@@ -82,7 +82,7 @@ class RaftConsensusProtocolImpl(
         logger.info("Affirmations responses: $leaderAffirmationReactions")
 
         // TODO - schedule heartbeat sending by leader
-        val halfDelay: Duration = heartbeatDue.dividedBy(2)
+        val halfDelay: Duration = heartbeatDue.dividedBy(4)
         timer.setDelay(halfDelay)
         timer.startCounting { sendHeartbeat() }
     }
