@@ -24,7 +24,7 @@ class ProtocolTimerSpec {
 
         subject.startCounting { list.add(1) }
 
-        eventually(3) {
+        eventually(4) {
             expectThat(list.size).isEqualTo(1)
         }
     }
