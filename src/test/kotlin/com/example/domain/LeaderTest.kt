@@ -14,6 +14,7 @@ import com.example.gpac.domain.TransactionBlockerImpl
 import com.example.consensus.raft.infrastructure.DummyConsensusProtocol
 import com.example.utils.PeerThree
 import com.example.utils.PeerTwo
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -22,8 +23,11 @@ import strikt.api.expectThrows
 import strikt.assertions.containsExactlyInAnyOrder
 import strikt.assertions.isEqualTo
 import java.time.Duration
+import java.util.concurrent.Executors
 
 class LeaderTest {
+
+    val ctx = Executors.newFixedThreadPool(2).asCoroutineDispatcher()
 
     @BeforeEach
     fun setup() {
@@ -123,7 +127,7 @@ class LeaderTest {
     private val otherPeers = getOtherPeers(allPeers, 1, 1, 9090)
     private val consensusProtocol = DummyConsensusProtocol()
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-    private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1))
+    private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1),ctx)
     private val client = ProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
     private var subject =
