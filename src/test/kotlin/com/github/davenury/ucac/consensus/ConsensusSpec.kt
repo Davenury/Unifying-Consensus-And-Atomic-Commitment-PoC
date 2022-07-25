@@ -37,15 +37,16 @@ class ConsensusSpec {
         //* peer 1 proponuje zmianę (akceptowana)
         //* peer 2 proponuje zmianę (akceptowana)
 
-        val app1 = createApplication(arrayOf("1", "1"))
-        val app2 = createApplication(arrayOf("2", "1"))
-        val app3 = createApplication(arrayOf("3", "1"))
-        val app4 = createApplication(arrayOf("4", "1"))
-        val app5 = createApplication(arrayOf("5", "1"))
-        val apps = listOf(app1, app2, app3, app4, app5)
-        apps.forEach { app -> app.startNonblocking() }
+        val peer1 = createApplication(arrayOf("1", "1"))
+        val peer2 = createApplication(arrayOf("2", "1"))
+        val peer3 = createApplication(arrayOf("3", "1"))
+        val peer4 = createApplication(arrayOf("4", "1"))
+        val peer5 = createApplication(arrayOf("5", "1"))
 
-        val propagationDelay = 8_000L
+        val peers = listOf(peer1,peer2,peer3,peer4,peer5)
+        peers.forEach { it.startNonblocking() }
+
+        val propagationDelay = 7_000L
 
 
         delay(propagationDelay)
@@ -84,7 +85,8 @@ class ConsensusSpec {
             that(changes2[1].acceptNum).isEqualTo(1)
         }
 
-        apps.forEach { app -> app.stop() }
+        peers.forEach { it.stop() }
+
     }
 
     private val change =
