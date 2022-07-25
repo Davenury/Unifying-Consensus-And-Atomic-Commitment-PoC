@@ -1,6 +1,7 @@
 package com.example.common
 
 import kotlinx.coroutines.*
+import java.time.Duration
 import java.util.*
 
 interface ProtocolTimer {
@@ -9,12 +10,11 @@ interface ProtocolTimer {
 }
 
 class ProtocolTimerImpl(
-    private val delay: Int,
-    private val backoffBound: Long
+    private val delay: Duration,
+    private val backoffBound: Duration
 ) : ProtocolTimer {
 
     private var task: Job? = null
-    private val millisInSecond = 1000
 
     companion object {
         private val randomGenerator = Random()
@@ -23,7 +23,7 @@ class ProtocolTimerImpl(
     override suspend fun startCounting(action: suspend () -> Unit) {
         cancelCounting()
         task = GlobalScope.launch(Dispatchers.IO) {
-            delay((delay + randomGenerator.nextLong() % backoffBound) * millisInSecond)
+            delay(delay.toMillis() + randomGenerator.nextLong() % backoffBound.toMillis())
             action()
         }
     }

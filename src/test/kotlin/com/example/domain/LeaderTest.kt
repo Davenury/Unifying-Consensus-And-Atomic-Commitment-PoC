@@ -21,6 +21,7 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.containsExactlyInAnyOrder
 import strikt.assertions.isEqualTo
+import java.time.Duration
 
 class LeaderTest {
 
@@ -122,7 +123,7 @@ class LeaderTest {
     private val otherPeers = getOtherPeers(allPeers, 1, 1, 9090)
     private val consensusProtocol = DummyConsensusProtocol()
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-    private val timer = ProtocolTimerImpl(1, 1)
+    private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1))
     private val client = ProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
     private var subject =

@@ -8,13 +8,13 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
 import strikt.assertions.isEqualTo
+import java.time.Duration
 
 class ProtocolTimerSpec {
 
     @Test
     fun `should execute in timeout`(): Unit = runBlocking {
-        val delayInSeconds = 2
-        val subject = ProtocolTimerImpl(delayInSeconds, 1)
+        val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1))
 
         val list = mutableListOf<Int>()
 
@@ -27,8 +27,7 @@ class ProtocolTimerSpec {
 
     @Test
     fun `should not execute before timeout`(): Unit = runBlocking {
-        val delayInSeconds = 2
-        val subject = ProtocolTimerImpl(delayInSeconds, 1)
+        val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1))
 
         val list = mutableListOf<Int>()
 
@@ -40,8 +39,7 @@ class ProtocolTimerSpec {
 
     @Test
     fun `should be able to cancel job`(): Unit = runBlocking {
-        val delayInSeconds = 3
-        val subject = ProtocolTimerImpl(delayInSeconds, 1)
+        val subject = ProtocolTimerImpl(Duration.ofSeconds(3), Duration.ofSeconds(1))
 
         val list = mutableListOf<Int>()
 
