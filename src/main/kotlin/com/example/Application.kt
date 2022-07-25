@@ -109,10 +109,12 @@ fun getOtherPeers(
         throw IllegalStateException()
     }
 
-class Application constructor(val args: Array<String>,
-                              val additionalActions: Map<TestAddon, AdditionalAction>,
-                              val eventListeners: List<EventListener>,
-                              val configOverrides: Map<String, Any>) {
+class Application constructor(
+    val args: Array<String>,
+    val additionalActions: Map<TestAddon, AdditionalAction>,
+    val eventListeners: List<EventListener>,
+    val configOverrides: Map<String, Any>
+) {
     private val config: Config = loadConfig(configOverrides)
     private val conf: NodeIdAndPortOffset = getIdAndOffset(args, config)
     private val peerConstants: RaftConfiguration = RaftConfiguration(conf.peersetId, configOverrides)
@@ -133,7 +135,7 @@ class Application constructor(val args: Array<String>,
             val consensusProtocol = RaftConsensusProtocolImpl(
                 conf.nodeId,
                 conf.peersetId,
-                ProtocolTimerImpl(Duration.ZERO, Duration.ofSeconds(1),ctx), // TODO move to config
+                ProtocolTimerImpl(Duration.ZERO, Duration.ofSeconds(1), ctx), // TODO move to config
                 otherPeers[conf.peersetId - 1]
             )
 

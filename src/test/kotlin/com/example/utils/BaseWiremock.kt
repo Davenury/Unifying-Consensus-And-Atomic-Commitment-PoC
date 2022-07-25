@@ -31,33 +31,41 @@ abstract class BaseWiremock(
     }
 
     fun stubForNotElectingYou() {
-        wireMockServer.stubFor(post("/elect")
-            .willReturn(
-                aResponse().withStatus(422)
-            ))
+        wireMockServer.stubFor(
+            post("/elect")
+                .willReturn(
+                    aResponse().withStatus(422)
+                )
+        )
     }
 
     fun stubForAgree(ballotNumber: Int, acceptVal: Accept) {
-        wireMockServer.stubFor(post("/ft-agree")
-            .willReturn(
-                aResponse().withStatus(200)
-                    .withHeader("Content-Type", "application/json")
-                    .withBody("""{"ballotNumber":$ballotNumber,"acceptVal":"$acceptVal"}""")
-            ))
+        wireMockServer.stubFor(
+            post("/ft-agree")
+                .willReturn(
+                    aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""{"ballotNumber":$ballotNumber,"acceptVal":"$acceptVal"}""")
+                )
+        )
     }
 
     fun stubForNotAgree() {
-        wireMockServer.stubFor(post("/ft-agree")
-            .willReturn(
-                aResponse().withStatus(422)
-            ))
+        wireMockServer.stubFor(
+            post("/ft-agree")
+                .willReturn(
+                    aResponse().withStatus(422)
+                )
+        )
     }
 
     fun stubForApply() {
-        wireMockServer.stubFor(post("/apply")
-            .willReturn(
-                aResponse().withStatus(200)
-            ))
+        wireMockServer.stubFor(
+            post("/apply")
+                .willReturn(
+                    aResponse().withStatus(200)
+                )
+        )
     }
 
     fun verifyMaxRetriesForElectionPassed(maxRetries: Int) {

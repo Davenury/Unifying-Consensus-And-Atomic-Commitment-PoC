@@ -22,8 +22,7 @@ class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : His
      * Dummy implementation for simplicity of protocol. Change to correct implementation with actually building history
      * and checking if history can be built (e.g. not having conflicting changes etc.).
      * */
-    override fun canBeBuild(newChange: Change): Boolean
-        = true
+    override fun canBeBuild(newChange: Change): Boolean = true
 
     override fun getState(): History? =
         historyRaftNode.getState()

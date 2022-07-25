@@ -18,7 +18,7 @@ class ProtocolTimerSpec {
 
     @Test
     fun `should execute in timeout`(): Unit = runBlocking {
-        val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1),ctx)
+        val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1), ctx)
 
         val list = mutableListOf<Int>()
 
@@ -31,7 +31,7 @@ class ProtocolTimerSpec {
 
     @Test
     fun `should not execute before timeout`(): Unit = runBlocking {
-        val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1),ctx)
+        val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1), ctx)
 
         val list = mutableListOf<Int>()
 
@@ -43,7 +43,7 @@ class ProtocolTimerSpec {
 
     @Test
     fun `should be able to cancel job`(): Unit = runBlocking {
-        val subject = ProtocolTimerImpl(Duration.ofSeconds(3), Duration.ofSeconds(1),ctx)
+        val subject = ProtocolTimerImpl(Duration.ofSeconds(3), Duration.ofSeconds(1), ctx)
 
         val list = mutableListOf<Int>()
 

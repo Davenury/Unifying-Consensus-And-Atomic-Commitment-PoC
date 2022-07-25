@@ -7,15 +7,15 @@ import org.slf4j.LoggerFactory
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ChangeDto(val properties: Map<String, String>) {
     fun toChange(): Change =
-            (properties["operation"])?.let {
-                try {
-                    Operation.valueOf(it).toChange(this)
-                } catch (ex: IllegalArgumentException) {
-                    logger.debug("Error while creating Change class - unknown operation $it")
-                    throw UnknownOperationException(it)
-                }
+        (properties["operation"])?.let {
+            try {
+                Operation.valueOf(it).toChange(this)
+            } catch (ex: IllegalArgumentException) {
+                logger.debug("Error while creating Change class - unknown operation $it")
+                throw UnknownOperationException(it)
             }
-                    ?: throw MissingParameterException("\"operation\" value is required!")
+        }
+            ?: throw MissingParameterException("\"operation\" value is required!")
 
     companion object {
         private val logger = LoggerFactory.getLogger(ChangeDto::class.java)
@@ -25,13 +25,14 @@ data class ChangeDto(val properties: Map<String, String>) {
 @JsonIgnoreProperties(ignoreUnknown = true)
 sealed class Change(val operation: Operation) {
     abstract fun toDto(): ChangeDto
+
     companion object {
 
         fun fromJson(json: String): Change? =
-                objectMapper
-                        .readValue(json, HashMap<String, String>().javaClass)
-                        ?.let { ChangeDto(it) }
-                        ?.toChange()
+            objectMapper
+                .readValue(json, HashMap<String, String>().javaClass)
+                ?.let { ChangeDto(it) }
+                ?.toChange()
     }
 }
 
@@ -44,7 +45,7 @@ data class AddRelationChange(val from: String, val to: String) : Change(Operatio
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class DeleteRelationChange(val from: String, val to: String) :
-        Change(Operation.DELETE_RELATION) {
+    Change(Operation.DELETE_RELATION) {
     override fun toDto(): ChangeDto =
         ChangeDto(mapOf("operation" to this.operation.name, "from" to from, "to" to to))
 

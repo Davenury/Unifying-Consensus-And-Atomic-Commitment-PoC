@@ -127,7 +127,7 @@ class LeaderTest {
     private val otherPeers = getOtherPeers(allPeers, 1, 1, 9090)
     private val consensusProtocol = DummyConsensusProtocol()
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-    private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1),ctx)
+    private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)
     private val client = ProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
     private var subject =

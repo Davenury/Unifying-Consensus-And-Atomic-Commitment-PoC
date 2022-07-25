@@ -323,7 +323,8 @@ class GPACProtocolImpl(
         return responses.withIndex()
             .all { (index, value) ->
                 val positiveResponses = if (index + 1 == myPeersetId) value.size + 1 else value.size
-                val allPeers = if (index + 1 == myPeersetId) peersInTransaction[index].size + 1 else peersInTransaction[index].size
+                val allPeers =
+                    if (index + 1 == myPeersetId) peersInTransaction[index].size + 1 else peersInTransaction[index].size
                 positiveResponses > allPeers / 2F
             } && allShards
     }

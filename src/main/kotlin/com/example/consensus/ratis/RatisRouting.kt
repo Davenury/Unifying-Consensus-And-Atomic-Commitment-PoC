@@ -30,6 +30,7 @@ fun Application.ratisRouting(historyManagement: HistoryManagement) {
 data class HistoryDto(
     val changes: List<ChangeWithAcceptNumDto>
 )
+
 data class ChangeWithAcceptNumDto(
     val change: ChangeDto,
     val acceptNum: Int?
@@ -37,5 +38,6 @@ data class ChangeWithAcceptNumDto(
 
 fun ChangeWithAcceptNum.toDto() =
     ChangeWithAcceptNumDto(this.change.toDto(), acceptNum)
+
 fun History.toDto() =
     HistoryDto(changes = this.map { it.toDto() })
