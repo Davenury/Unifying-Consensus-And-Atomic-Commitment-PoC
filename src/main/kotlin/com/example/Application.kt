@@ -21,6 +21,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel
 import java.net.InetSocketAddress
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
+import java.time.Duration
 
 fun main(args: Array<String>) {
     createApplication(args).startBlocking()
@@ -121,13 +122,13 @@ class Application constructor(val args: Array<String>,
             val consensusProtocol = RaftConsensusProtocolImpl(
                 conf.nodeId,
                 conf.peersetId,
-                ProtocolTimerImpl(0, 500L),
+                ProtocolTimerImpl(Duration.ZERO, Duration.ofSeconds(1)), // TODO move to config
                 otherPeers[conf.peersetId - 1]
             )
 
             val historyManagement = RatisHistoryManagement(raftNode) //InMemoryHistoryManagement(consensusProtocol)
             val eventPublisher = EventPublisher(eventListeners)
-            val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeoutInSecs, config.protocol.backoffBound)
+            val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound)
             val protocolClient = ProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
             val gpacProtocol =
