@@ -14,7 +14,7 @@ import java.util.concurrent.Executors
 
 class ProtocolTimerSpec {
 
-    val ctx = Executors.newFixedThreadPool(2).asCoroutineDispatcher()
+    val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
 
     @Test
     fun `should execute in timeout`(): Unit = runBlocking {

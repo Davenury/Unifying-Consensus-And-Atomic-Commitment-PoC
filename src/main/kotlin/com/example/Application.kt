@@ -128,7 +128,7 @@ class Application constructor(val args: Array<String>,
 
             val nodeIdOffset: Int = otherPeers.take(conf.peersetId - 1).map { it.size }.sum()
 
-            ctx = Executors.newFixedThreadPool(2).asCoroutineDispatcher()
+            ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
 
             val consensusProtocol = RaftConsensusProtocolImpl(
                 conf.nodeId,
@@ -256,6 +256,7 @@ class Application constructor(val args: Array<String>,
         engine.stop(gracePeriodMillis, timeoutMillis)
         raftNode?.close()
     }
+
 
     fun getBoundAddress(): InetSocketAddress {
         val channelsProperty =

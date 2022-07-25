@@ -27,7 +27,7 @@ import java.util.concurrent.Executors
 
 class LeaderTest {
 
-    val ctx = Executors.newFixedThreadPool(2).asCoroutineDispatcher()
+    val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
 
     @BeforeEach
     fun setup() {
