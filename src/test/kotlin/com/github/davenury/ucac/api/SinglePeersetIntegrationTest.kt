@@ -44,7 +44,7 @@ class SinglePeersetIntegrationTest {
             override fun onSignal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>) {
                 if (signal.addon == TestAddon.BeforeSendingAgree) {
                     expectCatching {
-                        executeChange("${otherPeers[0][0]}/create_change")
+                        executeChange("http://${otherPeers[0][0]}/create_change")
                     }.isSuccess()
                 }
             }
