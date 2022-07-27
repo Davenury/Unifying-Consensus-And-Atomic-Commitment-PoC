@@ -7,12 +7,10 @@ import github.davenury.ucac.consensus.raft.domain.ConsensusSuccess
 import github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
 
 
-object DummyConsensusProtocol: ConsensusProtocol<Change, MutableList<ChangeWithAcceptNum>> {
+object DummyConsensusProtocol : ConsensusProtocol<Change, MutableList<ChangeWithAcceptNum>> {
     private var response: ConsensusResult = ConsensusSuccess
 
-    override fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult
-            = response
-
+    override fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult = response
 
 
     fun setResponse(response: ConsensusResult) {

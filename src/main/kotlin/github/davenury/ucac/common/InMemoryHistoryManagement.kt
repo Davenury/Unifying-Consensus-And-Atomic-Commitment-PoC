@@ -38,8 +38,7 @@ class InMemoryHistoryManagement(
     override fun getState(): History? =
         this.historyStorage
 
-    override fun canBeBuild(newChange: Change): Boolean
-        = true
+    override fun canBeBuild(newChange: Change): Boolean = true
 
     override fun build() {}
 

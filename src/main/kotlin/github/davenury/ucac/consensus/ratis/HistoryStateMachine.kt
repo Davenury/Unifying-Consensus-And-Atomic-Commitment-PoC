@@ -19,26 +19,26 @@ data class ChangeWithAcceptNum(val change: Change, val acceptNum: Int?) {
 }
 
 class HistoryStateMachine(override var state: History = mutableListOf()) :
-        StateMachine<History>(state) {
+    StateMachine<History>(state) {
 
     override fun serializeState(): String = objectMapper.writeValueAsString(state)
 
     override fun applyOperation(operation: String): String? =
-            try {
-                state.add(ChangeWithAcceptNum.fromJson(operation))
-                null
-            } catch (e: JsonMappingException) {
-                logger.error("Error during applyOperation ${e.message}")
-                e.message
-            }
+        try {
+            state.add(ChangeWithAcceptNum.fromJson(operation))
+            null
+        } catch (e: JsonMappingException) {
+            logger.error("Error during applyOperation ${e.message}")
+            e.message
+        }
 
     override fun queryOperation(operation: String): String =
-            try {
-                OperationType.valueOf(operation).invokeOperation(state)
-            } catch (e: java.lang.IllegalArgumentException) {
-                logger.error("Error during queryOperation: illegalArgumentException")
-                "INVALID_OPERATION"
-            }
+        try {
+            OperationType.valueOf(operation).invokeOperation(state)
+        } catch (e: java.lang.IllegalArgumentException) {
+            logger.error("Error during queryOperation: illegalArgumentException")
+            "INVALID_OPERATION"
+        }
 
     enum class OperationType {
         LAST {

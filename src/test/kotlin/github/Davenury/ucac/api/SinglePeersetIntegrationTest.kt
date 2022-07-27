@@ -177,7 +177,12 @@ class SinglePeersetIntegrationTest {
                 testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
-                    body = Apply(it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name")))
+                    body = Apply(
+                        it!!.ballotNumber,
+                        true,
+                        Accept.COMMIT,
+                        ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
+                    )
                 }.also {
                     println("Got response ${it.status.value}")
                 }
@@ -238,7 +243,7 @@ class SinglePeersetIntegrationTest {
     }
 
     private fun createPeersInRange(range: Int): List<String> =
-        List(range) { "localhost:${8081+it}" }
+        List(range) { "localhost:${8081 + it}" }
 
     private suspend fun executeChange(uri: String, change: Map<String, Any> = changeDto.properties) =
         testHttpClient.post<String>(uri) {

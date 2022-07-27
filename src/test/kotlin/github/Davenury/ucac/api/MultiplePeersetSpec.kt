@@ -453,10 +453,13 @@ class MultiplePeersetSpec {
                     testHttpClient.post<HttpResponse>(url2) {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
-                        body = Apply(it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(mapOf(
-                            "operation" to "ADD_USER",
-                            "userName" to "userName"
-                        ))
+                        body = Apply(
+                            it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(
+                                mapOf(
+                                    "operation" to "ADD_USER",
+                                    "userName" to "userName"
+                                )
+                            )
                         )
                     }.also {
                         println("Got response ${it.status.value}")
@@ -468,10 +471,13 @@ class MultiplePeersetSpec {
                     testHttpClient.post<HttpResponse>(url3) {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
-                        body = Apply(it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(mapOf(
-                            "operation" to "ADD_USER",
-                            "userName" to "userName"
-                        ))
+                        body = Apply(
+                            it!!.ballotNumber, true, Accept.COMMIT, ChangeDto(
+                                mapOf(
+                                    "operation" to "ADD_USER",
+                                    "userName" to "userName"
+                                )
+                            )
                         )
                     }.also {
                         println("Got response ${it.status.value}")

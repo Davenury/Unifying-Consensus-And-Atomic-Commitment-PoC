@@ -65,10 +65,10 @@ abstract class StateMachine<A>(open var state: A) : BaseStateMachine() {
             }
         } catch (ioe: IOException) {
             LOG.warn(
-                    "Failed to write snapshot file \"" +
-                            snapshotFile +
-                            "\", last applied index=" +
-                            last
+                "Failed to write snapshot file \"" +
+                        snapshotFile +
+                        "\", last applied index=" +
+                        last
             )
         }
 
@@ -153,7 +153,7 @@ abstract class StateMachine<A>(open var state: A) : BaseStateMachine() {
 
         // return the new value of the counter to the client
         val f: CompletableFuture<Message> =
-                CompletableFuture.completedFuture(Message.valueOf(serializeState()))
+            CompletableFuture.completedFuture(Message.valueOf(serializeState()))
 
         // if leader, log the incremented value and it's log index
         if (trx.serverRole === RaftProtos.RaftPeerRole.LEADER) {

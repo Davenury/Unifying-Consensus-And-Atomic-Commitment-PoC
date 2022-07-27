@@ -3,31 +3,35 @@ package github.davenury.ucac.infrastructure
 import github.davenury.ucac.common.ProtocolTimerImpl
 import github.davenury.ucac.utils.atLeast
 import github.davenury.ucac.utils.eventually
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
 import strikt.assertions.isEqualTo
 import java.time.Duration
+import java.util.concurrent.Executors
 
 class ProtocolTimerSpec {
 
+    val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
+
     @Test
     fun `should execute in timeout`(): Unit = runBlocking {
-        val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1))
+        val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1), ctx)
 
         val list = mutableListOf<Int>()
 
         subject.startCounting { list.add(1) }
 
-        eventually(3) {
+        eventually(4) {
             expectThat(list.size).isEqualTo(1)
         }
     }
 
     @Test
     fun `should not execute before timeout`(): Unit = runBlocking {
-        val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1))
+        val subject = ProtocolTimerImpl(Duration.ofSeconds(2), Duration.ofSeconds(1), ctx)
 
         val list = mutableListOf<Int>()
 
@@ -39,7 +43,7 @@ class ProtocolTimerSpec {
 
     @Test
     fun `should be able to cancel job`(): Unit = runBlocking {
-        val subject = ProtocolTimerImpl(Duration.ofSeconds(3), Duration.ofSeconds(1))
+        val subject = ProtocolTimerImpl(Duration.ofSeconds(3), Duration.ofSeconds(1), ctx)
 
         val list = mutableListOf<Int>()
 

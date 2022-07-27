@@ -10,7 +10,7 @@ interface TransactionBlocker {
     fun tryToBlock()
 }
 
-class TransactionBlockerImpl: TransactionBlocker {
+class TransactionBlockerImpl : TransactionBlocker {
     private val semaphore = Semaphore(1)
 
     override fun assertICanSendElectedYou() =

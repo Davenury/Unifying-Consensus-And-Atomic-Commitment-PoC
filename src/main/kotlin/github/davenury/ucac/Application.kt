@@ -18,7 +18,10 @@ import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.netty.channel.socket.nio.NioServerSocketChannel
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.asCoroutineDispatcher
 import java.time.Duration
+import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -102,15 +105,18 @@ fun getOtherPeers(
         throw IllegalStateException()
     }
 
-class Application constructor(val args: Array<String>,
-                              val additionalActions: Map<TestAddon, AdditionalAction>,
-                              val eventListeners: List<EventListener>,
-                              val configOverrides: Map<String, Any>) {
+class Application constructor(
+    args: Array<String>,
+    private val additionalActions: Map<TestAddon, AdditionalAction>,
+    private val eventListeners: List<EventListener>,
+    configOverrides: Map<String, Any>
+) {
     private val config: Config = loadConfig(configOverrides)
     private val conf: NodeIdAndPortOffset = getIdAndOffset(args, config)
     private val peerConstants: RaftConfiguration = RaftConfiguration(conf.peersetId, configOverrides)
     private val engine: NettyApplicationEngine
-    private lateinit var raftNode: HistoryRaftNode
+    private var raftNode: HistoryRaftNode? = null
+    private lateinit var ctx: ExecutorCoroutineDispatcher
 
     init {
         engine = embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
@@ -118,16 +124,21 @@ class Application constructor(val args: Array<String>,
 
             val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
 
+            val nodeIdOffset: Int = otherPeers.take(conf.peersetId - 1).map { it.size }.sum()
+
+            ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
+
             val consensusProtocol = RaftConsensusProtocolImpl(
                 conf.nodeId,
                 conf.peersetId,
-                ProtocolTimerImpl(Duration.ZERO, Duration.ofSeconds(1)), // TODO move to config
+                ProtocolTimerImpl(Duration.ZERO, Duration.ofSeconds(1), ctx), // TODO move to config
                 otherPeers[conf.peersetId - 1]
             )
 
-            val historyManagement = RatisHistoryManagement(raftNode) //InMemoryHistoryManagement(consensusProtocol)
+            val historyManagement = RatisHistoryManagement(raftNode!!)
+//            val historyManagement = InMemoryHistoryManagement(consensusProtocol)
             val eventPublisher = EventPublisher(eventListeners)
-            val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound)
+            val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = ProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
             val gpacProtocol =
@@ -258,3 +269,4 @@ class Application constructor(val args: Array<String>,
         }
     }
 }
+
