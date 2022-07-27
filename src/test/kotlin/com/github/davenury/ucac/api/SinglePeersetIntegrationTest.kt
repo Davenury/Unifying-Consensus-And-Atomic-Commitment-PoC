@@ -13,7 +13,8 @@ import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -40,10 +41,10 @@ class SinglePeersetIntegrationTest {
     fun `second leader tries to become leader before first leader goes into ft-agree phase`(): Unit = runBlocking {
 
         val eventListener = object : EventListener {
-            override fun onSignal(signal: Signal, subject: SignalSubject) {
+            override fun onSignal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>) {
                 if (signal.addon == TestAddon.BeforeSendingAgree) {
                     expectCatching {
-                        executeChange("$peer2/create_change")
+                        executeChange("${otherPeers[0][0]}/create_change")
                     }.isSuccess()
                 }
             }
@@ -58,17 +59,32 @@ class SinglePeersetIntegrationTest {
         )
 
         val apps = listOf(
-            createApplication(arrayOf("1", "1"), firstLeaderCallbacks, listOf<EventListener>(eventListener)),
-            createApplication(arrayOf("2", "1"), emptyMap()),
-            createApplication(arrayOf("3", "1"), emptyMap()),
+            createApplication(
+                arrayOf("1", "1"),
+                firstLeaderCallbacks,
+                listOf<EventListener>(eventListener),
+                mode = TestApplicationMode(
+                    1, 1
+                )
+            ),
+            createApplication(arrayOf("2", "1"), emptyMap(), mode = TestApplicationMode(
+                2, 1
+            )),
+            createApplication(arrayOf("3", "1"), emptyMap(), mode = TestApplicationMode(
+                3, 1
+            )),
         )
         apps.forEach { app -> app.startNonblocking() }
+        val peers = apps.map { "localhost:${it.getBoundPort()}" }
+        apps.forEachIndexed { index, app ->
+            app.setOtherPeers(listOf(peers - peers[index]))
+        }
 
         delay(5000)
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
         expectThrows<ServerResponseException> {
-            executeChange("$peer1/create_change")
+            executeChange("http://${peers[0]}/create_change")
         }
 
         apps.forEach { app -> app.stop() }
@@ -78,7 +94,7 @@ class SinglePeersetIntegrationTest {
     fun `first leader is already in ft-agree phase and second leader tries to execute its transaction - second should be rejected`(): Unit =
         runBlocking {
             val eventListener = object : EventListener {
-                override fun onSignal(signal: Signal, subject: SignalSubject) {
+                override fun onSignal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>) {
                     if (signal.addon == TestAddon.BeforeSendingApply) {
                         expectCatching {
                             executeChange("http://localhost:8082/create_change")

@@ -465,7 +465,7 @@ class MultiplePeersetSpec {
                         println("Got response ${it.status.value}")
                     }
                 }
-                println("Localhost 8082 sent response to apply")
+                println("peer2 sent response to apply")
                 val url3 = "$peer3/apply"
                 runBlocking {
                     testHttpClient.post<HttpResponse>(url3) {

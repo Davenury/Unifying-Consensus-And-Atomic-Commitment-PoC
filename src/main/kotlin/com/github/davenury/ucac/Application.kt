@@ -1,12 +1,14 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
 import com.github.davenury.ucac.consensus.ratis.RaftConfiguration
 import com.github.davenury.ucac.consensus.ratis.RatisHistoryManagement
 import com.github.davenury.ucac.consensus.ratis.ratisRouting
 import com.github.davenury.ucac.gpac.api.gpacProtocolRouting
+import com.github.davenury.ucac.gpac.domain.GPACProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.ProtocolClientImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
@@ -42,97 +44,37 @@ fun createApplication(
     args: Array<String>,
     additionalActions: Map<TestAddon, AdditionalAction> = emptyMap(),
     eventListeners: List<EventListener> = emptyList(),
-    configOverrides: Map<String, Any> = emptyMap()
+    configOverrides: Map<String, Any> = emptyMap(),
+    mode: ApplicationMode = LocalDevelopmentApplicationMode(args)
 ): Application {
-    return Application(args, additionalActions, eventListeners, configOverrides)
+    return Application(additionalActions, eventListeners, configOverrides, mode)
 }
-
-data class NodeIdAndPortOffset(val nodeId: Int, val portOffset: Int, val peersetId: Int)
-
-fun getIdAndOffset(args: Array<String>, config: Config): NodeIdAndPortOffset {
-
-    if (args.isNotEmpty()) {
-        val peersetId = args[1].toInt()
-        val portOffsetFromPreviousPeersets: Int =
-            config.peers.peersAddresses.foldIndexed(0) { index, acc, strings ->
-                if (index <= peersetId - 2) acc + strings.size else acc + 0
-            }
-        return NodeIdAndPortOffset(
-            nodeId = args[0].toInt(),
-            portOffset = args[0].toInt() + portOffsetFromPreviousPeersets,
-            peersetId
-        )
-    }
-
-    val peersetId =
-        System.getenv()["PEERSET_ID"]?.toInt()
-            ?: throw RuntimeException(
-                "Provide PEERSET_ID env variable to represent id of node"
-            )
-
-    val id =
-        System.getenv()["RAFT_NODE_ID"]?.toInt()
-            ?: throw RuntimeException(
-                "Provide either arg or RAFT_NODE_ID env variable to represent id of node"
-            )
-
-    return NodeIdAndPortOffset(nodeId = id, portOffset = 0, peersetId)
-}
-
-fun getOtherPeers(
-    peersAddresses: List<List<String>>,
-    peerOffset: Int,
-    peersetId: Int,
-    basePort: Int = 8080
-): List<List<String>> =
-    try {
-        peersAddresses.foldIndexed(mutableListOf()) { index, acc, strings ->
-            if (index == peersetId - 1) {
-                acc +=
-                    strings.filterNot {
-                        it.contains("peer$peerOffset") || it.contains("${basePort + peerOffset}")
-                    }
-                acc
-            } else {
-                acc += strings
-                acc
-            }
-        }
-    } catch (e: java.lang.IndexOutOfBoundsException) {
-        println(
-            "Peers addresses doesn't have enough elements in list - peers addresses length: ${peersAddresses.size}, index: ${peersetId - 1}"
-        )
-        throw IllegalStateException()
-    }
 
 class Application constructor(
-    args: Array<String>,
     private val additionalActions: Map<TestAddon, AdditionalAction>,
     private val eventListeners: List<EventListener>,
-    configOverrides: Map<String, Any>
+    configOverrides: Map<String, Any>,
+    private val mode: ApplicationMode
 ) {
     private val config: Config = loadConfig(configOverrides)
-    private val conf: NodeIdAndPortOffset = getIdAndOffset(args, config)
-    private val peerConstants: RaftConfiguration = RaftConfiguration(conf.peersetId, configOverrides)
+    private val peerConstants: RaftConfiguration = RaftConfiguration(mode.peersetId, configOverrides)
     private val engine: NettyApplicationEngine
     private var raftNode: HistoryRaftNode? = null
     private lateinit var ctx: ExecutorCoroutineDispatcher
+    private lateinit var gpacProtocol: GPACProtocol
+    private lateinit var consensusProtocol: RaftConsensusProtocol
 
     init {
-        engine = embeddedServer(Netty, port = 8080 + conf.portOffset, host = "0.0.0.0") {
-            raftNode = HistoryRaftNode(conf.nodeId, conf.peersetId, peerConstants)
-
-            val otherPeers = getOtherPeers(config.peers.peersAddresses, conf.portOffset, conf.peersetId)
-
-            val nodeIdOffset: Int = otherPeers.take(conf.peersetId - 1).map { it.size }.sum()
+        engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
+            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
             ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
 
-            val consensusProtocol = RaftConsensusProtocolImpl(
-                conf.nodeId,
-                conf.peersetId,
+            consensusProtocol = RaftConsensusProtocolImpl(
+                mode.nodeId,
+                mode.peersetId,
                 ProtocolTimerImpl(Duration.ZERO, Duration.ofSeconds(1), ctx), // TODO move to config
-                otherPeers[conf.peersetId - 1]
+                mode.otherPeers[mode.peersetId - 1]
             )
 
             val historyManagement = RatisHistoryManagement(raftNode!!)
@@ -141,18 +83,18 @@ class Application constructor(
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = ProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
-            val gpacProtocol =
+            gpacProtocol =
                 GPACProtocolImpl(
                     historyManagement,
                     config.peers.maxLeaderElectionTries,
                     timer,
                     protocolClient,
                     transactionBlocker,
-                    otherPeers,
+                    mode.otherPeers,
                     additionalActions,
                     eventPublisher,
-                    8080 + conf.portOffset,
-                    conf.peersetId
+                    mode.port,
+                    mode.peersetId
                 )
 
             install(ContentNegotiation) {
@@ -231,19 +173,30 @@ class Application constructor(
                 }
             }
 
-            commonRouting(gpacProtocol, consensusProtocol)
+            commonRouting(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
             ratisRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
             //consensusProtocolRouting(consensusProtocol)
 
-//        runBlocking {
-//            consensusProtocol.begin()
-//        }
+            if (mode !is TestApplicationMode) {
+    //        runBlocking {
+    //            startConsensusProtocol()
+    //        }
+            }
         }
+    }
+
+    fun setOtherPeers(otherPeers: List<List<String>>) {
+        gpacProtocol.setOtherPeers(otherPeers)
+        consensusProtocol.setOtherPeers(otherPeers[mode.peersetId - 1])
     }
 
     fun startBlocking() {
         engine.start(wait = true)
+    }
+
+    suspend fun startConsensusProtocol() {
+        consensusProtocol.begin()
     }
 
     fun startNonblocking() {

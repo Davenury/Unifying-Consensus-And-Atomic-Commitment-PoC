@@ -3,7 +3,6 @@ package com.github.davenury.ucac.domain
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.infrastructure.DummyConsensusProtocol
 import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
-import com.github.davenury.ucac.getOtherPeers
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.ProtocolClientImpl
@@ -16,7 +15,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
 import strikt.api.expectThrows
-import strikt.assertions.containsExactlyInAnyOrder
 import strikt.assertions.isEqualTo
 import java.time.Duration
 import java.util.concurrent.Executors
@@ -38,45 +36,6 @@ class LeaderTest {
                 me = 8080,
                 myPeersetId = 0
             )
-    }
-
-    @Test
-    fun `should load only other peers`() {
-        val nodeId = 2
-        val peersetId = 1
-
-        val allPeers = listOf(listOf("peer1:8080", "peer2:8080", "peer3:8080"))
-        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten())
-            .containsExactlyInAnyOrder("peer1:8080", "peer3:8080")
-    }
-
-    @Test
-    fun `should load only other peers - mutliple peersets`() {
-        val nodeId = 2
-        val peersetId = 1
-
-        val allPeers =
-            listOf(
-                listOf("peer1:8080", "peer2:8080", "peer3:8080"),
-                listOf("peer4:8080", "peer5:8080", "peer6:8080")
-            )
-        expectThat(getOtherPeers(allPeers, nodeId, peersetId).flatten())
-            .containsExactlyInAnyOrder(
-                "peer1:8080",
-                "peer3:8080",
-                "peer4:8080",
-                "peer5:8080",
-                "peer6:8080"
-            )
-    }
-
-    @Test
-    fun `should load only other peers - localhost version`() {
-        val nodeId = 2
-        val peersetId = 1
-
-        expectThat(getOtherPeers(allPeers, nodeId, peersetId, 9090).flatten())
-            .containsExactlyInAnyOrder("localhost:9091", "localhost:9093")
     }
 
     @Test
@@ -120,7 +79,7 @@ class LeaderTest {
     }
 
     private val allPeers = listOf(listOf("localhost:9091", "localhost:9092", "localhost:9093"))
-    private val otherPeers = getOtherPeers(allPeers, 1, 1, 9090)
+    private val otherPeers = listOf(listOf("localhost:9092", "localhost:9093"))
     private val consensusProtocol = DummyConsensusProtocol()
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
     private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)

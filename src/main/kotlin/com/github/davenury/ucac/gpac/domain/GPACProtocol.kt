@@ -16,6 +16,7 @@ interface GPACProtocol : SignalSubject {
     suspend fun performProtocolAsRecoveryLeader(change: ChangeDto)
     fun getTransaction(): Transaction
     fun getBallotNumber(): Int
+    fun setOtherPeers(otherPeers: List<List<String>>)
 }
 
 class GPACProtocolImpl(
@@ -24,7 +25,7 @@ class GPACProtocolImpl(
     private val timer: ProtocolTimer,
     private val protocolClient: ProtocolClient,
     private val transactionBlocker: TransactionBlocker,
-    private val otherPeers: List<List<String>>,
+    private var otherPeers: List<List<String>>,
     private val addons: Map<TestAddon, AdditionalAction> = emptyMap(),
     private val eventPublisher: EventPublisher = EventPublisher(emptyList()),
     private val me: Int,
@@ -306,7 +307,7 @@ class GPACProtocolImpl(
     private fun isInTransaction(index: Int) = true
 
     private suspend fun signal(addon: TestAddon, transaction: Transaction?) {
-        eventPublisher.signal(addon, this)
+        eventPublisher.signal(addon, this, otherPeers)
         addons[addon]?.invoke(transaction)
     }
 
@@ -331,5 +332,9 @@ class GPACProtocolImpl(
 
     companion object {
         private val logger = LoggerFactory.getLogger(GPACProtocolImpl::class.java)
+    }
+
+    override fun setOtherPeers(otherPeers: List<List<String>>) {
+        this.otherPeers = otherPeers
     }
 }

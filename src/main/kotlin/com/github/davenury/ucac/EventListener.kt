@@ -23,11 +23,11 @@ interface SignalSubject
 class EventPublisher(
     private val listeners: List<EventListener>
 ) {
-    fun signal(addon: TestAddon, subject: SignalSubject) {
-        listeners.forEach { it.onSignal(Signal(addon), subject) }
+    fun signal(addon: TestAddon, subject: SignalSubject, otherPeers: List<List<String>>) {
+        listeners.forEach { it.onSignal(Signal(addon), subject, otherPeers) }
     }
 }
 
 interface EventListener {
-    fun onSignal(signal: Signal, subject: SignalSubject)
+    fun onSignal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>)
 }

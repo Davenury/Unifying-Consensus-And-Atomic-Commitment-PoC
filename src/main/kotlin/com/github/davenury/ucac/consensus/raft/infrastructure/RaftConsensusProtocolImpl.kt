@@ -18,7 +18,7 @@ class RaftConsensusProtocolImpl(
     private val peerId: Int,
     private val peersetId: Int,
     private val timer: ProtocolTimer,
-    private val consensusPeers: List<String>
+    private var consensusPeers: List<String>
 ) :
     ConsensusProtocol<Change, History>,
     RaftConsensusProtocol {
@@ -103,6 +103,10 @@ class RaftConsensusProtocolImpl(
         timer.startCounting {
             // TODO: heartbeat request
         }
+    }
+
+    override fun setOtherPeers(otherPeers: List<String>) {
+        this.consensusPeers = otherPeers
     }
 
     companion object {
