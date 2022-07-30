@@ -3,6 +3,7 @@ package com.example
 import com.example.gpac.domain.Transaction
 
 typealias AdditionalAction = suspend (Transaction?) -> Unit
+typealias AdditionalActionConsensus = suspend () -> Unit
 
 enum class TestAddon {
     BeforeSendingElect,
@@ -14,6 +15,11 @@ enum class TestAddon {
     BeforeSendingApply,
     OnHandlingApplyBegin,
     OnHandlingApplyEnd
+}
+
+enum class ConsensusTestAddon {
+    BeforeSendingElect,
+    AfterProposingChange
 }
 
 data class Signal(val addon: TestAddon)

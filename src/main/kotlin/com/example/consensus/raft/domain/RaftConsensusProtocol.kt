@@ -2,6 +2,7 @@ package com.example.consensus.raft.domain
 
 import com.example.common.ChangeWithAcceptNum
 import com.example.common.ChangeWithAcceptNumDto
+import com.example.common.History
 
 interface RaftConsensusProtocol {
     suspend fun begin()
@@ -14,4 +15,7 @@ interface RaftConsensusProtocol {
     )
 
     suspend fun handleProposeChange(change: ChangeWithAcceptNum)
+    fun getLeaderAddress(): String?
+    fun getProposedChanges(): History
+    fun getAcceptedChanges(): History
 }

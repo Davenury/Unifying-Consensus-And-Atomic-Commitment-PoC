@@ -54,7 +54,7 @@ class SinglePeersetIntegrationTest {
         )
 
         val apps = listOf(
-            createApplication(arrayOf("1", "1"), firstLeaderCallbacks, listOf<EventListener>(eventListener)),
+            createApplication(arrayOf("1", "1"), firstLeaderCallbacks, eventListeners = listOf<EventListener>(eventListener)),
             createApplication(arrayOf("2", "1"), emptyMap()),
             createApplication(arrayOf("3", "1"), emptyMap()),
         )
@@ -91,7 +91,7 @@ class SinglePeersetIntegrationTest {
                 TestAddon.BeforeSendingApply to firstLeaderAction
             )
             val apps = listOf(
-                createApplication(arrayOf("1", "1"), firstLeaderCallbacks, listOf<EventListener>(eventListener)),
+                createApplication(arrayOf("1", "1"), firstLeaderCallbacks, eventListeners = listOf<EventListener>(eventListener)),
                 createApplication(arrayOf("2", "1"), emptyMap()),
                 createApplication(arrayOf("3", "1"), emptyMap()),
             )

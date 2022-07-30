@@ -34,19 +34,27 @@ fun main(args: Array<String>) {
 fun startApplication(
     args: Array<String>,
     additionalActions: Map<TestAddon, AdditionalAction> = emptyMap(),
+    consensusAdditionalActions: Map<ConsensusTestAddon, AdditionalActionConsensus> = emptyMap(),
     eventListeners: List<EventListener> = emptyList(),
     configOverrides: Map<String, Any> = emptyMap()
 ) {
-    createApplication(args, additionalActions, eventListeners, configOverrides).startBlocking()
+    createApplication(
+        args,
+        additionalActions,
+        consensusAdditionalActions,
+        eventListeners,
+        configOverrides
+    ).startBlocking()
 }
 
 fun createApplication(
     args: Array<String>,
     additionalActions: Map<TestAddon, AdditionalAction> = emptyMap(),
+    consensusAdditionalActions: Map<ConsensusTestAddon, AdditionalActionConsensus> = emptyMap(),
     eventListeners: List<EventListener> = emptyList(),
     configOverrides: Map<String, Any> = emptyMap()
 ): Application {
-    return Application(args, additionalActions, eventListeners, configOverrides)
+    return Application(args, additionalActions, consensusAdditionalActions, eventListeners, configOverrides)
 }
 
 data class NodeIdAndPortOffset(val nodeId: Int, val portOffset: Int, val peersetId: Int)
@@ -122,6 +130,7 @@ fun getOtherPeers(
 class Application constructor(
     val args: Array<String>,
     val additionalActions: Map<TestAddon, AdditionalAction>,
+    val consensusAdditionalActions: Map<ConsensusTestAddon, AdditionalActionConsensus>,
     val eventListeners: List<EventListener>,
     val configOverrides: Map<String, Any>
 ) {
@@ -146,7 +155,8 @@ class Application constructor(
                 nodeIdOffset + conf.nodeId,
                 getSelfAddress(config.peers.peersAddresses, conf.portOffset, conf.peersetId),
                 ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(2), ctx), // TODO move to config
-                otherPeers[conf.peersetId - 1]
+                otherPeers[conf.peersetId - 1],
+                consensusAdditionalActions
             )
 
 //            val historyManagement = RatisHistoryManagement(raftNode)
