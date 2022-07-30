@@ -35,14 +35,16 @@ fun main(args: Array<String>) {
 fun createApplication(
     args: Array<String>,
     signalListeners: Map<Signal, SignalListener> = emptyMap(),
+    consensusAdditionalActions: Map<ConsensusTestAddon, AdditionalActionConsensus> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
     mode: ApplicationMode = LocalDevelopmentApplicationMode(args)
 ): Application {
-    return Application(signalListeners, configOverrides, mode)
+    return Application(signalListeners,consensusAdditionalActions, configOverrides, mode)
 }
 
 class Application constructor(
     private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
+    val consensusAdditionalActions: Map<ConsensusTestAddon, AdditionalActionConsensus>,
     configOverrides: Map<String, Any>,
     private val mode: ApplicationMode
 ) {
@@ -63,8 +65,9 @@ class Application constructor(
             consensusProtocol = RaftConsensusProtocolImpl(
                 mode.nodeId,
                 mode.peersetId,
-                ProtocolTimerImpl(Duration.ZERO, Duration.ofSeconds(1), ctx), // TODO move to config
-                if (mode is TestApplicationMode) listOf() else mode.otherPeers[mode.peersetId - 1]
+                ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(2), ctx), // TODO move to config
+                if (mode is TestApplicationMode) listOf() else mode.otherPeers[mode.peersetId - 1],
+                consensusAdditionalActions
             )
 
             val historyManagement = RatisHistoryManagement(raftNode!!)

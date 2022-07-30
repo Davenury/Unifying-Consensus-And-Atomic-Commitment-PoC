@@ -19,8 +19,22 @@ import strikt.api.expectCatching
 import strikt.assertions.isEqualTo
 import strikt.assertions.isSuccess
 
+typealias LeaderAddressPortAndApplication = Triple<String, String, Application>
+
+
 @Disabled("WIP")
 class ConsensusSpec {
+
+    private val leaderElectionDelay = 7_000L
+    private val changePropagationDelay = 7_000L
+    private val peer1Address = "http://localhost:8081"
+    private val peer2Address = "http://localhost:8082"
+    private val peer3Address = "http://localhost:8083"
+    private val peer4Address = "http://localhost:8084"
+    private val peer5Address = "http://localhost:8085"
+    private val peerAddresses = listOf(peer1Address, peer2Address, peer3Address, peer4Address, peer5Address)
+    private val noneLeader = "null"
+
 
     @BeforeEach
     internal fun setUp() {
@@ -43,24 +57,19 @@ class ConsensusSpec {
         val peer4 = createApplication(arrayOf("4", "1"))
         val peer5 = createApplication(arrayOf("5", "1"))
 
-        val peers = listOf(peer1,peer2,peer3,peer4,peer5)
+        val peers = listOf(peer1, peer2, peer3, peer4, peer5)
         peers.forEach { it.startNonblocking() }
 
-        val propagationDelay = 7_000L
-
-
-        delay(propagationDelay)
-        val peer1Address = "http://localhost:8081"
-        val peer2Address = "http://localhost:8082"
+        delay(leaderElectionDelay)
 
         // when: peer1 executed change
         expectCatching {
             executeChange("$peer1Address/consensus/create_change", createChangeWithAcceptNum(null))
         }.isSuccess()
 
-        delay(propagationDelay)
+        delay(changePropagationDelay)
 
-        val changes = askForChanges("http://localhost:8083")
+        val changes = askForChanges(peer3Address)
 
         // then: there's one change and it's change we've requested
         expect {
@@ -74,9 +83,9 @@ class ConsensusSpec {
             executeChange("$peer2Address/consensus/create_change", createChangeWithAcceptNum(1))
         }.isSuccess()
 
-        delay(propagationDelay)
+        delay(changePropagationDelay)
 
-        val changes2 = askForChanges("http://localhost:8083")
+        val changes2 = askForChanges(peer3Address)
 
         // then: there are two changes
         expect {
@@ -89,7 +98,267 @@ class ConsensusSpec {
 
     }
 
-    private val change =
+    @Test
+    fun `less than half of peers response on ConsensusElectMe`(): Unit = runBlocking {
+
+        val peer1 = createApplication(arrayOf("1", "1"))
+        val peer2 = createApplication(arrayOf("2", "1"))
+
+        val peers = listOf(peer1, peer2)
+        peers.forEach { it.startNonblocking() }
+
+        delay(leaderElectionDelay)
+
+        listOf(peer1Address, peer2Address).forEach {
+            expect {
+                val leaderAddress = askForLeaderAddress(it)
+                that(leaderAddress).isEqualTo(noneLeader)
+            }
+        }
+
+        peers.forEach { it.stop() }
+    }
+
+    @Test
+    fun `leader failed and new leader is elected`(): Unit = runBlocking {
+
+        val peer1 = createApplication(arrayOf("1", "1"))
+        val peer2 = createApplication(arrayOf("2", "1"))
+        val peer3 = createApplication(arrayOf("3", "1"))
+        val peer4 = createApplication(arrayOf("4", "1"))
+        val peer5 = createApplication(arrayOf("5", "1"))
+
+        var peers = listOf(peer1, peer2, peer3, peer4, peer5)
+        peers.forEach { it.startNonblocking() }
+
+        delay(leaderElectionDelay)
+
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val firstLeaderApplication = triple.third
+        val firstLeaderPort = triple.second
+        val firstLeaderAddress = triple.first
+
+
+        firstLeaderApplication.stop(0, 0)
+
+        peers = peers.filter { it != firstLeaderApplication }
+
+        delay(leaderElectionDelay)
+
+        expect {
+
+            val secondLeaderAddress =
+                peerAddresses.filterNot { it.contains(firstLeaderPort) }.first().let { askForLeaderAddress(it) }
+            that(secondLeaderAddress).isNotEqualTo(noneLeader)
+            that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress)
+        }
+
+        peers.forEach { it.stop() }
+    }
+
+    @Test
+    fun `less than half peers failed`(): Unit = runBlocking {
+
+        val peer1 = createApplication(arrayOf("1", "1"))
+        val peer2 = createApplication(arrayOf("2", "1"))
+        val peer3 = createApplication(arrayOf("3", "1"))
+        val peer4 = createApplication(arrayOf("4", "1"))
+        val peer5 = createApplication(arrayOf("5", "1"))
+
+        var peers = listOf(peer1, peer2, peer3, peer4, peer5)
+        peers.forEach { it.startNonblocking() }
+
+        delay(leaderElectionDelay)
+
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val firstLeaderApplication = triple.third
+        val firstLeaderPort = triple.second
+        val firstLeaderAddress = triple.first
+
+        firstLeaderApplication.stop(0, 0)
+
+        peers = peers.filter { it != firstLeaderApplication }
+
+        delay(leaderElectionDelay)
+
+        expect {
+
+            val secondLeaderAddress =
+                peerAddresses.filterNot { it.contains(firstLeaderPort) }.first().let { askForLeaderAddress(it) }
+            that(secondLeaderAddress).isNotEqualTo(noneLeader)
+            that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress)
+        }
+
+        peers.forEach { it.stop() }
+    }
+
+
+    @Test
+    fun `leader fails during processing change`(): Unit = runBlocking {
+
+        val leaderAction: AdditionalActionConsensus = {
+            throw RuntimeException("Failed after proposing change")
+        }
+
+        val addons = mapOf(ConsensusTestAddon.AfterProposingChange to leaderAction)
+
+        val peer1 = createApplication(arrayOf("1", "1"), consensusAdditionalActions = addons)
+        val peer2 = createApplication(arrayOf("2", "1"), consensusAdditionalActions = addons)
+        val peer3 = createApplication(arrayOf("3", "1"), consensusAdditionalActions = addons)
+        val peer4 = createApplication(arrayOf("4", "1"), consensusAdditionalActions = addons)
+        val peer5 = createApplication(arrayOf("5", "1"), consensusAdditionalActions = addons)
+
+        var peers = listOf(peer1, peer2, peer3, peer4, peer5)
+        peers.forEach { it.startNonblocking() }
+
+        delay(leaderElectionDelay)
+
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val firstLeaderApplication = triple.third
+        val firstLeaderPort = triple.second
+        val firstLeaderAddress = triple.first
+
+
+//      Start processing
+        expectCatching {
+            executeChange("$firstLeaderAddress/consensus/create_change", createChangeWithAcceptNum(null))
+        }.isFailure()
+
+        firstLeaderApplication.stop(0, 0)
+
+        peers = peers.filter { it != firstLeaderApplication }
+
+        val runningPeers = peerAddresses.filterNot { it.contains(firstLeaderPort) }
+
+        expect {
+            val proposedChanges = askForProposedChanges(runningPeers.first())
+            val acceptedChanges = askForAcceptedChanges(runningPeers.first())
+            that(proposedChanges.size).isEqualTo(1)
+            that(proposedChanges.first().change).isEqualTo(AddUserChange("userName"))
+            that(proposedChanges.first().acceptNum).isEqualTo(null)
+            that(acceptedChanges.size).isEqualTo(0)
+
+        }
+
+        delay(leaderElectionDelay + changePropagationDelay)
+
+        expect {
+            val proposedChanges = askForProposedChanges(runningPeers.first())
+            that(proposedChanges.size).isEqualTo(0)
+            val acceptedChanges = askForAcceptedChanges(runningPeers.first())
+            that(acceptedChanges.size).isEqualTo(1)
+            that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName"))
+            that(acceptedChanges.first().acceptNum).isEqualTo(null)
+        }
+
+        peers.forEach { it.stop() }
+    }
+
+    @Test
+    fun `less than half of peers fails after electing leader`(): Unit = runBlocking {
+
+        val peer1 = createApplication(arrayOf("1", "1"))
+        val peer2 = createApplication(arrayOf("2", "1"))
+        val peer3 = createApplication(arrayOf("3", "1"))
+        val peer4 = createApplication(arrayOf("4", "1"))
+        val peer5 = createApplication(arrayOf("5", "1"))
+
+        var peers = listOf(peer1, peer2, peer3, peer4, peer5)
+        peers.forEach { it.startNonblocking() }
+
+        delay(leaderElectionDelay)
+
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val firstLeaderApplication = triple.third
+        val firstLeaderPort = triple.second
+        val firstLeaderAddress = triple.first
+
+
+        val peersToStop = peerAddresses.zip(peers).filterNot { it.first.contains(firstLeaderPort) }.take(2)
+        peersToStop.forEach { it.second.stop(0, 0) }
+        val runningPeersAddressAndApplication = peerAddresses.zip(peers).filterNot { addressAndApplication ->
+            val addressesStopped = peersToStop.map { it.first }
+            addressesStopped.contains(addressAndApplication.first)
+        }
+
+        val runningPeers = runningPeersAddressAndApplication.map { it.first }
+
+//      Start processing
+        expectCatching {
+            executeChange("${runningPeers.first()}/consensus/create_change", createChangeWithAcceptNum(null))
+        }.isSuccess()
+
+        delay(changePropagationDelay)
+
+        runningPeers.forEach {
+            expect {
+                val proposedChanges = askForProposedChanges(it)
+                val acceptedChanges = askForAcceptedChanges(it)
+                println("$it $acceptedChanges $proposedChanges")
+                that(proposedChanges.size).isEqualTo(0)
+                that(acceptedChanges.size).isEqualTo(1)
+                that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName"))
+                that(acceptedChanges.first().acceptNum).isEqualTo(null)
+            }
+
+        }
+
+        peers.forEach { it.stop() }
+    }
+
+    @Test
+    fun `more than half of peers fails during propagating change`(): Unit = runBlocking {
+
+        val peer1 = createApplication(arrayOf("1", "1"))
+        val peer2 = createApplication(arrayOf("2", "1"))
+        val peer3 = createApplication(arrayOf("3", "1"))
+        val peer4 = createApplication(arrayOf("4", "1"))
+        val peer5 = createApplication(arrayOf("5", "1"))
+
+        var peers = listOf(peer1, peer2, peer3, peer4, peer5)
+        peers.forEach { it.startNonblocking() }
+
+        delay(leaderElectionDelay)
+
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val firstLeaderApplication = triple.third
+        val firstLeaderPort = triple.second
+        val firstLeaderAddress = triple.first
+
+
+        val peersToStop = peerAddresses.zip(peers).filterNot { it.first.contains(firstLeaderPort) }.take(3)
+        peersToStop.forEach { it.second.stop(0, 0) }
+        val runningPeersAddressAndApplication = peerAddresses.zip(peers).filterNot { addressAndApplication ->
+            val addressesStopped = peersToStop.map { it.first }
+            addressesStopped.contains(addressAndApplication.first)
+        }
+
+        val runningPeers = runningPeersAddressAndApplication.map { it.first }
+
+//      Start processing
+        expectCatching {
+            executeChange("${runningPeers.first()}/consensus/create_change", createChangeWithAcceptNum(null))
+        }.isSuccess()
+
+        delay(changePropagationDelay)
+
+//      As only one peer confirm changes it should be still proposedChange
+        runningPeers.forEach {
+            expect {
+                val proposedChanges = askForProposedChanges(it)
+                val acceptedChanges = askForAcceptedChanges(it)
+                that(proposedChanges.size).isEqualTo(1)
+                that(proposedChanges.first().change).isEqualTo(AddUserChange("userName"))
+                that(proposedChanges.first().acceptNum).isEqualTo(null)
+                that(acceptedChanges.size).isEqualTo(0)
+            }
+        }
+
+        peers.forEach { it.stop() }
+    }
+
+
+    private val exampleChange =
         mapOf(
             "operation" to "ADD_USER",
             "userName" to "userName"
@@ -97,7 +366,7 @@ class ConsensusSpec {
 
 
     private fun createChangeWithAcceptNum(acceptNum: Int?) = mapOf(
-        "change" to change,
+        "change" to exampleChange,
         "acceptNum" to acceptNum
     )
 
@@ -109,14 +378,42 @@ class ConsensusSpec {
             body = requestBody
         }
 
-    private suspend fun askForChanges(peer: String) =
-        testHttpClient.get<String>("$peer/consensus/changes") {
+    private suspend fun genericAskForChange(suffix: String, peer: String): List<ChangeWithAcceptNum> =
+        testHttpClient.get<String>("$peer/consensus/$suffix") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }.let { objectMapper.readValue<HistoryDto>(it) }
             .changes.map { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
-    private val peer1 = "http://localhost:8081"
-    private val peer2 = "http://localhost:8082"
-}
 
+    private suspend fun askForChanges(peer: String) = genericAskForChange("changes", peer)
+    private suspend fun askForProposedChanges(peer: String) = genericAskForChange("proposed_changes", peer)
+    private suspend fun askForAcceptedChanges(peer: String) = genericAskForChange("accepted_changes", peer)
+
+    private suspend fun askForLeaderAddress(peer: String) =
+        testHttpClient.post<String>("$peer/consensus/leader_address") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }
+
+    private suspend fun getLeaderAddressPortAndApplication(peers: List<Application>): LeaderAddressPortAndApplication {
+        val address =
+            askForLeaderAddress(peer1Address)
+
+        expect {
+            that(address).isNotEqualTo(noneLeader)
+        }
+
+        val port = getPortFromAddress(address)
+
+        val addressAndApplication = peerAddresses.zip(peers).first { it.first.contains(port) }
+
+        val leaderAddress = addressAndApplication.first
+        val application = addressAndApplication.second
+
+        return Triple(leaderAddress, port, application)
+    }
+
+    private fun getPortFromAddress(address: String) = address.split(":")[1]
+
+}

@@ -36,6 +36,9 @@ data class Ledger(
     fun getHistory(): History =
         (acceptedItems + proposedItems).map { it.change }.toMutableList()
 
+    fun getAcceptedChanges(): History = acceptedItems.map { it.change }.toMutableList()
+    fun getProposedChanges(): History = proposedItems.map { it.change }.toMutableList()
+
     fun changeAlreadyProposed(change: ChangeWithAcceptNum): Boolean =
         (acceptedItems + proposedItems).any { it.change == change }
 

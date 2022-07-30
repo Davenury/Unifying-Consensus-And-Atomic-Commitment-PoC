@@ -12,4 +12,7 @@ interface RaftConsensusProtocol {
     )
 
     suspend fun handleProposeChange(change: ChangeWithAcceptNum)
+    fun getLeaderAddress(): String?
+    fun getProposedChanges(): History
+    fun getAcceptedChanges(): History
 }

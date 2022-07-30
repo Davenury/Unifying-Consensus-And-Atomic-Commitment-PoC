@@ -39,7 +39,16 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             val message: ConsensusProposeChange = call.receive()
             protocol.handleProposeChange(message.change.toChangeWithAcceptNum())
             call.respond("OK")
-            // TODO
+        }
+        post("/consensus/leader_address") {
+            call.respond(protocol.getLeaderAddress() ?: "null")
+        }
+//      Endpoints for tests
+        get("/consensus/proposed_changes") {
+            call.respond(protocol.getProposedChanges().toDto())
+        }
+        get("/consensus/accepted_changes") {
+            call.respond(protocol.getAcceptedChanges().toDto())
         }
     }
 }
