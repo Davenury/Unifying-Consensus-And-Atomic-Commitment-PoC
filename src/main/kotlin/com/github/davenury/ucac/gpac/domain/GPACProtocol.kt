@@ -1,9 +1,6 @@
 package com.github.davenury.ucac.gpac.domain
 
-import com.github.davenury.ucac.AdditionalAction
-import com.github.davenury.ucac.EventPublisher
-import com.github.davenury.ucac.SignalSubject
-import com.github.davenury.ucac.TestAddon
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import org.slf4j.LoggerFactory
 import kotlin.math.max
@@ -308,7 +305,7 @@ class GPACProtocolImpl(
 
     private suspend fun signal(addon: TestAddon, transaction: Transaction?) {
         eventPublisher.signal(addon, this, otherPeers)
-        addons[addon]?.invoke(transaction)
+        addons[addon]?.invoke(ProtocolTestInformation(transaction, otherPeers))
     }
 
     private fun <T> superMajority(responses: List<List<T>>): Boolean =

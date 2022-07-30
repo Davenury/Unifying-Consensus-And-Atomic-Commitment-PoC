@@ -2,7 +2,12 @@ package com.github.davenury.ucac
 
 import com.github.davenury.ucac.gpac.domain.Transaction
 
-typealias AdditionalAction = suspend (Transaction?) -> Unit
+typealias AdditionalAction = suspend (protocolTestInformation: ProtocolTestInformation) -> Unit
+
+data class ProtocolTestInformation(
+    val transaction: Transaction?,
+    val otherPeers: List<List<String>>
+)
 
 enum class TestAddon {
     BeforeSendingElect,

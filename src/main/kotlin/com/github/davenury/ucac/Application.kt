@@ -74,7 +74,7 @@ class Application constructor(
                 mode.nodeId,
                 mode.peersetId,
                 ProtocolTimerImpl(Duration.ZERO, Duration.ofSeconds(1), ctx), // TODO move to config
-                mode.otherPeers[mode.peersetId - 1]
+                if (mode is TestApplicationMode) listOf() else mode.otherPeers[mode.peersetId - 1]
             )
 
             val historyManagement = RatisHistoryManagement(raftNode!!)
