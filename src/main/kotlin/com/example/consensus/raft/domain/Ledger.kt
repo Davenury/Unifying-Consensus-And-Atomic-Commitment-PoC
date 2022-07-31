@@ -10,7 +10,9 @@ data class Ledger(
 ) {
 
     fun updateLedger(acceptedItems: List<LedgerItem>, proposedItems: List<LedgerItem>) {
-        this.acceptedItems.addAll(acceptedItems)
+
+        val newAcceptedItems = acceptedItems.filterNot { this.acceptedItems.contains(it) }
+        this.acceptedItems.addAll(newAcceptedItems)
         val acceptedIds = acceptedItems.map { it.id }
 
         this.proposedItems.removeAll { acceptedIds.contains(it.id) }
@@ -19,6 +21,7 @@ data class Ledger(
 
     fun getNewAcceptedItems(id: Int) = acceptedItems.filter { it.id > id }
     fun getNewProposedItems(id: Int) = proposedItems.filter { it.id > id }
+    fun getLastAcceptedItemId() = acceptedItems.lastOrNull()?.id ?: -1
 
     fun acceptItems(acceptedIndexes: List<Int>) {
         val newAcceptedItems = proposedItems.filter { acceptedIndexes.contains(it.id) }
@@ -26,10 +29,10 @@ data class Ledger(
         proposedItems.removeAll(newAcceptedItems)
     }
 
-    fun proposeChange(change: ChangeWithAcceptNum): Int {
+    fun proposeChange(change: ChangeWithAcceptNum, iteration: Int): Int {
         val previousId = proposedItems.lastOrNull()?.id ?: acceptedItems.lastOrNull()?.id ?: -1
         val newId = previousId + 1
-        proposedItems.add(LedgerItem(newId, change))
+        proposedItems.add(LedgerItem(newId,iteration, change))
         return newId
     }
 
@@ -44,10 +47,10 @@ data class Ledger(
 
 }
 
-data class LedgerItemDto(val id: Int, val change: ChangeWithAcceptNumDto) {
-    fun toLedgerItem(): LedgerItem = LedgerItem(id, change.toChangeWithAcceptNum())
+data class LedgerItemDto(val id: Int,val iteration: Int, val change: ChangeWithAcceptNumDto) {
+    fun toLedgerItem(): LedgerItem = LedgerItem(id,iteration, change.toChangeWithAcceptNum())
 }
 
-data class LedgerItem(val id: Int, val change: ChangeWithAcceptNum) {
-    fun toDto(): LedgerItemDto = LedgerItemDto(id, change.toDto())
+data class LedgerItem(val id: Int, val iteration: Int,  val change: ChangeWithAcceptNum) {
+    fun toDto(): LedgerItemDto = LedgerItemDto(id,iteration, change.toDto())
 }

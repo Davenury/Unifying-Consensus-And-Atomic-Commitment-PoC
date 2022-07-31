@@ -49,10 +49,10 @@ class RaftConsensusProtocolImpl(
                         ) {
                             contentType(ContentType.Application.Json)
                             accept(ContentType.Application.Json)
-                            body = ConsensusElectMe(peerId, leaderIteration)
+                            body = ConsensusElectMe(peerId, leaderIteration, state.getLastAcceptedItemId())
                         }
                     } catch (e: Exception) {
-                        logger.info("$peerId - $e")
+                        logger.info("$peerId - error $e when sending request to $peerUrl")
                         null
                     }
                 }
@@ -63,11 +63,12 @@ class RaftConsensusProtocolImpl(
 
         if (!checkHalfOfPeerSet(positiveResponses.size)) {
             leader = null
+            leaderAddress = null
             restartLeaderTimeout()
             return
         }
 
-        logger.info("$peerId - I'm the leader")
+        logger.info("$peerId - I'm the leader in iteration $leaderIteration")
 
         val leaderAffirmationReactions =
             consensusPeers.map { peerUrl ->
@@ -94,9 +95,9 @@ class RaftConsensusProtocolImpl(
         timer.startCounting { sendHeartbeat() }
     }
 
-    override suspend fun handleRequestVote(peerId: Int, iteration: Int): ConsensusElectedYou {
+    override suspend fun handleRequestVote(peerId: Int, iteration: Int, lastAcceptedId: Int): ConsensusElectedYou {
         // TODO - transaction blocker?
-        if (amILeader() || iteration <= leaderIteration) {
+        if (amILeader() || iteration <= leaderIteration || lastAcceptedId < state.getLastAcceptedItemId()) {
             return ConsensusElectedYou(this.peerId, false)
         }
 
@@ -114,13 +115,17 @@ class RaftConsensusProtocolImpl(
 
     override suspend fun handleHeartbeat(
         peerId: Int,
+        iteration: Int,
         acceptedChanges: List<LedgerItem>,
         proposedChanges: List<LedgerItem>
-    ) {
+    ): Boolean {
+
+        if (iteration < leaderIteration) return false
         logger.info("${this.peerId} - Received heartbeat with \n newAcceptedChanges: $acceptedChanges \n newProposedChanges $proposedChanges")
         state.updateLedger(acceptedChanges, proposedChanges)
 
         restartLeaderTimeout()
+        return true
     }
 
     override suspend fun handleProposeChange(change: ChangeWithAcceptNum) {
@@ -144,6 +149,7 @@ class RaftConsensusProtocolImpl(
                     accept(ContentType.Application.Json)
                     body = ConsensusHeartbeat(
                         peerId,
+                        leaderIteration,
                         newAcceptedChanges.map { it.toDto() },
                         newProposedChanges.map { it.toDto() })
                 }
@@ -182,6 +188,7 @@ class RaftConsensusProtocolImpl(
         timer.cancelCounting()
         timer.setDelay(heartbeatDue)
         timer.startCounting {
+            logger.info("$peerId - leader not send heartbeat, start try to become leader")
             sendLeaderRequest()
         }
     }
@@ -194,7 +201,7 @@ class RaftConsensusProtocolImpl(
         if (amILeader()) {
 
             if (state.changeAlreadyProposed(changeWithAcceptNum)) return ConsensusFailure
-            val id = state.proposeChange(changeWithAcceptNum)
+            val id = state.proposeChange(changeWithAcceptNum, leaderIteration)
 
             ledgerIdToVoteGranted[id] = 0
 
@@ -226,7 +233,7 @@ class RaftConsensusProtocolImpl(
         return history
     }
 
-    private fun checkHalfOfPeerSet(value: Int): Boolean = (value+1) * 2 > (consensusPeers.size + 1)
+    private fun checkHalfOfPeerSet(value: Int): Boolean = (value + 1) * 2 > (consensusPeers.size + 1)
 
     private fun amILeader(): Boolean = leader == peerId
 

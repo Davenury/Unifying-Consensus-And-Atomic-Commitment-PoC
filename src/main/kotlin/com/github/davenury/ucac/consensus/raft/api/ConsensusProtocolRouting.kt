@@ -4,6 +4,7 @@ import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusImTheLeader
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import io.ktor.application.*
+import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
@@ -14,7 +15,7 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         // głosujemy na leadera
         post("/consensus/request_vote") {
             val message: ConsensusElectMe = call.receive()
-            call.respond(protocol.handleRequestVote(message.peerId, message.leaderIteration))
+            call.respond(protocol.handleRequestVote(message.peerId, message.leaderIteration, message.lastAcceptedId))
         }
 
         // potwierdzenie że mamy leadera
@@ -26,12 +27,15 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
 
         post("/consensus/heartbeat") {
             val message: ConsensusHeartbeat = call.receive()
-            protocol.handleHeartbeat(
+            val heartbeatResult = protocol.handleHeartbeat(
                 message.peerId,
+                message.iteration,
                 message.acceptedChanges.map { it.toLedgerItem() },
-                message.proposedChanges.map { it.toLedgerItem() })
-            call.respond("OK")
-            // TODO
+                message.proposedChanges.map { it.toLedgerItem() }
+            )
+            if(heartbeatResult) call.respond("OK")
+            else call.respond(HttpStatusCode.Unauthorized, "You are not a leader - leader is ${protocol.getLeaderAddress()}")
+        // TODO
         }
 
         // kiedy nie jesteś leaderem to prosisz leadera o zmianę

@@ -52,6 +52,7 @@ class Application constructor(
     private val peerConstants: RaftConfiguration = RaftConfiguration(mode.peersetId, configOverrides)
     private val engine: NettyApplicationEngine
     private var raftNode: HistoryRaftNode? = null
+    private lateinit var consensusProtocol: RaftConsensusProtocolImpl
     private lateinit var ctx: ExecutorCoroutineDispatcher
     private lateinit var gpacProtocol: GPACProtocol
     private lateinit var consensusProtocol: RaftConsensusProtocol
