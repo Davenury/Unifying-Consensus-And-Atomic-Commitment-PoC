@@ -82,9 +82,9 @@ tasks.withType<Jar> {
 tasks {
     "test"(Test::class) {
         filter {
-            excludeTestsMatching("com.example.api.SinglePeersetIntegrationTest")
-            excludeTestsMatching("com.example.api.MultiplePeersetSpec")
-            excludeTestsMatching("com.example.consensus.ConsensusSpec")
+            excludeTestsMatching("com.github.davenury.ucac.api.SinglePeersetIntegrationTest")
+            excludeTestsMatching("com.github.davenury.ucac.api.MultiplePeersetSpec")
+            excludeTestsMatching("com.github.davenury.ucac.consensus.ConsensusSpec")
         }
     }
 }
@@ -97,8 +97,8 @@ tasks.register<Test>("singlePeersetIntegrationTest") {
     useJUnitPlatform()
 
     filter {
-        includeTestsMatching("com.example.api.SinglePeersetIntegrationTest")
-        includeTestsMatching("com.example.consensus.ConsensusSpec")
+        includeTestsMatching("com.github.davenury.ucac.api.SinglePeersetIntegrationTest")
+        includeTestsMatching("com.github.davenury.ucac.consensus.ConsensusSpec")
     }
 }
 
@@ -110,6 +110,6 @@ tasks.register<Test>("integrationTest") {
     useJUnitPlatform()
 
     filter {
-        includeTestsMatching("com.example.api.MultiplePeersetSpec")
+        includeTestsMatching("com.github.davenury.ucac.api.MultiplePeersetSpec")
     }
 }
