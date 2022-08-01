@@ -1,6 +1,8 @@
 package com.github.davenury.ucac.utils
 
 import com.github.davenury.ucac.*
+import com.github.davenury.ucac.EventListener
+import java.util.*
 import kotlin.random.Random
 
 class TestApplicationSet(
@@ -19,7 +21,8 @@ class TestApplicationSet(
         val ratisConfigOverrides = mapOf(
             "raft.server.addresses" to List(numberOfPeersets) {
                 List(numberOfPeersInPeersets[it]) { "localhost:${Random.nextInt(5000, 20000) + 11124}" }
-            }
+            },
+            "raft.clusterGroupIds" to List(numberOfPeersets) { UUID.randomUUID() }
         )
 
         // applications creation
@@ -27,7 +30,6 @@ class TestApplicationSet(
             val peersetApps = mutableListOf<Application>()
             repeat(numberOfPeersInPeersets[peersetId]) { peerId ->
                 val absoluteIndex = apps.flatten().size + peerId + 1
-                println(absoluteIndex)
                 peersetApps.add(
                     createApplication(
                         arrayOf("${peerId + 1}", "${peersetId + 1}"),

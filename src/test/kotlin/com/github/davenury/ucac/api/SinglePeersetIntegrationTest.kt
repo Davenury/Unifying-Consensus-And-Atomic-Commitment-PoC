@@ -2,6 +2,7 @@ package com.github.davenury.ucac.api
 
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.davenury.ucac.*
+import com.github.davenury.ucac.EventListener
 import com.github.davenury.ucac.common.AddGroupChange
 import com.github.davenury.ucac.common.AddUserChange
 import com.github.davenury.ucac.common.ChangeDto
@@ -29,6 +30,7 @@ import strikt.assertions.isFailure
 import strikt.assertions.isGreaterThanOrEqualTo
 import strikt.assertions.isSuccess
 import java.io.File
+import java.util.*
 import kotlin.random.Random
 
 class SinglePeersetIntegrationTest {
@@ -82,7 +84,8 @@ class SinglePeersetIntegrationTest {
         runBlocking {
             val numberOfApps = 3
             val ratisPorts = List(numberOfApps) { Random.nextInt(10000, 20000) + it }
-            val configOverrides = mapOf("raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" }))
+            val configOverrides = mapOf("raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" }),
+                "raft.clusterGroupIds" to listOf(UUID.randomUUID()))
 
             val eventListener = object : EventListener {
                 override fun onSignal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>) {
@@ -127,7 +130,6 @@ class SinglePeersetIntegrationTest {
             apps.forEachIndexed { index, app ->
                 app.setOtherPeers(listOf(peers - peers[index]))
             }
-            apps.forEach { it.startConsensusProtocol() }
 
             delay(5000)
 
@@ -143,7 +145,8 @@ class SinglePeersetIntegrationTest {
         runBlocking {
             val numberOfApps = 3
             val ratisPorts = List(numberOfApps) { Random.nextInt(10000, 20000) + it }
-            val configOverrides = mapOf("raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" }))
+            val configOverrides = mapOf("raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" }),
+                "raft.clusterGroupIds" to listOf(UUID.randomUUID()))
 
             val firstLeaderAction: suspend (ProtocolTestInformation) -> Unit = {
                 val url = "http://${it.otherPeers[0][0]}/ft-agree"
@@ -169,7 +172,6 @@ class SinglePeersetIntegrationTest {
             apps.forEachIndexed { index, app ->
                 app.setOtherPeers(listOf(peers - peers[index]))
             }
-            apps.forEach { it.startConsensusProtocol() }
 
             // application will start
             delay(5000)
@@ -206,7 +208,8 @@ class SinglePeersetIntegrationTest {
 
         val configOverrides = mapOf<String, Any>(
             "peers.peersAddresses" to listOf(createPeersInRange(numberOfApps)),
-            "raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" })
+            "raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" }),
+            "raft.clusterGroupIds" to listOf(UUID.randomUUID())
         )
 
         val firstLeaderAction: suspend (ProtocolTestInformation) -> Unit = {
@@ -244,7 +247,6 @@ class SinglePeersetIntegrationTest {
         apps.forEachIndexed { index, app ->
             app.setOtherPeers(listOf(peers - peers[index]))
         }
-        apps.forEach { it.startConsensusProtocol() }
 
         // application will start
         delay(5000)

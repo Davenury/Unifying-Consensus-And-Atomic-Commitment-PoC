@@ -27,6 +27,7 @@ import strikt.assertions.isA
 import strikt.assertions.isEqualTo
 import strikt.assertions.isGreaterThanOrEqualTo
 import java.io.File
+import java.util.*
 import kotlin.random.Random
 
 class MultiplePeersetSpec {
@@ -43,7 +44,8 @@ class MultiplePeersetSpec {
         val ratisPorts = List(numberOfApps) { Random.nextInt(10000, 20000) + it }
 
         val configOverrides = mapOf<String, Any>(
-            "raft.server.addresses" to ratisPorts.chunked(3).map { it.map { "localhost:${it + 11124}" } }
+            "raft.server.addresses" to ratisPorts.chunked(3).map { it.map { "localhost:${it + 11124}" } },
+            "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
         )
 
         // given - applications
@@ -118,7 +120,8 @@ class MultiplePeersetSpec {
         val ratisPorts = List(numberOfApps) { Random.nextInt(10000, 20000) + it }
 
         val configOverrides = mapOf<String, Any>(
-            "raft.server.addresses" to ratisPorts.chunked(3).map { it.map { "localhost:${it + 11124}" } }
+            "raft.server.addresses" to ratisPorts.chunked(3).map { it.map { "localhost:${it + 11124}" } },
+            "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
         )
 
         // given - applications
@@ -172,7 +175,8 @@ class MultiplePeersetSpec {
         val configOverrides = mapOf(
             "raft.server.addresses" to listOf(
                 List(3) { "localhost:${Random.nextInt(5000, 10000) + 11124}" },
-                List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" })
+                List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" }),
+            "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
         )
 
         // given - applications
@@ -247,7 +251,8 @@ class MultiplePeersetSpec {
         val configOverrides = mapOf(
             "raft.server.addresses" to listOf(
                 List(3) { "localhost:${Random.nextInt(5000, 10000) + 11124}" },
-                List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" })
+                List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" }),
+            "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
         )
 
         // given - applications
@@ -337,7 +342,8 @@ class MultiplePeersetSpec {
             val configOverrides = mapOf(
                 "raft.server.addresses" to listOf(
                     List(3) { "localhost:${Random.nextInt(5000, 10000) + 11124}" },
-                    List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" })
+                    List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" }),
+                "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
             )
 
             val failAction: suspend (ProtocolTestInformation) -> Unit = {
@@ -438,7 +444,8 @@ class MultiplePeersetSpec {
         val configOverrides = mapOf(
             "raft.server.addresses" to listOf(
                 List(3) { "localhost:${Random.nextInt(5000, 10000) + 11124}" },
-                List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" })
+                List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" }),
+            "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
         )
 
         val failAction: suspend (ProtocolTestInformation) -> Unit = {
@@ -540,7 +547,8 @@ class MultiplePeersetSpec {
             val configOverrides = mapOf(
                 "raft.server.addresses" to listOf(
                     List(3) { "localhost:${Random.nextInt(5000, 10000) + 11124}" },
-                    List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" })
+                    List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" }),
+                "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
             )
 
             val leaderAction: suspend (ProtocolTestInformation) -> Unit = {
