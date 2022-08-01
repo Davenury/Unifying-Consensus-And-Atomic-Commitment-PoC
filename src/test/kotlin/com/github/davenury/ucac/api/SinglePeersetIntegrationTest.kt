@@ -9,6 +9,7 @@ import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
 import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNumDto
 import com.github.davenury.ucac.consensus.ratis.HistoryDto
 import com.github.davenury.ucac.gpac.domain.*
+import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -41,10 +42,6 @@ class SinglePeersetIntegrationTest {
     @Test
     fun `second leader tries to become leader before first leader goes into ft-agree phase`(): Unit = runBlocking {
 
-        val numberOfApps = 3
-        val ratisPorts = List(numberOfApps) { Random.nextInt(10000, 20000) + it }
-        val configOverrides = mapOf("raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" }))
-
         val eventListener = object : EventListener {
             override fun onSignal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>) {
                 if (signal.addon == TestAddon.BeforeSendingAgree) {
@@ -63,42 +60,21 @@ class SinglePeersetIntegrationTest {
             TestAddon.BeforeSendingAgree to firstLeaderAction
         )
 
-        val apps = listOf(
-            createApplication(
-                arrayOf("1", "1"),
-                firstLeaderCallbacks,
-                listOf<EventListener>(eventListener),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(
-                    1, 1
-                )
-            ),
-            createApplication(
-                arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(
-                    2, 1
-                )
-            ),
-            createApplication(
-                arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(
-                    3, 1
-                )
-            ),
+        val apps = TestApplicationSet(
+            1, listOf(3),
+            actions = mapOf(1 to firstLeaderCallbacks),
+            eventListeners = mapOf(1 to listOf<EventListener>(eventListener))
         )
-        apps.forEach { app -> app.startNonblocking() }
-        val peers = apps.map { "localhost:${it.getBoundPort()}" }
-        apps.forEachIndexed { index, app ->
-            app.setOtherPeers(listOf(peers - peers[index]))
-        }
-        apps.forEach { it.startConsensusProtocol() }
+        val peers = apps.getPeers()
 
         delay(5000)
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0]}/create_change")
+            executeChange("http://${peers[0][0]}/create_change")
         }
 
-        apps.forEach { app -> app.stop() }
+        apps.stopApps()
     }
 
     @Test

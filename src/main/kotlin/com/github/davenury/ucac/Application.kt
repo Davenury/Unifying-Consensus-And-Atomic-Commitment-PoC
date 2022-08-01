@@ -221,5 +221,7 @@ class Application constructor(
             channelsProperty.isAccessible = oldAccessible
         }
     }
+
+    fun getPeersetId() = mode.peersetId
 }
 
