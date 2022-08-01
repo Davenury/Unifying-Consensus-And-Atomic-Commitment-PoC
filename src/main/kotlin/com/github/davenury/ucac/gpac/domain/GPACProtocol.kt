@@ -1,9 +1,6 @@
 package com.github.davenury.ucac.gpac.domain
 
-import com.github.davenury.ucac.AdditionalAction
-import com.github.davenury.ucac.EventPublisher
-import com.github.davenury.ucac.SignalSubject
-import com.github.davenury.ucac.TestAddon
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import org.slf4j.LoggerFactory
 import kotlin.math.max
@@ -16,6 +13,7 @@ interface GPACProtocol : SignalSubject {
     suspend fun performProtocolAsRecoveryLeader(change: ChangeDto)
     fun getTransaction(): Transaction
     fun getBallotNumber(): Int
+    fun setOtherPeers(otherPeers: List<List<String>>)
 }
 
 class GPACProtocolImpl(
@@ -24,7 +22,7 @@ class GPACProtocolImpl(
     private val timer: ProtocolTimer,
     private val protocolClient: ProtocolClient,
     private val transactionBlocker: TransactionBlocker,
-    private val otherPeers: List<List<String>>,
+    private var otherPeers: List<List<String>>,
     private val addons: Map<TestAddon, AdditionalAction> = emptyMap(),
     private val eventPublisher: EventPublisher = EventPublisher(emptyList()),
     private val me: Int,
@@ -306,8 +304,8 @@ class GPACProtocolImpl(
     private fun isInTransaction(index: Int) = true
 
     private suspend fun signal(addon: TestAddon, transaction: Transaction?) {
-        eventPublisher.signal(addon, this)
-        addons[addon]?.invoke(transaction)
+        eventPublisher.signal(addon, this, otherPeers)
+        addons[addon]?.invoke(ProtocolTestInformation(transaction, otherPeers))
     }
 
     private fun <T> superMajority(responses: List<List<T>>): Boolean =
@@ -331,5 +329,9 @@ class GPACProtocolImpl(
 
     companion object {
         private val logger = LoggerFactory.getLogger(GPACProtocolImpl::class.java)
+    }
+
+    override fun setOtherPeers(otherPeers: List<List<String>>) {
+        this.otherPeers = otherPeers
     }
 }

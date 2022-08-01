@@ -2,7 +2,12 @@ package com.github.davenury.ucac
 
 import com.github.davenury.ucac.gpac.domain.Transaction
 
-typealias AdditionalAction = suspend (Transaction?) -> Unit
+typealias AdditionalAction = suspend (protocolTestInformation: ProtocolTestInformation) -> Unit
+
+data class ProtocolTestInformation(
+    val transaction: Transaction?,
+    val otherPeers: List<List<String>>
+)
 
 enum class TestAddon {
     BeforeSendingElect,
@@ -23,11 +28,11 @@ interface SignalSubject
 class EventPublisher(
     private val listeners: List<EventListener>
 ) {
-    fun signal(addon: TestAddon, subject: SignalSubject) {
-        listeners.forEach { it.onSignal(Signal(addon), subject) }
+    fun signal(addon: TestAddon, subject: SignalSubject, otherPeers: List<List<String>>) {
+        listeners.forEach { it.onSignal(Signal(addon), subject, otherPeers) }
     }
 }
 
 interface EventListener {
-    fun onSignal(signal: Signal, subject: SignalSubject)
+    fun onSignal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>)
 }
