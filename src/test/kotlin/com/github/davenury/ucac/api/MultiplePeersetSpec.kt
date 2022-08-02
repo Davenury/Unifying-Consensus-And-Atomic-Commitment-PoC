@@ -16,9 +16,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.io.FileUtils
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.fail
+import org.junit.jupiter.api.*
 import strikt.api.expect
 import strikt.api.expectThat
 import strikt.api.expectThrows
@@ -63,8 +61,6 @@ class MultiplePeersetSpec {
             val filteredPeers = peers.map { peerset -> peerset.filter { it != "localhost:${application.getBoundPort()}" } }
             application.setOtherPeers(filteredPeers)
         }
-
-        delay(5000)
 
         // when - executing transaction
         executeChange("http://${peers[0][0]}/create_change")
@@ -145,19 +141,16 @@ class MultiplePeersetSpec {
         // val app5 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "2"), emptyMap()) }
         // val app6 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "2"), emptyMap()) }
 
-        delay(5000)
-
         // when - executing transaction
         try {
             executeChange("http://${peers[0][0]}/create_change")
             fail("Exception not thrown")
         } catch (e: Exception) {
-            expectThat(e).isA<ServerResponseException>()
-            expectThat(e.message!!).contains("Transaction failed due to too many retries of becoming a leader.")
+            expect {
+                that(e).isA<ServerResponseException>()
+                that(e.message!!).contains("Transaction failed due to too many retries of becoming a leader.")
+            }
         }
-
-        // we need to wait for timeout from peers of second peerset
-        delay(15000)
 
         // then - transaction should not be executed
         askForChanges("http://${peers[0][2]}")
@@ -170,6 +163,7 @@ class MultiplePeersetSpec {
         apps.forEach { app -> app.stop() }
     }
 
+    @Disabled("Servers are not able to stop here")
     @Test
     fun `transaction should not pass when more than half peers of any peerset aren't responding`(): Unit = runBlocking {
         val configOverrides = mapOf(
@@ -243,7 +237,7 @@ class MultiplePeersetSpec {
                 }
             }
 
-        apps.forEach { app -> app.stop(0, 0) }
+        apps.forEach { app -> app.stop() }
     }
 
     @Test
@@ -308,13 +302,8 @@ class MultiplePeersetSpec {
             application.setOtherPeers(filteredPeers)
         }
 
-        delay(5000)
-
         // when - executing transaction
         executeChange("http://${peers[0][0]}/create_change")
-
-        // we need to wait for timeout from peers of second peerset
-        delay(10000)
 
         // then - transaction should be executed in every peerset
         askForChanges("http://${peers[0][1]}")
@@ -346,7 +335,7 @@ class MultiplePeersetSpec {
                 "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
             )
 
-            val failAction: suspend (ProtocolTestInformation) -> Unit = {
+            val failAction: AdditionalAction = {
                 throw RuntimeException()
             }
 
@@ -448,7 +437,7 @@ class MultiplePeersetSpec {
             "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
         )
 
-        val failAction: suspend (ProtocolTestInformation) -> Unit = {
+        val failAction: AdditionalAction = {
             throw RuntimeException()
         }
 
@@ -551,7 +540,7 @@ class MultiplePeersetSpec {
                 "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
             )
 
-            val leaderAction: suspend (ProtocolTestInformation) -> Unit = {
+            val leaderAction: AdditionalAction = {
                 val url2 = "${it.otherPeers[0][0]}/apply"
                 runBlocking {
                     testHttpClient.post<HttpResponse>(url2) {
