@@ -133,7 +133,6 @@ class SinglePeersetIntegrationTest {
             }
 
             phaser.arriveAndAwaitAdvance()
-
             val response = testHttpClient.get<String>("http://${peers[0][2]}/change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
