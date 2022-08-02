@@ -82,10 +82,6 @@ class SinglePeersetIntegrationTest {
     @Test
     fun `first leader is already in ft-agree phase and second leader tries to execute its transaction - second should be rejected`(): Unit =
         runBlocking {
-            val numberOfApps = 3
-            val ratisPorts = List(numberOfApps) { Random.nextInt(10000, 20000) + it }
-            val configOverrides = mapOf("raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" }),
-                "raft.clusterGroupIds" to listOf(UUID.randomUUID()))
 
             val eventListener = object : EventListener {
                 override fun onSignal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>) {
@@ -104,49 +100,24 @@ class SinglePeersetIntegrationTest {
             val firstLeaderCallbacks: Map<TestAddon, suspend (ProtocolTestInformation) -> Unit> = mapOf(
                 TestAddon.BeforeSendingApply to firstLeaderAction
             )
-            val apps = listOf(
-                createApplication(
-                    arrayOf("1", "1"),
-                    firstLeaderCallbacks,
-                    listOf<EventListener>(eventListener),
-                    configOverrides = configOverrides,
-                    mode = TestApplicationMode(
-                        1, 1
-                    )
-                ),
-                createApplication(
-                    arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(
-                        2, 1
-                    )
-                ),
-                createApplication(
-                    arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(
-                        3, 1
-                    )
-                ),
+            val apps = TestApplicationSet(1, listOf(3),
+                actions = mapOf(1 to firstLeaderCallbacks),
+                eventListeners = mapOf(1 to listOf(eventListener))
             )
-            apps.forEach { app -> app.startNonblocking() }
-            val peers = apps.map { "localhost:${it.getBoundPort()}" }
-            apps.forEachIndexed { index, app ->
-                app.setOtherPeers(listOf(peers - peers[index]))
-            }
+            val peers = apps.getPeers()
 
             delay(5000)
 
             expectCatching {
-                executeChange("http://${peers[0]}/create_change")
+                executeChange("http://${peers[0][0]}/create_change")
             }.isSuccess()
 
-            apps.forEach { app -> app.stop() }
+            apps.stopApps()
         }
 
     @Test
     fun `should be able to execute transaction even if leader fails after first ft-agree`() {
         runBlocking {
-            val numberOfApps = 3
-            val ratisPorts = List(numberOfApps) { Random.nextInt(10000, 20000) + it }
-            val configOverrides = mapOf("raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" }),
-                "raft.clusterGroupIds" to listOf(UUID.randomUUID()))
 
             val firstLeaderAction: suspend (ProtocolTestInformation) -> Unit = {
                 val url = "http://${it.otherPeers[0][0]}/ft-agree"
@@ -162,32 +133,26 @@ class SinglePeersetIntegrationTest {
             val firstLeaderCallbacks: Map<TestAddon, suspend (ProtocolTestInformation) -> Unit> = mapOf(
                 TestAddon.BeforeSendingAgree to firstLeaderAction
             )
-            val apps = listOf(
-                createApplication(arrayOf("1", "1"), firstLeaderCallbacks, configOverrides = configOverrides, mode = TestApplicationMode(1, 1)),
-                createApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(2, 1)),
-                createApplication(arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(3, 1)),
+            val apps = TestApplicationSet(1, listOf(3),
+                actions = mapOf(1 to firstLeaderCallbacks)
             )
-            apps.forEach { app -> app.startNonblocking() }
-            val peers = apps.map { "localhost:${it.getBoundPort()}" }
-            apps.forEachIndexed { index, app ->
-                app.setOtherPeers(listOf(peers - peers[index]))
-            }
+            val peers = apps.getPeers()
 
             // application will start
             delay(5000)
 
             // change that will cause leader to fall according to action
             try {
-                executeChange("http://${peers[0]}/create_change")
-                fail("Didn't work")
+                executeChange("http://${peers[0][0]}/create_change")
+                fail("Change passed")
             } catch (e: Exception) {
                 println("Leader 1 fails: $e")
             }
 
             // leader timeout is 3 seconds for integration tests
-            delay(7000)
+            delay(9000)
 
-            val response = testHttpClient.get<String>("http://${peers[2]}/change") {
+            val response = testHttpClient.get<String>("http://${peers[0][2]}/change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }
@@ -197,19 +162,14 @@ class SinglePeersetIntegrationTest {
             }
             expectThat(change.change).isEqualTo(AddUserChange("userName"))
 
-            apps.forEach { app -> app.stop() }
+            apps.stopApps()
         }
     }
 
     @Test
     fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
-        val numberOfApps = 5
-        val ratisPorts = List(numberOfApps) { Random.nextInt(10000, 20000) + it }
-
         val configOverrides = mapOf<String, Any>(
-            "peers.peersAddresses" to listOf(createPeersInRange(numberOfApps)),
-            "raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" }),
-            "raft.clusterGroupIds" to listOf(UUID.randomUUID())
+            "peers.peersAddresses" to listOf(createPeersInRange(5)),
         )
 
         val firstLeaderAction: suspend (ProtocolTestInformation) -> Unit = {
@@ -235,25 +195,19 @@ class SinglePeersetIntegrationTest {
             TestAddon.BeforeSendingApply to firstLeaderAction
         )
 
-        val apps = listOf(
-            createApplication(arrayOf("1", "1"), firstLeaderCallbacks, configOverrides = configOverrides, mode = TestApplicationMode(1, 1)),
-            createApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(2, 1)),
-            createApplication(arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(3, 1)),
-            createApplication(arrayOf("4", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(4, 1)),
-            createApplication(arrayOf("5", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(5, 1)),
+        val apps = TestApplicationSet(1, listOf(5),
+            actions = mapOf(1 to firstLeaderCallbacks),
+            configOverrides = configOverrides
         )
-        apps.forEach { app -> app.startNonblocking() }
-        val peers = apps.map { "localhost:${it.getBoundPort()}" }
-        apps.forEachIndexed { index, app ->
-            app.setOtherPeers(listOf(peers - peers[index]))
-        }
+        val peers = apps.getPeers()
 
         // application will start
         delay(5000)
 
         // change that will cause leader to fall according to action
         try {
-            executeChange("http://${peers[0]}/create_change", mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
+            executeChange("http://${peers[0][0]}/create_change", mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
+            fail("Change passed")
         } catch (e: Exception) {
             println("Leader 1 fails: $e")
         }
@@ -261,7 +215,7 @@ class SinglePeersetIntegrationTest {
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
         delay(7000)
 
-        val response = testHttpClient.get<String>("http://${peers[3]}/change") {
+        val response = testHttpClient.get<String>("http://${peers[0][3]}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -270,13 +224,10 @@ class SinglePeersetIntegrationTest {
         expectThat(change.change.toChange()).isEqualTo(AddGroupChange("name"))
 
         // and should not execute this change couple of times
-        val response2 = testHttpClient.get<String>("http://${peers[1]}/changes") {
+        val response2 = testHttpClient.get<String>("http://${peers[0][1]}/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
-
-        apps.forEach { app -> app.stop() }
-
         val values: List<ChangeWithAcceptNum> = objectMapper.readValue<HistoryDto>(response2).changes.map {
             ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)
         }
@@ -285,6 +236,8 @@ class SinglePeersetIntegrationTest {
             that(values.size).isGreaterThanOrEqualTo(1)
             that(values[0]).isEqualTo(ChangeWithAcceptNum(AddGroupChange("name"), 1))
         }
+
+        apps.stopApps()
     }
 
     private fun createPeersInRange(range: Int): List<String> =

@@ -9,6 +9,7 @@ import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNumDto
 import com.github.davenury.ucac.consensus.ratis.HistoryDto
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.Apply
+import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -40,29 +41,8 @@ class MultiplePeersetSpec {
 
     @Test
     fun `should execute transaction in every peer from every of two peersets`(): Unit = runBlocking {
-        val numberOfApps = 6
-        val ratisPorts = List(numberOfApps) { Random.nextInt(10000, 20000) + it }
-
-        val configOverrides = mapOf<String, Any>(
-            "raft.server.addresses" to ratisPorts.chunked(3).map { it.map { "localhost:${it + 11124}" } },
-            "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
-        )
-
-        // given - applications
-        val apps = listOf(
-            createApplication(arrayOf("1", "1"), emptyMap(), mode = TestApplicationMode(1, 1), configOverrides = configOverrides),
-            createApplication(arrayOf("2", "1"), emptyMap(), mode = TestApplicationMode(2, 1), configOverrides = configOverrides),
-            createApplication(arrayOf("3", "1"), emptyMap(), mode = TestApplicationMode(3, 1), configOverrides = configOverrides),
-            createApplication(arrayOf("1", "2"), emptyMap(), mode = TestApplicationMode(1, 2), configOverrides = configOverrides),
-            createApplication(arrayOf("2", "2"), emptyMap(), mode = TestApplicationMode(2, 2), configOverrides = configOverrides),
-            createApplication(arrayOf("3", "2"), emptyMap(), mode = TestApplicationMode(3, 2), configOverrides = configOverrides),
-        )
-        apps.forEach { app -> app.startNonblocking() }
-        val peers = apps.chunked(3).map { it.map { "localhost:${it.getBoundPort()}" } }
-        apps.forEachIndexed { index, application ->
-            val filteredPeers = peers.map { peerset -> peerset.filter { it != "localhost:${application.getBoundPort()}" } }
-            application.setOtherPeers(filteredPeers)
-        }
+        val apps = TestApplicationSet(2, listOf(3, 3))
+        val peers = apps.getPeers()
 
         delay(5000)
 
@@ -110,40 +90,14 @@ class MultiplePeersetSpec {
                 }
             }
 
-        apps.forEach { app -> app.stop() }
+        apps.stopApps()
     }
 
     @Test
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
 
-        val numberOfApps = 6
-        val ratisPorts = List(numberOfApps) { Random.nextInt(10000, 20000) + it }
-
-        val configOverrides = mapOf<String, Any>(
-            "raft.server.addresses" to ratisPorts.chunked(3).map { it.map { "localhost:${it + 11124}" } },
-            "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
-        )
-
-        // given - applications
-        val apps = listOf(
-            createApplication(arrayOf("1", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(1, 1)),
-            createApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(2, 1)),
-            createApplication(arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(3, 1))
-        )
-        apps.forEach { app -> app.startNonblocking() }
-        val peers = apps.chunked(3).map { it.map { "localhost:${it.getBoundPort()}" } }.toMutableList()
-
-        //since we're not starting application, we need to assure that addresses of those unstarted applications will be set
-        peers.add(listOf("localhost:8084", "localhost:8085", "localhost:8086"))
-        apps.forEachIndexed { index, application ->
-            val filteredPeers = peers.map { peerset -> peerset.filter { it != "localhost:${application.getBoundPort()}" } }
-            application.setOtherPeers(filteredPeers)
-        }
-
-        // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-        // val app4 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("1", "2"), emptyMap()) }
-        // val app5 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "2"), emptyMap()) }
-        // val app6 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "2"), emptyMap()) }
+        val apps = TestApplicationSet(2, listOf(3, 3), appsToExclude = listOf(4, 5, 6))
+        val peers = apps.getPeers()
 
         delay(5000)
 
@@ -167,60 +121,15 @@ class MultiplePeersetSpec {
                 }
             }
 
-        apps.forEach { app -> app.stop() }
+        apps.stopApps()
     }
 
     @Test
     fun `transaction should not pass when more than half peers of any peerset aren't responding`(): Unit = runBlocking {
-        val configOverrides = mapOf(
-            "raft.server.addresses" to listOf(
-                List(3) { "localhost:${Random.nextInt(5000, 10000) + 11124}" },
-                List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" }),
-            "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
-        )
 
-        // given - applications
-        val app1 = createApplication(
-            arrayOf("1", "1"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(1, 1)
-        )
-        val app2 = createApplication(
-            arrayOf("2", "1"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(2, 1)
-        )
-        //val app3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1"), emptyMap()) }
-
-        // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-        val app4 = createApplication(
-            arrayOf("1", "2"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(1, 2)
-        )
-        val app5 = createApplication(
-            arrayOf("2", "2"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(2, 2)
-        )
-
-        val apps = listOf(app1, app2, app4, app5)
-        apps.forEach { app -> app.startNonblocking() }
-        val peers = apps.chunked(2).map { it.map { "localhost:${it.getBoundPort()}" } }.toMutableList().map { it.toMutableList() }
-        peers[0].add("localhost:8083")
-        peers[1].addAll(listOf("localhost:8086", "localhost:8087", "localhost:8088"))
-        apps.forEachIndexed { index, application ->
-            val filteredPeers = peers.map { peerset -> peerset.filter { it != "localhost:${application.getBoundPort()}" } }
-            application.setOtherPeers(filteredPeers)
-        }
-
-        // val app6 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "2"), emptyMap()) }
-        // val app7 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "2"), emptyMap()) }
-        // val app8 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("5", "2"), emptyMap()) }
+        val appsToExclude = listOf(3, 6, 7, 8)
+        val apps = TestApplicationSet(2, listOf(3, 5), appsToExclude = appsToExclude)
+        val peers = apps.getPeers()
 
         delay(5000)
 
@@ -243,70 +152,14 @@ class MultiplePeersetSpec {
                 }
             }
 
-        apps.forEach { app -> app.stop(0, 0) }
+        apps.stopApps()
     }
 
     @Test
     fun `transaction should pass when more than half peers of all peersets are operative`(): Unit = runBlocking {
-        val configOverrides = mapOf(
-            "raft.server.addresses" to listOf(
-                List(3) { "localhost:${Random.nextInt(5000, 10000) + 11124}" },
-                List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" }),
-            "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
-        )
-
-        // given - applications
-        val app1 = createApplication(
-            arrayOf("1", "1"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(1, 1)
-        )
-        val app2 = createApplication(
-            arrayOf("2", "1"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(2, 1)
-        )
-        //val app3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1"), emptyMap()) }
-
-        // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-        val app4 = createApplication(
-            arrayOf("1", "2"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(1, 2)
-        )
-        val app5 = createApplication(
-            arrayOf("2", "2"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(2, 2)
-        )
-        val app6 = createApplication(
-            arrayOf("3", "2"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(3, 2)
-        )
-        // val app7 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "2"), emptyMap()) }
-        // val app8 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("5", "2"), emptyMap()) }
-        val apps = listOf(app1, app2, app4, app5, app6)
-        apps.forEach { app -> app.startNonblocking() }
-        val peers =
-            apps.asSequence()
-                .withIndex()
-                .groupBy{ it.index < 2 }
-                .values
-                .map { it.map { it.value } }
-                .map { it.map { "localhost:${it.getBoundPort()}" } }.toMutableList().map { it.toMutableList() }
-                .toList()
-        peers[0].add("localhost:8083")
-        peers[1].addAll(listOf("localhost:8087", "localhost:8088"))
-        apps.forEachIndexed { index, application ->
-            val filteredPeers = peers.map { peerset -> peerset.filter { it != "localhost:${application.getBoundPort()}" } }
-            application.setOtherPeers(filteredPeers)
-        }
+        val appsToExclude = listOf(3, 7, 8)
+        val apps = TestApplicationSet(2, listOf(3, 5), appsToExclude = appsToExclude)
+        val peers = apps.getPeers()
 
         delay(5000)
 
@@ -333,88 +186,27 @@ class MultiplePeersetSpec {
                 }
             }
 
-        apps.forEach { app -> app.stop() }
+        apps.stopApps()
     }
 
     @Test
     fun `transaction should not be processed if every peer from one peerset fails after ft-agree`(): Unit =
         runBlocking {
-            val configOverrides = mapOf(
-                "raft.server.addresses" to listOf(
-                    List(3) { "localhost:${Random.nextInt(5000, 10000) + 11124}" },
-                    List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" }),
-                "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
-            )
 
             val failAction: suspend (ProtocolTestInformation) -> Unit = {
                 throw RuntimeException()
             }
-
-            // given - applications
-            val app1 = createApplication(
-                arrayOf("1", "1"),
-                emptyMap(),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(1, 1)
+            val apps = TestApplicationSet(
+                2, listOf(3, 5),
+                actions = mapOf(
+                    4 to mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                    5 to mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                    6 to mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                    7 to mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                    8 to mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                )
             )
-            val app2 = createApplication(
-                arrayOf("2", "1"),
-                emptyMap(),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(2, 1)
-            )
-            val app3 = createApplication(
-                arrayOf("3", "1"),
-                emptyMap(),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(3, 1)
-            )
-
-            // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-            val app4 = createApplication(
-                arrayOf("1", "2"),
-                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(1, 2)
-            )
-            val app5 = createApplication(
-                arrayOf("2", "2"),
-                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(2, 2)
-            )
-            val app6 = createApplication(
-                arrayOf("3", "2"),
-                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(3, 2)
-            )
-            val app7 = createApplication(
-                arrayOf("4", "2"),
-                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(4, 2)
-            )
-            val app8 = createApplication(
-                arrayOf("5", "2"),
-                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(5, 2)
-            )
-            val apps = listOf(app1, app2, app3, app4, app5, app6, app7, app8)
-            apps.forEach { app -> app.startNonblocking() }
-            val peers =
-                apps.asSequence()
-                    .withIndex()
-                    .groupBy{ it.index < 3 }
-                    .values
-                    .map { it.map { it.value } }
-                    .map { it.map { "localhost:${it.getBoundPort()}" } }.toMutableList().map { it.toMutableList() }
-                    .toList()
-            apps.forEachIndexed { index, application ->
-                val filteredPeers = peers.map { peerset -> peerset.filter { it != "localhost:${application.getBoundPort()}" } }
-                application.setOtherPeers(filteredPeers)
-            }
+            val peers = apps.getPeers()
 
             delay(5000)
 
@@ -436,87 +228,21 @@ class MultiplePeersetSpec {
                     }
             }
 
-            apps.forEach { app -> app.stop() }
+            apps.stopApps()
         }
 
     @Test
     fun `transaction should be processed if leader fails after ft-agree`(): Unit = runBlocking {
-        val configOverrides = mapOf(
-            "raft.server.addresses" to listOf(
-                List(3) { "localhost:${Random.nextInt(5000, 10000) + 11124}" },
-                List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" }),
-            "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
-        )
 
         val failAction: suspend (ProtocolTestInformation) -> Unit = {
             throw RuntimeException()
         }
 
-        // given - applications
-        val app1 = createApplication(
-            arrayOf("1", "1"),
-            mapOf(TestAddon.BeforeSendingApply to failAction),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(1, 1)
+        val apps = TestApplicationSet(
+            2, listOf(3, 5),
+            actions = mapOf(1 to mapOf(TestAddon.BeforeSendingApply to failAction))
         )
-        val app2 = createApplication(
-            arrayOf("2", "1"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(2, 1)
-        )
-        val app3 = createApplication(
-            arrayOf("3", "1"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(3, 1)
-        )
-
-        // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-        val app4 = createApplication(
-            arrayOf("1", "2"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(1, 2)
-        )
-        val app5 = createApplication(
-            arrayOf("2", "2"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(2, 2)
-        )
-        val app6 = createApplication(
-            arrayOf("3", "2"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(3, 2)
-        )
-        val app7 = createApplication(
-            arrayOf("4", "2"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(4, 2)
-        )
-        val app8 = createApplication(
-            arrayOf("5", "2"),
-            emptyMap(),
-            configOverrides = configOverrides,
-            mode = TestApplicationMode(5, 2)
-        )
-        val apps = listOf(app1, app2, app3, app4, app5, app6, app7, app8)
-        apps.forEach { app -> app.startNonblocking() }
-        val peers =
-            apps.asSequence()
-                .withIndex()
-                .groupBy{ it.index < 3 }
-                .values
-                .map { it.map { it.value } }
-                .map { it.map { "localhost:${it.getBoundPort()}" } }.toMutableList().map { it.toMutableList() }
-                .toList()
-        apps.forEachIndexed { index, application ->
-            val filteredPeers = peers.map { peerset -> peerset.filter { it != "localhost:${application.getBoundPort()}" } }
-            application.setOtherPeers(filteredPeers)
-        }
+        val peers = apps.getPeers()
 
         delay(5000)
 
@@ -538,18 +264,12 @@ class MultiplePeersetSpec {
                 }
         }
 
-        apps.forEach { app -> app.stop() }
+        apps.stopApps()
     }
 
     @Test
     fun `transaction should be processed and should be processed only once when one peerset applies its change and the other not`(): Unit =
         runBlocking {
-            val configOverrides = mapOf(
-                "raft.server.addresses" to listOf(
-                    List(3) { "localhost:${Random.nextInt(5000, 10000) + 11124}" },
-                    List(5) { "localhost:${Random.nextInt(10001, 20000) + 11134}" }),
-                "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
-            )
 
             val leaderAction: suspend (ProtocolTestInformation) -> Unit = {
                 val url2 = "${it.otherPeers[0][0]}/apply"
@@ -591,71 +311,11 @@ class MultiplePeersetSpec {
                 throw RuntimeException()
             }
 
-            // given - applications
-            val app1 = createApplication(
-                arrayOf("1", "1"),
-                mapOf(TestAddon.BeforeSendingApply to leaderAction),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(1, 1)
+            val apps = TestApplicationSet(
+                2, listOf(3, 5),
+                actions = mapOf(1 to mapOf(TestAddon.BeforeSendingApply to leaderAction))
             )
-            val app2 = createApplication(
-                arrayOf("2", "1"),
-                emptyMap(),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(2, 1)
-            )
-            val app3 = createApplication(
-                arrayOf("3", "1"),
-                emptyMap(),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(3, 1)
-            )
-
-            // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
-            val app4 = createApplication(
-                arrayOf("1", "2"),
-                emptyMap(),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(1, 2)
-            )
-            val app5 = createApplication(
-                arrayOf("2", "2"),
-                emptyMap(),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(2, 2)
-            )
-            val app6 = createApplication(
-                arrayOf("3", "2"),
-                emptyMap(),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(3, 2)
-            )
-            val app7 = createApplication(
-                arrayOf("4", "2"),
-                emptyMap(),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(4, 2)
-            )
-            val app8 = createApplication(
-                arrayOf("5", "2"),
-                emptyMap(),
-                configOverrides = configOverrides,
-                mode = TestApplicationMode(5, 2)
-            )
-            val apps = listOf(app1, app2, app3, app4, app5, app6, app7, app8)
-            apps.forEach { app -> app.startNonblocking() }
-            val peers =
-                apps.asSequence()
-                    .withIndex()
-                    .groupBy{ it.index < 3 }
-                    .values
-                    .map { it.map { it.value } }
-                    .map { it.map { "localhost:${it.getBoundPort()}" } }.toMutableList().map { it.toMutableList() }
-                    .toList()
-            apps.forEachIndexed { index, application ->
-                val filteredPeers = peers.map { peerset -> peerset.filter { it != "localhost:${application.getBoundPort()}" } }
-                application.setOtherPeers(filteredPeers)
-            }
+            val peers = apps.getPeers()
 
             delay(5000)
 
@@ -677,7 +337,7 @@ class MultiplePeersetSpec {
                     }
             }
 
-            apps.forEach { app -> app.stop() }
+            apps.stopApps()
         }
 
 
