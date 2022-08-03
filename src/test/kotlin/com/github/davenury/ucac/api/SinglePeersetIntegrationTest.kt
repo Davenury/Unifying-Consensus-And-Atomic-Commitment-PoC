@@ -15,6 +15,7 @@ import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.fail
+import org.slf4j.LoggerFactory
 import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
@@ -27,7 +28,11 @@ import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 
+@Suppress("HttpUrlsUsage")
 class SinglePeersetIntegrationTest {
+    companion object {
+        private val log = LoggerFactory.getLogger(SinglePeersetIntegrationTest::class.java)!!
+    }
 
     @BeforeEach
     fun setup() {
@@ -122,7 +127,7 @@ class SinglePeersetIntegrationTest {
                 executeChange("http://${peers[0][0]}/create_change")
                 fail("Change passed")
             } catch (e: Exception) {
-                println("Leader 1 fails: $e")
+                log.info("Leader 1 fails: $e")
             }
 
             phaser.arriveAndAwaitAdvance()
@@ -161,7 +166,7 @@ class SinglePeersetIntegrationTest {
                         ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
                     )
                 }.also {
-                    println("Got response ${it.status.value}")
+                    log.info("Got response ${it.status.value}")
                 }
             }
             throw RuntimeException()
@@ -191,7 +196,7 @@ class SinglePeersetIntegrationTest {
             executeChange("http://${peers[0][0]}/create_change", mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
             fail("Change passed")
         } catch (e: Exception) {
-            println("Leader 1 fails: $e")
+            log.info("Leader 1 fails: $e")
         }
 
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction

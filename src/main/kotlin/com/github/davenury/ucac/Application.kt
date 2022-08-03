@@ -67,6 +67,7 @@ class Application constructor(
 
             consensusProtocol = RaftConsensusProtocolImpl(
                 mode.nodeId,
+                mode.peersetId,
                 mode.host,
                 ctx,
                 mode.otherPeers.getOrElse(mode.peersetId) { listOf() },
@@ -91,8 +92,8 @@ class Application constructor(
                     transactionBlocker,
                     mode.otherPeers,
                     signalPublisher,
-                    mode.port,
-                    mode.peersetId
+                    mode.peersetId,
+                    mode.nodeId,
                 )
 
             install(ContentNegotiation) {

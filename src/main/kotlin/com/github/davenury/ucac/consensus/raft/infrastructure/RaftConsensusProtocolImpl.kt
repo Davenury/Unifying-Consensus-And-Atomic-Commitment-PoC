@@ -13,6 +13,7 @@ import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 /** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
     private val peerId: Int,
+    private val peersetId: Int,
     private var peerAddress: String,
     private val ctx: ExecutorCoroutineDispatcher,
     private var consensusPeers: List<String>,
@@ -34,6 +35,8 @@ class RaftConsensusProtocolImpl(
         logger.info("$peerId - Start raft on address $peerAddress, other peers: $consensusPeers")
         timer.startCounting { sendLeaderRequest() }
     }
+
+    override fun getPeerName() = "peerset${peersetId}/peer${peerId}"
 
     override fun setOtherPeers(otherPeers: List<String>) {
         logger.info("$peerId - Peers: $otherPeers \n old: $consensusPeers")

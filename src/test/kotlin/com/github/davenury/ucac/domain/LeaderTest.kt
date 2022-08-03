@@ -32,8 +32,8 @@ class LeaderTest {
                 client,
                 transactionBlocker,
                 otherPeers,
-                me = 8080,
-                myPeersetId = 0
+                myPeersetId = 0,
+                myNodeId = 0,
             )
     }
 
@@ -92,8 +92,8 @@ class LeaderTest {
             client,
             transactionBlocker,
             otherPeers,
-            me = 8080,
-            myPeersetId = 0
+            myPeersetId = 0,
+            myNodeId = 0,
         )
     private val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"))
 }
