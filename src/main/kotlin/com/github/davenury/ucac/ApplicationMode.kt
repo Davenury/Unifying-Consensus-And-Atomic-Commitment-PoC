@@ -120,6 +120,31 @@ class LocalDevelopmentApplicationMode(
             )
             throw IllegalStateException()
         }
+}
+
+object KubernetesApplicationMode: ApplicationMode() {
+    override val port: Int
+        get() = TODO("Not yet implemented")
+    override val host: String
+        get() = TODO("Not yet implemented")
+    override val peersetId: Int
+        get() = TODO("Not yet implemented")
+    override val otherPeers: List<List<String>>
+        get() = TODO("Not yet implemented")
+    override val nodeId: Int
+        get() = TODO("Not yet implemented")
+}
+
+fun determineApplicationMode(args: Array<String>): ApplicationMode {
+
+    val config = loadConfig()
+    if (config.applicationEnv == "docker_compose") {
+        return DockerComposeApplicationMode
+    }
+    if (System.getenv("application_environment") == "k8s") {
+        return KubernetesApplicationMode
+    }
+    return LocalDevelopmentApplicationMode(args)
 
     companion object {
         private val logger = LoggerFactory.getLogger(LocalDevelopmentApplicationMode::class.java)

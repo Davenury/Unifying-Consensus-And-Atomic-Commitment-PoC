@@ -6,7 +6,7 @@ import com.sksamuel.hoplite.MapPropertySource
 import com.sksamuel.hoplite.addResourceSource
 import java.time.Duration
 
-data class Config(val raft: RaftConfig, val peers: PeersConfig, val protocol: ProtocolConfig)
+data class Config(val raft: RaftConfig, val peers: PeersConfig, val protocol: ProtocolConfig, val applicationEnv: String?)
 data class PeersConfig(val peersAddresses: List<List<String>>, val maxLeaderElectionTries: Int)
 data class RaftConfig(
     val server: ServerConfig,

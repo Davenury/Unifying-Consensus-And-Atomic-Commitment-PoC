@@ -38,7 +38,7 @@ fun createApplication(
     args: Array<String>,
     signalListeners: Map<Signal, SignalListener> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
-    mode: ApplicationMode = LocalDevelopmentApplicationMode(args)
+    mode: ApplicationMode = determineApplicationMode(args)
 ): Application {
     return Application(signalListeners, configOverrides, mode)
 }
@@ -57,6 +57,7 @@ class Application constructor(
     private lateinit var gpacProtocol: GPACProtocol
 
     init {
+
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
 //            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
