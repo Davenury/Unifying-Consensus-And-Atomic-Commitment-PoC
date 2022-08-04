@@ -12,6 +12,9 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import org.slf4j.LoggerFactory
 import java.security.MessageDigest
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.micrometer.prometheus.PrometheusConfig
+import io.micrometer.prometheus.PrometheusMeterRegistry
 
 val objectMapper: ObjectMapper =
     jacksonObjectMapper().configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
@@ -37,3 +40,5 @@ fun sha512(string: String): String {
     val digest = md.digest(string.toByteArray(Charsets.UTF_8))
     return digest.joinToString(separator = "") { eachByte -> "%02x".format(eachByte) }
 }
+
+val meterRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)

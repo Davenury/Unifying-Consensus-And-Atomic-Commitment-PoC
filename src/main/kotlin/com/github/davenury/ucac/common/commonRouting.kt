@@ -2,6 +2,7 @@ package com.github.davenury.ucac.common
 
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
+import com.github.davenury.ucac.meterRegistry
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
@@ -12,6 +13,8 @@ fun Application.commonRouting(
     gpacProtocol: GPACProtocol,
     consensusProtocol: ConsensusProtocol<Change, History>,
 ) {
+
+    val counter = meterRegistry.counter("test_counter")
 
     routing {
 
@@ -27,12 +30,17 @@ fun Application.commonRouting(
             consensusProtocol.proposeChange(change.toChange(), properties["acceptNum"] as Int?)
             call.respond(HttpStatusCode.OK)
         }
-
+        
         get("/consensus/changes") {
             call.respond(consensusProtocol.getState()?.toDto() ?: listOf<ChangeWithAcceptNumDto>())
         }
         get("/consensus/change") {
             call.respond(consensusProtocol.getState()?.lastOrNull()?.toDto() ?: HttpStatusCode.BadRequest)
+        }
+
+        post("/bump/counter") {
+            counter.increment()
+            call.respond(HttpStatusCode.OK)
         }
     }
 

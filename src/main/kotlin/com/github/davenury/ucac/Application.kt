@@ -183,6 +183,8 @@ class Application constructor(
                 }
             }
 
+            metaRouting()
+
             commonRouting(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
             historyManagementRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
