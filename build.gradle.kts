@@ -46,7 +46,9 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1")
 
+    // metrics
     implementation("io.micrometer:micrometer-registry-prometheus:1.9.2")
+    implementation("io.ktor:ktor-metrics-micrometer:$ktor_version")
 
     implementation("org.apache.ratis:ratis:$ratis_version")
     implementation("org.apache.ratis:ratis-proto:$ratis_version")

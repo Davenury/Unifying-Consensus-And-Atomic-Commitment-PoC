@@ -19,9 +19,13 @@ import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
+import io.ktor.metrics.micrometer.*
 import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
+import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
+import io.micrometer.core.instrument.binder.system.ProcessorMetrics
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -102,6 +106,15 @@ class Application constructor(
 
             install(ContentNegotiation) {
                 register(ContentType.Application.Json, JacksonConverter(objectMapper))
+            }
+
+            install(MicrometerMetrics) {
+                registry = meterRegistry
+                meterBinders = listOf(
+                    JvmMemoryMetrics(),
+                    JvmGcMetrics(),
+                    ProcessorMetrics()
+                )
             }
 
 
