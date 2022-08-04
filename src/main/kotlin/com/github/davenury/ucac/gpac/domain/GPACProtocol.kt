@@ -20,7 +20,7 @@ class GPACProtocolImpl(
     private val historyManagement: HistoryManagement,
     private val maxLeaderElectionTries: Int,
     private val timer: ProtocolTimer,
-    private val protocolClient: ProtocolClient,
+    private val protocolClient: GPACProtocolClient,
     private val transactionBlocker: TransactionBlocker,
     private var otherPeers: List<List<String>>,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),

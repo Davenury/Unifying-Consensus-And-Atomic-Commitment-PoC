@@ -69,13 +69,16 @@ class Application constructor(
                 ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(2), ctx), // TODO move to config
                 if (mode is TestApplicationMode) listOf() else mode.otherPeers[mode.peersetId - 1],
                 consensusAdditionalActions
+                otherPeers[conf.peersetId - 1],
+                consensusAdditionalActions,
+                RaftProtocolClientImpl()
             )
 
             val historyManagement = RatisHistoryManagement(raftNode!!)
 //            val historyManagement = InMemoryHistoryManagement(consensusProtocol)
             val signalPublisher = SignalPublisher(signalListeners)
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
-            val protocolClient = ProtocolClientImpl()
+            val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
             gpacProtocol =
                 GPACProtocolImpl(

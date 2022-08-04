@@ -18,7 +18,7 @@ class GPACProtocolSpec {
     private val consensusProtocol = DummyConsensusProtocol()
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
     private val timerMock = mockk<ProtocolTimer>()
-    private val protocolClientMock = mockk<ProtocolClient>()
+    private val protocolClientMock = mockk<GPACProtocolClient>()
     private val transactionBlockerMock = mockk<TransactionBlocker>()
     private var subject = GPACProtocolImpl(
         historyManagement,

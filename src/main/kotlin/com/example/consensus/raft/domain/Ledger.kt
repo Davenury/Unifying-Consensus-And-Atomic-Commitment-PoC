@@ -15,8 +15,10 @@ data class Ledger(
         this.acceptedItems.addAll(newAcceptedItems)
         val acceptedIds = acceptedItems.map { it.id }
 
+
         this.proposedItems.removeAll { acceptedIds.contains(it.id) }
         this.proposedItems.addAll(proposedItems)
+
     }
 
     fun getNewAcceptedItems(id: Int) = acceptedItems.filter { it.id > id }

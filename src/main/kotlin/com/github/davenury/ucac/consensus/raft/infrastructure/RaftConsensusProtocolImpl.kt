@@ -18,13 +18,13 @@ class RaftConsensusProtocolImpl(
     private val peerId: Int,
     private val peerAddress: String,
     private val timer: ProtocolTimer,
-    private var consensusPeers: List<String>,
-    private val addons: Map<ConsensusTestAddon, AdditionalActionConsensus> = emptyMap()
-) :
-    ConsensusProtocol<Change, History>,
-    RaftConsensusProtocol {
+    private val consensusPeers: List<String>,
+    private val addons: Map<ConsensusTestAddon, AdditionalActionConsensus> = emptyMap(),
+    private val protocolClient: RaftProtocolClient,
+) : ConsensusProtocol<Change, History>, RaftConsensusProtocol {
 
     private var leaderIteration: Int = 0
+    private val semaphore: Semaphore = Semaphore(1)
     private val voteGranted: Map<PeerId, ConsensusPeer> = mutableMapOf()
     private val peerUrlToLastPeerIndexes: MutableMap<String, PeerIndexes> = mutableMapOf()
     private val ledgerIdToVoteGranted: MutableMap<Int, Int> = mutableMapOf()
@@ -38,28 +38,19 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun sendLeaderRequest() {
+        logger.info("Peer $peerId try to become leader in iteration $leaderIteration")
         leaderIteration += 1
         leader = peerId
-        val responses =
-            consensusPeers
-                .mapNotNull { peerUrl ->
-                    try {
-                        httpClient.post<ConsensusElectedYou>(
-                            "http://$peerUrl/consensus/request_vote"
-                        ) {
-                            contentType(ContentType.Application.Json)
-                            accept(ContentType.Application.Json)
-                            body = ConsensusElectMe(peerId, leaderIteration, state.getLastAcceptedItemId())
-                        }
-                    } catch (e: Exception) {
-                        logger.info("$peerId - error $e when sending request to $peerUrl")
-                        null
-                    }
-                }
+
+        val responses = protocolClient.sendConsensusElectMe(
+            consensusPeers,
+            ConsensusElectMe(peerId, leaderIteration, state.getLastAcceptedItemId())
+        )
+
 
         logger.info("Responses from leader request for $peerId: $responses in iteration $leaderIteration")
 
-        val positiveResponses = responses.filter { it.voteGranted }
+        val positiveResponses = responses.filterNotNull().filter { it.voteGranted }
 
         if (!checkHalfOfPeerSet(positiveResponses.size)) {
             leader = null
@@ -71,27 +62,18 @@ class RaftConsensusProtocolImpl(
         logger.info("$peerId - I'm the leader in iteration $leaderIteration")
 
         val leaderAffirmationReactions =
-            consensusPeers.map { peerUrl ->
-                try {
-                    httpClient
-                        .post<String>("http://$peerUrl/consensus/leader") {
-                            contentType(ContentType.Application.Json)
-                            accept(ContentType.Application.Json)
-                            body = ConsensusImTheLeader(peerId, peerAddress, leaderIteration)
-                        }
-                        .let { "$it from $peerUrl" }
-                } catch (e: Exception) {
-                    "$peerId - $e"
-                }
-            }
+            protocolClient.sendConsensusImTheLeader(
+                consensusPeers,
+                ConsensusImTheLeader(peerId, peerAddress, leaderIteration)
+            )
+
 
         logger.info("Affirmations responses: $leaderAffirmationReactions")
 
         leaderAddress = peerAddress
 
         // TODO - schedule heartbeat sending by leader
-        val halfDelay: Duration = heartbeatDue.dividedBy(4)
-        timer.setDelay(halfDelay)
+        timer.setDelay(leaderTimeout)
         timer.startCounting { sendHeartbeat() }
     }
 
@@ -101,6 +83,7 @@ class RaftConsensusProtocolImpl(
             return ConsensusElectedYou(this.peerId, false)
         }
 
+        println("HandleRequestVote ${this.peerId} from $peerId $iteration")
         leaderIteration = iteration
         restartLeaderTimeout()
         return ConsensusElectedYou(this.peerId, true)
@@ -120,8 +103,9 @@ class RaftConsensusProtocolImpl(
         proposedChanges: List<LedgerItem>
     ): Boolean {
 
+        logger.info("HandleHeartbeat in ${this.peerId} from $peerId $iteration $leaderIteration - true leader is $leader")
         if (iteration < leaderIteration) return false
-        logger.info("${this.peerId} - Received heartbeat with \n newAcceptedChanges: $acceptedChanges \n newProposedChanges $proposedChanges")
+        logger.info("${this.peerId} - Received heartbeat from $peerId with \n newAcceptedChanges: $acceptedChanges \n newProposedChanges $proposedChanges")
         state.updateLedger(acceptedChanges, proposedChanges)
 
         restartLeaderTimeout()
@@ -138,57 +122,72 @@ class RaftConsensusProtocolImpl(
 
 
     private suspend fun sendHeartbeat() {
-        consensusPeers.map { peerUrl ->
-            try {
-                val peerIndexes = peerUrlToLastPeerIndexes.getOrDefault(peerUrl, PeerIndexes(-1, -1))
-                val newAcceptedChanges = state.getNewAcceptedItems(peerIndexes.acceptedIndex)
-                val newProposedChanges = state.getNewProposedItems(peerIndexes.acknowledgedIndex)
+        logger.info("SendHeartbeat from $peerId in $leaderIteration to peers: $consensusPeers")
+        val iteration = leaderIteration
+        val start = System.nanoTime()
+        val peersWithMessage = consensusPeers.map { peerUrl ->
+            val peerIndexes = peerUrlToLastPeerIndexes.getOrDefault(peerUrl, PeerIndexes(-1, -1))
+            val newAcceptedChanges = state.getNewAcceptedItems(peerIndexes.acceptedIndex)
+            val newProposedChanges = state.getNewProposedItems(peerIndexes.acknowledgedIndex)
 
-                val response = httpClient.post<String>("http://$peerUrl/consensus/heartbeat") {
-                    contentType(ContentType.Application.Json)
-                    accept(ContentType.Application.Json)
-                    body = ConsensusHeartbeat(
-                        peerId,
-                        leaderIteration,
-                        newAcceptedChanges.map { it.toDto() },
-                        newProposedChanges.map { it.toDto() })
-                }
+            val message = ConsensusHeartbeat(
+                peerId,
+                iteration,
+                newAcceptedChanges.map { it.toDto() },
+                newProposedChanges.map { it.toDto() })
 
-                if (newProposedChanges.isNotEmpty()) {
-                    newProposedChanges.forEach {
-                        ledgerIdToVoteGranted[it.id] =
-                            ledgerIdToVoteGranted.getOrDefault(it.id, 0) + 1
-                    }
-                    peerUrlToLastPeerIndexes[peerUrl] =
-                        peerIndexes.copy(acknowledgedIndex = newProposedChanges.last().id)
-                }
-                if (newAcceptedChanges.isNotEmpty()) {
-                    val previousAcceptedIndex = peerUrlToLastPeerIndexes.getOrDefault(peerUrl, PeerIndexes(-1, -1))
-                    val newAcceptedIndex: Int =
-                        newAcceptedChanges.lastOrNull()?.id ?: previousAcceptedIndex.acceptedIndex
-                    peerUrlToLastPeerIndexes[peerUrl] = peerIndexes.copy(acceptedIndex = newAcceptedIndex)
-                }
-
-            } catch (e: Exception) {
-                logger.warn("$peerId - $e")
-            }
+            Pair(peerUrl, message)
         }
+        val responses = protocolClient.sendConsensusHeartbeat(peersWithMessage)
+        val result: List<Boolean> = consensusPeers.zip(responses)
+            .filter{it.second != null}
+            .map { pair ->
+
+            val peerUrl = pair.first
+            val peerIndexes = peerUrlToLastPeerIndexes.getOrDefault(peerUrl, PeerIndexes(-1, -1))
+            val newAcceptedChanges = state.getNewAcceptedItems(peerIndexes.acceptedIndex)
+            val newProposedChanges = state.getNewProposedItems(peerIndexes.acknowledgedIndex)
+
+            if (newProposedChanges.isNotEmpty()) {
+                newProposedChanges.forEach {
+                    ledgerIdToVoteGranted[it.id] =
+                        ledgerIdToVoteGranted.getOrDefault(it.id, 0) + 1
+                }
+                peerUrlToLastPeerIndexes[peerUrl] =
+                    peerIndexes.copy(acknowledgedIndex = newProposedChanges.last().id)
+            }
+            if (newAcceptedChanges.isNotEmpty()) {
+                val previousAcceptedIndex = peerUrlToLastPeerIndexes.getOrDefault(peerUrl, PeerIndexes(-1, -1))
+                val newAcceptedIndex: Int =
+                    newAcceptedChanges.lastOrNull()?.id ?: previousAcceptedIndex.acceptedIndex
+                peerUrlToLastPeerIndexes[peerUrl] = peerIndexes.copy(acceptedIndex = newAcceptedIndex)
+            }
+            pair.second!!.accepted
+        }
+
+        val time = Duration.ofNanos(System.nanoTime() - start)
+        println("Heartbeat by $peerId took ${time.toMillis()} millis")
         val acceptedIndexes: List<Int> = ledgerIdToVoteGranted
             .filter { (key, value) ->
                 checkHalfOfPeerSet(value)
             }
             .map { it.key }
 
+        logger.info("$peerId accept indexes: $acceptedIndexes")
         state.acceptItems(acceptedIndexes)
 
-        timer.startCounting { sendHeartbeat() }
+        if (result.all { it }) timer.startCounting { sendHeartbeat() }
+        else timer.startCounting {
+            logger.info("$peerId - some peer increase iteration try to become leader")
+            sendLeaderRequest()
+        }
     }
 
     private suspend fun restartLeaderTimeout() {
         timer.cancelCounting()
-        timer.setDelay(heartbeatDue)
+        timer.setDelay(if (leader == null) leaderTimeout else heartbeatDue)
         timer.startCounting {
-            logger.info("$peerId - leader not send heartbeat, start try to become leader")
+            logger.info("$peerId - leader $leaderAddress doesn't send heartbeat, start try to become leader")
             sendLeaderRequest()
         }
     }
@@ -243,7 +242,8 @@ class RaftConsensusProtocolImpl(
 
     companion object {
         private val logger = LoggerFactory.getLogger(RaftConsensusProtocolImpl::class.java)
-        private val heartbeatDue = Duration.ofSeconds(4)
+        private val heartbeatDue = Duration.ofSeconds(6)
+        private val leaderTimeout = Duration.ofMillis(500)
     }
 }
 

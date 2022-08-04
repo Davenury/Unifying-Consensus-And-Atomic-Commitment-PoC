@@ -17,4 +17,9 @@ data class ConsensusHeartbeat(
     val proposedChanges: List<LedgerItemDto>
 )
 
+data class ConsensusHeartbeatResponse(
+    val accepted: Boolean,
+    val leaderAddress: String?
+)
+
 data class ConsensusProposeChange(val change: ChangeWithAcceptNumDto)

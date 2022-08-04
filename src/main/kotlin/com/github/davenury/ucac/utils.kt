@@ -7,6 +7,9 @@ import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.features.*
 import io.ktor.client.features.json.*
+import io.ktor.client.request.*
+import io.ktor.http.*
+import org.slf4j.LoggerFactory
 
 val objectMapper: ObjectMapper =
     jacksonObjectMapper().configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
@@ -25,4 +28,26 @@ val testHttpClient = HttpClient(OkHttp) {
     install(HttpTimeout) {
         requestTimeoutMillis = 15000
     }
+}
+
+
+open class AbstractProtocolClient {
+
+
+    suspend inline fun <Message, reified Response> httpCall(
+        url: String,
+        requestBody: Message,
+    ): Response {
+        logger.info("Sending to: $url")
+        return httpClient.post<Response>(url) {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            body = requestBody!!
+        }
+    }
+
+    companion object {
+        val logger = LoggerFactory.getLogger(com.example.gpac.domain.GPACProtocolClientImpl::class.java)
+    }
+
 }

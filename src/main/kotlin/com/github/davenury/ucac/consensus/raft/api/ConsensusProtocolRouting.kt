@@ -8,40 +8,51 @@ import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import java.util.concurrent.Semaphore
 
 fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
+
+    val semaphore: Semaphore = Semaphore(1)
 
     routing {
         // głosujemy na leadera
         post("/consensus/request_vote") {
             val message: ConsensusElectMe = call.receive()
-            call.respond(protocol.handleRequestVote(message.peerId, message.leaderIteration, message.lastAcceptedId))
+            semaphore.acquire()
+            val response = protocol.handleRequestVote(message.peerId, message.leaderIteration, message.lastAcceptedId)
+            semaphore.release()
+            call.respond(response)
         }
 
         // potwierdzenie że mamy leadera
         post("/consensus/leader") {
             val message: ConsensusImTheLeader = call.receive()
+            semaphore.acquire()
             protocol.handleLeaderElected(message.peerId, message.peerAddress, message.leaderIteration)
+            semaphore.release()
             call.respond("OK")
         }
 
         post("/consensus/heartbeat") {
             val message: ConsensusHeartbeat = call.receive()
+            semaphore.acquire()
             val heartbeatResult = protocol.handleHeartbeat(
                 message.peerId,
                 message.iteration,
                 message.acceptedChanges.map { it.toLedgerItem() },
                 message.proposedChanges.map { it.toLedgerItem() }
             )
-            if(heartbeatResult) call.respond("OK")
-            else call.respond(HttpStatusCode.Unauthorized, "You are not a leader - leader is ${protocol.getLeaderAddress()}")
+            semaphore.release()
+            call.respond(ConsensusHeartbeatResponse(heartbeatResult, protocol.getLeaderAddress()))
         // TODO
         }
 
         // kiedy nie jesteś leaderem to prosisz leadera o zmianę
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
+            semaphore.acquire()
             protocol.handleProposeChange(message.change.toChangeWithAcceptNum())
+            semaphore.release()
             call.respond("OK")
         }
         post("/consensus/leader_address") {

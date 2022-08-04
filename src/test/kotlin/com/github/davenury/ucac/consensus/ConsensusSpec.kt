@@ -29,11 +29,13 @@ class ConsensusSpec {
 
     private val leaderElectionDelay = 7_000L
     private val changePropagationDelay = 7_000L
-    private val peer1Address = "http://localhost:8081"
-    private val peer2Address = "http://localhost:8082"
-    private val peer3Address = "http://localhost:8083"
-    private val peer4Address = "http://localhost:8084"
-    private val peer5Address = "http://localhost:8085"
+    private val peer1Address = "http://127.0.0.1:8081"
+    private val peer2Address = "http://127.0.0.1:8082"
+    private val peer3Address = "http://127.0.0.1:8083"
+    private val peer4Address = "http://127.0.0.1:8084"
+    private val peer5Address = "http://127.0.0.1:8085"
+    private val knownPeerIp = "127.0.0.1"
+    private val unknownPeerIp = "198.18.0.0"
     private val peerAddresses = listOf(peer1Address, peer2Address, peer3Address, peer4Address, peer5Address)
     private val noneLeader = "null"
 
@@ -371,6 +373,8 @@ class ConsensusSpec {
             expect {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
+                println(proposedChanges)
+                println(proposedChanges)
                 that(proposedChanges.size).isEqualTo(1)
                 that(proposedChanges.first().change).isEqualTo(AddUserChange("userName"))
                 that(proposedChanges.first().acceptNum).isEqualTo(null)
@@ -381,6 +385,7 @@ class ConsensusSpec {
         peers.forEach { it.stop() }
     }
 
+    @Disabled("Servers are not able to stop here")
     @Test
     fun `network divide on half and then merge`(): Unit = runBlocking {
 
@@ -411,15 +416,18 @@ class ConsensusSpec {
 //      Divide network
         firstHalf.forEach { address ->
             val application = addressToApplication[address]
-            val peers = firstHalf.filter { it != address } + secondHalf.map { it.replace("localhost","198.18.0.0") }
+            val peers = firstHalf.filter { it != address } + secondHalf.map { it.replace(knownPeerIp,unknownPeerIp) }
             modifyPeers(application!!,peers)
         }
 
         secondHalf.forEach { address ->
             val application = addressToApplication[address]
-            val peers = secondHalf.filter { it != address } + firstHalf.map { it.replace("localhost","198.18.0.0") }
+            val peers = secondHalf.filter { it != address } + firstHalf.map { it.replace(knownPeerIp,unknownPeerIp) }
             modifyPeers(application!!,peers)
         }
+
+        println("First half: $firstHalf \n Second half: $secondHalf")
+        println("After divide network")
 
 //      Delay to chose leader in second half
         delay(leaderElectionDelay)
@@ -433,14 +441,15 @@ class ConsensusSpec {
             executeChange("${secondHalf.first()}/consensus/create_change", createChangeWithAcceptNum(2))
         }.isSuccess()
 
-        println("$firstHalf $secondHalf")
+        println("First half: $firstHalf \n second half: $secondHalf")
 
-        delay(changePropagationDelay*2)
+        delay(changePropagationDelay)
 
         firstHalf.forEach {
             expect {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
+                println("First half Peer: $it \n $proposedChanges \n $acceptedChanges ")
                 that(proposedChanges.size).isEqualTo(1)
                 that(proposedChanges.first().change).isEqualTo(AddUserChange("userName"))
                 that(proposedChanges.first().acceptNum).isEqualTo(1)
@@ -451,6 +460,7 @@ class ConsensusSpec {
             expect {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
+                println("Second half peer: $it \n $proposedChanges \n $acceptedChanges ")
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
                 that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName"))
