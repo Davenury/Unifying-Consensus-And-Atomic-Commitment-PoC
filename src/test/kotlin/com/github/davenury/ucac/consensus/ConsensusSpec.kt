@@ -4,19 +4,22 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.davenury.ucac.common.AddUserChange
 import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
 import com.github.davenury.ucac.consensus.ratis.HistoryDto
+import com.github.davenury.ucac.createApplication
 import com.github.davenury.ucac.objectMapper
-import com.github.davenury.ucac.startApplication
 import com.github.davenury.ucac.testHttpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.assertions.isEqualTo
 import strikt.assertions.isSuccess
 
+@Disabled("WIP")
 class ConsensusSpec {
 
     @BeforeEach
@@ -34,11 +37,13 @@ class ConsensusSpec {
         //* peer 1 proponuje zmianę (akceptowana)
         //* peer 2 proponuje zmianę (akceptowana)
 
-        val peer1 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("1", "1")) }
-        val peer2 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("2", "1")) }
-        val peer3 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("3", "1")) }
-        val peer4 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("4", "1")) }
-        val peer5 = GlobalScope.launch(Dispatchers.IO) { startApplication(arrayOf("5", "1")) }
+        val app1 = createApplication(arrayOf("1", "1"))
+        val app2 = createApplication(arrayOf("2", "1"))
+        val app3 = createApplication(arrayOf("3", "1"))
+        val app4 = createApplication(arrayOf("4", "1"))
+        val app5 = createApplication(arrayOf("5", "1"))
+        val apps = listOf(app1, app2, app3, app4, app5)
+        apps.forEach { app -> app.startNonblocking() }
 
         delay(5000)
 
@@ -68,6 +73,7 @@ class ConsensusSpec {
             that(changes2[1].change).isEqualTo(AddUserChange("userName"))
         }
 
+        apps.forEach { app -> app.stop() }
     }
 
     private val change = mapOf(
@@ -89,4 +95,7 @@ class ConsensusSpec {
         }.let { objectMapper.readValue<HistoryDto>(it) }
             .changes.map { ChangeWithAcceptNum(it.change.toChange(), it.acceptNum) }
 
+    private val peer1 = "http://localhost:8081"
+    private val peer2 = "http://localhost:8082"
 }
+
