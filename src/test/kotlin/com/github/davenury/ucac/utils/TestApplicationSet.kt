@@ -1,15 +1,14 @@
 package com.github.davenury.ucac.utils
 
 import com.github.davenury.ucac.*
-import com.github.davenury.ucac.EventListener
+import com.github.davenury.ucac.SignalListener
 import java.util.*
 import kotlin.random.Random
 
 class TestApplicationSet(
     numberOfPeersets: Int,
     numberOfPeersInPeersets: List<Int>,
-    actions: Map<Int, Map<TestAddon, AdditionalAction>> = emptyMap(),
-    eventListeners: Map<Int, List<EventListener>> = emptyMap(),
+    signalListeners: Map<Int, Map<Signal, SignalListener>> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap()
 ) {
 
@@ -33,10 +32,9 @@ class TestApplicationSet(
                 peersetApps.add(
                     createApplication(
                         arrayOf("${peerId + 1}", "${peersetId + 1}"),
-                        actions[absoluteIndex] ?: emptyMap(),
-                        eventListeners[absoluteIndex] ?: emptyList(),
+                        signalListeners[absoluteIndex] ?: emptyMap(),
                         ratisConfigOverrides + configOverrides,
-                        TestApplicationMode(peerId + 1, peersetId + 1)
+                        TestApplicationMode(peerId + 1, peersetId + 1),
                     )
                 )
             }
@@ -51,6 +49,7 @@ class TestApplicationSet(
                 .withIndex()
                 .groupBy{ it.value.getPeersetId() }
                 .values
+                .asSequence()
                 .map { it.map { it.value } }
                 .map { it.map { "localhost:${it.getBoundPort()}" } }.toMutableList().map { it.toMutableList() }
                 .toList()

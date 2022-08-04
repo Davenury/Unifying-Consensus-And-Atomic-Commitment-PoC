@@ -31,28 +31,17 @@ fun main(args: Array<String>) {
     createApplication(args).startBlocking()
 }
 
-fun startApplication(
-    args: Array<String>,
-    additionalActions: Map<TestAddon, AdditionalAction> = emptyMap(),
-    eventListeners: List<EventListener> = emptyList(),
-    configOverrides: Map<String, Any> = emptyMap()
-) {
-    createApplication(args, additionalActions, eventListeners, configOverrides).startBlocking()
-}
-
 fun createApplication(
     args: Array<String>,
-    additionalActions: Map<TestAddon, AdditionalAction> = emptyMap(),
-    eventListeners: List<EventListener> = emptyList(),
+    signalListeners: Map<Signal, SignalListener> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
     mode: ApplicationMode = LocalDevelopmentApplicationMode(args)
 ): Application {
-    return Application(additionalActions, eventListeners, configOverrides, mode)
+    return Application(signalListeners, configOverrides, mode)
 }
 
 class Application constructor(
-    private val additionalActions: Map<TestAddon, AdditionalAction>,
-    private val eventListeners: List<EventListener>,
+    private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
     configOverrides: Map<String, Any>,
     private val mode: ApplicationMode
 ) {
@@ -79,7 +68,7 @@ class Application constructor(
 
             val historyManagement = RatisHistoryManagement(raftNode!!)
 //            val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-            val eventPublisher = EventPublisher(eventListeners)
+            val signalPublisher = SignalPublisher(signalListeners)
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = ProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
@@ -91,8 +80,7 @@ class Application constructor(
                     protocolClient,
                     transactionBlocker,
                     mode.otherPeers,
-                    additionalActions,
-                    eventPublisher,
+                    signalPublisher,
                     mode.port,
                     mode.peersetId
                 )
