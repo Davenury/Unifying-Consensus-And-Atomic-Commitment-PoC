@@ -1,8 +1,9 @@
-package com.example.consensus.raft.domain
+package com.github.davenury.ucac.consensus.raft.domain
 
-import com.example.common.ChangeWithAcceptNum
-import com.example.common.ChangeWithAcceptNumDto
-import com.example.common.History
+import com.github.davenury.ucac.common.ChangeWithAcceptNum
+import com.github.davenury.ucac.common.ChangeWithAcceptNumDto
+import com.github.davenury.ucac.common.History
+
 
 data class Ledger(
     val acceptedItems: MutableList<LedgerItem> = mutableListOf(),

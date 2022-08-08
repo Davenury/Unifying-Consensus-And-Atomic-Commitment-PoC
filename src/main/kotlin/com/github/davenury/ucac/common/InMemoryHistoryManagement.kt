@@ -3,7 +3,6 @@ package com.github.davenury.ucac.common
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusFailure
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusSuccess
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
 import org.slf4j.LoggerFactory
 
 class InMemoryHistoryManagement(

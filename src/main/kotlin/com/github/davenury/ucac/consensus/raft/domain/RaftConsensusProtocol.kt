@@ -1,5 +1,8 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
+import com.github.davenury.ucac.common.ChangeWithAcceptNum
+import com.github.davenury.ucac.common.History
+
 interface RaftConsensusProtocol {
     suspend fun begin()
     fun setOtherPeers(otherPeers: List<String>)

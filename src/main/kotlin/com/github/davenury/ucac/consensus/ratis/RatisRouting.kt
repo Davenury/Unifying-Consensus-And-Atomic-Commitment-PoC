@@ -1,9 +1,6 @@
 package com.github.davenury.ucac.consensus.ratis
 
-import com.github.davenury.ucac.common.ChangeDto
-import com.github.davenury.ucac.common.ErrorMessage
-import com.github.davenury.ucac.common.History
-import com.github.davenury.ucac.common.HistoryManagement
+import com.github.davenury.ucac.common.*
 import io.ktor.application.*
 import io.ktor.response.*
 import io.ktor.routing.*
@@ -27,17 +24,4 @@ fun Application.ratisRouting(historyManagement: HistoryManagement) {
     }
 }
 
-data class HistoryDto(
-    val changes: List<ChangeWithAcceptNumDto>
-)
 
-data class ChangeWithAcceptNumDto(
-    val change: ChangeDto,
-    val acceptNum: Int?
-)
-
-fun ChangeWithAcceptNum.toDto() =
-    ChangeWithAcceptNumDto(this.change.toDto(), acceptNum)
-
-fun History.toDto() =
-    HistoryDto(changes = this.map { it.toDto() })

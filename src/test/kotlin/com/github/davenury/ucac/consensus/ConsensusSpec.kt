@@ -1,12 +1,11 @@
 package com.github.davenury.ucac.consensus
 
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.AddUserChange
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
-import com.github.davenury.ucac.consensus.ratis.HistoryDto
-import com.github.davenury.ucac.createApplication
-import com.github.davenury.ucac.objectMapper
-import com.github.davenury.ucac.testHttpClient
+import com.github.davenury.ucac.common.ChangeWithAcceptNum
+import com.github.davenury.ucac.common.HistoryDto
+import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
@@ -20,6 +19,8 @@ import strikt.assertions.isEqualTo
 import strikt.assertions.isFailure
 import strikt.assertions.isNotEqualTo
 import strikt.assertions.isSuccess
+import kotlin.reflect.full.declaredMemberProperties
+import kotlin.reflect.jvm.isAccessible
 
 typealias LeaderAddressPortAndApplication = Triple<String, String, Application>
 

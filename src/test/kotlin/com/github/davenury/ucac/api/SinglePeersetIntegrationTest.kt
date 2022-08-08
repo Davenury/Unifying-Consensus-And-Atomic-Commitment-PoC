@@ -137,7 +137,7 @@ class SinglePeersetIntegrationTest {
             }
 
             val change = objectMapper.readValue<ChangeWithAcceptNumDto>(response).let {
-                ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)
+                ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum)
             }
             expectThat(change.change).isEqualTo(AddUserChange("userName"))
 
@@ -208,7 +208,7 @@ class SinglePeersetIntegrationTest {
         }
 
         val change = objectMapper.readValue(response, ChangeWithAcceptNumDto::class.java)
-        expectThat(change.change.toChange()).isEqualTo(AddGroupChange("name"))
+        expectThat(change.changeDto.toChange()).isEqualTo(AddGroupChange("name"))
 
         // and should not execute this change couple of times
         val response2 = testHttpClient.get<String>("http://${peers[0][1]}/changes") {
@@ -217,7 +217,7 @@ class SinglePeersetIntegrationTest {
         }
 
         val values: List<ChangeWithAcceptNum> = objectMapper.readValue<HistoryDto>(response2).changes.map {
-            ChangeWithAcceptNum(it.change.toChange(), it.acceptNum)
+            ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum)
         }
         // only one change and this change shouldn't be applied for 8082 two times
         expect {

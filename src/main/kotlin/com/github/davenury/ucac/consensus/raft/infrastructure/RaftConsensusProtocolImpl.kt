@@ -1,15 +1,18 @@
 package com.github.davenury.ucac.consensus.raft.infrastructure
 
+import com.github.davenury.ucac.AdditionalActionConsensus
+import com.github.davenury.ucac.ConsensusTestAddon
 import com.github.davenury.ucac.common.Change
+import com.github.davenury.ucac.common.ChangeWithAcceptNum
 import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.common.ProtocolTimer
 import com.github.davenury.ucac.consensus.raft.domain.*
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
 import org.slf4j.LoggerFactory
 import java.time.Duration
+import java.util.concurrent.Semaphore
 
 /**
  * @author Kamil Jarosz
@@ -18,7 +21,7 @@ class RaftConsensusProtocolImpl(
     private val peerId: Int,
     private val peerAddress: String,
     private val timer: ProtocolTimer,
-    private val consensusPeers: List<String>,
+    private var consensusPeers: List<String>,
     private val addons: Map<ConsensusTestAddon, AdditionalActionConsensus> = emptyMap(),
     private val protocolClient: RaftProtocolClient,
 ) : ConsensusProtocol<Change, History>, RaftConsensusProtocol {

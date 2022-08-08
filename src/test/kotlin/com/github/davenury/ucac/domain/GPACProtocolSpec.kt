@@ -2,7 +2,6 @@ package com.github.davenury.ucac.domain
 
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.infrastructure.DummyConsensusProtocol
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
 import com.github.davenury.ucac.gpac.domain.*
 import io.mockk.*
 import kotlinx.coroutines.runBlocking

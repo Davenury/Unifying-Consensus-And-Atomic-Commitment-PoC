@@ -3,6 +3,7 @@ package com.github.davenury.ucac
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.features.*
@@ -47,7 +48,7 @@ open class AbstractProtocolClient {
     }
 
     companion object {
-        val logger = LoggerFactory.getLogger(com.example.gpac.domain.GPACProtocolClientImpl::class.java)
+        val logger = LoggerFactory.getLogger(RaftProtocolClientImpl::class.java)
     }
 
 }

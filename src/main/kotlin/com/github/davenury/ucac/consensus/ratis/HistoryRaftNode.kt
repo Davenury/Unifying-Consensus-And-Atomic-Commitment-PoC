@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus.ratis
 
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeDto
+import com.github.davenury.ucac.common.ChangeWithAcceptNum
 import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusFailure
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol

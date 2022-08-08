@@ -1,8 +1,7 @@
 package com.github.davenury.ucac.consensus.raft.api
 
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusImTheLeader
-import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
+import com.github.davenury.ucac.common.toDto
+import com.github.davenury.ucac.consensus.raft.domain.*
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*

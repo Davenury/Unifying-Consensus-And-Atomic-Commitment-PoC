@@ -1,7 +1,8 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
+import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
+import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
 import com.github.davenury.ucac.consensus.ratis.RaftConfiguration
@@ -10,7 +11,7 @@ import com.github.davenury.ucac.consensus.ratis.ratisRouting
 import com.github.davenury.ucac.gpac.api.gpacProtocolRouting
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
-import com.github.davenury.ucac.gpac.domain.ProtocolClientImpl
+import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
 import io.ktor.application.*
 import io.ktor.features.*
@@ -26,7 +27,6 @@ import java.time.Duration
 import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
-import java.time.Duration
 
 fun main(args: Array<String>) {
     createApplication(args).startBlocking()
@@ -55,7 +55,6 @@ class Application constructor(
     private lateinit var consensusProtocol: RaftConsensusProtocolImpl
     private lateinit var ctx: ExecutorCoroutineDispatcher
     private lateinit var gpacProtocol: GPACProtocol
-    private lateinit var consensusProtocol: RaftConsensusProtocol
 
     init {
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
@@ -65,11 +64,9 @@ class Application constructor(
 
             consensusProtocol = RaftConsensusProtocolImpl(
                 mode.nodeId,
-                mode.peersetId,
+                mode.host,
                 ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(2), ctx), // TODO move to config
                 if (mode is TestApplicationMode) listOf() else mode.otherPeers[mode.peersetId - 1],
-                consensusAdditionalActions
-                otherPeers[conf.peersetId - 1],
                 consensusAdditionalActions,
                 RaftProtocolClientImpl()
             )

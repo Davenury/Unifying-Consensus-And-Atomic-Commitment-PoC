@@ -4,6 +4,15 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory
 
+typealias History = MutableList<ChangeWithAcceptNum>
+
+data class HistoryDto(
+    val changes: List<ChangeWithAcceptNumDto>
+)
+
+fun History.toDto() =
+    HistoryDto(changes = this.map { it.toDto() })
+
 data class ChangeWithAcceptNum(val change: Change, val acceptNum: Int?) {
     companion object {
         fun fromJson(json: String): ChangeWithAcceptNum {

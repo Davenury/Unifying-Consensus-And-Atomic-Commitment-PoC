@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus.ratis
 
 import com.fasterxml.jackson.databind.JsonMappingException
 import com.github.davenury.ucac.common.Change
+import com.github.davenury.ucac.common.ChangeWithAcceptNum
 import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory

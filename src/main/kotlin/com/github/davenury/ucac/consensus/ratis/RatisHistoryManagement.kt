@@ -1,9 +1,6 @@
 package com.github.davenury.ucac.consensus.ratis
 
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.History
-import com.github.davenury.ucac.common.HistoryChangeResult
-import com.github.davenury.ucac.common.HistoryManagement
+import com.github.davenury.ucac.common.*
 import org.slf4j.LoggerFactory
 
 class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : HistoryManagement(historyRaftNode) {

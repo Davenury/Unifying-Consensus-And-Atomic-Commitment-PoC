@@ -1,6 +1,7 @@
-package com.example.consensus.raft.domain
+package com.github.davenury.ucac.consensus.raft.domain
 
-import com.example.AbstractProtocolClient
+import com.github.davenury.ucac.AbstractProtocolClient
+import com.github.davenury.ucac.consensus.raft.domain.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async

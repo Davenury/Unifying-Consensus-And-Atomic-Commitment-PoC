@@ -3,7 +3,6 @@ package com.github.davenury.ucac.common
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusFailure
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusSuccess
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
 
 abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
     open suspend fun change(change: Change, acceptNum: Int?) =
@@ -32,5 +31,3 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
 enum class HistoryChangeResult {
     HistoryChangeSuccess, HistoryChangeFailure
 }
-
-typealias History = MutableList<ChangeWithAcceptNum>
