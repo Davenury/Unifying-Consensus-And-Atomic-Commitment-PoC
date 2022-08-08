@@ -320,7 +320,6 @@ class ConsensusSpec {
             expect {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
-                println("$it $acceptedChanges $proposedChanges")
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
                 that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName"))
@@ -373,8 +372,6 @@ class ConsensusSpec {
             expect {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
-                println(proposedChanges)
-                println(proposedChanges)
                 that(proposedChanges.size).isEqualTo(1)
                 that(proposedChanges.first().change).isEqualTo(AddUserChange("userName"))
                 that(proposedChanges.first().acceptNum).isEqualTo(null)
@@ -385,7 +382,7 @@ class ConsensusSpec {
         peers.forEach { it.stop() }
     }
 
-    @Disabled("Servers are not able to stop here")
+//    @Disabled("Servers are not able to stop here")
     @Test
     fun `network divide on half and then merge`(): Unit = runBlocking {
 
@@ -426,8 +423,6 @@ class ConsensusSpec {
             modifyPeers(application!!,peers)
         }
 
-        println("First half: $firstHalf \n Second half: $secondHalf")
-        println("After divide network")
 
 //      Delay to chose leader in second half
         delay(leaderElectionDelay)
@@ -441,15 +436,14 @@ class ConsensusSpec {
             executeChange("${secondHalf.first()}/consensus/create_change", createChangeWithAcceptNum(2))
         }.isSuccess()
 
-        println("First half: $firstHalf \n second half: $secondHalf")
 
         delay(changePropagationDelay)
+
 
         firstHalf.forEach {
             expect {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
-                println("First half Peer: $it \n $proposedChanges \n $acceptedChanges ")
                 that(proposedChanges.size).isEqualTo(1)
                 that(proposedChanges.first().change).isEqualTo(AddUserChange("userName"))
                 that(proposedChanges.first().acceptNum).isEqualTo(1)
@@ -460,7 +454,6 @@ class ConsensusSpec {
             expect {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
-                println("Second half peer: $it \n $proposedChanges \n $acceptedChanges ")
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
                 that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName"))
@@ -481,7 +474,6 @@ class ConsensusSpec {
             expect {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
-                println("Peer: $it \n $proposedChanges \n $acceptedChanges")
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
                 that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName"))
