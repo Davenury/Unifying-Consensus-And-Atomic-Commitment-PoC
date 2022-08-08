@@ -3,12 +3,7 @@ package com.github.davenury.ucac.api
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.SignalListener
-import com.github.davenury.ucac.common.AddGroupChange
-import com.github.davenury.ucac.common.AddUserChange
-import com.github.davenury.ucac.common.ChangeDto
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNumDto
-import com.github.davenury.ucac.consensus.ratis.HistoryDto
+import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.gpac.domain.*
 import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.features.*

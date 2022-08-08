@@ -1,9 +1,9 @@
 package com.github.davenury.ucac
 
+import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
-import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
 import com.github.davenury.ucac.consensus.ratis.RaftConfiguration
 import com.github.davenury.ucac.consensus.ratis.RatisHistoryManagement
@@ -23,6 +23,7 @@ import io.ktor.server.netty.*
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.runBlocking
 import java.time.Duration
 import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
@@ -171,10 +172,8 @@ class Application constructor(
             gpacProtocolRouting(gpacProtocol)
             consensusProtocolRouting(consensusProtocol)
 
-            if (mode !is TestApplicationMode) {
-    //        runBlocking {
-    //            startConsensusProtocol()
-    //        }
+            runBlocking {
+                startConsensusProtocol()
             }
         }
     }
@@ -194,6 +193,7 @@ class Application constructor(
 
     fun startNonblocking() {
         engine.start(wait = false)
+        consensusProtocol.peerAddress = "localhost:${getBoundPort()}"
     }
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {

@@ -1,5 +1,6 @@
-package com.github.davenury.ucac.consensus.raft.infrastructure
+package com.example.consensus.raft.infrastructure
 
+import com.example.*
 import com.github.davenury.ucac.AdditionalActionConsensus
 import com.github.davenury.ucac.ConsensusTestAddon
 import com.github.davenury.ucac.common.Change
@@ -10,16 +11,16 @@ import com.github.davenury.ucac.consensus.raft.domain.*
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
-import org.slf4j.LoggerFactory
 import java.time.Duration
+import org.slf4j.LoggerFactory
 import java.util.concurrent.Semaphore
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * @author Kamil Jarosz
- */
+/** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
     private val peerId: Int,
-    private val peerAddress: String,
+    var peerAddress: String,
     private val timer: ProtocolTimer,
     private var consensusPeers: List<String>,
     private val addons: Map<ConsensusTestAddon, AdditionalActionConsensus> = emptyMap(),
@@ -40,6 +41,11 @@ class RaftConsensusProtocolImpl(
         timer.startCounting { sendLeaderRequest() }
     }
 
+    override fun setOtherPeers(otherPeers: List<String>) {
+        println("$peerId - Peers: $otherPeers \n old: $consensusPeers")
+        consensusPeers = otherPeers
+    }
+
     private suspend fun sendLeaderRequest() {
         logger.info("Peer $peerId try to become leader in iteration $leaderIteration")
         leaderIteration += 1
@@ -53,11 +59,11 @@ class RaftConsensusProtocolImpl(
 
         logger.info("Responses from leader request for $peerId: $responses in iteration $leaderIteration")
 
-        leaderIteration = responses.filterNotNull().maxOf { it.myIteration }
+        leaderIteration = responses.filterNotNull().maxOfOrNull { it.myIteration } ?: leaderIteration
 
         val positiveResponses = responses.filterNotNull().filter { it.voteGranted }
 
-        if (!checkHalfOfPeerSet(positiveResponses.size)) {
+        if (!checkHalfOfPeerSet(positiveResponses.size) || consensusPeers.isEmpty()) {
             leader = null
             leaderAddress = null
             restartLeaderTimeout()
@@ -246,13 +252,9 @@ class RaftConsensusProtocolImpl(
 
     private fun amILeader(): Boolean = leader == peerId
 
-    override fun setOtherPeers(otherPeers: List<String>) {
-        this.consensusPeers = otherPeers
-    }
-
     companion object {
         private val logger = LoggerFactory.getLogger(RaftConsensusProtocolImpl::class.java)
-        private val heartbeatDue = Duration.ofSeconds(6)
+        private val heartbeatDue = Duration.ofSeconds(4)
         private val leaderTimeout = Duration.ofMillis(500)
     }
 }
