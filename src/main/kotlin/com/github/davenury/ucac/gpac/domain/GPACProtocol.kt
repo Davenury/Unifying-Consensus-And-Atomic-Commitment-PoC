@@ -23,8 +23,7 @@ class GPACProtocolImpl(
     private val protocolClient: ProtocolClient,
     private val transactionBlocker: TransactionBlocker,
     private var otherPeers: List<List<String>>,
-    private val addons: Map<TestAddon, AdditionalAction> = emptyMap(),
-    private val eventPublisher: EventPublisher = EventPublisher(emptyList()),
+    private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     private val me: Int,
     private val myPeersetId: Int
 ) : GPACProtocol {
@@ -56,7 +55,7 @@ class GPACProtocolImpl(
             )
         }
 
-        signal(TestAddon.OnHandlingElectBegin, null)
+        signal(Signal.OnHandlingElectBegin, null)
 
         transactionBlocker.assertICanSendElectedYou()
 
@@ -65,7 +64,7 @@ class GPACProtocolImpl(
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal)
 
-        signal(TestAddon.OnHandlingElectEnd, transaction)
+        signal(Signal.OnHandlingElectEnd, transaction)
 
         return ElectedYou(
             message.ballotNumber,
@@ -78,7 +77,7 @@ class GPACProtocolImpl(
 
     override suspend fun handleAgree(message: Agree): Agreed {
 
-        signal(TestAddon.OnHandlingAgreeBegin, transaction)
+        signal(Signal.OnHandlingAgreeBegin, transaction)
 
         if (!checkBallotNumber(message.ballotNumber)) {
             throw NotValidLeader(myBallotNumber, message.ballotNumber)
@@ -100,7 +99,7 @@ class GPACProtocolImpl(
             logger.info("$me Lock aquired: ${message.ballotNumber}")
         }
 
-        signal(TestAddon.OnHandlingAgreeEnd, transaction)
+        signal(Signal.OnHandlingAgreeEnd, transaction)
 
         leaderFailTimeoutStart(message.change)
 
@@ -109,7 +108,7 @@ class GPACProtocolImpl(
 
     override suspend fun handleApply(message: Apply) {
         leaderFailTimeoutStop()
-        signal(TestAddon.OnHandlingApplyBegin, transaction)
+        signal(Signal.OnHandlingApplyBegin, transaction)
 
         try {
             this.transaction =
@@ -126,7 +125,7 @@ class GPACProtocolImpl(
             logger.info("$me Releasing semaphore as cohort")
             transactionBlocker.releaseBlock()
 
-            signal(TestAddon.OnHandlingApplyEnd, transaction)
+            signal(Signal.OnHandlingApplyEnd, transaction)
         }
     }
 
@@ -157,11 +156,11 @@ class GPACProtocolImpl(
 
         this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
 
-        signal(TestAddon.BeforeSendingAgree, this.transaction)
+        signal(Signal.BeforeSendingAgree, this.transaction)
 
         val agreedResponses = ftAgreePhase(change, acceptVal)
 
-        signal(TestAddon.BeforeSendingApply, this.transaction)
+        signal(Signal.BeforeSendingApply, this.transaction)
 
         val applyResponses = applyPhase(change, acceptVal)
     }
@@ -179,7 +178,7 @@ class GPACProtocolImpl(
             logger.info("$me Got hit with message with decision true")
             // someone got to ft-agree phase
             this.transaction = this.transaction.copy(acceptVal = messageWithDecision.acceptVal)
-            signal(TestAddon.BeforeSendingAgree, this.transaction)
+            signal(Signal.BeforeSendingAgree, this.transaction)
 
             val agreedResponses = ftAgreePhase(
                 change,
@@ -188,7 +187,7 @@ class GPACProtocolImpl(
                 acceptNum = this.transaction.acceptNum
             )
 
-            signal(TestAddon.BeforeSendingApply, this.transaction)
+            signal(Signal.BeforeSendingApply, this.transaction)
 
             val applyResponses = applyPhase(change, messageWithDecision.acceptVal)
 
@@ -196,12 +195,12 @@ class GPACProtocolImpl(
         }
 
         // I got to ft-agree phase, so my voice of this is crucial
-        signal(TestAddon.BeforeSendingAgree, this.transaction)
+        signal(Signal.BeforeSendingAgree, this.transaction)
 
         logger.info("$me Recovery leader transaction state: ${this.transaction}")
         val agreedResponses = ftAgreePhase(change, this.transaction.acceptVal!!, acceptNum = this.transaction.acceptNum)
 
-        signal(TestAddon.BeforeSendingApply, this.transaction)
+        signal(Signal.BeforeSendingApply, this.transaction)
 
         val applyResponses = applyPhase(change, this.transaction.acceptVal!!)
 
@@ -225,7 +224,7 @@ class GPACProtocolImpl(
             myBallotNumber++
             if (!historyManagement.canBeBuild(change.toChange())) throw HistoryCannotBeBuildException()
             this.transaction = transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
-            signal(TestAddon.BeforeSendingElect, this.transaction)
+            signal(Signal.BeforeSendingElect, this.transaction)
             logger.info("$me - sending ballot number: $myBallotNumber")
             val (responses, maxBallotNumber) = getElectedYouResponses(change, otherPeers, acceptNum)
             electResponses = responses
@@ -303,9 +302,8 @@ class GPACProtocolImpl(
 
     private fun isInTransaction(index: Int) = true
 
-    private suspend fun signal(addon: TestAddon, transaction: Transaction?) {
-        eventPublisher.signal(addon, this, otherPeers)
-        addons[addon]?.invoke(ProtocolTestInformation(transaction, otherPeers))
+    private fun signal(signal: Signal, transaction: Transaction?) {
+        signalPublisher.signal(signal, this, otherPeers, transaction)
     }
 
     private fun <T> superMajority(responses: List<List<T>>): Boolean =

@@ -2,7 +2,7 @@ package com.github.davenury.ucac.api
 
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.davenury.ucac.*
-import com.github.davenury.ucac.EventListener
+import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.common.AddGroupChange
 import com.github.davenury.ucac.common.AddUserChange
 import com.github.davenury.ucac.common.ChangeDto
@@ -15,10 +15,8 @@ import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.io.FileUtils
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.fail
@@ -46,29 +44,17 @@ class SinglePeersetIntegrationTest {
     fun `second leader tries to become leader before first leader goes into ft-agree phase`(): Unit = runBlocking {
         val signalExecuted = AtomicBoolean(false)
 
-        val eventListener = object : EventListener {
-            override fun onSignal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>) {
-                if (signal.addon == TestAddon.BeforeSendingAgree) {
-                    expectCatching {
-                        executeChange("http://${otherPeers[0][0]}/create_change")
-                    }.isSuccess()
-                    signalExecuted.set(true)
-                }
-            }
-        }
-
-        // first application - first leader; second application - second leader
-        val firstLeaderAction: AdditionalAction = {
+        val signalListener = SignalListener {
+            expectCatching {
+                executeChange("http://${it.otherPeers[0][0]}/create_change")
+            }.isSuccess()
+            signalExecuted.set(true)
             throw RuntimeException("Stop")
         }
-        val firstLeaderCallbacks: Map<TestAddon, AdditionalAction> = mapOf(
-            TestAddon.BeforeSendingAgree to firstLeaderAction
-        )
 
         val apps = TestApplicationSet(
             1, listOf(3),
-            actions = mapOf(1 to firstLeaderCallbacks),
-            eventListeners = mapOf(1 to listOf<EventListener>(eventListener))
+            signalListeners = mapOf(1 to mapOf(Signal.BeforeSendingAgree to signalListener))
         )
         val peers = apps.getPeers()
 
@@ -88,35 +74,28 @@ class SinglePeersetIntegrationTest {
             val configOverrides = mapOf("raft.server.addresses" to listOf(ratisPorts.map { "localhost:${it + 11124}" }),
                 "raft.clusterGroupIds" to listOf(UUID.randomUUID()))
 
-            val eventListener = object : EventListener {
-                override fun onSignal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>) {
-                    if (signal.addon == TestAddon.BeforeSendingApply) {
-                        expectCatching {
-                            executeChange("http://${otherPeers[0][0]}/create_change")
-                        }.isFailure()
-                    }
-                }
+            val signalListener = SignalListener {
+                expectCatching {
+                    executeChange("http://${it.otherPeers[0][0]}/create_change")
+                }.isFailure()
             }
 
             val apps = listOf(
                 createApplication(
                     arrayOf("1", "1"),
-                    mapOf(),
-                    listOf(eventListener),
+                    signalListeners = mapOf(Signal.BeforeSendingApply to signalListener),
                     configOverrides = configOverrides,
-                    mode = TestApplicationMode(
-                        1, 1
-                    )
+                    mode = TestApplicationMode(1, 1),
                 ),
                 createApplication(
-                    arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(
-                        2, 1
-                    )
+                    arrayOf("2", "1"),
+                    configOverrides = configOverrides,
+                    mode = TestApplicationMode(2, 1),
                 ),
                 createApplication(
-                    arrayOf("3", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(
-                        3, 1
-                    )
+                    arrayOf("3", "1"),
+                    configOverrides = configOverrides,
+                    mode = TestApplicationMode(3, 1),
                 ),
             )
             apps.forEach { app -> app.startNonblocking() }
@@ -142,7 +121,7 @@ class SinglePeersetIntegrationTest {
 
             val phaser = Phaser(2)
 
-            val firstLeaderAction: AdditionalAction = {
+            val firstLeaderAction = SignalListener { runBlocking {
                 val url = "http://${it.otherPeers[0][0]}/ft-agree"
                 val response = testHttpClient.post<Agreed>(url) {
                     contentType(ContentType.Application.Json)
@@ -152,15 +131,15 @@ class SinglePeersetIntegrationTest {
                 println("Other peer sent response to ft-agree: $response")
                 // kill app
                 throw RuntimeException("Stop")
-            }
-            val firstLeaderCallbacks: Map<TestAddon, AdditionalAction> = mapOf(
-                TestAddon.BeforeSendingAgree to firstLeaderAction
+            }}
+            val firstLeaderCallbacks: Map<Signal, SignalListener> = mapOf(
+                Signal.BeforeSendingAgree to firstLeaderAction
             )
-            val afterHandlingApply: AdditionalAction = {
+            val afterHandlingApply = SignalListener {
                 phaser.arriveAndAwaitAdvance()
             }
-            val peer2Callbacks: Map<TestAddon, AdditionalAction> = mapOf(
-                TestAddon.OnHandlingApplyEnd to afterHandlingApply
+            val peer2Callbacks: Map<Signal, SignalListener> = mapOf(
+                Signal.OnHandlingApplyEnd to afterHandlingApply
             )
             val peer2ConfigOverrides: MutableMap<String, Any> = HashMap(configOverrides)
             peer2ConfigOverrides["protocol.leaderFailTimeout"] = Duration.ZERO
@@ -211,7 +190,7 @@ class SinglePeersetIntegrationTest {
             "raft.clusterGroupIds" to listOf(UUID.randomUUID())
         )
 
-        val firstLeaderAction: AdditionalAction = {
+        val firstLeaderAction = SignalListener {
             val url = "http://${it.otherPeers[0][0]}/apply"
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {
@@ -230,23 +209,23 @@ class SinglePeersetIntegrationTest {
             println("${it.otherPeers[0][0]} sent response to apply")
             throw RuntimeException()
         }
-        val firstLeaderCallbacks: Map<TestAddon, AdditionalAction> = mapOf(
-            TestAddon.BeforeSendingApply to firstLeaderAction
+        val firstLeaderCallbacks: Map<Signal, SignalListener> = mapOf(
+            Signal.BeforeSendingApply to firstLeaderAction
         )
 
-        val peer3Action: AdditionalAction = {
+        val peer3Action = SignalListener {
             phaser.arriveAndAwaitAdvance()
         }
-        val peer3Callbacks: Map<TestAddon, AdditionalAction> = mapOf(
-            TestAddon.OnHandlingApplyEnd to peer3Action
+        val peer3Callbacks: Map<Signal, SignalListener> = mapOf(
+            Signal.OnHandlingApplyEnd to peer3Action
         )
 
         val apps = listOf(
             createApplication(arrayOf("1", "1"), firstLeaderCallbacks, configOverrides = configOverrides, mode = TestApplicationMode(1, 1)),
-            createApplication(arrayOf("2", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(2, 1)),
+            createApplication(arrayOf("2", "1"), configOverrides = configOverrides, mode = TestApplicationMode(2, 1)),
             createApplication(arrayOf("3", "1"), peer3Callbacks, configOverrides = configOverrides, mode = TestApplicationMode(3, 1)),
-            createApplication(arrayOf("4", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(4, 1)),
-            createApplication(arrayOf("5", "1"), emptyMap(), configOverrides = configOverrides, mode = TestApplicationMode(5, 1)),
+            createApplication(arrayOf("4", "1"), configOverrides = configOverrides, mode = TestApplicationMode(4, 1)),
+            createApplication(arrayOf("5", "1"), configOverrides = configOverrides, mode = TestApplicationMode(5, 1)),
         )
         apps.forEach { app -> app.startNonblocking() }
         val peers = apps.map { "localhost:${it.getBoundPort()}" }
@@ -312,4 +291,3 @@ class SinglePeersetIntegrationTest {
             ?.forEach { file -> FileUtils.deleteDirectory(file) }
     }
 }
-

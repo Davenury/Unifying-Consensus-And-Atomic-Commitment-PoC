@@ -335,26 +335,23 @@ class MultiplePeersetSpec {
                 "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
             )
 
-            val failAction: AdditionalAction = {
+            val failAction = SignalListener {
                 throw RuntimeException()
             }
 
             // given - applications
             val app1 = createApplication(
                 arrayOf("1", "1"),
-                emptyMap(),
                 configOverrides = configOverrides,
                 mode = TestApplicationMode(1, 1)
             )
             val app2 = createApplication(
                 arrayOf("2", "1"),
-                emptyMap(),
                 configOverrides = configOverrides,
                 mode = TestApplicationMode(2, 1)
             )
             val app3 = createApplication(
                 arrayOf("3", "1"),
-                emptyMap(),
                 configOverrides = configOverrides,
                 mode = TestApplicationMode(3, 1)
             )
@@ -362,31 +359,31 @@ class MultiplePeersetSpec {
             // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
             val app4 = createApplication(
                 arrayOf("1", "2"),
-                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                signalListeners = mapOf(Signal.OnHandlingAgreeEnd to failAction),
                 configOverrides = configOverrides,
                 mode = TestApplicationMode(1, 2)
             )
             val app5 = createApplication(
                 arrayOf("2", "2"),
-                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                signalListeners = mapOf(Signal.OnHandlingAgreeEnd to failAction),
                 configOverrides = configOverrides,
                 mode = TestApplicationMode(2, 2)
             )
             val app6 = createApplication(
                 arrayOf("3", "2"),
-                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                signalListeners = mapOf(Signal.OnHandlingAgreeEnd to failAction),
                 configOverrides = configOverrides,
                 mode = TestApplicationMode(3, 2)
             )
             val app7 = createApplication(
                 arrayOf("4", "2"),
-                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                signalListeners = mapOf(Signal.OnHandlingAgreeEnd to failAction),
                 configOverrides = configOverrides,
                 mode = TestApplicationMode(4, 2)
             )
             val app8 = createApplication(
                 arrayOf("5", "2"),
-                mapOf(TestAddon.OnHandlingAgreeEnd to failAction),
+                signalListeners = mapOf(Signal.OnHandlingAgreeEnd to failAction),
                 configOverrides = configOverrides,
                 mode = TestApplicationMode(5, 2)
             )
@@ -419,9 +416,7 @@ class MultiplePeersetSpec {
             peers.flatten().forEach {
                 askForChanges("http://${it}")
                     .let {
-                        expect {
-                            that(it.size).isEqualTo(0)
-                        }
+                        expectThat(it.size).isEqualTo(0)
                     }
             }
 
@@ -438,26 +433,24 @@ class MultiplePeersetSpec {
             "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
         )
 
-        val failAction: AdditionalAction = {
+        val failAction = SignalListener {
             throw RuntimeException()
         }
 
         // given - applications
         val app1 = createApplication(
             arrayOf("1", "1"),
-            mapOf(TestAddon.BeforeSendingApply to failAction),
+            mapOf(Signal.BeforeSendingApply to failAction),
             configOverrides = configOverrides,
             mode = TestApplicationMode(1, 1)
         )
         val app2 = createApplication(
             arrayOf("2", "1"),
-            emptyMap(),
             configOverrides = configOverrides,
             mode = TestApplicationMode(2, 1)
         )
         val app3 = createApplication(
             arrayOf("3", "1"),
-            emptyMap(),
             configOverrides = configOverrides,
             mode = TestApplicationMode(3, 1)
         )
@@ -465,31 +458,26 @@ class MultiplePeersetSpec {
         // mock of not responding peerset2 - is in config, so transaction leader should wait on their responses
         val app4 = createApplication(
             arrayOf("1", "2"),
-            emptyMap(),
             configOverrides = configOverrides,
             mode = TestApplicationMode(1, 2)
         )
         val app5 = createApplication(
             arrayOf("2", "2"),
-            emptyMap(),
             configOverrides = configOverrides,
             mode = TestApplicationMode(2, 2)
         )
         val app6 = createApplication(
             arrayOf("3", "2"),
-            emptyMap(),
             configOverrides = configOverrides,
             mode = TestApplicationMode(3, 2)
         )
         val app7 = createApplication(
             arrayOf("4", "2"),
-            emptyMap(),
             configOverrides = configOverrides,
             mode = TestApplicationMode(4, 2)
         )
         val app8 = createApplication(
             arrayOf("5", "2"),
-            emptyMap(),
             configOverrides = configOverrides,
             mode = TestApplicationMode(5, 2)
         )
@@ -500,6 +488,7 @@ class MultiplePeersetSpec {
                 .withIndex()
                 .groupBy{ it.index < 3 }
                 .values
+                .asSequence()
                 .map { it.map { it.value } }
                 .map { it.map { "localhost:${it.getBoundPort()}" } }.toMutableList().map { it.toMutableList() }
                 .toList()
@@ -542,7 +531,7 @@ class MultiplePeersetSpec {
                 "raft.clusterGroupIds" to listOf(UUID.randomUUID(), UUID.randomUUID())
             )
 
-            val leaderAction: AdditionalAction = {
+            val leaderAction = SignalListener {
                 val url2 = "${it.otherPeers[0][0]}/apply"
                 runBlocking {
                     testHttpClient.post<HttpResponse>(url2) {
@@ -585,7 +574,7 @@ class MultiplePeersetSpec {
             // given - applications
             val app1 = createApplication(
                 arrayOf("1", "1"),
-                mapOf(TestAddon.BeforeSendingApply to leaderAction),
+                mapOf(Signal.BeforeSendingApply to leaderAction),
                 configOverrides = configOverrides,
                 mode = TestApplicationMode(1, 1)
             )
