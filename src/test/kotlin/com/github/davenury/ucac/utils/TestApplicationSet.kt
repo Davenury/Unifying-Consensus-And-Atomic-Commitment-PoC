@@ -38,7 +38,10 @@ class TestApplicationSet(
         }.toMutableList()
 
         // start and address discovery
-        apps.flatten().forEachIndexed { index, app -> if (index + 1 !in appsToExclude) app.startNonblocking() }
+        apps
+            .flatten()
+            .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
+            .forEach { it.startNonblocking() }
         peers =
             apps.flatten()
                 .asSequence()
