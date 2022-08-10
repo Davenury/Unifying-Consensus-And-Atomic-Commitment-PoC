@@ -101,8 +101,6 @@ class SinglePeersetIntegrationTest {
                     accept(ContentType.Application.Json)
                     body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, changeDto)
                 }
-                println("Other peer sent response to ft-agree: $response")
-                // kill app
                 throw RuntimeException("Stop")
             }}
             val firstLeaderCallbacks: Map<Signal, SignalListener> = mapOf(
@@ -171,7 +169,6 @@ class SinglePeersetIntegrationTest {
                     println("Got response ${it.status.value}")
                 }
             }
-            println("${it.otherPeers[0][0]} sent response to apply")
             throw RuntimeException()
         }
         val firstLeaderCallbacks: Map<Signal, SignalListener> = mapOf(

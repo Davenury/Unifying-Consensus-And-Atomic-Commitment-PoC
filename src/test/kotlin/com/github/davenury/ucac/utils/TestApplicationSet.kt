@@ -45,18 +45,23 @@ class TestApplicationSet(
         peers =
             apps.flatten()
                 .asSequence()
-                .mapIndexed {index, it -> Pair(it, if (index + 1 in appsToExclude) "localhost:0" else "localhost:${it.getBoundPort()}") }
+                .mapIndexed { index, it ->
+                    val address = if (index + 1 in appsToExclude) "localhost:0" else "localhost:${it.getBoundPort()}"
+                    Pair(it, address)
+                }
                 .groupBy{ it.first.getPeersetId() }
                 .values
                 .map { it.map { it.second } }
                 .toList()
 
-        apps.flatten().zip(peers.flatten()).forEachIndexed { index, (app, peer) ->
-            if (index + 1 !in appsToExclude) {
+        apps
+            .flatten()
+            .zip(peers.flatten())
+            .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
+            .forEach { (app, peer) ->
                 app.setOtherPeers(
                     peers.map { it.filterNot { it == peer } }
                 )
-            }
         }
     }
 
