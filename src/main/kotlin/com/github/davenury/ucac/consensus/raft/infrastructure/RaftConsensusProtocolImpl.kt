@@ -3,14 +3,12 @@ package com.example.consensus.raft.infrastructure
 import com.example.*
 import com.github.davenury.ucac.AdditionalActionConsensus
 import com.github.davenury.ucac.ConsensusTestAddon
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.ChangeWithAcceptNum
-import com.github.davenury.ucac.common.History
-import com.github.davenury.ucac.common.ProtocolTimer
+import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.domain.*
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import java.time.Duration
 import org.slf4j.LoggerFactory
 import java.util.concurrent.Semaphore
@@ -21,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class RaftConsensusProtocolImpl(
     private val peerId: Int,
     var peerAddress: String,
-    private val timer: ProtocolTimer,
+    private val ctx: ExecutorCoroutineDispatcher,
     private var consensusPeers: List<String>,
     private val addons: Map<ConsensusTestAddon, AdditionalActionConsensus> = emptyMap(),
     private val protocolClient: RaftProtocolClient,
@@ -35,6 +33,7 @@ class RaftConsensusProtocolImpl(
     private var leader: Int? = null
     private var leaderAddress: String? = null
     private var state: Ledger = Ledger()
+    private var timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofSeconds(2),ctx)
 
     override suspend fun begin() {
         logger.info("$peerId - Start raft on address $peerAddress, other peers: $consensusPeers")
@@ -55,7 +54,6 @@ class RaftConsensusProtocolImpl(
             consensusPeers,
             ConsensusElectMe(peerId, leaderIteration, state.getLastAcceptedItemId())
         )
-
 
         logger.info("Responses from leader request for $peerId: $responses in iteration $leaderIteration")
 
@@ -84,7 +82,7 @@ class RaftConsensusProtocolImpl(
         leaderAddress = peerAddress
 
         // TODO - schedule heartbeat sending by leader
-        timer.setDelay(leaderTimeout)
+        timer = getLeaderTimer()
         timer.startCounting { sendHeartbeat() }
     }
 
@@ -186,7 +184,11 @@ class RaftConsensusProtocolImpl(
         state.acceptItems(acceptedIndexes)
         acceptedIndexes.forEach { ledgerIdToVoteGranted.remove(it) }
 
-        if (responses.all { it?.accepted == true }) timer.startCounting { sendHeartbeat() }
+
+        if (responses.all { it?.accepted == true }) {
+            timer = getLeaderTimer()
+            timer.startCounting { sendHeartbeat() }
+        }
         else timer.startCounting {
             logger.info("$peerId - some peer increase iteration try to become leader")
             sendLeaderRequest()
@@ -195,7 +197,7 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun restartLeaderTimeout() {
         timer.cancelCounting()
-        timer.setDelay(if (leader == null) leaderTimeout else heartbeatDue)
+        timer = if (leader == null) getLeaderTimer() else getHeartbeatTimer()
         timer.startCounting {
             logger.info("$peerId - leader $leaderAddress doesn't send heartbeat, start try to become leader")
             sendLeaderRequest()
@@ -251,6 +253,9 @@ class RaftConsensusProtocolImpl(
     private fun checkHalfOfPeerSet(value: Int): Boolean = (value + 1) * 2 > (consensusPeers.size + 1)
 
     private fun amILeader(): Boolean = leader == peerId
+
+    private fun getLeaderTimer() = ProtocolTimerImpl(leaderTimeout, Duration.ZERO, ctx)
+    private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatDue, Duration.ofSeconds(2), ctx)
 
     companion object {
         private val logger = LoggerFactory.getLogger(RaftConsensusProtocolImpl::class.java)
