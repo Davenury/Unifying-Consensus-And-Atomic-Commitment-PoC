@@ -25,17 +25,17 @@ class TestApplicationSet(
         )
 
         var currentApp = 0
-        apps = MutableList(numberOfPeersets) { peersetId ->
-            MutableList(numberOfPeersInPeersets[peersetId]) { peerId ->
+        apps = (1..numberOfPeersets).map { peersetId ->
+            (1..numberOfPeersInPeersets[peersetId]).map { peerId ->
                 currentApp++
                 createApplication(
-                    arrayOf("${peerId + 1}", "${peersetId + 1}"),
-                    signalListeners[currentApp + 1] ?: emptyMap(),
+                    arrayOf("$peerId", "$peersetId"),
+                    signalListeners[currentApp] ?: emptyMap(),
                     ratisConfigOverrides + (configOverrides[peerId] ?: emptyMap()),
-                    TestApplicationMode(peerId + 1, peersetId + 1)
+                    TestApplicationMode(peerId, peersetId)
                 )
-            }
-        }
+            }.toMutableList()
+        }.toMutableList()
 
         // start and address discovery
         apps.flatten().forEachIndexed { index, app -> if (index + 1 !in appsToExclude) app.startNonblocking() }
