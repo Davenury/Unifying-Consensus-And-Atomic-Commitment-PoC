@@ -8,6 +8,7 @@ import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import kotlin.random.Random
 
 fun Application.commonRouting(
     gpacProtocol: GPACProtocol,
@@ -41,6 +42,19 @@ fun Application.commonRouting(
         post("/bump/counter") {
             counter.increment()
             call.respond(HttpStatusCode.OK)
+        }
+
+        post("/random_fail") {
+
+            val result = Random.nextInt(10)
+            if (result % 4 == 0) {
+                call.respond(HttpStatusCode.BadRequest)
+            } else if (result % 3 == 0) {
+                call.respond(HttpStatusCode.ServiceUnavailable)
+            } else {
+                call.respond(HttpStatusCode.OK)
+            }
+
         }
     }
 

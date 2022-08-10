@@ -45,7 +45,7 @@ object DockerComposeApplicationMode: ApplicationMode() {
 
 
         val config = loadConfig()
-        val me = config.peers.peersAddresses[_peersetId - 1][id].split(":")[0]
+        val me = config.peers.peersAddresses[_peersetId - 1][id - 1].split(":")[0]
 
         host = me
         port = 8080
@@ -120,6 +120,10 @@ class LocalDevelopmentApplicationMode(
             )
             throw IllegalStateException()
         }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(LocalDevelopmentApplicationMode::class.java)
+    }
 }
 
 object KubernetesApplicationMode: ApplicationMode() {
@@ -145,9 +149,5 @@ fun determineApplicationMode(args: Array<String>): ApplicationMode {
         return KubernetesApplicationMode
     }
     return LocalDevelopmentApplicationMode(args)
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(LocalDevelopmentApplicationMode::class.java)
-    }
 
 }

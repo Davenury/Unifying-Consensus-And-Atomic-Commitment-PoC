@@ -1,4 +1,9 @@
 version: "3.3"
+
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+
 services:
   _image_build:
     image: poc
@@ -40,36 +45,51 @@ services:
       - RAFT_NODE_ID=3
       - PEERSET_ID=1
       - CONFIG_FILE=application-compose.conf
-  peer4:
-    image: poc
-    depends_on:
-      - _image_build
+#  peer4:
+#    image: poc
+#    depends_on:
+#      - _image_build
+#    ports:
+#      - "8084:8080"
+#      - "10034"
+#    environment:
+#      - RAFT_NODE_ID=1
+#      - PEERSET_ID=2
+#      - CONFIG_FILE=application-compose.conf
+#  peer5:
+#    image: poc
+#    depends_on:
+#      - _image_build
+#    ports:
+#      - "8085:8080"
+#      - "10134"
+#    environment:
+#      - RAFT_NODE_ID=2
+#      - PEERSET_ID=2
+#      - CONFIG_FILE=application-compose.conf
+#  peer6:
+#    image: poc
+#    depends_on:
+#      - _image_build
+#    ports:
+#      - "8086:8080"
+#      - "11134"
+#    environment:
+#      - RAFT_NODE_ID=3
+#      - PEERSET_ID=2
+#      - CONFIG_FILE=application-compose.conf
+  prometheus:
+    image: prom/prometheus
     ports:
-      - "8084:8080"
-      - "10034"
-    environment:
-      - RAFT_NODE_ID=1
-      - PEERSET_ID=2
-      - CONFIG_FILE=application-compose.conf
-  peer5:
-    image: poc
+      - "9090:9090"
+    volumes:
+      - ./metrics/compose:/etc/prometheus/
+      - prometheus_data:/prometheus
+  grafana:
+    image: grafana/grafana
     depends_on:
-      - _image_build
+      - prometheus
     ports:
-      - "8085:8080"
-      - "10134"
-    environment:
-      - RAFT_NODE_ID=2
-      - PEERSET_ID=2
-      - CONFIG_FILE=application-compose.conf
-  peer6:
-    image: poc
-    depends_on:
-      - _image_build
-    ports:
-      - "8086:8080"
-      - "11134"
-    environment:
-      - RAFT_NODE_ID=3
-      - PEERSET_ID=2
-      - CONFIG_FILE=application-compose.conf
+      - 3000:3000
+    volumes:
+      - grafana_data:/var/lib/grafana
