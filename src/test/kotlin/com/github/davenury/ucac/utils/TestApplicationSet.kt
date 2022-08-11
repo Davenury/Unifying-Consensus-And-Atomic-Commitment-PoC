@@ -26,7 +26,7 @@ class TestApplicationSet(
 
         var currentApp = 0
         apps = (1..numberOfPeersets).map { peersetId ->
-            (1..numberOfPeersInPeersets[peersetId]).map { peerId ->
+            (1..numberOfPeersInPeersets[peersetId - 1]).map { peerId ->
                 currentApp++
                 createApplication(
                     arrayOf("$peerId", "$peersetId"),
