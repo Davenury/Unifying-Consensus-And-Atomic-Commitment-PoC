@@ -1,11 +1,9 @@
 package com.example.consensus.raft.infrastructure
 
 import com.example.*
-import com.github.davenury.ucac.AdditionalActionConsensus
-import com.github.davenury.ucac.ConsensusTestAddon
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.domain.*
-import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -21,9 +19,9 @@ class RaftConsensusProtocolImpl(
     var peerAddress: String,
     private val ctx: ExecutorCoroutineDispatcher,
     private var consensusPeers: List<String>,
-    private val addons: Map<ConsensusTestAddon, AdditionalActionConsensus> = emptyMap(),
+    private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     private val protocolClient: RaftProtocolClient,
-) : ConsensusProtocol<Change, History>, RaftConsensusProtocol {
+) : ConsensusProtocol<Change, History>, RaftConsensusProtocol, SignalSubject {
 
     private var leaderIteration: Int = 0
     private val semaphore: Semaphore = Semaphore(1)
@@ -33,7 +31,7 @@ class RaftConsensusProtocolImpl(
     private var leader: Int? = null
     private var leaderAddress: String? = null
     private var state: Ledger = Ledger()
-    private var timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofSeconds(2),ctx)
+    private var timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofSeconds(2), ctx)
 
     override suspend fun begin() {
         logger.info("$peerId - Start raft on address $peerAddress, other peers: $consensusPeers")
@@ -188,8 +186,7 @@ class RaftConsensusProtocolImpl(
         if (responses.all { it?.accepted == true }) {
             timer = getLeaderTimer()
             timer.startCounting { sendHeartbeat() }
-        }
-        else timer.startCounting {
+        } else timer.startCounting {
             logger.info("$peerId - some peer increase iteration try to become leader")
             sendLeaderRequest()
         }
@@ -218,9 +215,9 @@ class RaftConsensusProtocolImpl(
 
             timer.cancelCounting()
             sendHeartbeat()
-            addons[ConsensusTestAddon.AfterProposingChange]?.invoke()
+            signalPublisher.signal(Signal.ConsensusAfterProposingChange, this, listOf(consensusPeers), null)
             return ConsensusSuccess
-        } else if(leaderAddress != null) {
+        } else if (leaderAddress != null) {
             return try {
                 httpClient
                     .post<String>("http://$leaderAddress/consensus/request_apply_change") {
@@ -233,7 +230,7 @@ class RaftConsensusProtocolImpl(
                 "$peerId - $e"
                 ConsensusFailure
             }
-        } else{
+        } else {
             val id = state.proposeChange(changeWithAcceptNum, leaderIteration)
             ledgerIdToVoteGranted[id] = 0
             timer.startCounting {

@@ -212,16 +212,16 @@ class ConsensusSpec {
     @Test
     fun `leader fails during processing change`(): Unit = runBlocking {
 
-        val leaderAction: AdditionalActionConsensus = {
+        val leaderAction = SignalListener {
             throw RuntimeException("Failed after proposing change")
         }
 
-        val addons = mapOf(ConsensusTestAddon.AfterProposingChange to leaderAction)
+        val signalListeners = mapOf(Signal.ConsensusAfterProposingChange to leaderAction)
 
         var peers = (1..5).map {
             createApplication(
                 arrayOf(it.toString(), "1"),
-                consensusAdditionalActions = addons,
+                signalListeners = signalListeners,
                 mode = TestApplicationMode(it, 1)
             )
         }

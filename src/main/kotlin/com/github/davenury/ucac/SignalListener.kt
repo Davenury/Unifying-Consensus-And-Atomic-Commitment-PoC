@@ -12,14 +12,9 @@ enum class Signal {
     BeforeSendingApply,
     OnHandlingApplyBegin,
     OnHandlingApplyEnd,
+    ConsensusAfterProposingChange
 }
 
-typealias AdditionalActionConsensus = suspend () -> Unit
-
-enum class ConsensusTestAddon {
-    BeforeSendingElect,
-    AfterProposingChange
-}
 
 interface SignalSubject
 

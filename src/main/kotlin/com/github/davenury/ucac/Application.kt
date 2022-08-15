@@ -36,16 +36,14 @@ fun main(args: Array<String>) {
 fun createApplication(
     args: Array<String>,
     signalListeners: Map<Signal, SignalListener> = emptyMap(),
-    consensusAdditionalActions: Map<ConsensusTestAddon, AdditionalActionConsensus> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
     mode: ApplicationMode = LocalDevelopmentApplicationMode(args)
 ): Application {
-    return Application(signalListeners,consensusAdditionalActions, configOverrides, mode)
+    return Application(signalListeners,configOverrides, mode)
 }
 
 class Application constructor(
     private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
-    val consensusAdditionalActions: Map<ConsensusTestAddon, AdditionalActionConsensus>,
     configOverrides: Map<String, Any>,
     private val mode: ApplicationMode
 ) {
@@ -61,6 +59,8 @@ class Application constructor(
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
 //            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
+            val signalPublisher = SignalPublisher(signalListeners)
+
             ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
 
             consensusProtocol = RaftConsensusProtocolImpl(
@@ -68,13 +68,13 @@ class Application constructor(
                 mode.host,
                 ctx,
                 if (mode is TestApplicationMode) listOf() else mode.otherPeers[mode.peersetId - 1],
-                consensusAdditionalActions,
+                signalPublisher,
                 RaftProtocolClientImpl()
             )
 
 //            val historyManagement = RatisHistoryManagement(raftNode!!)
             val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-            val signalPublisher = SignalPublisher(signalListeners)
+
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
