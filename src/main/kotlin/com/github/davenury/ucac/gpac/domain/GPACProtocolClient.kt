@@ -1,5 +1,6 @@
 package com.github.davenury.ucac.gpac.domain
 
+import com.github.davenury.ucac.AbstractProtocolClient
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -22,7 +23,7 @@ interface GPACProtocolClient {
     suspend fun sendApply(otherPeers: List<List<String>>, message: Apply): List<Int>
 }
 
-class GPACProtocolClientImpl : GPACProtocolClient {
+class GPACProtocolClientImpl : AbstractProtocolClient(), GPACProtocolClient {
 
     override suspend fun sendElectMe(
         otherPeers: List<List<String>>,
@@ -61,7 +62,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         val responses: List<List<K>> = otherPeers.map { peersets ->
             peersets.map {
                 CoroutineScope(Dispatchers.IO).async {
-                    val (httpResult, value) = httpCall<K, T>("http://$it/$urlPath", requestBody, errorMessage)
+                    val (httpResult, value) = gpacHttpCall<K, T>("http://$it/$urlPath", requestBody, errorMessage)
                     acc.add(value)
                     httpResult
                 }
@@ -84,20 +85,13 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         )
     }
 
-    private suspend inline fun <reified K, T> httpCall(
+    private suspend inline fun <reified K, T> gpacHttpCall(
         url: String,
         requestBody: T,
         errorMessage: (String, Throwable) -> String
     ): Pair<K?, Int> =
         try {
-            logger.info("Sending to: $url")
-            httpClient.post<K>(url) {
-                contentType(ContentType.Application.Json)
-                accept(ContentType.Application.Json)
-                body = requestBody!!
-            }.let {
-                Pair(it, 0)
-            }
+            Pair(httpCall<T, K>(url, requestBody), 0)
         } catch (e: ClientRequestException) {
             // since we're updating ballot number in electing phase, this mechanism lets us
             // get any aggregation from all responses from "Not electing you" response, so we can get
