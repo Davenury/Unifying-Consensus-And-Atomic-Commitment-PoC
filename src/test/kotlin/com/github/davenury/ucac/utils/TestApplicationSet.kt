@@ -9,14 +9,14 @@ class TestApplicationSet(
     numberOfPeersets: Int,
     numberOfPeersInPeersets: List<Int>,
     signalListeners: Map<Int, Map<Signal, SignalListener>> = emptyMap(),
-    configOverrides: Map<String, Any> = emptyMap()
+    configOverrides: Map<Int, Map<String, Any>> = emptyMap(),
+    appsToExclude: List<Int> = emptyList()
 ) {
 
-    private val apps: MutableList<MutableList<Application>> = mutableListOf()
+    private var apps: MutableList<MutableList<Application>> = mutableListOf()
     private val peers: List<List<String>>
 
     init {
-
         val ratisConfigOverrides = mapOf(
             "raft.server.addresses" to List(numberOfPeersets) {
                 List(numberOfPeersInPeersets[it]) { "localhost:${Random.nextInt(5000, 20000) + 11124}" }
@@ -24,39 +24,44 @@ class TestApplicationSet(
             "raft.clusterGroupIds" to List(numberOfPeersets) { UUID.randomUUID() }
         )
 
-        // applications creation
-        repeat(numberOfPeersets) { peersetId ->
-            val peersetApps = mutableListOf<Application>()
-            repeat(numberOfPeersInPeersets[peersetId]) { peerId ->
-                val absoluteIndex = apps.flatten().size + peerId + 1
-                peersetApps.add(
-                    createApplication(
-                        arrayOf("${peerId + 1}", "${peersetId + 1}"),
-                        signalListeners[absoluteIndex] ?: emptyMap(),
-                        ratisConfigOverrides + configOverrides,
-                        TestApplicationMode(peerId + 1, peersetId + 1),
-                    )
+        var currentApp = 0
+        apps = (1..numberOfPeersets).map { peersetId ->
+            (1..numberOfPeersInPeersets[peersetId - 1]).map { peerId ->
+                currentApp++
+                createApplication(
+                    arrayOf("$peerId", "$peersetId"),
+                    signalListeners[currentApp] ?: emptyMap(),
+                    ratisConfigOverrides + (configOverrides[peerId] ?: emptyMap()),
+                    TestApplicationMode(peerId, peersetId)
                 )
-            }
-            apps.add(peersetApps)
-        }
+            }.toMutableList()
+        }.toMutableList()
 
         // start and address discovery
-        apps.flatten().forEach { app -> app.startNonblocking() }
+        apps
+            .flatten()
+            .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
+            .forEach { it.startNonblocking() }
         peers =
             apps.flatten()
                 .asSequence()
-                .withIndex()
-                .groupBy{ it.value.getPeersetId() }
+                .mapIndexed { index, it ->
+                    val address = if (index + 1 in appsToExclude) "localhost:0" else "localhost:${it.getBoundPort()}"
+                    Pair(it, address)
+                }
+                .groupBy{ it.first.getPeersetId() }
                 .values
-                .asSequence()
-                .map { it.map { it.value } }
-                .map { it.map { "localhost:${it.getBoundPort()}" } }.toMutableList().map { it.toMutableList() }
+                .map { it.map { it.second } }
                 .toList()
 
-        apps.flatten().forEachIndexed { index, application ->
-            val filteredPeers = peers.map { peerset -> peerset.filter { it != "localhost:${application.getBoundPort()}" } }
-            application.setOtherPeers(filteredPeers)
+        apps
+            .flatten()
+            .zip(peers.flatten())
+            .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
+            .forEach { (app, peer) ->
+                app.setOtherPeers(
+                    peers.map { it.filterNot { it == peer } }
+                )
         }
     }
 

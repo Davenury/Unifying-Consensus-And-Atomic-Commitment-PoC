@@ -1,5 +1,7 @@
 package com.github.davenury.ucac
 
+import org.slf4j.LoggerFactory
+
 sealed class ApplicationMode {
     abstract val port: Int
     abstract val host: String
@@ -66,11 +68,13 @@ object DockerComposeApplicationMode: ApplicationMode() {
                 }
             }
         } catch (e: java.lang.IndexOutOfBoundsException) {
-            println(
+            logger.error(
                 "Peers addresses doesn't have enough elements in list - peers addresses length: ${config.peers.peersAddresses.size}, index: ${peersetId - 1}"
             )
             throw IllegalStateException()
         }
+
+    private val logger = LoggerFactory.getLogger(DockerComposeApplicationMode::class.java)
 
 }
 
@@ -79,23 +83,20 @@ class LocalDevelopmentApplicationMode(
 ): ApplicationMode() {
     override val host: String
     override val port: Int
-    override val peersetId: Int
+    override val peersetId: Int = args[1].toInt()
     override val otherPeers: List<List<String>>
-    override val nodeId: Int
+    override val nodeId: Int = args[0].toInt()
 
     init {
         val config = loadConfig()
-        val _peersetId = args[1].toInt()
         val portOffsetFromPreviousPeersets: Int =
             config.peers.peersAddresses.foldIndexed(0) { index, acc, strings ->
-                if (index <= _peersetId - 2) acc + strings.size else acc + 0
+                if (index <= peersetId - 2) acc + strings.size else acc + 0
             }
 
         host = "localhost"
         port = 8080 + args[0].toInt() + portOffsetFromPreviousPeersets
-        peersetId = _peersetId
         otherPeers = getOtherPeers(config, port)
-        nodeId = args[0].toInt()
     }
 
     private fun getOtherPeers(config: Config, port: Int): List<List<String>> =
@@ -113,10 +114,14 @@ class LocalDevelopmentApplicationMode(
                 }
             }
         } catch (e: java.lang.IndexOutOfBoundsException) {
-            println(
+            logger.error(
                 "Peers addresses doesn't have enough elements in list - peers addresses length: ${config.peers.peersAddresses.size}, index: ${peersetId - 1}"
             )
             throw IllegalStateException()
         }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(LocalDevelopmentApplicationMode::class.java)
+    }
 
 }
