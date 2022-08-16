@@ -90,7 +90,6 @@ class Application constructor(
                     timer,
                     protocolClient,
                     transactionBlocker,
-                    mode.otherPeers,
                     signalPublisher,
                     mode.peersetId,
                     mode.nodeId,
@@ -184,7 +183,6 @@ class Application constructor(
     }
 
     fun setOtherPeers(otherPeers: List<List<String>>) {
-        gpacProtocol.setOtherPeers(otherPeers)
         consensusProtocol.setOtherPeers(otherPeers[mode.peersetId - 1])
     }
 

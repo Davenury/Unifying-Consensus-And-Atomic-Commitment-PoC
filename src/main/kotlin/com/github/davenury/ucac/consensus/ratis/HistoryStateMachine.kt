@@ -7,7 +7,6 @@ import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory
 
-
 class HistoryStateMachine(override var state: History = mutableListOf()) :
     StateMachine<History>(state) {
 

@@ -5,33 +5,26 @@ import org.slf4j.LoggerFactory
 
 enum class Operation {
     ADD_RELATION {
-        override fun toChange(changeDto: ChangeDto): Change =
-            readChange<AddRelationChange>(changeDto)
+        override fun toChange(changeDto: ChangeDto): Change {
+            return AddRelationChange(changeDto.properties["from"]!!, changeDto.properties["to"]!!, changeDto.peers)
+        }
     },
     DELETE_RELATION {
-        override fun toChange(changeDto: ChangeDto): Change =
-            readChange<DeleteRelationChange>(changeDto)
+        override fun toChange(changeDto: ChangeDto): Change {
+            return DeleteRelationChange(changeDto.properties["from"]!!, changeDto.properties["to"]!!, changeDto.peers)
+        }
     },
     ADD_USER {
-        override fun toChange(changeDto: ChangeDto): Change =
-            readChange<AddUserChange>(changeDto)
+        override fun toChange(changeDto: ChangeDto): Change {
+            return AddUserChange(changeDto.properties["userName"]!!, changeDto.peers)
+        }
     },
     ADD_GROUP {
-        override fun toChange(changeDto: ChangeDto): Change =
-            readChange<AddGroupChange>(changeDto)
+        override fun toChange(changeDto: ChangeDto): Change {
+            return AddGroupChange(changeDto.properties["groupName"]!!, changeDto.peers)
+        }
     };
 
-    companion object {
-        private val logger = LoggerFactory.getLogger(Operation::class.java)
-
-        private inline fun <reified T : Change> readChange(changeDto: ChangeDto): Change =
-            try {
-                objectMapper.convertValue(changeDto.properties, T::class.java)
-            } catch (ex: Exception) {
-                logger.debug("Missing parameter exception while creating add relation change: ${ex.message}")
-                throw MissingParameterException(ex.message)
-            }
-    }
-
+    // Something like this may be problematic with complex fields, but since we don't need them now, we don't need to worry about them
     abstract fun toChange(changeDto: ChangeDto): Change
 }

@@ -11,6 +11,7 @@ import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.*
+import kotlin.collections.HashMap
 
 class HistoryRaftNode(peerId: Int, peersetId: Int, constants: RaftConfiguration) :
     RaftNode(peerId, HistoryStateMachine(), File("./history-$peerId-$peersetId-${UUID.randomUUID()}"), constants),
@@ -29,8 +30,12 @@ class HistoryRaftNode(peerId: Int, peersetId: Int, constants: RaftConfiguration)
             objectMapper
                 .readValue(result, mutableListOf<LinkedHashMap<String, Any>>().javaClass)
                 .map {
+                    val change = objectMapper.convertValue(it["change"], HashMap<String, Any>()::class.java)
                     ChangeWithAcceptNum(
-                        ChangeDto(it["change"]!! as Map<String, String>).toChange(),
+                        ChangeDto(
+                            (it["change"] as Map<String, Any>).map { e -> e.key to e.value.toString() }.toMap(),
+                            change["peers"]!! as List<List<String>>
+                        ).toChange(),
                         it["acceptNum"] as Int
                     )
                 }

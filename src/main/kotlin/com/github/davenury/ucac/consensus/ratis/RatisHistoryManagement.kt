@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory
 
 class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : HistoryManagement(historyRaftNode) {
     override fun getLastChange(): ChangeWithAcceptNum? = try {
-        historyRaftNode.getState()?.last()
+        historyRaftNode.getState().last()
     } catch (ex: java.util.NoSuchElementException) {
         logger.error("History is empty!")
         null

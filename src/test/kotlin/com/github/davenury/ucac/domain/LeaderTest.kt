@@ -22,21 +22,6 @@ class LeaderTest {
 
     val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
 
-    @BeforeEach
-    fun setup() {
-        subject =
-            GPACProtocolImpl(
-                historyManagement,
-                3,
-                timer,
-                client,
-                transactionBlocker,
-                otherPeers,
-                myPeersetId = 0,
-                myNodeId = 0,
-            )
-    }
-
     @Test
     fun `should throw max retires exceeded, when too many times tried to be a leader`() {
         PeerTwo.stubForNotElectingYou()
@@ -91,9 +76,8 @@ class LeaderTest {
             timer,
             client,
             transactionBlocker,
-            otherPeers,
             myPeersetId = 0,
             myNodeId = 0,
         )
-    private val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"))
+    private val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"), listOf(listOf("localhost:9092", "localhost:9093")))
 }

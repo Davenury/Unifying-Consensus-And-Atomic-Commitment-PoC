@@ -37,7 +37,7 @@ class SignalPublisher(
 data class SignalData(
     val signal: Signal,
     val subject: SignalSubject,
-    val otherPeers: List<List<String>>,
+    val peers: List<List<String>>,
     val transaction: Transaction?,
 )
 
