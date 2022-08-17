@@ -24,6 +24,7 @@ class InMemoryHistoryManagementSpec {
         // given - some change
         val change = AddRelationChange("from", "to")
         // and - consensus protocol that's ok with changes
+        consensusProtocol.change = ChangeWithAcceptNum(change,1)
         consensusProtocol.setResponse(ConsensusSuccess)
         // when - change is proposed
         runBlocking {
@@ -37,6 +38,7 @@ class InMemoryHistoryManagementSpec {
         // given - some change
         val change = AddRelationChange("from", "to")
         // and - consensus protocol that isn't ok with changes
+        consensusProtocol.change = null
         consensusProtocol.setResponse(ConsensusFailure)
 
         // when - change is proposed

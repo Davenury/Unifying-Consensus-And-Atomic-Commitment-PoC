@@ -15,7 +15,7 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
             }
 
     abstract fun getLastChange(): ChangeWithAcceptNum?
-    abstract fun getState(): History?
+    abstract fun getState(): History
 
     /**
      * function used to check if history can be build given another change to perform

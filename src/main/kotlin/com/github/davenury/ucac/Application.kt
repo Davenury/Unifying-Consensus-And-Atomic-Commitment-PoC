@@ -2,6 +2,7 @@ package com.github.davenury.ucac
 
 import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.consensus.historyManagementRouting
 import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
@@ -9,7 +10,6 @@ import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
 import com.github.davenury.ucac.consensus.ratis.RaftConfiguration
 import com.github.davenury.ucac.consensus.ratis.RatisHistoryManagement
-import com.github.davenury.ucac.consensus.ratis.ratisRouting
 import com.github.davenury.ucac.gpac.api.gpacProtocolRouting
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
@@ -26,7 +26,6 @@ import io.netty.channel.socket.nio.NioServerSocketChannel
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
-import java.time.Duration
 import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
@@ -59,7 +58,7 @@ class Application constructor(
 
     init {
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
-            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
+//            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
             val signalPublisher = SignalPublisher(signalListeners)
 
@@ -74,8 +73,8 @@ class Application constructor(
                 RaftProtocolClientImpl()
             )
 
-            val historyManagement = RatisHistoryManagement(raftNode!!)
-//            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
+//            val historyManagement = RatisHistoryManagement(raftNode!!)
+            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
 
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
@@ -170,7 +169,7 @@ class Application constructor(
             }
 
             commonRouting(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
-            ratisRouting(historyManagement)
+            historyManagementRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
             consensusProtocolRouting(consensusProtocol)
 

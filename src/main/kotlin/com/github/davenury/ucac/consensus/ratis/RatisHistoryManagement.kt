@@ -17,7 +17,7 @@ class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : His
      * */
     override fun canBeBuild(newChange: Change): Boolean = true
 
-    override fun getState(): History? =
+    override fun getState(): History =
         historyRaftNode.getState()
 
     override fun build() {}

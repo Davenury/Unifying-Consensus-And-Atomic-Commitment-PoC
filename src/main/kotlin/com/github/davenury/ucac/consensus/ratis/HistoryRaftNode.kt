@@ -22,7 +22,7 @@ class HistoryRaftNode(peerId: Int, peersetId: Int, constants: RaftConfiguration)
         return if (result == "INVALID_OPERATION") ConsensusFailure else ConsensusSuccess
     }
 
-    override fun getState(): History? {
+    override fun getState(): History {
         val msg = HistoryStateMachine.OperationType.STATE.toString()
         val result = queryData(msg)
         return try {
@@ -37,7 +37,7 @@ class HistoryRaftNode(peerId: Int, peersetId: Int, constants: RaftConfiguration)
                 .toMutableList()
         } catch (e: Exception) {
             logger.error("Can't parse result from state machine \n ${e.message}")
-            null
+            mutableListOf()
         }
     }
 

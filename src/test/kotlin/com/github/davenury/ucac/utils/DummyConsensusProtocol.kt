@@ -2,6 +2,7 @@ package com.github.davenury.ucac.utils
 
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeWithAcceptNum
+import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
@@ -9,6 +10,7 @@ import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 
 object DummyConsensusProtocol : ConsensusProtocol<Change, MutableList<ChangeWithAcceptNum>> {
     private var response: ConsensusResult = ConsensusSuccess
+    public var change: ChangeWithAcceptNum? = null
 
     override suspend fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult = response
 
@@ -17,5 +19,8 @@ object DummyConsensusProtocol : ConsensusProtocol<Change, MutableList<ChangeWith
         this.response = response
     }
 
-    override fun getState(): MutableList<ChangeWithAcceptNum> = mutableListOf()
+    override fun getState(): MutableList<ChangeWithAcceptNum> = mutableListOf(change).filterNotNull().toMutableList()
+
+
+
 }
