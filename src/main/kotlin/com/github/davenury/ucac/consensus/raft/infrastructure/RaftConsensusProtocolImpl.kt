@@ -115,9 +115,7 @@ class RaftConsensusProtocolImpl(
         return true
     }
 
-    override suspend fun handleProposeChange(change: ChangeWithAcceptNum) {
-        proposeChange(change.change, change.acceptNum)
-    }
+    override suspend fun handleProposeChange(change: ChangeWithAcceptNum) = proposeChange(change.change, change.acceptNum)
 
     override fun setLeaderAddress(address: String) {
         peerAddress = address
@@ -222,12 +220,12 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun sendRequestToLeader(changeWithAcceptNum: ChangeWithAcceptNum): ConsensusResult = try {
-        httpClient
-            .post<String>("http://$leaderAddress/consensus/request_apply_change") {
+        val response = httpClient.post<String>("http://$leaderAddress/consensus/request_apply_change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
                 body = ConsensusProposeChange(changeWithAcceptNum.toDto())
             }
+        println("Response from leader: $response")
         ConsensusSuccess
     } catch (e: Exception) {
         logger.info("$peerId - $e")
@@ -255,7 +253,7 @@ class RaftConsensusProtocolImpl(
         }
     }
 
-    override fun getState(): History? {
+    override fun getState(): History {
         val history = state.getHistory()
         logger.info("$peerId - request for state: $history")
         return history

@@ -45,9 +45,9 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
             semaphore.acquire()
-            protocol.handleProposeChange(message.change.toChangeWithAcceptNum())
+            val result = protocol.handleProposeChange(message.change.toChangeWithAcceptNum())
             semaphore.release()
-            call.respond("OK")
+            call.respond(result)
         }
 //      Endpoints for tests
         get("/consensus/proposed_changes") {
