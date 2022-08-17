@@ -32,7 +32,7 @@ class ConsensusSpec {
     private val changePropagationDelay = 7_000L
     private val knownPeerIp = "127.0.0.1"
     private val unknownPeerIp = "198.18.0.0"
-    private val noneLeader = "null"
+    private val noneLeader = null
 
 
     @BeforeEach
@@ -165,7 +165,7 @@ class ConsensusSpec {
         expect {
 
             val secondLeaderAddress =
-                peers.filterNot { it != firstLeaderApplication }.first().let { askForLeaderAddress(it) }
+                peers.first().let { askForLeaderAddress(it) }
             that(secondLeaderAddress).isNotEqualTo(noneLeader)
             that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress)
         }
@@ -198,7 +198,7 @@ class ConsensusSpec {
         expect {
 
             val secondLeaderAddress =
-                peers.filterNot { it != firstLeaderApplication }.first().let { askForLeaderAddress(it) }
+                peers.first().let { askForLeaderAddress(it) }
             that(secondLeaderAddress).isNotEqualTo(noneLeader)
             that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress)
         }
@@ -506,11 +506,7 @@ class ConsensusSpec {
         try {
             consensusProperty.isAccessible = true
             val consensusProtocol = consensusProperty.get(app) as RaftConsensusProtocolImpl
-            consensusProtocol.javaClass.getDeclaredField("consensusPeers").let { field ->
-                field.isAccessible = true
-                leaderAddress = (field.get(consensusProtocol) as RaftConsensusProtocolImpl).getLeaderAddress()
-                field.isAccessible = false
-            }
+            leaderAddress = consensusProtocol.getLeaderAddress()
             return leaderAddress
         } finally {
             consensusProperty.isAccessible = consensusOldAccessible

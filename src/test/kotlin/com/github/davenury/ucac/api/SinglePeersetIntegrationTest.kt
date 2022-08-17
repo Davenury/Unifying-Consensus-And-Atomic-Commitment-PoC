@@ -197,7 +197,7 @@ class SinglePeersetIntegrationTest {
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
         phaser.arriveAndAwaitAdvance()
 
-        val response = testHttpClient.get<String>("http://${peers[0][3]}/change") {
+        val response = testHttpClient.get<String>("http://${peers[0][3]}/consensus/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -206,7 +206,7 @@ class SinglePeersetIntegrationTest {
         expectThat(change.changeDto.toChange()).isEqualTo(AddGroupChange("name"))
 
         // and should not execute this change couple of times
-        val response2 = testHttpClient.get<String>("http://${peers[0][1]}/changes") {
+        val response2 = testHttpClient.get<String>("http://${peers[0][1]}/consensus/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }

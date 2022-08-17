@@ -4,10 +4,9 @@ import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeDto
 import com.github.davenury.ucac.common.ChangeWithAcceptNum
 import com.github.davenury.ucac.common.History
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusFailure
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusSuccess
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory
 import java.io.File

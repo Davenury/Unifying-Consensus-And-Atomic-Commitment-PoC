@@ -3,8 +3,7 @@ package com.github.davenury.ucac.infrastructure
 import com.github.davenury.ucac.common.AddRelationChange
 import com.github.davenury.ucac.common.ChangeWithAcceptNum
 import com.github.davenury.ucac.common.InMemoryHistoryManagement
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusFailure
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusSuccess
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import com.github.davenury.ucac.utils.DummyConsensusProtocol
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach

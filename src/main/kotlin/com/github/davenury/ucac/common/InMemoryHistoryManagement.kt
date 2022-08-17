@@ -1,8 +1,7 @@
 package com.github.davenury.ucac.common
 
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusFailure
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusSuccess
 import org.slf4j.LoggerFactory
 
 class InMemoryHistoryManagement(
@@ -20,6 +19,10 @@ class InMemoryHistoryManagement(
                             HistoryChangeResult.HistoryChangeFailure
                         }
                         ConsensusSuccess -> {
+                            historyStorage.add(ChangeWithAcceptNum(change, acceptNum))
+                            HistoryChangeResult.HistoryChangeSuccess
+                        }
+                        ConsensusResultUnknown -> {
                             historyStorage.add(ChangeWithAcceptNum(change, acceptNum))
                             HistoryChangeResult.HistoryChangeSuccess
                         }

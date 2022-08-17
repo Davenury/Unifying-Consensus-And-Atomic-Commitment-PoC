@@ -8,6 +8,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import java.time.Duration
 import org.slf4j.LoggerFactory
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import java.util.concurrent.Semaphore
 
 /** @author Kamil Jarosz */
@@ -18,11 +19,11 @@ class RaftConsensusProtocolImpl(
     private var consensusPeers: List<String>,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     private val protocolClient: RaftProtocolClient,
+    private val heartbeatDue: Duration = Duration.ofSeconds(4),
+    private val leaderTimeout: Duration = Duration.ofMillis(500)
 ) : ConsensusProtocol<Change, History>, RaftConsensusProtocol, SignalSubject {
 
     private var leaderIteration: Int = 0
-    private val semaphore: Semaphore = Semaphore(1)
-    private val voteGranted: Map<PeerId, ConsensusPeer> = mutableMapOf()
     private val peerUrlToLastPeerIndexes: MutableMap<String, PeerIndexes> = mutableMapOf()
     private val ledgerIdToVoteGranted: MutableMap<Int, Int> = mutableMapOf()
     private var leader: Int? = null
@@ -207,8 +208,16 @@ class RaftConsensusProtocolImpl(
         ledgerIdToVoteGranted[id] = 0
 
         timer.cancelCounting()
+//      Propose change
         sendHeartbeat()
         signalPublisher.signal(Signal.ConsensusAfterProposingChange, this, listOf(consensusPeers), null)
+
+        if (state.getLastAcceptedItemId() != id) return ConsensusResultUnknown
+
+//      If change accepted, propagate it
+        timer.cancelCounting()
+        sendHeartbeat()
+
         return ConsensusSuccess
     }
 
@@ -261,8 +270,6 @@ class RaftConsensusProtocolImpl(
 
     companion object {
         private val logger = LoggerFactory.getLogger(RaftConsensusProtocolImpl::class.java)
-        private val heartbeatDue = Duration.ofSeconds(4)
-        private val leaderTimeout = Duration.ofMillis(500)
     }
 }
 

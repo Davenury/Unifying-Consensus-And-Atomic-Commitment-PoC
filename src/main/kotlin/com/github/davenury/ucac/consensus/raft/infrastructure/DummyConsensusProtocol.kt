@@ -5,7 +5,7 @@ import com.github.davenury.ucac.common.ChangeWithAcceptNum
 import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusSuccess
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 
 class DummyConsensusProtocol : ConsensusProtocol<Change, History> {
     private val historyStorage: History = mutableListOf()

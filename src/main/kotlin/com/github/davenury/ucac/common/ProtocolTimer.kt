@@ -34,7 +34,7 @@ class ProtocolTimerImpl(
                         )
                     .let { Duration.ofMillis(it) }
                 val timeout = delay.plus(backoff)
-                delay(timeout as kotlin.time.Duration)
+                delay(timeout.toMillis())
                 action()
             }
 

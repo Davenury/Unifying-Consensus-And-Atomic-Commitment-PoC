@@ -1,22 +1,18 @@
 package com.github.davenury.ucac.common
 
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusFailure
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusSuccess
 
 abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
     open suspend fun change(change: Change, acceptNum: Int?) =
-            consensusProtocol.proposeChange(change, acceptNum)
-                .let {
-                    when (it) {
-                        ConsensusFailure -> {
-                            HistoryChangeResult.HistoryChangeFailure
-                        }
-                        ConsensusSuccess -> {
-                            HistoryChangeResult.HistoryChangeSuccess
-                        }
-                    }
+        consensusProtocol.proposeChange(change, acceptNum)
+            .let {
+                when (it) {
+                    ConsensusFailure -> HistoryChangeResult.HistoryChangeFailure
+                    ConsensusSuccess -> HistoryChangeResult.HistoryChangeSuccess
+                    ConsensusResultUnknown -> HistoryChangeResult.HistoryChangeSuccess
                 }
+            }
 
     abstract fun getLastChange(): ChangeWithAcceptNum?
     abstract fun getState(): History?

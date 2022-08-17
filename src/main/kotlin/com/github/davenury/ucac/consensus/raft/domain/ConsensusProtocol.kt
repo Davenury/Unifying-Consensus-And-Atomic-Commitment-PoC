@@ -6,8 +6,8 @@ interface ConsensusProtocol<A, B> {
     fun getState(): B?
 }
 
-sealed class ConsensusResult
 
-object ConsensusSuccess : ConsensusResult()
+enum class ConsensusResult {
+    ConsensusSuccess, ConsensusFailure, ConsensusResultUnknown
+}
 
-object ConsensusFailure : ConsensusResult()
