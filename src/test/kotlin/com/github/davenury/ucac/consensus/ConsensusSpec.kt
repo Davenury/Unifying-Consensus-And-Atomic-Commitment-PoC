@@ -105,11 +105,10 @@ class ConsensusSpec {
 
         peers.forEach { it.startNonblocking() }
         updatePeersAddresses(peers, allPeers.size - peers.size)
-        val peerAddresses = getPeerAddresses(peers)
 
         delay(leaderElectionDelay)
 
-        peerAddresses.forEach {
+        peers.forEach {
             expect {
                 val leaderAddress = askForLeaderAddress(it)
                 that(leaderAddress).isEqualTo(noneLeader)
@@ -128,11 +127,10 @@ class ConsensusSpec {
         val peers = allPeers.take(3)
         peers.forEach { it.startNonblocking() }
         updatePeersAddresses(peers, allPeers.size - peers.size)
-        val peerAddresses = getPeerAddresses(peers)
 
         delay(leaderElectionDelay * 2)
 
-        peerAddresses.forEach {
+        peers.forEach {
             expect {
                 val leaderAddress = askForLeaderAddress(it)
                 that(leaderAddress).isNotEqualTo(noneLeader)
@@ -167,7 +165,7 @@ class ConsensusSpec {
         expect {
 
             val secondLeaderAddress =
-                peerAddresses.filterNot { it.contains(firstLeaderPort) }.first().let { askForLeaderAddress(it) }
+                peers.filterNot { it != firstLeaderApplication }.first().let { askForLeaderAddress(it) }
             that(secondLeaderAddress).isNotEqualTo(noneLeader)
             that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress)
         }
@@ -200,7 +198,7 @@ class ConsensusSpec {
         expect {
 
             val secondLeaderAddress =
-                peerAddresses.filterNot { it.contains(firstLeaderPort) }.first().let { askForLeaderAddress(it) }
+                peers.filterNot { it != firstLeaderApplication }.first().let { askForLeaderAddress(it) }
             that(secondLeaderAddress).isNotEqualTo(noneLeader)
             that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress)
         }
@@ -500,16 +498,29 @@ class ConsensusSpec {
     private suspend fun askForProposedChanges(peer: String) = genericAskForChange("proposed_changes", peer)
     private suspend fun askForAcceptedChanges(peer: String) = genericAskForChange("accepted_changes", peer)
 
-    private suspend fun askForLeaderAddress(peer: String) =
-        testHttpClient.post<String>("http://$peer/consensus/leader_address") {
-            contentType(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
+    private fun askForLeaderAddress(app: Application): String? {
+        val consensusProperty =
+            Application::class.declaredMemberProperties.single { it.name == "consensusProtocol" }
+        val consensusOldAccessible = consensusProperty.isAccessible
+        var leaderAddress: String? = null
+        try {
+            consensusProperty.isAccessible = true
+            val consensusProtocol = consensusProperty.get(app) as RaftConsensusProtocolImpl
+            consensusProtocol.javaClass.getDeclaredField("consensusPeers").let { field ->
+                field.isAccessible = true
+                leaderAddress = (field.get(consensusProtocol) as RaftConsensusProtocolImpl).getLeaderAddress()
+                field.isAccessible = false
+            }
+            return leaderAddress
+        } finally {
+            consensusProperty.isAccessible = consensusOldAccessible
         }
+    }
 
     private suspend fun getLeaderAddressPortAndApplication(peers: List<Application>): LeaderAddressPortAndApplication {
         val peerAddresses = getPeerAddresses(peers)
         val address =
-            askForLeaderAddress(peerAddresses[0])
+            askForLeaderAddress(peers[0])!!
 
         expect {
             that(address).isNotEqualTo(noneLeader)
@@ -544,20 +555,7 @@ class ConsensusSpec {
 
     private fun modifyPeers(app: Application, peers: List<String>) {
         val peers = peers.map { it.replace("http://", "") }
-        val consensusProperty =
-            Application::class.declaredMemberProperties.single { it.name == "consensusProtocol" }
-        val consensusOldAccessible = consensusProperty.isAccessible
-        try {
-            consensusProperty.isAccessible = true
-            val consensusProtocol = consensusProperty.get(app) as RaftConsensusProtocolImpl
-            consensusProtocol.javaClass.getDeclaredField("consensusPeers").let { field ->
-                field.isAccessible = true
-                field.set(consensusProtocol, peers)
-                field.isAccessible = false
-            }
-        } finally {
-            consensusProperty.isAccessible = consensusOldAccessible
-        }
+        app.setOtherPeers(listOf(peers))
     }
 
 

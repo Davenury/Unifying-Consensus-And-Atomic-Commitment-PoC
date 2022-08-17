@@ -1,7 +1,9 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
-import com.github.davenury.ucac.AbstractProtocolClient
 import com.github.davenury.ucac.consensus.raft.domain.*
+import com.github.davenury.ucac.httpClient
+import io.ktor.client.request.*
+import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -15,7 +17,7 @@ interface RaftProtocolClient {
     suspend fun sendConsensusHeartbeat(peersWithMessage: List<Pair<String, ConsensusHeartbeat>>): List<ConsensusHeartbeatResponse?>
 }
 
-class RaftProtocolClientImpl : RaftProtocolClient, AbstractProtocolClient() {
+class RaftProtocolClientImpl : RaftProtocolClient {
 
     override suspend fun sendConsensusElectMe(
         otherPeers: List<String>,
@@ -61,7 +63,12 @@ class RaftProtocolClientImpl : RaftProtocolClient, AbstractProtocolClient() {
         url: String,
         message: Message
     ): Response? = try {
-        httpCall<Message, Response>(url, message)
+        logger.info("Sending to: $url")
+        httpClient.post<Response>(url) {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            body = message!!
+        }
     } catch (e: Exception) {
         logger.error("Request to $url ends with: $e")
         null

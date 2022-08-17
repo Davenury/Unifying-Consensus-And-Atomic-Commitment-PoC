@@ -12,7 +12,7 @@ data class Ledger(
 
     fun updateLedger(acceptedItems: List<LedgerItem>, proposedItems: List<LedgerItem>) {
 
-        val newAcceptedItems = acceptedItems.filterNot { this.acceptedItems.contains(it) }
+        val newAcceptedItems = acceptedItems - this.acceptedItems.toSet()
         this.acceptedItems.addAll(newAcceptedItems)
         val acceptedIds = acceptedItems.map { it.id }
 

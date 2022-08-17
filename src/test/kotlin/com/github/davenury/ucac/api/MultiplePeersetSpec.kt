@@ -67,7 +67,7 @@ class MultiplePeersetSpec {
 
         // and - there's only one change in history of both peersets
         askForChanges("http://${peers[0][1]}")
-            .let { it ->
+            .let {
                 expect {
                     that(it.size).isGreaterThanOrEqualTo(1)
                     that(it[0]).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName"), 1))
@@ -75,7 +75,7 @@ class MultiplePeersetSpec {
             }
 
         askForChanges("http://${peers[1][0]}")
-            .let { it ->
+            .let {
                 expect {
                     that(it.size).isGreaterThanOrEqualTo(1)
                     that(it[0]).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName"), 1))
@@ -104,7 +104,7 @@ class MultiplePeersetSpec {
 
         // then - transaction should not be executed
         askForChanges("http://${peers[0][2]}")
-            .let { it ->
+            .let {
                 expect {
                     that(it.size).isEqualTo(0)
                 }
@@ -136,7 +136,7 @@ class MultiplePeersetSpec {
 
         // then - transaction should not be executed
         askForChanges("http://${peers[0][1]}")
-            .let { it ->
+            .let {
                 expect {
                     that(it.size).isEqualTo(0)
                 }
@@ -156,7 +156,7 @@ class MultiplePeersetSpec {
 
         // then - transaction should be executed in every peerset
         askForChanges("http://${peers[0][1]}")
-            .let { it ->
+            .let {
                 expect {
                     that(it.size).isGreaterThanOrEqualTo(1)
                     that(it[0]).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName"), 1))
@@ -164,7 +164,7 @@ class MultiplePeersetSpec {
             }
 
         askForChanges("http://${peers[1][0]}")
-            .let { it ->
+            .let {
                 expect {
                     that(it.size).isGreaterThanOrEqualTo(1)
                     that(it[0]).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName"), 1))
@@ -230,7 +230,7 @@ class MultiplePeersetSpec {
 
         peers.flatten().forEach {
             askForChanges("http://$it")
-                .let { it ->
+                .let {
                     expect {
                         that(it.size).isGreaterThanOrEqualTo(1)
                         that(it[0].change).isEqualTo(AddUserChange("userName"))
@@ -304,7 +304,7 @@ class MultiplePeersetSpec {
 
             peers.flatten().forEach {
                 askForChanges("http://$it")
-                    .let { it ->
+                    .let {
                         expect {
                             that(it.size).isGreaterThanOrEqualTo(1)
                             that(it[0].change).isEqualTo(AddUserChange("userName"))

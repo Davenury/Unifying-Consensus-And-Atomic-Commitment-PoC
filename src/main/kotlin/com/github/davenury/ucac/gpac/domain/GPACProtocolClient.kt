@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.gpac.domain
 
-import com.github.davenury.ucac.AbstractProtocolClient
+import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -23,7 +23,7 @@ interface GPACProtocolClient {
     suspend fun sendApply(otherPeers: List<List<String>>, message: Apply): List<Int>
 }
 
-class GPACProtocolClientImpl : AbstractProtocolClient(), GPACProtocolClient {
+class GPACProtocolClientImpl :  GPACProtocolClient {
 
     override suspend fun sendElectMe(
         otherPeers: List<List<String>>,
@@ -85,13 +85,19 @@ class GPACProtocolClientImpl : AbstractProtocolClient(), GPACProtocolClient {
         )
     }
 
-    private suspend inline fun <reified K, T> gpacHttpCall(
+    private suspend inline fun <reified Response, Message> gpacHttpCall(
         url: String,
-        requestBody: T,
+        requestBody: Message,
         errorMessage: (String, Throwable) -> String
-    ): Pair<K?, Int> =
+    ): Pair<Response?, Int> =
         try {
-            Pair(httpCall<T, K>(url, requestBody), 0)
+            logger.info("Sending to: $url")
+            val response = httpClient.post<Response>(url) {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+                body = requestBody!!
+            }
+            Pair(response, 0)
         } catch (e: ClientRequestException) {
             // since we're updating ballot number in electing phase, this mechanism lets us
             // get any aggregation from all responses from "Not electing you" response, so we can get

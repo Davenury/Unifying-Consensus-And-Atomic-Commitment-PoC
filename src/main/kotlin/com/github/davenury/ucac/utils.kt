@@ -31,24 +31,3 @@ val testHttpClient = HttpClient(OkHttp) {
     }
 }
 
-
-open class AbstractProtocolClient {
-
-
-    suspend inline fun <Message, reified Response> httpCall(
-        url: String,
-        requestBody: Message,
-    ): Response {
-        logger.info("Sending to: $url")
-        return httpClient.post<Response>(url) {
-            contentType(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
-            body = requestBody!!
-        }
-    }
-
-    companion object {
-        val logger = LoggerFactory.getLogger(RaftProtocolClientImpl::class.java)
-    }
-
-}

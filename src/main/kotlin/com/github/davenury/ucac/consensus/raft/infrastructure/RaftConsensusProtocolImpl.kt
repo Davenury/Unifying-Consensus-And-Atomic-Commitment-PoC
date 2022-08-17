@@ -1,6 +1,5 @@
 package com.example.consensus.raft.infrastructure
 
-import com.example.*
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.domain.*
@@ -10,8 +9,6 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import java.time.Duration
 import org.slf4j.LoggerFactory
 import java.util.concurrent.Semaphore
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 
 /** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
@@ -102,12 +99,11 @@ class RaftConsensusProtocolImpl(
         restartLeaderTimeout()
     }
 
-    override suspend fun handleHeartbeat(
-        peerId: Int,
-        iteration: Int,
-        acceptedChanges: List<LedgerItem>,
-        proposedChanges: List<LedgerItem>
-    ): Boolean {
+    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): Boolean {
+        val iteration = heartbeat.iteration
+        val peerId = heartbeat.peerId
+        val acceptedChanges = heartbeat.acceptedChanges.map { it.toLedgerItem() }
+        val proposedChanges = heartbeat.proposedChanges.map { it.toLedgerItem() }
 
         logger.info("HandleHeartbeat in ${this.peerId} from $peerId $iteration $leaderIteration - true leader is $leader")
         if (iteration < leaderIteration || peerId != leader) return false
@@ -122,7 +118,7 @@ class RaftConsensusProtocolImpl(
         proposeChange(change.change, change.acceptNum)
     }
 
-    override fun setLeaderAddress(address: String){
+    override fun setLeaderAddress(address: String) {
         peerAddress = address
     }
 
@@ -151,9 +147,8 @@ class RaftConsensusProtocolImpl(
         val responses = protocolClient.sendConsensusHeartbeat(peersWithMessage)
         val result: List<Boolean> = consensusPeers.zip(responses)
             .filter { it.second?.accepted ?: false }
-            .map { pair ->
+            .map { (peerUrl, heartbeatResponse) ->
 
-                val peerUrl = pair.first
                 val peerIndexes = peerUrlToLastPeerIndexes.getOrDefault(peerUrl, PeerIndexes(-1, -1))
                 val newAcceptedChanges = state.getNewAcceptedItems(peerIndexes.acceptedIndex)
                 val newProposedChanges = state.getNewProposedItems(peerIndexes.acknowledgedIndex)
@@ -172,7 +167,7 @@ class RaftConsensusProtocolImpl(
                     peerUrlToLastPeerIndexes[peerUrl] =
                         newPeerIndexes.copy(acceptedIndex = newAcceptedChanges.maxOf { it.id })
                 }
-                pair.second!!.accepted
+                heartbeatResponse!!.accepted
             }
 
         val time = Duration.ofNanos(System.nanoTime() - start)
@@ -205,43 +200,49 @@ class RaftConsensusProtocolImpl(
         }
     }
 
+    private suspend fun proposeChangeToLedger(changeWithAcceptNum: ChangeWithAcceptNum): ConsensusResult {
+        if (state.changeAlreadyProposed(changeWithAcceptNum)) return ConsensusFailure
+        val id = state.proposeChange(changeWithAcceptNum, leaderIteration)
+
+        ledgerIdToVoteGranted[id] = 0
+
+        timer.cancelCounting()
+        sendHeartbeat()
+        signalPublisher.signal(Signal.ConsensusAfterProposingChange, this, listOf(consensusPeers), null)
+        return ConsensusSuccess
+    }
+
+    private suspend fun sendRequestToLeader(changeWithAcceptNum: ChangeWithAcceptNum): ConsensusResult = try {
+        httpClient
+            .post<String>("http://$leaderAddress/consensus/request_apply_change") {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+                body = ConsensusProposeChange(changeWithAcceptNum.toDto())
+            }
+        ConsensusSuccess
+    } catch (e: Exception) {
+        logger.info("$peerId - $e")
+        ConsensusFailure
+    }
+
+    private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: ChangeWithAcceptNum): ConsensusResult {
+        val id = state.proposeChange(changeWithAcceptNum, leaderIteration)
+        ledgerIdToVoteGranted[id] = 0
+        timer.startCounting {
+            logger.info("$peerId - change was proposed a no leader is elected")
+            sendLeaderRequest()
+        }
+        return ConsensusSuccess
+    }
 
     override suspend fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult {
         // TODO
         val changeWithAcceptNum = ChangeWithAcceptNum(change, acceptNum)
         logger.info("$peerId received change: $changeWithAcceptNum")
-        if (amILeader()) {
-
-            if (state.changeAlreadyProposed(changeWithAcceptNum)) return ConsensusFailure
-            val id = state.proposeChange(changeWithAcceptNum, leaderIteration)
-
-            ledgerIdToVoteGranted[id] = 0
-
-            timer.cancelCounting()
-            sendHeartbeat()
-            signalPublisher.signal(Signal.ConsensusAfterProposingChange, this, listOf(consensusPeers), null)
-            return ConsensusSuccess
-        } else if (leaderAddress != null) {
-            return try {
-                httpClient
-                    .post<String>("http://$leaderAddress/consensus/request_apply_change") {
-                        contentType(ContentType.Application.Json)
-                        accept(ContentType.Application.Json)
-                        body = ConsensusProposeChange(changeWithAcceptNum.toDto())
-                    }
-                ConsensusSuccess
-            } catch (e: Exception) {
-                "$peerId - $e"
-                ConsensusFailure
-            }
-        } else {
-            val id = state.proposeChange(changeWithAcceptNum, leaderIteration)
-            ledgerIdToVoteGranted[id] = 0
-            timer.startCounting {
-                logger.info("$peerId - change was proposed a no leader is elected")
-                sendLeaderRequest()
-            }
-            return ConsensusSuccess
+        return when {
+            amILeader() -> proposeChangeToLedger(changeWithAcceptNum)
+            leaderAddress != null -> sendRequestToLeader(changeWithAcceptNum)
+            else -> tryToProposeChangeMyself(changeWithAcceptNum)
         }
     }
 
@@ -273,13 +274,3 @@ data class ConsensusPeer(
     val peerId: Int,
     val peerAddress: String
 )
-
-//data class ConsensusPeer(
-//    val peerId: PeerId,
-//    val voteGranted: Boolean,
-//    val rpcDue: Duration,
-//    val heartbeatDue: Duration,
-//    val matchIndex: Int,
-//    // maybe optional
-//    val nextIndex: Int
-//)

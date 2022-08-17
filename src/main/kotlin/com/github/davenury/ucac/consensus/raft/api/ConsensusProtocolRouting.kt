@@ -35,15 +35,10 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         post("/consensus/heartbeat") {
             val message: ConsensusHeartbeat = call.receive()
             semaphore.acquire()
-            val heartbeatResult = protocol.handleHeartbeat(
-                message.peerId,
-                message.iteration,
-                message.acceptedChanges.map { it.toLedgerItem() },
-                message.proposedChanges.map { it.toLedgerItem() }
-            )
+            val heartbeatResult = protocol.handleHeartbeat(message)
             semaphore.release()
             call.respond(ConsensusHeartbeatResponse(heartbeatResult, protocol.getLeaderAddress()))
-        // TODO
+            // TODO
         }
 
         // kiedy nie jesteś leaderem to prosisz leadera o zmianę
@@ -53,9 +48,6 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             protocol.handleProposeChange(message.change.toChangeWithAcceptNum())
             semaphore.release()
             call.respond("OK")
-        }
-        post("/consensus/leader_address") {
-            call.respond(protocol.getLeaderAddress() ?: "null")
         }
 //      Endpoints for tests
         get("/consensus/proposed_changes") {

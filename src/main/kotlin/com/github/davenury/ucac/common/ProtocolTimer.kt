@@ -26,11 +26,15 @@ class ProtocolTimerImpl(
     override suspend fun startCounting(action: suspend () -> Unit) {
         cancelCounting()
         with(CoroutineScope(ctx)) {
+
             task = launch {
-                val backoff =
-                    if (backoffBound.isZero) 0 else randomGenerator.nextLong().absoluteValue % backoffBound.toMillis()
-                val timeout = delay.toMillis() + backoff
-                delay(timeout)
+                val backoff = (
+                        if (backoffBound.isZero) 0
+                        else randomGenerator.nextLong().absoluteValue % backoffBound.toMillis()
+                        )
+                    .let { Duration.ofMillis(it) }
+                val timeout = delay.plus(backoff)
+                delay(timeout as kotlin.time.Duration)
                 action()
             }
 
