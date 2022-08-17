@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: peer-config
+  namespace: # TODO
+data:
+  application_environment: "k8s"
+  PEERSET_ID: 1 # TODO int
+  RAFT_NODE_ID: 1 # TODO int
+  RATIS_PEERS_ADDRESSES: [] # TODO []
+  RATIS_CLUSTER_GROUPS_IDS: [] # TODO []
+  GPAC_PEERS_ADDRESSES: [] # TODO []
