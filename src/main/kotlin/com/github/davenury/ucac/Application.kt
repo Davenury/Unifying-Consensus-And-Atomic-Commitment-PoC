@@ -3,6 +3,8 @@ package com.github.davenury.ucac
 import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
+import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
 import com.github.davenury.ucac.consensus.ratis.RaftConfiguration
@@ -39,7 +41,7 @@ fun createApplication(
     configOverrides: Map<String, Any> = emptyMap(),
     mode: ApplicationMode = LocalDevelopmentApplicationMode(args)
 ): Application {
-    return Application(signalListeners,configOverrides, mode)
+    return Application(signalListeners, configOverrides, mode)
 }
 
 class Application constructor(
@@ -51,13 +53,13 @@ class Application constructor(
     private val peerConstants: RaftConfiguration = RaftConfiguration(mode.peersetId, configOverrides)
     private val engine: NettyApplicationEngine
     private var raftNode: HistoryRaftNode? = null
-    private lateinit var consensusProtocol: RaftConsensusProtocolImpl
+    private lateinit var consensusProtocol: RaftConsensusProtocol
     private lateinit var ctx: ExecutorCoroutineDispatcher
     private lateinit var gpacProtocol: GPACProtocol
 
     init {
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
-            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
+//            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
             val signalPublisher = SignalPublisher(signalListeners)
 
@@ -67,13 +69,13 @@ class Application constructor(
                 mode.nodeId,
                 mode.host,
                 ctx,
-                if (mode is TestApplicationMode) listOf() else mode.otherPeers[mode.peersetId - 1],
+                mode.otherPeers.getOrElse(mode.peersetId) { listOf() },
                 signalPublisher,
                 RaftProtocolClientImpl()
             )
 
-            val historyManagement = RatisHistoryManagement(raftNode!!)
-//            val historyManagement = InMemoryHistoryManagement(consensusProtocol)
+//            val historyManagement = RatisHistoryManagement(raftNode!!)
+            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
 
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
@@ -193,7 +195,8 @@ class Application constructor(
 
     fun startNonblocking() {
         engine.start(wait = false)
-        consensusProtocol.peerAddress = "localhost:${getBoundPort()}"
+        val address = "localhost:${getBoundPort()}"
+        consensusProtocol.setLeaderAddress(address)
     }
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {

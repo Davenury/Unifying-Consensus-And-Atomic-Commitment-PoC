@@ -16,6 +16,7 @@ interface RaftConsensusProtocol {
     ): Boolean
 
     suspend fun handleProposeChange(change: ChangeWithAcceptNum)
+    fun setLeaderAddress(address: String)
     fun getLeaderAddress(): String?
     fun getProposedChanges(): History
     fun getAcceptedChanges(): History

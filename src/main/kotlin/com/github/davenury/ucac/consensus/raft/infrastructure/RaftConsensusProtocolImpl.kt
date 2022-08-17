@@ -122,6 +122,10 @@ class RaftConsensusProtocolImpl(
         proposeChange(change.change, change.acceptNum)
     }
 
+    override fun setLeaderAddress(address: String){
+        peerAddress = address
+    }
+
     override fun getLeaderAddress(): String? = leaderAddress
     override fun getProposedChanges(): History = state.getProposedChanges()
     override fun getAcceptedChanges(): History = state.getAcceptedChanges()
