@@ -59,7 +59,7 @@ class Application constructor(
 
     init {
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
-//            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
+            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
             val signalPublisher = SignalPublisher(signalListeners)
 
@@ -74,8 +74,8 @@ class Application constructor(
                 RaftProtocolClientImpl()
             )
 
-//            val historyManagement = RatisHistoryManagement(raftNode!!)
-            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
+            val historyManagement = RatisHistoryManagement(raftNode!!)
+//            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
 
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
