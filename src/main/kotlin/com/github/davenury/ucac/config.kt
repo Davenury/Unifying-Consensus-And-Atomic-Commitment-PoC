@@ -24,10 +24,13 @@ fun loadConfig(overrides: Map<String, Any> = emptyMap()): Config {
     val configFile = System.getProperty("configFile")
         ?: System.getenv("CONFIG_FILE")
         ?: "application.conf"
-    return ConfigLoaderBuilder
+    return loadConfig(configFile, overrides)
+}
+
+fun loadConfig(configFileName: String, overrides: Map<String, Any> = emptyMap()): Config =
+    ConfigLoaderBuilder
         .default()
         .addSource(MapPropertySource(overrides))
-        .addResourceSource("/$configFile")
+        .addResourceSource("/$configFileName")
         .build()
         .loadConfigOrThrow()
-}

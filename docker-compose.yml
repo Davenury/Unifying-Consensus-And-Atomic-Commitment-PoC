@@ -23,6 +23,7 @@ services:
       - RAFT_NODE_ID=1
       - PEERSET_ID=1
       - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
   peer2:
     image: poc
     depends_on:
@@ -34,6 +35,7 @@ services:
       - RAFT_NODE_ID=2
       - PEERSET_ID=1
       - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
   peer3:
     image: poc
     depends_on:
@@ -45,39 +47,43 @@ services:
       - RAFT_NODE_ID=3
       - PEERSET_ID=1
       - CONFIG_FILE=application-compose.conf
-#  peer4:
-#    image: poc
-#    depends_on:
-#      - _image_build
-#    ports:
-#      - "8084:8080"
-#      - "10034"
-#    environment:
-#      - RAFT_NODE_ID=1
-#      - PEERSET_ID=2
-#      - CONFIG_FILE=application-compose.conf
-#  peer5:
-#    image: poc
-#    depends_on:
-#      - _image_build
-#    ports:
-#      - "8085:8080"
-#      - "10134"
-#    environment:
-#      - RAFT_NODE_ID=2
-#      - PEERSET_ID=2
-#      - CONFIG_FILE=application-compose.conf
-#  peer6:
-#    image: poc
-#    depends_on:
-#      - _image_build
-#    ports:
-#      - "8086:8080"
-#      - "11134"
-#    environment:
-#      - RAFT_NODE_ID=3
-#      - PEERSET_ID=2
-#      - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
+  peer4:
+    image: poc
+    depends_on:
+      - _image_build
+    ports:
+      - "8084:8080"
+      - "10034"
+    environment:
+      - RAFT_NODE_ID=1
+      - PEERSET_ID=2
+      - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
+  peer5:
+    image: poc
+    depends_on:
+      - _image_build
+    ports:
+      - "8085:8080"
+      - "10134"
+    environment:
+      - RAFT_NODE_ID=2
+      - PEERSET_ID=2
+      - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
+  peer6:
+    image: poc
+    depends_on:
+      - _image_build
+    ports:
+      - "8086:8080"
+      - "11134"
+    environment:
+      - RAFT_NODE_ID=3
+      - PEERSET_ID=2
+      - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
   prometheus:
     image: prom/prometheus
     ports:

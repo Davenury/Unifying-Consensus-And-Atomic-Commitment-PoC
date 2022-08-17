@@ -127,27 +127,62 @@ class LocalDevelopmentApplicationMode(
 }
 
 object KubernetesApplicationMode: ApplicationMode() {
-    override val port: Int
-        get() = TODO("Not yet implemented")
     override val host: String
-        get() = TODO("Not yet implemented")
+    override val port: Int
     override val peersetId: Int
-        get() = TODO("Not yet implemented")
     override val otherPeers: List<List<String>>
-        get() = TODO("Not yet implemented")
     override val nodeId: Int
-        get() = TODO("Not yet implemented")
+
+    init {
+        val _peersetId =
+            System.getenv()["PEERSET_ID"]?.toInt()
+                ?: throw RuntimeException(
+                    "Provide PEERSET_ID env variable to represent id of node"
+                )
+
+        val id =
+            System.getenv()["RAFT_NODE_ID"]?.toInt()
+                ?: throw RuntimeException(
+                    "Provide either arg or RAFT_NODE_ID env variable to represent id of node"
+                )
+
+        val config = loadConfig("application-kubernetes.conf")
+        val me = config.peers.peersAddresses[_peersetId - 1][id - 1].split(":")[0]
+
+        host = me
+        port = 8080
+        peersetId = _peersetId
+        otherPeers = getOtherPeers(config, me)
+        nodeId = id
+    }
+
+    private fun getOtherPeers(config: Config, me: String): List<List<String>> =
+        try {
+            config.peers.peersAddresses.foldIndexed(mutableListOf()) { index, acc, strings ->
+                if (index == peersetId - 1) {
+                    acc +=
+                        strings.filterNot {
+                            it.contains(me)
+                        }
+                    acc
+                } else {
+                    acc += strings
+                    acc
+                }
+            }
+        } catch (e: java.lang.IndexOutOfBoundsException) {
+            logger.error(
+                "Peers addresses doesn't have enough elements in list - peers addresses length: ${config.peers.peersAddresses.size}, index: ${peersetId - 1}"
+            )
+            throw IllegalStateException()
+        }
+
+    private val logger = LoggerFactory.getLogger(DockerComposeApplicationMode::class.java)
 }
 
-fun determineApplicationMode(args: Array<String>): ApplicationMode {
-
-    val config = loadConfig()
-    if (config.applicationEnv == "docker_compose") {
-        return DockerComposeApplicationMode
+fun determineApplicationMode(args: Array<String>): ApplicationMode =
+    when (System.getenv("application_environment")) {
+        "docker_compose" -> DockerComposeApplicationMode
+        "k8s" -> KubernetesApplicationMode
+        else -> LocalDevelopmentApplicationMode(args)
     }
-    if (System.getenv("application_environment") == "k8s") {
-        return KubernetesApplicationMode
-    }
-    return LocalDevelopmentApplicationMode(args)
-
-}
