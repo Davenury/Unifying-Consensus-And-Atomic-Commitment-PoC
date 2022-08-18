@@ -27,7 +27,6 @@ data class ChangeWithAcceptNum(val change: Change, val acceptNum: Int?) {
     fun toDto(): ChangeWithAcceptNumDto = ChangeWithAcceptNumDto(change.toDto(), acceptNum)
 }
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class ChangeWithAcceptNumDto(val changeDto: ChangeDto, val acceptNum: Int?) {
 
     fun toChangeWithAcceptNum(): ChangeWithAcceptNum = ChangeWithAcceptNum(changeDto.toChange(), acceptNum)
