@@ -165,8 +165,9 @@ func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig) {
 			"application_environment": "k8s",
 			"PEERSET_ID": peerConfig.PeersetId,
 			"RAFT_NODE_ID": peerConfig.PeerId,
+			// TODO - this isn't the right way of passing list of lists to env 
 			"RATIS_PEERS_ADDRESSES": fmt.Sprintf("[[%s]]", GenerateServicesForPeers(peerConfig, ratisPort)),
-			"RATIS_CLUSTERS_GROUPS_IDS": fmt.Sprintf("[%s]", uuid.New()),
+			"RATIS_CLUSTER_GROUPS_IDS": fmt.Sprintf("[%s]", uuid.New()),
 			"GPAC_PEERS_ADDRESSES": fmt.Sprintf("[[%s]]", GenerateServicesForPeersStaticPort(peerConfig, servicePort)),
 		},
 	}
