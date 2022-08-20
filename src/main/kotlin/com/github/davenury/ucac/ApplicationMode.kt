@@ -133,6 +133,8 @@ object KubernetesApplicationMode: ApplicationMode() {
     override val otherPeers: List<List<String>>
     override val nodeId: Int
 
+    private val allPeers: List<List<String>>
+
     init {
         val _peersetId =
             System.getenv()["PEERSET_ID"]?.toInt()
@@ -147,7 +149,8 @@ object KubernetesApplicationMode: ApplicationMode() {
                 )
 
         val config = loadConfig("application-kubernetes.conf")
-        val me = config.peers.peersAddresses[_peersetId - 1][id - 1].split(":")[0]
+        allPeers = System.getenv()["GPAC_PEERS_ADDRESSES"].let { objectMapper.readValue(it, ArrayList<ArrayList<String>>()::class.java) }
+        val me = allPeers[_peersetId - 1][id - 1].split(":")[0]
 
         host = me
         port = 8080
@@ -158,7 +161,7 @@ object KubernetesApplicationMode: ApplicationMode() {
 
     private fun getOtherPeers(config: Config, me: String): List<List<String>> =
         try {
-            config.peers.peersAddresses.foldIndexed(mutableListOf()) { index, acc, strings ->
+            allPeers.foldIndexed(mutableListOf()) { index, acc, strings ->
                 if (index == peersetId - 1) {
                     acc +=
                         strings.filterNot {
