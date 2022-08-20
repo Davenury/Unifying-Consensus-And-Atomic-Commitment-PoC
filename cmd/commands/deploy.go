@@ -21,7 +21,7 @@ const ratisPort = 10024
 const servicePort = 8080
 
 var numberOfPeersInPeerset int
-var namespace string
+var deployNamespace string
 
 func CreateDeployCommand() *cobra.Command {
 
@@ -38,11 +38,11 @@ func CreateDeployCommand() *cobra.Command {
 					PeersInPeerset: numberOfPeersInPeerset,
 				}
 
-				//deploySinglePeerService(namespace, peerConfig, ratisPort + i)
+				deploySinglePeerService(deployNamespace, peerConfig, ratisPort + i)
 				
-				deploySinglePeerConfigMap(namespace, peerConfig)
+				deploySinglePeerConfigMap(deployNamespace, peerConfig)
 
-				//deploySinglePeerDeployment(namespace, peerConfig)
+				deploySinglePeerDeployment(deployNamespace, peerConfig)
 
 				fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
 			}
@@ -52,7 +52,7 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().IntVar(&numberOfPeersInPeerset, "peersInPeerset", 0, "Number of peers in single peerset")
 	deployCommand.MarkFlagRequired("peersInPeerset")
 
-	deployCommand.Flags().StringVarP(&namespace, "namespace", "n", "default", "Namespace to deploy cluster to")
+	deployCommand.Flags().StringVarP(&deployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
 
 	return deployCommand
 
@@ -73,6 +73,9 @@ func deploySinglePeerDeployment(namespace string, peerConfig PeerConfig) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: DeploymentName(peerConfig),
 			Namespace: namespace,
+			Labels: map[string]string{
+				"project": "ucac",
+			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &oneReplicaPointer,
@@ -154,6 +157,9 @@ func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: ConfigMapName(peerConfig),
 			Namespace: namespace,
+			Labels: map[string]string{
+				"project": "ucac",
+			},
 		},
 		Data: map[string]string{
 			"application_environment": "k8s",
@@ -178,6 +184,9 @@ func deploySinglePeerService(namespace string, peerConfig PeerConfig, currentRat
 		ObjectMeta: metav1.ObjectMeta{
 			Name: ServiceName(peerConfig),
 			Namespace: namespace,
+			Labels: map[string]string{
+				"project": "ucac",
+			},
 		},
 		Spec: apiv1.ServiceSpec{
 			Selector: map[string]string{

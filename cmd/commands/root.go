@@ -23,4 +23,5 @@ func Execute() {
 func init() {
 	rootCommand.AddCommand(CreateTestCommand())
 	rootCommand.AddCommand(CreateDeployCommand())
+	rootCommand.AddCommand(CreateCleanupCommand())
 }
