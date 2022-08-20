@@ -225,7 +225,7 @@ class RaftConsensusProtocolImpl(
                 accept(ContentType.Application.Json)
                 body = ConsensusProposeChange(changeWithAcceptNum.toDto())
             }
-        println("Response from leader: $response")
+        logger.info("Response from leader: $response")
         ConsensusSuccess
     } catch (e: Exception) {
         logger.info("$peerId - $e")

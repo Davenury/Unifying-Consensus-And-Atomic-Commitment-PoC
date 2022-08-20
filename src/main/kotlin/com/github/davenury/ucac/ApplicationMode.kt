@@ -1,6 +1,7 @@
 package com.github.davenury.ucac
 
 import org.slf4j.LoggerFactory
+import java.time.Duration
 
 sealed class ApplicationMode {
     abstract val port: Int
@@ -8,6 +9,8 @@ sealed class ApplicationMode {
     abstract val peersetId: Int
     abstract val otherPeers: List<List<String>>
     abstract val nodeId: Int
+    abstract val heartbeatTimeout: Duration
+    abstract val leaderTimeout: Duration
 }
 
 class TestApplicationMode(
@@ -21,6 +24,10 @@ class TestApplicationMode(
     // should be change in application
     override val otherPeers: List<List<String>>
         get() = listOf(listOf())
+    override val heartbeatTimeout: Duration
+        get() = Duration.ofSeconds(4)
+    override val leaderTimeout: Duration
+        get() = Duration.ofMillis(500)
 }
 
 object DockerComposeApplicationMode: ApplicationMode() {
@@ -29,6 +36,8 @@ object DockerComposeApplicationMode: ApplicationMode() {
     override val peersetId: Int
     override val otherPeers: List<List<String>>
     override val nodeId: Int
+    override val heartbeatTimeout: Duration
+    override val leaderTimeout: Duration
 
     init {
         val _peersetId =
@@ -42,6 +51,9 @@ object DockerComposeApplicationMode: ApplicationMode() {
                 ?: throw RuntimeException(
                     "Provide either arg or RAFT_NODE_ID env variable to represent id of node"
                 )
+
+        heartbeatTimeout = System.getenv()["HEARTBEAT_TIMEOUT"]?.let { Duration.parse(it) } ?: Duration.ofSeconds(4)
+        leaderTimeout = System.getenv()["LEADER_TIMEOUT"]?.let { Duration.parse(it) } ?: Duration.ofMillis(500)
 
         val config = loadConfig()
         val me = config.peers.peersAddresses[_peersetId - 1][id].split(":")[0]
@@ -86,6 +98,8 @@ class LocalDevelopmentApplicationMode(
     override val peersetId: Int = args[1].toInt()
     override val otherPeers: List<List<String>>
     override val nodeId: Int = args[0].toInt()
+    override val heartbeatTimeout: Duration
+    override val leaderTimeout: Duration
 
     init {
         val config = loadConfig()
@@ -97,6 +111,8 @@ class LocalDevelopmentApplicationMode(
         host = "localhost"
         port = 8080 + args[0].toInt() + portOffsetFromPreviousPeersets
         otherPeers = getOtherPeers(config, port)
+        heartbeatTimeout = config.raft.heartbeatTimeout
+        leaderTimeout = config.raft.leaderTimeout
     }
 
     private fun getOtherPeers(config: Config, port: Int): List<List<String>> =

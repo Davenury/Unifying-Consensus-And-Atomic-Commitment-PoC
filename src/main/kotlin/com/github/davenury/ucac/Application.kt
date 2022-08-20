@@ -64,13 +64,15 @@ class Application constructor(
 
             ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
 
+            val raftProtocolClientImpl = RaftProtocolClientImpl()
+
             consensusProtocol = RaftConsensusProtocolImpl(
                 mode.nodeId,
                 mode.host,
                 ctx,
                 mode.otherPeers.getOrElse(mode.peersetId) { listOf() },
                 signalPublisher,
-                RaftProtocolClientImpl()
+                raftProtocolClientImpl,
             )
 
             val historyManagement = RatisHistoryManagement(raftNode!!)
@@ -196,6 +198,7 @@ class Application constructor(
         engine.start(wait = false)
         val address = "localhost:${getBoundPort()}"
         consensusProtocol.setLeaderAddress(address)
+
     }
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
