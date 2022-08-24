@@ -37,8 +37,14 @@ data class ChangeWithAcceptNumDto(val changeDto: ChangeDto, val acceptNum: Int?)
 data class ChangeDto(val properties: Map<String, String>) {
     fun toChange(): Change =
         (properties["operation"])
-            ?.let { Operation.valueOf(it).toChange(this) }
-            ?: throw MissingParameterException("\"operation\" value is required!")
+            ?.let {
+                try {
+                    Operation.valueOf(it).toChange(this)
+                } catch (ex: IllegalArgumentException) {
+                    logger.error("Error while creating Change class - unknown operation $it")
+                    throw UnknownOperationException(it)
+                }
+            } ?: throw MissingParameterException("\"operation\" value is required!")
 
     companion object {
         private val logger = LoggerFactory.getLogger(ChangeDto::class.java)
