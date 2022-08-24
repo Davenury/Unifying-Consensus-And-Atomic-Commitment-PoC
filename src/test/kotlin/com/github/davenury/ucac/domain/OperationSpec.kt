@@ -49,7 +49,7 @@ class OperationSpec {
     fun `should throw unknown operation exception, when operation is not known`() {
         val changeDto = ChangeDto(mapOf("operation" to "SOME_UNKNOWN_OPERATION", "to" to "to", "from" to "from"))
 
-        expectThrows<IllegalArgumentException> {
+        expectThrows<UnknownOperationException> {
             changeDto.toChange()
         }
     }
