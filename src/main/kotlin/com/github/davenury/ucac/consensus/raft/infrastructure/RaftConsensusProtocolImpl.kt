@@ -13,7 +13,7 @@ import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 /** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
     private val peerId: Int,
-    var peerAddress: String,
+    private var peerAddress: String,
     private val ctx: ExecutorCoroutineDispatcher,
     private var consensusPeers: List<String>,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
@@ -115,9 +115,8 @@ class RaftConsensusProtocolImpl(
     }
 
     override suspend fun handleProposeChange(change: ChangeWithAcceptNum) = proposeChange(change.change, change.acceptNum)
-
-    override fun setLeaderAddress(address: String) {
-        peerAddress = address
+    override fun setPeerAddress(address: String) {
+        this.peerAddress = address
     }
 
     override fun getLeaderAddress(): String? = leaderAddress
@@ -271,10 +270,3 @@ class RaftConsensusProtocolImpl(
 }
 
 data class PeerIndexes(val acceptedIndex: Int, val acknowledgedIndex: Int)
-
-data class PeerId(val id: Int)
-
-data class ConsensusPeer(
-    val peerId: Int,
-    val peerAddress: String
-)

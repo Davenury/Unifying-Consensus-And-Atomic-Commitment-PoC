@@ -198,6 +198,7 @@ class Application constructor(
     fun startNonblocking() {
         engine.start(wait = false)
         val address = "localhost:${getBoundPort()}"
+        consensusProtocol.setPeerAddress(address)
 
     }
 
