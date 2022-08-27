@@ -1,10 +1,9 @@
 package com.github.davenury.ucac
 
-import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.historyManagementRouting
 import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
@@ -73,6 +72,8 @@ class Application constructor(
                 mode.otherPeers.getOrElse(mode.peersetId) { listOf() },
                 signalPublisher,
                 raftProtocolClientImpl,
+                config.raft.heartbeatTimeout,
+                config.raft.leaderTimeout
             )
 
             val historyManagement = RatisHistoryManagement(raftNode!!)
@@ -197,7 +198,6 @@ class Application constructor(
     fun startNonblocking() {
         engine.start(wait = false)
         val address = "localhost:${getBoundPort()}"
-        consensusProtocol.setLeaderAddress(address)
 
     }
 

@@ -1,4 +1,4 @@
-package com.example.consensus.raft.infrastructure
+package com.github.davenury.ucac.consensus.raft.infrastructure
 
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
@@ -9,7 +9,6 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import java.time.Duration
 import org.slf4j.LoggerFactory
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
-import java.util.concurrent.Semaphore
 
 /** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
@@ -37,7 +36,7 @@ class RaftConsensusProtocolImpl(
     }
 
     override fun setOtherPeers(otherPeers: List<String>) {
-        println("$peerId - Peers: $otherPeers \n old: $consensusPeers")
+        logger.info("$peerId - Peers: $otherPeers \n old: $consensusPeers")
         consensusPeers = otherPeers
     }
 
@@ -223,7 +222,7 @@ class RaftConsensusProtocolImpl(
         val response = httpClient.post<String>("http://$leaderAddress/consensus/request_apply_change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
-                body = ConsensusProposeChange(changeWithAcceptNum.toDto())
+                body = changeWithAcceptNum.toDto()
             }
         logger.info("Response from leader: $response")
         ConsensusSuccess

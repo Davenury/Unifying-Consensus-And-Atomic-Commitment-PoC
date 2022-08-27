@@ -10,7 +10,7 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
                 when (it) {
                     ConsensusFailure -> HistoryChangeResult.HistoryChangeFailure
                     ConsensusSuccess -> HistoryChangeResult.HistoryChangeSuccess
-                    ConsensusResultUnknown -> HistoryChangeResult.HistoryChangeSuccess
+                    ConsensusResultUnknown -> HistoryChangeResult.HistoryChangeUnknown
                 }
             }
 
@@ -25,5 +25,5 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
 }
 
 enum class HistoryChangeResult {
-    HistoryChangeSuccess, HistoryChangeFailure
+    HistoryChangeSuccess, HistoryChangeFailure, HistoryChangeUnknown
 }

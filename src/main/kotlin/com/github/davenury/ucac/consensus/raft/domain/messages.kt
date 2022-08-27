@@ -22,4 +22,4 @@ data class ConsensusHeartbeatResponse(
     val leaderAddress: String?
 )
 
-data class ConsensusProposeChange(val change: ChangeWithAcceptNumDto)
+typealias ConsensusProposeChange = ChangeWithAcceptNumDto

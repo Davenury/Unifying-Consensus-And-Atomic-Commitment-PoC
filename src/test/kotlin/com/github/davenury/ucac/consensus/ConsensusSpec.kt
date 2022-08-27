@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.consensus
 
-import com.example.consensus.raft.infrastructure.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.AddUserChange
@@ -287,7 +287,6 @@ class ConsensusSpec {
 
 
         val peersToStop = peerAddresses.zip(peers).filterNot { it.first.contains(firstLeaderPort) }.take(2)
-        println("Stop 2 application")
 
         peersToStop.forEach { it.second.stop(0, 0) }
         val runningPeersAddressAndApplication = peerAddresses.zip(peers).filterNot { addressAndApplication ->
