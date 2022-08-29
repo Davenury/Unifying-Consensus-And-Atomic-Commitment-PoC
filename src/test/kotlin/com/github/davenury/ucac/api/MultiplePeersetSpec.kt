@@ -2,11 +2,7 @@ package com.github.davenury.ucac.api
 
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.davenury.ucac.*
-import com.github.davenury.ucac.common.AddUserChange
-import com.github.davenury.ucac.common.ChangeDto
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNumDto
-import com.github.davenury.ucac.consensus.ratis.HistoryDto
+import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.Apply
 import com.github.davenury.ucac.utils.TestApplicationSet
@@ -51,7 +47,7 @@ class MultiplePeersetSpec {
             accept(ContentType.Application.Json)
         }
             .let { objectMapper.readValue<ChangeWithAcceptNumDto>(it) }
-            .let { ChangeWithAcceptNum(it.change.toChange(), it.acceptNum) }
+            .let { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
         expect {
             that(peer2Change.change).isEqualTo(AddUserChange("userName"))
@@ -63,7 +59,7 @@ class MultiplePeersetSpec {
             accept(ContentType.Application.Json)
         }
             .let { objectMapper.readValue<ChangeWithAcceptNumDto>(it) }
-            .let { ChangeWithAcceptNum(it.change.toChange(), it.acceptNum) }
+            .let { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
         expect {
             that(peer4Change.change).isEqualTo(AddUserChange("userName"))
@@ -332,7 +328,7 @@ class MultiplePeersetSpec {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }.let { objectMapper.readValue<HistoryDto>(it) }
-            .changes.map { ChangeWithAcceptNum(it.change.toChange(), it.acceptNum) }
+            .changes.map { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
     private val changeDto = ChangeDto(
         mapOf(

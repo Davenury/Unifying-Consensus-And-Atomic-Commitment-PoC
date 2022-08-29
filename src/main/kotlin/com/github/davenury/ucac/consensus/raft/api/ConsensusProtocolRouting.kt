@@ -1,50 +1,62 @@
 package com.github.davenury.ucac.consensus.raft.api
 
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusImTheLeader
-import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
+import com.github.davenury.ucac.common.toDto
+import com.github.davenury.ucac.consensus.raft.domain.*
 import io.ktor.application.*
+import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
-
+import java.util.concurrent.Semaphore
 
 fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
+
+    val semaphore: Semaphore = Semaphore(1)
 
     routing {
         // głosujemy na leadera
         post("/consensus/request_vote") {
             val message: ConsensusElectMe = call.receive()
-            call.respond(protocol.handleRequestVote(message))
+            semaphore.acquire()
+            val response = protocol.handleRequestVote(message.peerId, message.leaderIteration, message.lastAcceptedId)
+            semaphore.release()
+            call.respond(response)
         }
 
         // potwierdzenie że mamy leadera
         post("/consensus/leader") {
             val message: ConsensusImTheLeader = call.receive()
-            protocol.handleLeaderElected(message)
+            semaphore.acquire()
+            protocol.handleLeaderElected(message.peerId, message.peerAddress, message.leaderIteration)
+            semaphore.release()
             call.respond("OK")
         }
 
         post("/consensus/heartbeat") {
-            // TODO
-        }
-
-        // leader proponuje zmianę bez pewności czy zostanie zaaplikowana
-        post("/consensus/propose_change") {
-            // TODO
-        }
-
-        // leader ma potwierdzenie że większość zaakceptowała zmianę i potwierdza reszcie
-        post("/consensus/apply_change") {
+            val message: ConsensusHeartbeat = call.receive()
+            semaphore.acquire()
+            val heartbeatResult = protocol.handleHeartbeat(message)
+            semaphore.release()
+            call.respond(ConsensusHeartbeatResponse(heartbeatResult, protocol.getLeaderAddress()))
             // TODO
         }
 
         // kiedy nie jesteś leaderem to prosisz leadera o zmianę
         post("/consensus/request_apply_change") {
-            // TODO
+            val message: ConsensusProposeChange = call.receive()
+            semaphore.acquire()
+            val result = protocol.handleProposeChange(message.toChangeWithAcceptNum())
+            semaphore.release()
+            call.respond(result)
+        }
+//      Endpoints for tests
+        get("/consensus/proposed_changes") {
+            call.respond(protocol.getProposedChanges().toDto())
+        }
+        get("/consensus/accepted_changes") {
+            call.respond(protocol.getAcceptedChanges().toDto())
         }
     }
-
 }
 
 /*

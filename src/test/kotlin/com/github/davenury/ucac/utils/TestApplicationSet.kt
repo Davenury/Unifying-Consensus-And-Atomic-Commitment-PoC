@@ -10,11 +10,12 @@ class TestApplicationSet(
     numberOfPeersInPeersets: List<Int>,
     signalListeners: Map<Int, Map<Signal, SignalListener>> = emptyMap(),
     configOverrides: Map<Int, Map<String, Any>> = emptyMap(),
-    appsToExclude: List<Int> = emptyList()
+    val appsToExclude: List<Int> = emptyList()
 ) {
 
     private var apps: MutableList<MutableList<Application>> = mutableListOf()
     private val peers: List<List<String>>
+    private val nonRunningPeer = "localhost:0"
 
     init {
         val ratisConfigOverrides = mapOf(
@@ -46,7 +47,7 @@ class TestApplicationSet(
             apps.flatten()
                 .asSequence()
                 .mapIndexed { index, it ->
-                    val address = if (index + 1 in appsToExclude) "localhost:0" else "localhost:${it.getBoundPort()}"
+                    val address = if (index + 1 in appsToExclude) nonRunningPeer else "localhost:${it.getBoundPort()}"
                     Pair(it, address)
                 }
                 .groupBy{ it.first.getPeersetId() }
@@ -70,5 +71,14 @@ class TestApplicationSet(
     }
 
     fun getPeers() = peers
+
+    fun getRunningPeers() = peers.map { it.filter { it != nonRunningPeer } }
+
+    fun getApps() = apps
+    fun getRunningApps(): List<Application> = apps
+        .flatten()
+        .zip(peers.flatten())
+        .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
+        .map { it.first }
 
 }

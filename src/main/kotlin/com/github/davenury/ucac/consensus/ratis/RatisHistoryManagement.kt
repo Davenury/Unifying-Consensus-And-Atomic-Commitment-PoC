@@ -1,9 +1,6 @@
 package com.github.davenury.ucac.consensus.ratis
 
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.History
-import com.github.davenury.ucac.common.HistoryChangeResult
-import com.github.davenury.ucac.common.HistoryManagement
+import com.github.davenury.ucac.common.*
 import org.slf4j.LoggerFactory
 
 class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : HistoryManagement(historyRaftNode) {
@@ -14,17 +11,13 @@ class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : His
         null
     }
 
-    override fun change(change: Change, acceptNum: Int?): HistoryChangeResult {
-        return super.change(change, acceptNum)
-    }
-
     /**
      * Dummy implementation for simplicity of protocol. Change to correct implementation with actually building history
      * and checking if history can be built (e.g. not having conflicting changes etc.).
      * */
     override fun canBeBuild(newChange: Change): Boolean = true
 
-    override fun getState(): History? =
+    override fun getState(): History =
         historyRaftNode.getState()
 
     override fun build() {}

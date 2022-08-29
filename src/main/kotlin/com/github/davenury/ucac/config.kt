@@ -8,7 +8,13 @@ import java.time.Duration
 
 data class Config(val raft: RaftConfig, val peers: PeersConfig, val protocol: ProtocolConfig)
 data class PeersConfig(val peersAddresses: List<List<String>>, val maxLeaderElectionTries: Int)
-data class RaftConfig(val server: ServerConfig, val clusterGroupIds: List<String>)
+data class RaftConfig(
+    val server: ServerConfig,
+    val clusterGroupIds: List<String>,
+    val heartbeatTimeout: Duration,
+    val leaderTimeout: Duration
+)
+
 data class ServerConfig(val addresses: List<List<String>>, val root: RootConfig)
 data class RootConfig(val storage: StorageConfig)
 data class StorageConfig(val path: String)

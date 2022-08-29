@@ -2,10 +2,9 @@ package com.github.davenury.ucac.domain
 
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.infrastructure.DummyConsensusProtocol
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
-import com.github.davenury.ucac.gpac.domain.ProtocolClientImpl
+import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
 import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
@@ -83,7 +82,7 @@ class LeaderTest {
     private val consensusProtocol = DummyConsensusProtocol()
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
     private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)
-    private val client = ProtocolClientImpl()
+    private val client = GPACProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
     private var subject =
         GPACProtocolImpl(

@@ -22,11 +22,19 @@ fun Application.commonRouting(
         }
 
         post("/consensus/create_change") {
-            val change = ChangeDto(call.receive())
-            consensusProtocol.proposeChange(change.toChange(), null)
+
+            val properties = call.receive<Map<String, Any>>()
+            val change = ChangeDto(properties["change"] as Map<String, String>)
+            consensusProtocol.proposeChange(change.toChange(), properties["acceptNum"] as Int?)
             call.respond(HttpStatusCode.OK)
         }
 
+        get("/consensus/changes") {
+            call.respond(consensusProtocol.getState()?.toDto() ?: listOf<ChangeWithAcceptNumDto>())
+        }
+        get("/consensus/change") {
+            call.respond(consensusProtocol.getState()?.lastOrNull()?.toDto() ?: HttpStatusCode.BadRequest)
+        }
     }
 
 }

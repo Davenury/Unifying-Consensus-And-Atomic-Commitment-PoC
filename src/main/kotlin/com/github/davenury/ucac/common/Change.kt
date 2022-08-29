@@ -4,18 +4,47 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory
 
+typealias History = MutableList<ChangeWithAcceptNum>
+
+data class HistoryDto(
+    val changes: List<ChangeWithAcceptNumDto>
+)
+
+fun History.toDto() =
+    HistoryDto(changes = this.map { it.toDto() })
+
+data class ChangeWithAcceptNum(val change: Change, val acceptNum: Int?) {
+    companion object {
+        fun fromJson(json: String): ChangeWithAcceptNum {
+            val map = objectMapper.readValue(json, HashMap<String, Any>().javaClass)
+            val changeString = objectMapper.writeValueAsString(map["change"])
+            val change: Change = Change.fromJson(changeString)!!
+            val acceptNum = map["acceptNum"] as Int?
+            return ChangeWithAcceptNum(change, acceptNum)
+        }
+    }
+
+    fun toDto(): ChangeWithAcceptNumDto = ChangeWithAcceptNumDto(change.toDto(), acceptNum)
+}
+
+data class ChangeWithAcceptNumDto(val changeDto: ChangeDto, val acceptNum: Int?) {
+
+    fun toChangeWithAcceptNum(): ChangeWithAcceptNum = ChangeWithAcceptNum(changeDto.toChange(), acceptNum)
+}
+
+
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ChangeDto(val properties: Map<String, String>) {
     fun toChange(): Change =
-        (properties["operation"])?.let {
-            try {
-                Operation.valueOf(it).toChange(this)
-            } catch (ex: IllegalArgumentException) {
-                logger.debug("Error while creating Change class - unknown operation $it")
-                throw UnknownOperationException(it)
-            }
-        }
-            ?: throw MissingParameterException("\"operation\" value is required!")
+        (properties["operation"])
+            ?.let {
+                try {
+                    Operation.valueOf(it).toChange(this)
+                } catch (ex: IllegalArgumentException) {
+                    logger.error("Error while creating Change class - unknown operation $it")
+                    throw UnknownOperationException(it)
+                }
+            } ?: throw MissingParameterException("\"operation\" value is required!")
 
     companion object {
         private val logger = LoggerFactory.getLogger(ChangeDto::class.java)

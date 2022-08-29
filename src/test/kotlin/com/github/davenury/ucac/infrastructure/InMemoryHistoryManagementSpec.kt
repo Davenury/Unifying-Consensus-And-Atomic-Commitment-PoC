@@ -1,11 +1,11 @@
 package com.github.davenury.ucac.infrastructure
 
 import com.github.davenury.ucac.common.AddRelationChange
+import com.github.davenury.ucac.common.ChangeWithAcceptNum
 import com.github.davenury.ucac.common.InMemoryHistoryManagement
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusFailure
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusSuccess
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import com.github.davenury.ucac.utils.DummyConsensusProtocol
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
@@ -24,10 +24,12 @@ class InMemoryHistoryManagementSpec {
         // given - some change
         val change = AddRelationChange("from", "to")
         // and - consensus protocol that's ok with changes
+        consensusProtocol.change = ChangeWithAcceptNum(change,1)
         consensusProtocol.setResponse(ConsensusSuccess)
         // when - change is proposed
-        subject.change(change, 1)
-        // then - change should be done
+        runBlocking {
+            subject.change(change, 1)
+        }// then - change should be done
         expectThat(subject.getLastChange()).isEqualTo(ChangeWithAcceptNum(change, 1))
     }
 
@@ -36,11 +38,13 @@ class InMemoryHistoryManagementSpec {
         // given - some change
         val change = AddRelationChange("from", "to")
         // and - consensus protocol that isn't ok with changes
+        consensusProtocol.change = null
         consensusProtocol.setResponse(ConsensusFailure)
 
         // when - change is proposed
-        subject.change(change, 1)
-
+        runBlocking {
+            subject.change(change, 1)
+        }
         // then - change should not be added
         expectThat(subject.getLastChange()).isNull()
     }

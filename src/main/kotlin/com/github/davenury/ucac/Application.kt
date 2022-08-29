@@ -1,16 +1,18 @@
 package com.github.davenury.ucac
 
-import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.consensus.historyManagementRouting
+import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
+import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
+import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
 import com.github.davenury.ucac.consensus.ratis.RaftConfiguration
 import com.github.davenury.ucac.consensus.ratis.RatisHistoryManagement
-import com.github.davenury.ucac.consensus.ratis.ratisRouting
 import com.github.davenury.ucac.gpac.api.gpacProtocolRouting
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
-import com.github.davenury.ucac.gpac.domain.ProtocolClientImpl
+import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
 import io.ktor.application.*
 import io.ktor.features.*
@@ -22,7 +24,7 @@ import io.ktor.server.netty.*
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
-import java.time.Duration
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
@@ -49,28 +51,36 @@ class Application constructor(
     private val peerConstants: RaftConfiguration = RaftConfiguration(mode.peersetId, configOverrides)
     private val engine: NettyApplicationEngine
     private var raftNode: HistoryRaftNode? = null
+    private lateinit var consensusProtocol: RaftConsensusProtocol
     private lateinit var ctx: ExecutorCoroutineDispatcher
     private lateinit var gpacProtocol: GPACProtocol
-    private lateinit var consensusProtocol: RaftConsensusProtocol
 
     init {
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
             raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
+            val signalPublisher = SignalPublisher(signalListeners)
+
             ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
+
+            val raftProtocolClientImpl = RaftProtocolClientImpl()
 
             consensusProtocol = RaftConsensusProtocolImpl(
                 mode.nodeId,
-                mode.peersetId,
-                ProtocolTimerImpl(Duration.ZERO, Duration.ofSeconds(1), ctx), // TODO move to config
-                if (mode is TestApplicationMode) listOf() else mode.otherPeers[mode.peersetId - 1]
+                mode.host,
+                ctx,
+                mode.otherPeers.getOrElse(mode.peersetId) { listOf() },
+                signalPublisher,
+                raftProtocolClientImpl,
+                config.raft.heartbeatTimeout,
+                config.raft.leaderTimeout
             )
 
             val historyManagement = RatisHistoryManagement(raftNode!!)
-//            val historyManagement = InMemoryHistoryManagement(consensusProtocol)
-            val signalPublisher = SignalPublisher(signalListeners)
+//            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
+
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
-            val protocolClient = ProtocolClientImpl()
+            val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
             gpacProtocol =
                 GPACProtocolImpl(
@@ -162,14 +172,12 @@ class Application constructor(
             }
 
             commonRouting(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
-            ratisRouting(historyManagement)
+            historyManagementRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
-            //consensusProtocolRouting(consensusProtocol)
+            consensusProtocolRouting(consensusProtocol)
 
-            if (mode !is TestApplicationMode) {
-    //        runBlocking {
-    //            startConsensusProtocol()
-    //        }
+            runBlocking {
+                startConsensusProtocol()
             }
         }
     }
@@ -189,6 +197,9 @@ class Application constructor(
 
     fun startNonblocking() {
         engine.start(wait = false)
+        val address = "${mode.host}:${getBoundPort()}"
+        consensusProtocol.setPeerAddress(address)
+
     }
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {

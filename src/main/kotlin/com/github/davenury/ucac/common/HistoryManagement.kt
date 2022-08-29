@@ -1,26 +1,21 @@
 package com.github.davenury.ucac.common
 
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusFailure
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusSuccess
-import com.github.davenury.ucac.consensus.ratis.ChangeWithAcceptNum
 
 abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
-    open fun change(change: Change, acceptNum: Int?) =
+    open suspend fun change(change: Change, acceptNum: Int?) =
         consensusProtocol.proposeChange(change, acceptNum)
             .let {
                 when (it) {
-                    ConsensusFailure -> {
-                        HistoryChangeResult.HistoryChangeFailure
-                    }
-                    ConsensusSuccess -> {
-                        HistoryChangeResult.HistoryChangeSuccess
-                    }
+                    ConsensusFailure -> HistoryChangeResult.HistoryChangeFailure
+                    ConsensusSuccess -> HistoryChangeResult.HistoryChangeSuccess
+                    ConsensusResultUnknown -> HistoryChangeResult.HistoryChangeUnknown
                 }
             }
 
     abstract fun getLastChange(): ChangeWithAcceptNum?
-    abstract fun getState(): History?
+    abstract fun getState(): History
 
     /**
      * function used to check if history can be build given another change to perform
@@ -30,7 +25,5 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
 }
 
 enum class HistoryChangeResult {
-    HistoryChangeSuccess, HistoryChangeFailure
+    HistoryChangeSuccess, HistoryChangeFailure, HistoryChangeUnknown
 }
-
-typealias History = MutableList<ChangeWithAcceptNum>

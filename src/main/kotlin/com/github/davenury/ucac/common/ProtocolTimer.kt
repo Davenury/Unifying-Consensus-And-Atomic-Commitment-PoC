@@ -9,7 +9,6 @@ import kotlin.math.absoluteValue
 interface ProtocolTimer {
     suspend fun startCounting(action: suspend () -> Unit)
     fun cancelCounting()
-    fun setDelay(delay: Duration)
 }
 
 class ProtocolTimerImpl(
@@ -27,9 +26,15 @@ class ProtocolTimerImpl(
     override suspend fun startCounting(action: suspend () -> Unit) {
         cancelCounting()
         with(CoroutineScope(ctx)) {
+
             task = launch {
-                val timeout = delay.toMillis() + randomGenerator.nextLong().absoluteValue % backoffBound.toMillis()
-                delay(timeout)
+                val backoff = (
+                        if (backoffBound.isZero) 0
+                        else randomGenerator.nextLong().absoluteValue % backoffBound.toMillis()
+                        )
+                    .let { Duration.ofMillis(it) }
+                val timeout = delay.plus(backoff)
+                delay(timeout.toMillis())
                 action()
             }
 
@@ -40,7 +45,4 @@ class ProtocolTimerImpl(
         this.task?.cancel()
     }
 
-    override fun setDelay(delay: Duration) {
-        this.delay = delay
-    }
 }

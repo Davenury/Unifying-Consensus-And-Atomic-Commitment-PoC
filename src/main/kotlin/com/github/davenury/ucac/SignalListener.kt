@@ -12,7 +12,9 @@ enum class Signal {
     BeforeSendingApply,
     OnHandlingApplyBegin,
     OnHandlingApplyEnd,
+    ConsensusAfterProposingChange
 }
+
 
 interface SignalSubject
 

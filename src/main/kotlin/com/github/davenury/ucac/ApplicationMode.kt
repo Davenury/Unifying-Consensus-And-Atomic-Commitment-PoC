@@ -43,6 +43,7 @@ object DockerComposeApplicationMode: ApplicationMode() {
                     "Provide either arg or RAFT_NODE_ID env variable to represent id of node"
                 )
 
+
         val config = loadConfig()
         val me = config.peers.peersAddresses[_peersetId - 1][id].split(":")[0]
 
