@@ -78,7 +78,7 @@ class TestApplicationSet(
     fun getRunningApps(): List<Application> = apps
         .flatten()
         .zip(peers.flatten())
-        .filterIndexed { index, _ -> appsToExclude.contains(index + 1) }
+        .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
         .map { it.first }
 
 }
