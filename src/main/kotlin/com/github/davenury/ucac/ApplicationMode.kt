@@ -1,7 +1,6 @@
 package com.github.davenury.ucac
 
 import org.slf4j.LoggerFactory
-import java.time.Duration
 
 sealed class ApplicationMode {
     abstract val port: Int

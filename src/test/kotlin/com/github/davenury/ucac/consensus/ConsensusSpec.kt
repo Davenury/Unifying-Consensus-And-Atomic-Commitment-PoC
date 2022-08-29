@@ -6,6 +6,7 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.AddUserChange
 import com.github.davenury.ucac.common.ChangeWithAcceptNum
 import com.github.davenury.ucac.common.HistoryDto
+import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
@@ -19,7 +20,6 @@ import strikt.assertions.isEqualTo
 import strikt.assertions.isFailure
 import strikt.assertions.isNotEqualTo
 import strikt.assertions.isSuccess
-import kotlin.random.Random
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -51,11 +51,9 @@ class ConsensusSpec {
         //* peer 2 proponuje zmianę (akceptowana)
 
 
-        val peers = (1..5).map { createApplication(arrayOf(it.toString(), "1"), mode = TestApplicationMode(it, 1)) }
+        val peerset = TestApplicationSet(1, listOf(5))
+        val peerAddresses = peerset.getPeers()[0]
 
-        peers.forEach { it.startNonblocking() }
-        val peerAddresses = getPeerAddresses(peers)
-        updatePeersAddresses(peers)
 
         delay(leaderElectionDelay)
 
@@ -91,66 +89,53 @@ class ConsensusSpec {
             that(changes2[1].acceptNum).isEqualTo(1)
         }
 
-        peers.forEach { it.stop(0, 0) }
-
+        peerset.stopApps()
     }
 
     @Test
     fun `less than half of peers response on ConsensusElectMe`(): Unit = runBlocking {
 
-        val allPeers =
-            (1..5).map { createApplication(arrayOf(it.toString(), "1"), mode = TestApplicationMode(it, 1)) }
 
-        val peers = allPeers.take(2)
-
-        peers.forEach { it.startNonblocking() }
-        updatePeersAddresses(peers, allPeers.size - peers.size)
+        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(3, 4, 5))
 
         delay(leaderElectionDelay)
 
-        peers.forEach {
+        peerset.getRunningApps().forEach {
             expect {
                 val leaderAddress = askForLeaderAddress(it)
                 that(leaderAddress).isEqualTo(noneLeader)
             }
         }
 
-        peers.forEach { it.stop(0, 0) }
+        peerset.stopApps()
     }
 
     @Test
     fun `minimum number of peers response on ConsensusElectMe`(): Unit = runBlocking {
 
-        val allPeers =
-            (1..5).map { createApplication(arrayOf(it.toString(), "1"), mode = TestApplicationMode(it, 1)) }
-
-        val peers = allPeers.take(3)
-        peers.forEach { it.startNonblocking() }
-        updatePeersAddresses(peers, allPeers.size - peers.size)
+        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(4, 5))
 
         delay(leaderElectionDelay * 2)
 
-        peers.forEach {
+        peerset.getRunningApps().forEach {
             expect {
                 val leaderAddress = askForLeaderAddress(it)
                 that(leaderAddress).isNotEqualTo(noneLeader)
             }
         }
 
-        peers.forEach { it.stop(0, 0) }
+        peerset.stopApps()
     }
 
     @Test
     fun `leader failed and new leader is elected`(): Unit = runBlocking {
 
-        var peers = (1..5).map { createApplication(arrayOf(it.toString(), "1"), mode = TestApplicationMode(it, 1)) }
-        peers.forEach { it.startNonblocking() }
-        updatePeersAddresses(peers)
-        val peerAddresses = getPeerAddresses(peers)
+        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(4, 5))
+        var apps = peerset.getRunningApps()
 
         delay(leaderElectionDelay)
 
-        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
@@ -158,52 +143,50 @@ class ConsensusSpec {
 
         firstLeaderApplication.stop(0, 0)
 
-        peers = peers.filter { it != firstLeaderApplication }
+        apps = apps.filter { it != firstLeaderApplication }
 
         delay(leaderElectionDelay)
 
         expect {
 
             val secondLeaderAddress =
-                peers.first().let { askForLeaderAddress(it) }
+                askForLeaderAddress(apps.first())
             that(secondLeaderAddress).isNotEqualTo(noneLeader)
             that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress)
         }
 
-        peers.forEach { it.stop(0, 0) }
+        peerset.stopApps()
     }
 
     @Test
     fun `less than half peers failed`(): Unit = runBlocking {
 
 
-        var peers = (1..5).map { createApplication(arrayOf(it.toString(), "1"), mode = TestApplicationMode(it, 1)) }
-        peers.forEach { it.startNonblocking() }
-        updatePeersAddresses(peers)
-        val peerAddresses = getPeerAddresses(peers)
+        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(4, 5))
+        var apps = peerset.getRunningApps()
 
         delay(leaderElectionDelay)
 
-        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
 
         firstLeaderApplication.stop(0, 0)
 
-        peers = peers.filter { it != firstLeaderApplication }
+        apps = apps.filter { it != firstLeaderApplication }
 
         delay(leaderElectionDelay)
 
         expect {
 
             val secondLeaderAddress =
-                peers.first().let { askForLeaderAddress(it) }
+                askForLeaderAddress(apps.first())
             that(secondLeaderAddress).isNotEqualTo(noneLeader)
             that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress)
         }
 
-        peers.forEach { it.stop(0, 0) }
+        peerset.stopApps()
     }
 
 
@@ -214,22 +197,16 @@ class ConsensusSpec {
             throw RuntimeException("Failed after proposing change")
         }
 
-        val signalListeners = mapOf(Signal.ConsensusAfterProposingChange to leaderAction)
+        val signalListener = mapOf(Signal.ConsensusAfterProposingChange to leaderAction)
 
-        var peers = (1..5).map {
-            createApplication(
-                arrayOf(it.toString(), "1"),
-                signalListeners = signalListeners,
-                mode = TestApplicationMode(it, 1)
-            )
-        }
-        peers.forEach { it.startNonblocking() }
-        updatePeersAddresses(peers)
-        val peerAddresses = getPeerAddresses(peers)
+        val signalListeners = (1..5).associateWith { signalListener }
+
+        val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
+        var apps = peerset.getRunningApps()
 
         delay(leaderElectionDelay)
 
-        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
@@ -242,9 +219,7 @@ class ConsensusSpec {
 
         firstLeaderApplication.stop(0, 0)
 
-        peers = peers.filter { it != firstLeaderApplication }
-
-        val runningPeers = peerAddresses.filterNot { it.contains(firstLeaderPort) }
+        val runningPeers = peerset.getRunningPeers()[0].filterNot { it.contains(firstLeaderPort) }
 
         expect {
             val proposedChanges = askForProposedChanges(runningPeers.first())
@@ -267,29 +242,29 @@ class ConsensusSpec {
             that(acceptedChanges.first().acceptNum).isEqualTo(null)
         }
 
-        peers.forEach { it.stop(0, 0) }
+        peerset.stopApps()
     }
 
     @Test
     fun `less than half of peers fails after electing leader`(): Unit = runBlocking {
 
-        var peers = (1..5).map { createApplication(arrayOf(it.toString(), "1"), mode = TestApplicationMode(it, 1)) }
-        peers.forEach { it.startNonblocking() }
-        updatePeersAddresses(peers)
-        val peerAddresses = getPeerAddresses(peers)
+        val peerset = TestApplicationSet(1, listOf(5))
+        var apps = peerset.getRunningApps()
+
+        val peerAddresses = peerset.getRunningPeers()[0]
 
         delay(leaderElectionDelay)
 
-        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
 
 
-        val peersToStop = peerAddresses.zip(peers).filterNot { it.first.contains(firstLeaderPort) }.take(2)
+        val peersToStop = peerAddresses.zip(apps).filterNot { it.first.contains(firstLeaderPort) }.take(2)
 
         peersToStop.forEach { it.second.stop(0, 0) }
-        val runningPeersAddressAndApplication = peerAddresses.zip(peers).filterNot { addressAndApplication ->
+        val runningPeersAddressAndApplication = peerAddresses.zip(apps).filterNot { addressAndApplication ->
             val addressesStopped = peersToStop.map { it.first }
             addressesStopped.contains(addressAndApplication.first)
         }
@@ -315,28 +290,28 @@ class ConsensusSpec {
 
         }
 
-        peers.forEach { it.stop(0, 0) }
+        peerset.stopApps()
     }
 
     @Test
     fun `more than half of peers fails during propagating change`(): Unit = runBlocking {
 
-        var peers = (1..5).map { createApplication(arrayOf(it.toString(), "1"), mode = TestApplicationMode(it, 1)) }
-        peers.forEach { it.startNonblocking() }
-        updatePeersAddresses(peers)
-        val peerAddresses = getPeerAddresses(peers)
+        val peerset = TestApplicationSet(1, listOf(5))
+        var apps = peerset.getRunningApps()
+
+        val peerAddresses = peerset.getRunningPeers()[0]
 
         delay(leaderElectionDelay)
 
-        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
 
 
-        val peersToStop = peerAddresses.zip(peers).filterNot { it.first.contains(firstLeaderPort) }.take(3)
+        val peersToStop = peerAddresses.zip(apps).filterNot { it.first.contains(firstLeaderPort) }.take(3)
         peersToStop.forEach { it.second.stop(0, 0) }
-        val runningPeersAddressAndApplication = peerAddresses.zip(peers).filterNot { addressAndApplication ->
+        val runningPeersAddressAndApplication = peerAddresses.zip(apps).filterNot { addressAndApplication ->
             val addressesStopped = peersToStop.map { it.first }
             addressesStopped.contains(addressAndApplication.first)
         }
@@ -362,22 +337,22 @@ class ConsensusSpec {
             }
         }
 
-        peers.forEach { it.stop(0, 0) }
+        peerset.stopApps()
     }
 
     @Disabled("WIP")
     @Test
     fun `network divide on half and then merge`(): Unit = runBlocking {
 
+        val peerset = TestApplicationSet(1, listOf(5))
+        var apps = peerset.getRunningApps()
 
-        var peers = (1..5).map { createApplication(arrayOf(it.toString(), "1"), mode = TestApplicationMode(it, 1)) }
-        peers.forEach { it.startNonblocking() }
-        updatePeersAddresses(peers)
-        val peerAddresses = getPeerAddresses(peers)
+        val peerAddresses = peerset.getRunningPeers()[0]
+
 
         delay(leaderElectionDelay)
 
-        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(peers)
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
@@ -387,7 +362,7 @@ class ConsensusSpec {
         val firstHalf = listOf(firstLeaderAddress, notLeaderPeers.first())
         val secondHalf = notLeaderPeers.drop(1)
 
-        val addressToApplication: Map<String, Application> = peerAddresses.zip(peers).toMap()
+        val addressToApplication: Map<String, Application> = peerAddresses.zip(apps).toMap()
 
 
 //      Divide network
@@ -461,7 +436,7 @@ class ConsensusSpec {
             }
         }
 
-        peers.forEach { it.stop(0, 0) }
+        peerset.stopApps()
     }
 
 
@@ -533,18 +508,6 @@ class ConsensusSpec {
 
     private fun getPeerAddresses(apps: List<Application>): List<String> =
         apps.map { "127.0.0.1:${it.getBoundPort()}" }
-
-    private fun updatePeersAddresses(startedApps: List<Application>, notStartedApps: Int = 0) {
-        val notStartedAppsAddresses = (1..notStartedApps)
-            .map { "127.0.0.1:${Random.nextInt(5000, 10000)}" }
-
-        val peers = getPeerAddresses(startedApps) + notStartedAppsAddresses
-
-        startedApps.forEach { application ->
-            val filteredPeers: List<String> = peers.filter { it != "127.0.0.1:${application.getBoundPort()}" }
-            application.setOtherPeers(listOf(filteredPeers))
-        }
-    }
 
     private fun getPortFromAddress(address: String) = address.split(":")[1]
 
