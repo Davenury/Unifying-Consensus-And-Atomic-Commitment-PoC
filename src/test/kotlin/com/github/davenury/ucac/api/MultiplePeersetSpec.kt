@@ -10,10 +10,16 @@ import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.apache.commons.io.FileUtils
-import org.junit.jupiter.api.*
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.fail
+import org.slf4j.LoggerFactory
 import strikt.api.expect
 import strikt.api.expectThat
 import strikt.api.expectThrows
@@ -23,9 +29,16 @@ import strikt.assertions.isEqualTo
 import strikt.assertions.isGreaterThanOrEqualTo
 import java.io.File
 import java.util.*
+import java.util.concurrent.Phaser
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
+@Suppress("HttpUrlsUsage")
 class MultiplePeersetSpec {
+    companion object {
+        private val logger = LoggerFactory.getLogger(MultiplePeersetSpec::class.java)
+    }
 
     @BeforeEach
     fun setup() {
@@ -105,9 +118,7 @@ class MultiplePeersetSpec {
         // then - transaction should not be executed
         askForChanges("http://${peers[0][2]}")
             .let {
-                expect {
-                    that(it.size).isEqualTo(0)
-                }
+                expectThat(it.size).isEqualTo(0)
             }
 
         apps.stopApps()
@@ -206,7 +217,6 @@ class MultiplePeersetSpec {
             apps.stopApps()
         }
 
-    @Disabled("Delays are still used")
     @Test
     fun `transaction should be processed if leader fails after ft-agree`(): Unit = runBlocking {
 
@@ -214,9 +224,33 @@ class MultiplePeersetSpec {
             throw RuntimeException()
         }
 
+        val phaser = Phaser(7)
+        phaser.register()
+
+        val peerApplyCommitted = SignalListener {
+            logger.info("Arrived: ${it.subject.getPeerName()}")
+            phaser.arrive()
+        }
+
+        val signalListenersForLeaders = mapOf(
+            Signal.BeforeSendingApply to failAction,
+        )
+        val signalListenersForCohort = mapOf(
+            Signal.OnHandlingApplyCommitted to peerApplyCommitted,
+        )
+
         val apps = TestApplicationSet(
             2, listOf(3, 5),
-            signalListeners = mapOf(1 to mapOf(Signal.BeforeSendingApply to failAction))
+            signalListeners = mapOf(
+                1 to signalListenersForLeaders,
+                2 to signalListenersForCohort,
+                3 to signalListenersForCohort,
+                4 to signalListenersForCohort,
+                5 to signalListenersForCohort,
+                6 to signalListenersForCohort,
+                7 to signalListenersForCohort,
+                8 to signalListenersForCohort,
+            )
         )
         val peers = apps.getPeers()
 
@@ -225,8 +259,9 @@ class MultiplePeersetSpec {
             executeChange("http://${peers[0][0]}/create_change")
         }
 
-        // application should elect recovery leader to perform transaction to the end
-        delay(20000)
+        withContext(Dispatchers.IO) {
+            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+        }
 
         peers.flatten().forEach {
             askForChanges("http://$it")
@@ -241,10 +276,11 @@ class MultiplePeersetSpec {
         apps.stopApps()
     }
 
-    @Disabled("Delays are still used")
     @Test
     fun `transaction should be processed and should be processed only once when one peerset applies its change and the other not`(): Unit =
         runBlocking {
+            val phaser = Phaser(8)
+            phaser.register()
 
             val leaderAction = SignalListener {
                 val url2 = "${it.otherPeers[0][0]}/apply"
@@ -261,10 +297,10 @@ class MultiplePeersetSpec {
                             )
                         )
                     }.also {
-                        println("Got response ${it.status.value}")
+                        logger.info("Got response ${it.status.value}")
                     }
                 }
-                println("${it.otherPeers[0][0]} sent response to apply")
+                logger.info("${it.otherPeers[0][0]} sent response to apply")
                 val url3 = "${it.otherPeers[0][1]}/apply"
                 runBlocking {
                     testHttpClient.post<HttpResponse>(url3) {
@@ -279,36 +315,55 @@ class MultiplePeersetSpec {
                             )
                         )
                     }.also {
-                        println("Got response ${it.status.value}")
+                        logger.info("Got response ${it.status.value}")
                     }
                 }
-                println("${it.otherPeers[0][1]} sent response to apply")
+                logger.info("${it.otherPeers[0][1]} sent response to apply")
                 throw RuntimeException()
             }
 
+            val arrivalCount = AtomicInteger(0)
+            val peerApplyEnd = SignalListener {
+                arrivalCount.incrementAndGet()
+                phaser.arrive()
+            }
+
+            val signalListenersForCohort = mapOf(
+                Signal.OnHandlingApplyCommitted to peerApplyEnd,
+            )
+            val signalListenersForLeader = mapOf(
+                Signal.BeforeSendingApply to leaderAction,
+            ) + signalListenersForCohort
+
             val apps = TestApplicationSet(
                 2, listOf(3, 5),
-                signalListeners = mapOf(1 to mapOf(Signal.BeforeSendingApply to leaderAction))
+                signalListeners = mapOf(
+                    1 to signalListenersForLeader,
+                    2 to signalListenersForCohort,
+                    3 to signalListenersForCohort,
+                    4 to signalListenersForCohort,
+                    5 to signalListenersForCohort,
+                    6 to signalListenersForCohort,
+                    7 to signalListenersForCohort,
+                    8 to signalListenersForCohort,
+                )
             )
             val peers = apps.getPeers()
-
-            delay(5000)
 
             // when - executing transaction something should go wrong after ft-agree
             expectThrows<ServerResponseException> {
                 executeChange("http://${peers[0][0]}/create_change")
             }
 
-            // application should elect recovery leader to perform transaction to the end
-            delay(20000)
+            withContext(Dispatchers.IO) {
+                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+            }
 
             peers.flatten().forEach {
                 askForChanges("http://$it")
                     .let {
-                        expect {
-                            that(it.size).isGreaterThanOrEqualTo(1)
-                            that(it[0].change).isEqualTo(AddUserChange("userName"))
-                        }
+                        expectThat(it.size).isGreaterThanOrEqualTo(1)
+                        expectThat(it[0].change).isEqualTo(AddUserChange("userName"))
                     }
             }
 

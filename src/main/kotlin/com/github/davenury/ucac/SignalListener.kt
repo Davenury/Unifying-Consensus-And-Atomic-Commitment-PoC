@@ -12,11 +12,14 @@ enum class Signal {
     BeforeSendingApply,
     OnHandlingApplyBegin,
     OnHandlingApplyEnd,
-    ConsensusAfterProposingChange
+    OnHandlingApplyCommitted,
+    ConsensusAfterProposingChange,
 }
 
 
-interface SignalSubject
+interface SignalSubject {
+    fun getPeerName(): String
+}
 
 class SignalPublisher(
     private val listeners: Map<Signal, SignalListener>

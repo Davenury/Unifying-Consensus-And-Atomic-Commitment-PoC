@@ -24,8 +24,8 @@ class GPACProtocolImpl(
     private val transactionBlocker: TransactionBlocker,
     private var otherPeers: List<List<String>>,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
-    private val me: Int,
-    private val myPeersetId: Int
+    private val myPeersetId: Int,
+    private val myNodeId: Int,
 ) : GPACProtocol {
 
     private var myBallotNumber: Int = 0
@@ -90,13 +90,13 @@ class GPACProtocolImpl(
                 acceptNum = message.acceptNum ?: message.ballotNumber
             )
 
-        logger.info("$me state transaction state: ${this.transaction}")
+        logger.info("${getPeerName()} state transaction state: ${this.transaction}")
 
         myBallotNumber = message.ballotNumber
 
         if (!message.decision) {
             transactionBlocker.tryToBlock()
-            logger.info("$me Lock aquired: ${message.ballotNumber}")
+            logger.info("${getPeerName()} Lock aquired: ${message.ballotNumber}")
         }
 
         signal(Signal.OnHandlingAgreeEnd, transaction)
@@ -114,15 +114,18 @@ class GPACProtocolImpl(
             this.transaction =
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
-            logger.info("$me - my state: ${historyManagement.getState()}")
+            logger.info("${getPeerName()} - my state: ${historyManagement.getState()}")
 
+            if (message.acceptVal == Accept.COMMIT) {
+                signal(Signal.OnHandlingApplyCommitted, transaction)
+            }
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
                 historyManagement.change(message.change.toChange(), this.transaction.acceptNum)
             }
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT)
 
-            logger.info("$me Releasing semaphore as cohort")
+            logger.info("${getPeerName()} Releasing semaphore as cohort")
             transactionBlocker.releaseBlock()
 
             signal(Signal.OnHandlingApplyEnd, transaction)
@@ -133,16 +136,16 @@ class GPACProtocolImpl(
         historyManagement.getState()?.any { it.acceptNum == this.transaction.acceptNum } == true
 
     private suspend fun leaderFailTimeoutStart(change: ChangeDto) {
-        logger.info("$me Start counting")
+        logger.info("${getPeerName()} Start counting")
         timer.startCounting {
-            logger.info("$me Recovery leader starts")
+            logger.info("${getPeerName()} Recovery leader starts")
             transactionBlocker.releaseBlock()
             performProtocolAsRecoveryLeader(change)
         }
     }
 
     private fun leaderFailTimeoutStop() {
-        logger.info("$me Stop counter")
+        logger.info("${getPeerName()} Stop counter")
         timer.cancelCounting()
     }
 
@@ -175,7 +178,7 @@ class GPACProtocolImpl(
 
         val messageWithDecision = electResponses.flatten().find { it.decision }
         if (messageWithDecision != null) {
-            logger.info("$me Got hit with message with decision true")
+            logger.info("${getPeerName()} Got hit with message with decision true")
             // someone got to ft-agree phase
             this.transaction = this.transaction.copy(acceptVal = messageWithDecision.acceptVal)
             signal(Signal.BeforeSendingAgree, this.transaction)
@@ -197,7 +200,7 @@ class GPACProtocolImpl(
         // I got to ft-agree phase, so my voice of this is crucial
         signal(Signal.BeforeSendingAgree, this.transaction)
 
-        logger.info("$me Recovery leader transaction state: ${this.transaction}")
+        logger.info("${getPeerName()} Recovery leader transaction state: ${this.transaction}")
         val agreedResponses = ftAgreePhase(change, this.transaction.acceptVal!!, acceptNum = this.transaction.acceptNum)
 
         signal(Signal.BeforeSendingApply, this.transaction)
@@ -225,7 +228,7 @@ class GPACProtocolImpl(
             if (!historyManagement.canBeBuild(change.toChange())) throw HistoryCannotBeBuildException()
             this.transaction = transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
             signal(Signal.BeforeSendingElect, this.transaction)
-            logger.info("$me - sending ballot number: $myBallotNumber")
+            logger.info("${getPeerName()} - sending ballot number: $myBallotNumber")
             val (responses, maxBallotNumber) = getElectedYouResponses(change, otherPeers, acceptNum)
             electResponses = responses
             tries++
@@ -233,7 +236,7 @@ class GPACProtocolImpl(
                 return electResponses
             }
             myBallotNumber = max(maxBallotNumber, myBallotNumber)
-            logger.info("$me Bumped ballot number to: $myBallotNumber")
+            logger.info("${getPeerName()} Bumped ballot number to: $myBallotNumber")
         } while (tries < maxLeaderElectionTries)
 
         transactionBlocker.releaseBlock()
@@ -332,4 +335,6 @@ class GPACProtocolImpl(
     override fun setOtherPeers(otherPeers: List<List<String>>) {
         this.otherPeers = otherPeers
     }
+
+    override fun getPeerName() = "peerset${myPeersetId}/peer${myNodeId}"
 }

@@ -26,8 +26,8 @@ class GPACProtocolSpec {
         protocolClientMock,
         transactionBlockerMock,
         listOf(listOf("http://localhost:8080")),
-        me = 8080,
-        myPeersetId = 0
+        myPeersetId = 0,
+        myNodeId = 0,
     )
 
     @BeforeEach
@@ -39,8 +39,8 @@ class GPACProtocolSpec {
             protocolClientMock,
             transactionBlockerMock,
             listOf(listOf("http://localhost:8080")),
-            me = 8080,
-            myPeersetId = 0
+            myPeersetId = 0,
+            myNodeId = 0,
         )
     }
 
