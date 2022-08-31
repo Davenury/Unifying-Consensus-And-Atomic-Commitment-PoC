@@ -9,32 +9,38 @@ data class Ledger(
     val proposedItems: MutableList<LedgerItem> = mutableListOf()
 ) {
 
+    private var commitIndex: Int = 0
+    var lastApplied = -1
+
     fun updateLedger(acceptedItems: List<LedgerItem>, proposedItems: List<LedgerItem>) {
 
         val newAcceptedItems = acceptedItems - this.acceptedItems.toSet()
         this.acceptedItems.addAll(newAcceptedItems)
         val acceptedIds = acceptedItems.map { it.ledgerIndex }
+        lastApplied = acceptedIds.maxOrDefault(lastApplied)
 
 
         this.proposedItems.removeAll { acceptedIds.contains(it.ledgerIndex) }
-        this.proposedItems.addAll(proposedItems)
+        val newProposedItems = proposedItems - this.proposedItems.toSet()
+        this.proposedItems.addAll(newProposedItems)
+        commitIndex = newProposedItems.maxOrDefault(commitIndex)
 
     }
 
     fun getNewAcceptedItems(ledgerIndex: Int) = acceptedItems.filter { it.ledgerIndex > ledgerIndex }
     fun getNewProposedItems(ledgerIndex: Int) = proposedItems.filter { it.ledgerIndex > ledgerIndex }
-    fun getLastAcceptedItemId() = acceptedItems.lastOrNull()?.ledgerIndex ?: -1
 
     fun acceptItems(acceptedIndexes: List<Int>) {
         val newAcceptedItems = proposedItems.filter { acceptedIndexes.contains(it.ledgerIndex) }
         acceptedItems.addAll(newAcceptedItems)
         proposedItems.removeAll(newAcceptedItems)
+        lastApplied = newAcceptedItems.maxOrDefault(lastApplied)
     }
 
     fun proposeChange(change: Change, term: Int): Int {
-        val previousId = proposedItems.lastOrNull()?.ledgerIndex ?: acceptedItems.lastOrNull()?.ledgerIndex ?: -1
-        val newId = previousId + 1
+        val newId = commitIndex
         proposedItems.add(LedgerItem(newId, term, change))
+        commitIndex++
         return newId
     }
 
@@ -51,6 +57,13 @@ data class Ledger(
 
     fun changeAlreadyProposed(change: Change): Boolean =
         (acceptedItems + proposedItems).any { it.change == change }
+
+
+    private fun List<LedgerItem>.maxOrDefault(defaultValue: Int): Int =
+        this.maxOfOrNull { it.ledgerIndex } ?: defaultValue
+
+    @JvmName("maxOrDefaultInt")
+    private fun List<Int>.maxOrDefault(defaultValue: Int): Int = this.maxOfOrNull { it } ?: defaultValue
 
 }
 
