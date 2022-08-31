@@ -57,17 +57,18 @@ class Application constructor(
     private val engine: NettyApplicationEngine
     private var raftNode: HistoryRaftNode? = null
     private lateinit var consensusProtocol: RaftConsensusProtocol
-    private lateinit var ctx: ExecutorCoroutineDispatcher
+    private val ctx: ExecutorCoroutineDispatcher
     private lateinit var gpacProtocol: GPACProtocol
 
     init {
 
+        ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
-//            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
+            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
             val signalPublisher = SignalPublisher(signalListeners)
 
-            ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
+
 
             val raftProtocolClientImpl = RaftProtocolClientImpl()
 
@@ -232,6 +233,7 @@ class Application constructor(
     }
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
+        ctx.close()
         engine.stop(gracePeriodMillis, timeoutMillis)
         raftNode?.close()
     }

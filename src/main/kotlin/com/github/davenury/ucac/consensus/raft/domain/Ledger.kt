@@ -55,6 +55,23 @@ data class Ledger(
     fun getAcceptedChanges(): List<Change> = acceptedItems.map { it.change }.toMutableList()
     fun getProposedChanges(): List<Change> = proposedItems.map { it.change }.toMutableList()
 
+    fun checkIfItemExist(logIndex: Int, logTerm: Int): Boolean =
+        acceptedItems
+            .lastOrNull()
+            ?.let { it.ledgerIndex == logIndex && it.term == logTerm } ?: false
+
+    fun removeNotAcceptedItems(logIndex: Int, logTerm: Int) {
+        proposedItems.removeAll { it.ledgerIndex > logIndex || it.term > logTerm }
+        acceptedItems.removeAll { it.ledgerIndex > logIndex || it.term > logTerm }
+    }
+
+    fun getLastAppliedChangeIdAndTermBeforeIndex(index: Int): Pair<Int?, Int?> =
+        acceptedItems
+            .sortedBy { it.ledgerIndex }
+            .lastOrNull { it.ledgerIndex <= index }
+            ?.let { Pair(it.ledgerIndex, it.term) }
+            ?: Pair(null, null)
+
     fun changeAlreadyProposed(change: Change): Boolean =
         (acceptedItems + proposedItems).any { it.change == change }
 

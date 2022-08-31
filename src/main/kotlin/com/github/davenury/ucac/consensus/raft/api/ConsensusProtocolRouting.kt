@@ -17,7 +17,7 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         post("/consensus/request_vote") {
             val message: ConsensusElectMe = call.receive()
             semaphore.acquire()
-            val response = protocol.handleRequestVote(message.peerId, message.leaderIteration, message.lastAcceptedId)
+            val response = protocol.handleRequestVote(message.peerId, message.term, message.lastLogIndex)
             semaphore.release()
             call.respond(response)
         }
@@ -36,7 +36,7 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             semaphore.acquire()
             val heartbeatResult = protocol.handleHeartbeat(message)
             semaphore.release()
-            call.respond(ConsensusHeartbeatResponse(heartbeatResult, protocol.getLeaderAddress()))
+            call.respond(heartbeatResult)
             // TODO
         }
 

@@ -12,9 +12,9 @@ import org.slf4j.LoggerFactory
 
 interface RaftProtocolClient {
 
-    suspend fun sendConsensusElectMe(otherPeers: List<String>, message: ConsensusElectMe): List<ConsensusElectedYou?>
-    suspend fun sendConsensusImTheLeader(otherPeers: List<String>, message: ConsensusImTheLeader): List<String?>
-    suspend fun sendConsensusHeartbeat(peersWithMessage: List<Pair<String, ConsensusHeartbeat>>): List<ConsensusHeartbeatResponse?>
+    suspend fun sendConsensusElectMe(otherPeers: List<String>, message: ConsensusElectMe): List<Response<ConsensusElectedYou?>>
+    suspend fun sendConsensusImTheLeader(otherPeers: List<String>, message: ConsensusImTheLeader): List<Response<String?>>
+    suspend fun sendConsensusHeartbeat(peersWithMessage: List<Pair<String, ConsensusHeartbeat>>): List<Response<ConsensusHeartbeatResponse?>>
 }
 
 class RaftProtocolClientImpl : RaftProtocolClient {
@@ -22,7 +22,7 @@ class RaftProtocolClientImpl : RaftProtocolClient {
     override suspend fun sendConsensusElectMe(
         otherPeers: List<String>,
         message: ConsensusElectMe
-    ): List<ConsensusElectedYou?> =
+    ): List<Response<ConsensusElectedYou?>> =
         otherPeers
             .map { Pair(it, message) }
             .let { sendRequests(it, "consensus/request_vote") }
@@ -30,32 +30,36 @@ class RaftProtocolClientImpl : RaftProtocolClient {
     override suspend fun sendConsensusImTheLeader(
         otherPeers: List<String>,
         message: ConsensusImTheLeader
-    ): List<String?> =
+    ): List<Response<String?>> =
         otherPeers
             .map { Pair(it, message) }
             .let { sendRequests(it, "consensus/leader") }
 
     override suspend fun sendConsensusHeartbeat(
         peersWithMessage: List<Pair<String, ConsensusHeartbeat>>
-    ): List<ConsensusHeartbeatResponse?> =
-        sendRequests(peersWithMessage,"consensus/heartbeat")
+    ): List<Response<ConsensusHeartbeatResponse?>> =
+        sendRequests(peersWithMessage, "consensus/heartbeat")
 
 
     private suspend inline fun <T, reified K> sendRequests(
         peersWithBody: List<Pair<String, T>>,
         urlPath: String
-    ): List<K?> =
+    ): List<Response<K?>> =
         peersWithBody.map {
             CoroutineScope(Dispatchers.IO).async {
                 sendConsensusMessage<T, K>("http://${it.first}/$urlPath", it.second)
+            }.let { corutine ->
+                Pair(it.first, corutine)
             }
-        }.map { job ->
-            try {
-                job.await()
+        }.map {
+            val result = try {
+                it.second.await()
             } catch (e: Exception) {
                 logger.error("Error while evaluating responses: $e")
                 null
             }
+
+            Response(it.first, result)
         }
 
 
@@ -77,6 +81,6 @@ class RaftProtocolClientImpl : RaftProtocolClient {
     companion object {
         private val logger = LoggerFactory.getLogger(RaftProtocolClientImpl::class.java)
     }
-
-
 }
+
+data class Response<K>(val from: String, val message: K)

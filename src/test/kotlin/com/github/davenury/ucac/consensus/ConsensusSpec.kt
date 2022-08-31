@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.consensus
 
 import com.github.davenury.ucac.*
+import com.github.davenury.ucac.api.MultiplePeersetSpec
 import com.github.davenury.ucac.common.AddUserChange
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.Changes
@@ -16,10 +17,12 @@ import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import strikt.api.expect
 import strikt.api.expectCatching
+import strikt.api.expectThat
 import strikt.assertions.isEqualTo
 import strikt.assertions.isFailure
 import strikt.assertions.isNotEqualTo
 import strikt.assertions.isSuccess
+import java.util.concurrent.Phaser
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -28,9 +31,9 @@ typealias LeaderAddressPortAndApplication = Triple<String, String, Application>
 
 class ConsensusSpec {
 
-    private val leaderElectionDelay = 7_000L
-    private val changePropagationDelay = 7_000L
-    private val knownPeerIp = "127.0.0.1"
+    private val leaderElectionDelay = 8_000L
+    private val changePropagationDelay = 8_000L
+    private val knownPeerIp = "localhost"
     private val unknownPeerIp = "198.18.0.0"
     private val noneLeader = null
 
@@ -49,7 +52,17 @@ class ConsensusSpec {
         //* peer 1 proponuje zmianę (akceptowana)
         //* peer 2 proponuje zmianę (akceptowana)
 
-        val peerset = TestApplicationSet(1, listOf(5))
+        val phaser = Phaser(4)
+        phaser.register()
+
+        val peerApplyCommitted = SignalListener {
+            phaser.arrive()
+        }
+
+        val signalListener = mapOf(Signal.ConsensusLeaderElected to peerApplyCommitted)
+        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
+
+        val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
         val peerAddresses = peerset.getPeers()[0]
 
         delay(leaderElectionDelay)
@@ -128,7 +141,7 @@ class ConsensusSpec {
     @Test
     fun `leader failed and new leader is elected`(): Unit = runBlocking {
 
-        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(4, 5))
+        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(5))
         var apps = peerset.getRunningApps()
 
         delay(leaderElectionDelay)
@@ -160,7 +173,7 @@ class ConsensusSpec {
     fun `less than half peers failed`(): Unit = runBlocking {
 
 
-        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(4, 5))
+        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(5))
         var apps = peerset.getRunningApps()
 
         delay(leaderElectionDelay)
@@ -177,7 +190,6 @@ class ConsensusSpec {
         delay(leaderElectionDelay)
 
         expect {
-
             val secondLeaderAddress =
                 askForLeaderAddress(apps.first())
             that(secondLeaderAddress).isNotEqualTo(noneLeader)
@@ -338,7 +350,7 @@ class ConsensusSpec {
         peerset.stopApps()
     }
 
-    @Disabled("WIP")
+    //    @Disabled("WIP")
     @Test
     fun `network divide on half and then merge`(): Unit = runBlocking {
 
@@ -346,7 +358,6 @@ class ConsensusSpec {
         var apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
-
 
         delay(leaderElectionDelay)
 
@@ -367,18 +378,28 @@ class ConsensusSpec {
         firstHalf.forEach { address ->
             val application = addressToApplication[address]
             val peers = firstHalf.filter { it != address } + secondHalf.map { it.replace(knownPeerIp, unknownPeerIp) }
+            println("$ MODIFY PEERS: $firstLeaderAddress $address $peers")
             modifyPeers(application!!, peers)
         }
 
         secondHalf.forEach { address ->
             val application = addressToApplication[address]
             val peers = secondHalf.filter { it != address } + firstHalf.map { it.replace(knownPeerIp, unknownPeerIp) }
+            println("$ MODIFY PEERS: $firstLeaderAddress $address $peers")
             modifyPeers(application!!, peers)
         }
 
-
 //      Delay to chose leader in second half
         delay(leaderElectionDelay)
+
+//      Check if second half chose new leader
+        secondHalf.forEach {
+            val app = addressToApplication[it]
+            val newLeaderAddress = askForLeaderAddress(app!!)
+            println("$it $secondHalf \n newLeader: $newLeaderAddress old: $firstLeaderAddress")
+            expectThat(newLeaderAddress).isNotEqualTo(firstLeaderAddress)
+        }
+
 
 //      Run change in both halfs
         expectCatching {
@@ -392,11 +413,11 @@ class ConsensusSpec {
 
         delay(changePropagationDelay)
 
-
         firstHalf.forEach {
             expect {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
+                println("$it $firstLeaderAddress \n $proposedChanges \n $acceptedChanges")
                 that(proposedChanges.size).isEqualTo(1)
                 that(proposedChanges.first()).isEqualTo(createChange(null))
                 that(proposedChanges.first().acceptNum).isEqualTo(1)
@@ -493,7 +514,7 @@ class ConsensusSpec {
 
         val addressAndApplication = peerAddresses.zip(peers).first { it.first.contains(port) }
 
-        val leaderAddress = addressAndApplication.first
+        val leaderAddress = addressAndApplication.first.replace("127.0.0.1", "localhost")
         val application = addressAndApplication.second
 
         return Triple(leaderAddress, port, application)
