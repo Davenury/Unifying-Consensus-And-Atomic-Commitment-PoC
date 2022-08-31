@@ -34,6 +34,7 @@ data class ChangeWithAcceptNumDto(val changeDto: ChangeDto, val acceptNum: Int?)
 
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+// peers contains one entry for each peerset
 data class ChangeDto(val properties: Map<String, String>, val peers: List<List<String>>) {
     fun toChange(): Change =
         (properties["operation"])

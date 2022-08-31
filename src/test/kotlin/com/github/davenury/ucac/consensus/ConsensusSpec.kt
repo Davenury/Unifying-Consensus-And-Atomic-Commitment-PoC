@@ -513,7 +513,7 @@ class ConsensusSpec {
 
     private fun modifyPeers(app: Application, peers: List<String>) {
         val peers = peers.map { it.replace("http://", "") }
-        app.setOtherPeers(listOf(peers))
+        app.setConsensusOtherPeers(listOf(peers))
     }
 
 

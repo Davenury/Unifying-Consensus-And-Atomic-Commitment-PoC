@@ -60,14 +60,23 @@ class TestApplicationSet(
             .zip(peers.flatten())
             .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
             .forEach { (app, peer) ->
-                app.setOtherPeers(
+                app.setConsensusOtherPeers(
                     peers.map { it.filterNot { it == peer } }
                 )
         }
+
+        this.setAppsPeers(peers)
     }
 
     fun stopApps(gracePeriodMillis: Long = 200, timeoutPeriodMillis: Long = 1000) {
         apps.flatten().forEach { it.stop(gracePeriodMillis, timeoutPeriodMillis) }
+    }
+
+    fun setAppsPeers(peers: List<List<String>>) {
+        this.apps
+            .flatten()
+            .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
+            .forEach { it.setGPACPeers(peers) }
     }
 
     fun getPeers() = peers

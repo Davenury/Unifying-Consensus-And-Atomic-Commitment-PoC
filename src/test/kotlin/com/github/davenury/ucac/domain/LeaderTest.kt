@@ -78,6 +78,7 @@ class LeaderTest {
             transactionBlocker,
             myPeersetId = 0,
             myNodeId = 0,
+            allPeers = listOf(listOf("localhost:8081", "localhost:9092", "localhost:9093"))
         )
-    private val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"), listOf(listOf("localhost:9092", "localhost:9093")))
+    private val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"), listOf(listOf("localhost:9092")))
 }

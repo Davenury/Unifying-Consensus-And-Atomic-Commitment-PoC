@@ -27,6 +27,7 @@ class GPACProtocolSpec {
         transactionBlockerMock,
         myPeersetId = 0,
         myNodeId = 0,
+        allPeers = listOf(listOf("peer1", "peer2", "peer3"))
     )
 
     @Test
@@ -118,7 +119,7 @@ class GPACProtocolSpec {
         val message = Apply(10, true, Accept.COMMIT, changeDto)
 
         subject.handleApply(message)
-        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName", listOf(listOf())), 10))
+        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName", listOf(listOf("peer2"))), 10))
     }
 
     @Test
@@ -143,7 +144,7 @@ class GPACProtocolSpec {
             "operation" to "ADD_USER",
             "userName" to "userName"
         ),
-        listOf(listOf())
+        listOf(listOf("peer2"))
     )
 
 }

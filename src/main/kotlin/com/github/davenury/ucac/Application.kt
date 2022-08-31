@@ -1,18 +1,18 @@
 package com.github.davenury.ucac
 
-import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.historyManagementRouting
 import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
+import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
 import com.github.davenury.ucac.consensus.ratis.RaftConfiguration
 import com.github.davenury.ucac.consensus.ratis.RatisHistoryManagement
 import com.github.davenury.ucac.gpac.api.gpacProtocolRouting
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
-import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
+import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
 import io.ktor.application.*
 import io.ktor.features.*
@@ -91,8 +91,9 @@ class Application constructor(
                     protocolClient,
                     transactionBlocker,
                     signalPublisher,
-                    mode.peersetId,
-                    mode.nodeId,
+                    allPeers = config.peers.peersAddresses,
+                    myPeersetId = mode.peersetId,
+                    myNodeId = mode.nodeId,
                 )
 
             install(ContentNegotiation) {
@@ -182,7 +183,11 @@ class Application constructor(
         }
     }
 
-    fun setOtherPeers(otherPeers: List<List<String>>) {
+    fun setGPACPeers(peers: List<List<String>>) {
+        gpacProtocol.setPeers(peers)
+    }
+
+    fun setConsensusOtherPeers(otherPeers: List<List<String>>) {
         consensusProtocol.setOtherPeers(otherPeers[mode.peersetId - 1])
     }
 
