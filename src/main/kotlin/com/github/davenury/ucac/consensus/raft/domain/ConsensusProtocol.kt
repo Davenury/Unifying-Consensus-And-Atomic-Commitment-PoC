@@ -11,3 +11,7 @@ enum class ConsensusResult {
     ConsensusSuccess, ConsensusFailure, ConsensusResultUnknown
 }
 
+enum class RaftRole{
+    Leader, Follower, Candidate
+}
+

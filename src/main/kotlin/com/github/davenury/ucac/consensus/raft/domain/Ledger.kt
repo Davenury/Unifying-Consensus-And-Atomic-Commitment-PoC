@@ -13,28 +13,28 @@ data class Ledger(
 
         val newAcceptedItems = acceptedItems - this.acceptedItems.toSet()
         this.acceptedItems.addAll(newAcceptedItems)
-        val acceptedIds = acceptedItems.map { it.id }
+        val acceptedIds = acceptedItems.map { it.ledgerIndex }
 
 
-        this.proposedItems.removeAll { acceptedIds.contains(it.id) }
+        this.proposedItems.removeAll { acceptedIds.contains(it.ledgerIndex) }
         this.proposedItems.addAll(proposedItems)
 
     }
 
-    fun getNewAcceptedItems(id: Int) = acceptedItems.filter { it.id > id }
-    fun getNewProposedItems(id: Int) = proposedItems.filter { it.id > id }
-    fun getLastAcceptedItemId() = acceptedItems.lastOrNull()?.id ?: -1
+    fun getNewAcceptedItems(ledgerIndex: Int) = acceptedItems.filter { it.ledgerIndex > ledgerIndex }
+    fun getNewProposedItems(ledgerIndex: Int) = proposedItems.filter { it.ledgerIndex > ledgerIndex }
+    fun getLastAcceptedItemId() = acceptedItems.lastOrNull()?.ledgerIndex ?: -1
 
     fun acceptItems(acceptedIndexes: List<Int>) {
-        val newAcceptedItems = proposedItems.filter { acceptedIndexes.contains(it.id) }
+        val newAcceptedItems = proposedItems.filter { acceptedIndexes.contains(it.ledgerIndex) }
         acceptedItems.addAll(newAcceptedItems)
         proposedItems.removeAll(newAcceptedItems)
     }
 
-    fun proposeChange(change: Change, iteration: Int): Int {
-        val previousId = proposedItems.lastOrNull()?.id ?: acceptedItems.lastOrNull()?.id ?: -1
+    fun proposeChange(change: Change, term: Int): Int {
+        val previousId = proposedItems.lastOrNull()?.ledgerIndex ?: acceptedItems.lastOrNull()?.ledgerIndex ?: -1
         val newId = previousId + 1
-        proposedItems.add(LedgerItem(newId, iteration, change))
+        proposedItems.add(LedgerItem(newId, term, change))
         return newId
     }
 
@@ -54,10 +54,10 @@ data class Ledger(
 
 }
 
-data class LedgerItemDto(val id: Int, val iteration: Int, val change: Change) {
-    fun toLedgerItem(): LedgerItem = LedgerItem(id, iteration, change)
+data class LedgerItemDto(val ledgerIndex: Int, val term: Int, val change: Change) {
+    fun toLedgerItem(): LedgerItem = LedgerItem(ledgerIndex,term, change)
 }
 
-data class LedgerItem(val id: Int, val iteration: Int, val change: Change) {
-    fun toDto(): LedgerItemDto = LedgerItemDto(id, iteration, change)
+data class LedgerItem(val ledgerIndex: Int, val term: Int, val change: Change) {
+    fun toDto(): LedgerItemDto = LedgerItemDto(ledgerIndex,term, change)
 }
