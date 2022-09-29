@@ -23,7 +23,7 @@ fun Application.commonRouting(
 
         post("/consensus/create_change") {
             val properties = call.receive<Map<String, Any>>()
-            val change = ChangeDto(properties["change"] as Map<String, String>, properties["peers"] as List<List<String>>)
+            val change = ChangeDto(properties["change"] as Map<String, String>, properties["peers"] as List<String>)
             consensusProtocol.proposeChange(change.toChange(), properties["acceptNum"] as Int?)
             call.respond(HttpStatusCode.OK)
         }

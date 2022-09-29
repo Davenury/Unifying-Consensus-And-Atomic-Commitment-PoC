@@ -69,7 +69,7 @@ class ConsensusSpec {
         // then: there's one change and it's change we've requested
         expect {
             that(changes.size).isEqualTo(1)
-            that(changes[0].change).isEqualTo(AddUserChange("userName", listOf(listOf())))
+            that(changes[0].change).isEqualTo(AddUserChange("userName", listOf()))
             that(changes[0].acceptNum).isEqualTo(null)
         }
 
@@ -84,7 +84,7 @@ class ConsensusSpec {
 
         // then: there are two changes
         expect {
-            that(changes2[1].change).isEqualTo(AddUserChange("userName", listOf(listOf())))
+            that(changes2[1].change).isEqualTo(AddUserChange("userName", listOf()))
             that(changes2[1].acceptNum).isEqualTo(1)
         }
 
@@ -224,7 +224,7 @@ class ConsensusSpec {
             val proposedChanges = askForProposedChanges(runningPeers.first())
             val acceptedChanges = askForAcceptedChanges(runningPeers.first())
             that(proposedChanges.size).isEqualTo(1)
-            that(proposedChanges.first().change).isEqualTo(AddUserChange("userName", listOf(listOf())))
+            that(proposedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
             that(proposedChanges.first().acceptNum).isEqualTo(null)
             that(acceptedChanges.size).isEqualTo(0)
 
@@ -237,7 +237,7 @@ class ConsensusSpec {
             that(proposedChanges.size).isEqualTo(0)
             val acceptedChanges = askForAcceptedChanges(runningPeers.first())
             that(acceptedChanges.size).isEqualTo(1)
-            that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf(listOf())))
+            that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
             that(acceptedChanges.first().acceptNum).isEqualTo(null)
         }
 
@@ -283,7 +283,7 @@ class ConsensusSpec {
                 val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
-                that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf(listOf())))
+                that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
                 that(acceptedChanges.first().acceptNum).isEqualTo(null)
             }
 
@@ -330,7 +330,7 @@ class ConsensusSpec {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(1)
-                that(proposedChanges.first().change).isEqualTo(AddUserChange("userName", listOf(listOf())))
+                that(proposedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
                 that(proposedChanges.first().acceptNum).isEqualTo(null)
                 that(acceptedChanges.size).isEqualTo(0)
             }
@@ -399,7 +399,7 @@ class ConsensusSpec {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(1)
-                that(proposedChanges.first().change).isEqualTo(AddUserChange("userName", listOf(listOf())))
+                that(proposedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
                 that(proposedChanges.first().acceptNum).isEqualTo(1)
                 that(acceptedChanges.size).isEqualTo(0)
             }
@@ -410,7 +410,7 @@ class ConsensusSpec {
                 val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
-                that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf(listOf())))
+                that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
                 that(acceptedChanges.first().acceptNum).isEqualTo(2)
             }
         }
@@ -430,7 +430,7 @@ class ConsensusSpec {
                 val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
-                that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf(listOf())))
+                that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
                 that(acceptedChanges.first().acceptNum).isEqualTo(2)
             }
         }

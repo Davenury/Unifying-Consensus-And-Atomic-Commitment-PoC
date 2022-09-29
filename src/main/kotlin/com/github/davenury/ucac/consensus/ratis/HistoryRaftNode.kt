@@ -34,7 +34,7 @@ class HistoryRaftNode(peerId: Int, peersetId: Int, constants: RaftConfiguration)
                     ChangeWithAcceptNum(
                         ChangeDto(
                             (it["change"] as Map<String, Any>).map { e -> e.key to e.value.toString() }.toMap(),
-                            change["peers"]!! as List<List<String>>
+                            change["peers"]!! as List<String>
                         ).toChange(),
                         it["acceptNum"] as Int
                     )

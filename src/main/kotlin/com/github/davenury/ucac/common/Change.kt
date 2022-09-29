@@ -35,7 +35,7 @@ data class ChangeWithAcceptNumDto(val changeDto: ChangeDto, val acceptNum: Int?)
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 // peers contains one entry for each peerset
-data class ChangeDto(val properties: Map<String, String>, val peers: List<List<String>>) {
+data class ChangeDto(val properties: Map<String, String>, val peers: List<String>) {
     fun toChange(): Change =
         (properties["operation"])
             ?.let {
@@ -55,7 +55,7 @@ data class ChangeDto(val properties: Map<String, String>, val peers: List<List<S
 @JsonIgnoreProperties(ignoreUnknown = true)
 sealed class Change(val operation: Operation) {
     abstract fun toDto(): ChangeDto
-    abstract val peers: List<List<String>>
+    abstract val peers: List<String>
 
     companion object {
 
@@ -63,7 +63,7 @@ sealed class Change(val operation: Operation) {
             val properties = objectMapper
                 .readValue(json, HashMap<String, Any>()::class.java)
 
-            val peers = properties["peers"] as List<List<String>>
+            val peers = properties["peers"] as List<String>
             val otherProperties = properties.filter { (key, _) -> key != "peers" } as Map<String, String>
 
             return ChangeDto(otherProperties, peers).toChange()
@@ -72,14 +72,14 @@ sealed class Change(val operation: Operation) {
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class AddRelationChange(val from: String, val to: String, override val peers: List<List<String>>) : Change(Operation.ADD_RELATION) {
+data class AddRelationChange(val from: String, val to: String, override val peers: List<String>) : Change(Operation.ADD_RELATION) {
     override fun toDto(): ChangeDto =
         ChangeDto(mapOf("operation" to this.operation.name, "from" to from, "to" to to), peers)
 
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class DeleteRelationChange(val from: String, val to: String, override val peers: List<List<String>>) :
+data class DeleteRelationChange(val from: String, val to: String, override val peers: List<String>) :
     Change(Operation.DELETE_RELATION) {
     override fun toDto(): ChangeDto =
         ChangeDto(mapOf("operation" to this.operation.name, "from" to from, "to" to to), peers)
@@ -87,14 +87,14 @@ data class DeleteRelationChange(val from: String, val to: String, override val p
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class AddUserChange(val userName: String, override val peers: List<List<String>>) : Change(Operation.ADD_USER) {
+data class AddUserChange(val userName: String, override val peers: List<String>) : Change(Operation.ADD_USER) {
     override fun toDto(): ChangeDto =
         ChangeDto(mapOf("operation" to this.operation.name, "userName" to userName), peers)
 
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class AddGroupChange(val groupName: String, override val peers: List<List<String>>) : Change(Operation.ADD_GROUP) {
+data class AddGroupChange(val groupName: String, override val peers: List<String>) : Change(Operation.ADD_GROUP) {
     override fun toDto(): ChangeDto =
         ChangeDto(mapOf("operation" to this.operation.name, "groupName" to groupName), peers)
 

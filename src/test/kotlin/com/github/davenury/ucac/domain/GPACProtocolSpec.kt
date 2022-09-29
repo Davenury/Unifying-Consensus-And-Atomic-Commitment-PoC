@@ -120,7 +120,7 @@ class GPACProtocolSpec {
         val message = Apply(10, true, Accept.COMMIT, changeDto)
 
         subject.handleApply(message)
-        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName", listOf(listOf("peer2"))), 10))
+        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName", listOf("peer2")), 10))
     }
 
     @Test
@@ -145,7 +145,7 @@ class GPACProtocolSpec {
             "operation" to "ADD_USER",
             "userName" to "userName"
         ),
-        listOf(listOf("peer2"))
+        listOf("peer2")
     )
 
 }

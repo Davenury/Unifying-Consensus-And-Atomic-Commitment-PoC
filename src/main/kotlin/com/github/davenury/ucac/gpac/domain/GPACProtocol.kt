@@ -119,7 +119,7 @@ class GPACProtocolImpl(
             logger.info("${getPeerName()} - my state: ${historyManagement.getState()}")
 
             if (message.acceptVal == Accept.COMMIT) {
-                signal(Signal.OnHandlingApplyCommitted, transaction, message.change.peers)
+                signal(Signal.OnHandlingApplyCommitted, transaction, getPeersFromChange(message.change))
             }
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
                 historyManagement.change(message.change.toChange(), this.transaction.acceptNum)
@@ -154,7 +154,7 @@ class GPACProtocolImpl(
     override suspend fun performProtocolAsLeader(
         change: ChangeDto
     ) {
-        val enrichedChange = change.copy(peers = change.peers.toMutableList().also { it.add(listOf(myAddress)) })
+        val enrichedChange = change.copy(peers = change.peers.toMutableList().also { it.add(myAddress) })
         val electResponses = electMePhase(enrichedChange, { responses -> superSet(responses, getPeersFromChange(enrichedChange)) })
 
         val acceptVal =
@@ -330,8 +330,7 @@ class GPACProtocolImpl(
     }
 
     private fun getPeersFromChange(change: ChangeDto): List<List<String>> {
-        return change.peers.map { list ->
-            val peer = list[0]
+        return change.peers.map { peer ->
             if (peer == myAddress) return@map allPeers[myPeersetId]!!
             allPeers.values.find { it.contains(peer) }
                 ?: throw java.lang.IllegalArgumentException("Peer $peer is not found in any of peersets")

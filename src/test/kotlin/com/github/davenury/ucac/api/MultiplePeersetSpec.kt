@@ -299,7 +299,7 @@ class MultiplePeersetSpec {
                                     "operation" to "ADD_USER",
                                     "userName" to "userName"
                                 ),
-                                listOf(listOf(it.peers[1][0]))
+                                listOf(it.peers[1][0])
                             )
                         )
                     }.also {
@@ -318,7 +318,7 @@ class MultiplePeersetSpec {
                                     "operation" to "ADD_USER",
                                     "userName" to "userName"
                                 ),
-                                listOf(listOf(it.peers[1][0]))
+                                listOf(it.peers[1][0])
                             )
                         )
                     }.also {
@@ -399,7 +399,7 @@ class MultiplePeersetSpec {
             "userName" to "userName"
         ),
         // leader should enrich himself
-        listOf(listOf(otherPeersetPeer))
+        listOf(otherPeersetPeer)
     )
 
     private fun deleteRaftHistories() {
