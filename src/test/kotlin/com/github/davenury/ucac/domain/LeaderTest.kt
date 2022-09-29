@@ -26,7 +26,7 @@ class LeaderTest {
     fun `should throw max retires exceeded, when too many times tried to be a leader`() {
         PeerTwo.stubForNotElectingYou()
         PeerThree.stubForNotElectingYou()
-
+        
         expectThrows<MaxTriesExceededException> { subject.performProtocolAsLeader(changeDto) }
 
         // assert that we're actually asking 3 times
@@ -58,8 +58,8 @@ class LeaderTest {
 
         runBlocking { subject.performProtocolAsLeader(changeDto) }
 
-        expectThat(historyManagement.getLastChange())
-            .isEqualTo(ChangeWithAcceptNum(changeDto.toChange(), 1))
+        expectThat(historyManagement.getLastChange()?.change?.toDto()?.properties)
+            .isEqualTo(changeDto.properties)
     }
 
     private val allPeers = listOf(listOf("localhost:9091", "localhost:9092", "localhost:9093"))
@@ -76,9 +76,10 @@ class LeaderTest {
             timer,
             client,
             transactionBlocker,
-            myPeersetId = 0,
+            myPeersetId = 1,
             myNodeId = 0,
-            allPeers = listOf(listOf("localhost:8081", "localhost:9092", "localhost:9093"))
+            allPeers = mapOf(1 to listOf("localhost:9092", "localhost:9093")),
+            myAddress = "localhost:8081"
         )
-    private val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"), listOf(listOf("localhost:9092")))
+    private val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"), listOf())
 }

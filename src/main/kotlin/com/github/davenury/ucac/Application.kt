@@ -83,6 +83,10 @@ class Application constructor(
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
+            println("here ${config.peers.peersAddresses}")
+            println(mode.peersetId)
+            println(mode.nodeId)
+            val myAddress = config.peers.peersAddresses[mode.peersetId - 1][mode.nodeId - 1]
             gpacProtocol =
                 GPACProtocolImpl(
                     historyManagement,
@@ -91,9 +95,10 @@ class Application constructor(
                     protocolClient,
                     transactionBlocker,
                     signalPublisher,
-                    allPeers = config.peers.peersAddresses,
+                    allPeers = config.peers.peersAddresses.withIndex().associate { it.index + 1 to it.value.filterNot { it == myAddress } },
                     myPeersetId = mode.peersetId,
                     myNodeId = mode.nodeId,
+                    myAddress = myAddress
                 )
 
             install(ContentNegotiation) {
@@ -183,12 +188,10 @@ class Application constructor(
         }
     }
 
-    fun setGPACPeers(peers: List<List<String>>) {
+    fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
         gpacProtocol.setPeers(peers)
-    }
-
-    fun setConsensusOtherPeers(otherPeers: List<List<String>>) {
-        consensusProtocol.setOtherPeers(otherPeers[mode.peersetId - 1])
+        gpacProtocol.setMyAddress(myAddress)
+        consensusProtocol.setOtherPeers(peers[mode.peersetId]!!)
     }
 
     fun startBlocking() {

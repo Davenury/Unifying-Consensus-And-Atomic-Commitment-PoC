@@ -27,7 +27,8 @@ class GPACProtocolSpec {
         transactionBlockerMock,
         myPeersetId = 0,
         myNodeId = 0,
-        allPeers = listOf(listOf("peer1", "peer2", "peer3"))
+        allPeers = mapOf(0 to listOf("peer2", "peer3")),
+        myAddress = "peer1"
     )
 
     @Test

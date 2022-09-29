@@ -44,7 +44,7 @@ class SinglePeersetIntegrationTest {
 
         val signalListener = SignalListener {
             expectCatching {
-                executeChange("http://${it.peers[0][1]}/create_change", changeDto(it.peers))
+                executeChange("http://${it.peers[0][1]}/create_change", changeDto())
             }.isSuccess()
             signalExecuted.set(true)
             throw RuntimeException("Stop")
@@ -58,7 +58,7 @@ class SinglePeersetIntegrationTest {
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/create_change", changeDto(peers))
+            executeChange("http://${peers[0][0]}/create_change", changeDto())
         }
 
         apps.stopApps()
@@ -70,7 +70,7 @@ class SinglePeersetIntegrationTest {
 
             val signalListener = SignalListener {
                 expectCatching {
-                    executeChange("http://${it.peers[0][1]}/create_change", changeDto(it.peers))
+                    executeChange("http://${it.peers[0][1]}/create_change", changeDto())
                 }.isFailure()
             }
 
@@ -80,7 +80,7 @@ class SinglePeersetIntegrationTest {
             val peers = apps.getPeers()
 
             expectCatching {
-                executeChange("http://${peers[0][0]}/create_change", changeDto(peers))
+                executeChange("http://${peers[0][0]}/create_change", changeDto())
             }.isSuccess()
 
             apps.stopApps()
@@ -97,7 +97,7 @@ class SinglePeersetIntegrationTest {
                 val response = testHttpClient.post<Agreed>(url) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
-                    body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, changeDto(it.peers))
+                    body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, changeDto())
                 }
                 throw RuntimeException("Stop")
             }}
@@ -122,7 +122,7 @@ class SinglePeersetIntegrationTest {
 
             // change that will cause leader to fall according to action
             try {
-                executeChange("http://${peers[0][0]}/create_change", changeDto(peers))
+                executeChange("http://${peers[0][0]}/create_change", changeDto())
                 fail("Change passed")
             } catch (e: Exception) {
                 log.info("Leader 1 fails: $e")
@@ -137,7 +137,7 @@ class SinglePeersetIntegrationTest {
             val change = objectMapper.readValue<ChangeWithAcceptNumDto>(response).let {
                 ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum)
             }
-            expectThat(change.change).isEqualTo(AddUserChange("userName", peers))
+            expectThat(change.change.toDto().properties).isEqualTo(changeDto().properties)
 
             apps.stopApps()
         }
@@ -161,7 +161,7 @@ class SinglePeersetIntegrationTest {
                         it.transaction!!.ballotNumber,
                         true,
                         Accept.COMMIT,
-                        ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"), it.peers)
+                        ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"), listOf())
                     )
                 }.also {
                     log.info("Got response ${it.status.value}")
@@ -191,7 +191,7 @@ class SinglePeersetIntegrationTest {
 
         // change that will cause leader to fall according to action
         try {
-            executeChange("http://${peers[0][0]}/create_change", ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"), peers))
+            executeChange("http://${peers[0][0]}/create_change", ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"), listOf()))
             fail("Change passed")
         } catch (e: Exception) {
             log.info("Leader 1 fails: $e")
@@ -206,7 +206,7 @@ class SinglePeersetIntegrationTest {
         }
 
         val change = objectMapper.readValue(response, ChangeWithAcceptNumDto::class.java)
-        expectThat(change.changeDto.toChange()).isEqualTo(AddGroupChange("name", peers))
+        expectThat(change.changeDto.properties).isEqualTo(changeDto().properties)
 
         // and should not execute this change couple of times
         val response2 = testHttpClient.get<String>("http://${peers[0][1]}/changes") {
@@ -220,7 +220,7 @@ class SinglePeersetIntegrationTest {
         // only one change and this change shouldn't be applied for 8082 two times
         expect {
             that(values.size).isGreaterThanOrEqualTo(1)
-            that(values[0]).isEqualTo(ChangeWithAcceptNum(AddGroupChange("name", peers), 1))
+            that(values[0].change.toDto().properties).isEqualTo(changeDto().properties)
         }
 
         apps.stopApps()
@@ -236,12 +236,13 @@ class SinglePeersetIntegrationTest {
             body = change
         }
 
-    private fun changeDto(peers: List<List<String>>) = ChangeDto(
+    private fun changeDto() = ChangeDto(
         mapOf(
             "operation" to "ADD_USER",
             "userName" to "userName"
         ),
-        peers
+        // leader should enrich himself
+        listOf()
     )
 
     private fun deleteRaftHistories() {
