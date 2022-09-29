@@ -34,7 +34,7 @@ class RaftConsensusProtocolImpl(
     private var votedFor: VotedFor? = null
     private var state: Ledger = Ledger()
     private var role: RaftRole = RaftRole.Candidate
-    private var timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofSeconds(2), ctx)
+    private var timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofMillis(2_000), ctx)
 
     override suspend fun begin() {
         logger.info("$peerId - Start raft on address $peerAddress, other peers: $consensusPeers")
@@ -50,6 +50,7 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendLeaderRequest() {
         logger.info("Peer $peerId try to become leader in term $currentTerm")
+        signalPublisher.signal(Signal.ConsensusTryToBecomeLeader, this, listOf(consensusPeers), null)
         currentTerm += 1
         role = RaftRole.Candidate
 //      Vote for myself
@@ -69,7 +70,7 @@ class RaftConsensusProtocolImpl(
         if (!checkHalfOfPeerSet(positiveResponses.size) || consensusPeers.isEmpty()) {
             role = RaftRole.Follower
             votedFor = null
-            restartLeaderTimeout()
+            restartLeaderTimeout(RaftRole.Leader)
             return
         }
 
@@ -102,7 +103,7 @@ class RaftConsensusProtocolImpl(
         }
 
         currentTerm = iteration
-        restartLeaderTimeout()
+        restartLeaderTimeout(role)
         return ConsensusElectedYou(this.peerId, currentTerm, true)
     }
 
@@ -140,7 +141,8 @@ class RaftConsensusProtocolImpl(
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
-        state.updateLedger(acceptedChanges, proposedChanges)
+        val anyAcceptedChange = state.updateLedger(acceptedChanges, proposedChanges)
+        if(anyAcceptedChange) signalPublisher.signal(Signal.ConsensusFollowerChangeAccepted, this, listOf(consensusPeers), null)
 
         acceptedChanges.lastOrNull()?.let {
             signalPublisher.signal(
@@ -252,9 +254,9 @@ class RaftConsensusProtocolImpl(
         )
     }
 
-    private suspend fun restartLeaderTimeout() {
+    private suspend fun restartLeaderTimeout(role: RaftRole = RaftRole.Follower) {
         timer.cancelCounting()
-        timer = if (votedFor == null) getLeaderTimer() else getHeartbeatTimer()
+        timer = if (role == RaftRole.Leader) getLeaderTimer() else getHeartbeatTimer()
         timer.startCounting {
             logger.info("$peerId - leader ${votedFor?.address} doesn't send heartbeat, start try to become leader")
             sendLeaderRequest()
@@ -262,7 +264,7 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun proposeChangeToLedger(changeWithAcceptNum: Change): ConsensusResult {
-        if (state.changeAlreadyProposed(changeWithAcceptNum)) return ConsensusFailure
+        if (state.changeAlreadyProposed(changeWithAcceptNum)) return ConsensusSuccess
         val id = state.proposeChange(changeWithAcceptNum, currentTerm)
 
         ledgerIndexToMatchIndex[id] = 0
@@ -290,7 +292,7 @@ class RaftConsensusProtocolImpl(
         logger.info("Response from leader: $response")
         ConsensusSuccess
     } catch (e: Exception) {
-        logger.info("$peerId - $e")
+        logger.info("$peerId - request to leader (${votedFor!!.address}) failed with exception: $e")
         ConsensusFailure
     }
 
@@ -325,7 +327,7 @@ class RaftConsensusProtocolImpl(
     private fun amILeader(): Boolean = role == RaftRole.Leader
 
     private fun getLeaderTimer() = ProtocolTimerImpl(leaderTimeout, Duration.ZERO, ctx)
-    private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatDue, Duration.ofSeconds(2), ctx)
+    private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatDue, heartbeatDue.dividedBy(4), ctx)
 
     companion object {
         private val logger = LoggerFactory.getLogger(RaftConsensusProtocolImpl::class.java)

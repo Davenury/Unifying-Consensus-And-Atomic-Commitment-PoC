@@ -64,11 +64,9 @@ class Application constructor(
 
         ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
-            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
+//            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
             val signalPublisher = SignalPublisher(signalListeners)
-
-
 
             val raftProtocolClientImpl = RaftProtocolClientImpl()
 
@@ -80,8 +78,8 @@ class Application constructor(
                 mode.otherPeers.getOrElse(mode.peersetId - 1) { listOf() },
                 signalPublisher,
                 raftProtocolClientImpl,
-                config.raft.heartbeatTimeout,
-                config.raft.leaderTimeout
+                heartbeatDue = config.raft.heartbeatTimeout,
+                leaderTimeout = config.raft.leaderTimeout
             )
 
 //           val historyManagement = RatisHistoryManagement(raftNode!!)

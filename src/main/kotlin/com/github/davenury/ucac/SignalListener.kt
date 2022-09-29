@@ -16,7 +16,9 @@ enum class Signal {
     OnHandlingApplyCommitted,
     ConsensusLeaderElected,
     ConsensusAfterProposingChange,
-    ConsensusAfterHandlingHeartbeat
+    ConsensusAfterHandlingHeartbeat,
+    ConsensusFollowerChangeAccepted,
+    ConsensusTryToBecomeLeader
 }
 
 

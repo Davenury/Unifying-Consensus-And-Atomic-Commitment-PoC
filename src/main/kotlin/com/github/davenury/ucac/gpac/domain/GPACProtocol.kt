@@ -116,7 +116,7 @@ class GPACProtocolImpl(
             this.transaction =
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
-            logger.info("${getPeerName()} - my state: ${historyManagement.getState()}")
+            logger.info("${getPeerName()} - my state: ${historyManagement.getState()}, proposed change: ${this.transaction.acceptNum}")
 
             if (message.acceptVal == Accept.COMMIT) {
                 signal(Signal.OnHandlingApplyCommitted, transaction, getPeersFromChange(message.change))

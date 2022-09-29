@@ -1,7 +1,6 @@
 package com.github.davenury.ucac.consensus
 
 import com.github.davenury.ucac.*
-import com.github.davenury.ucac.api.MultiplePeersetSpec
 import com.github.davenury.ucac.common.AddUserChange
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.Changes
@@ -10,19 +9,18 @@ import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.request.*
 import io.ktor.http.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
-import strikt.assertions.isEqualTo
-import strikt.assertions.isFailure
-import strikt.assertions.isNotEqualTo
-import strikt.assertions.isSuccess
+import strikt.assertions.*
 import java.util.concurrent.Phaser
+import java.util.concurrent.TimeUnit
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -31,8 +29,6 @@ typealias LeaderAddressPortAndApplication = Triple<String, String, Application>
 
 class ConsensusSpec {
 
-    private val leaderElectionDelay = 8_000L
-    private val changePropagationDelay = 8_000L
     private val knownPeerIp = "localhost"
     private val unknownPeerIp = "198.18.0.0"
     private val noneLeader = null
@@ -52,20 +48,31 @@ class ConsensusSpec {
         //* peer 1 proponuje zmianę (akceptowana)
         //* peer 2 proponuje zmianę (akceptowana)
 
-        val phaser = Phaser(4)
-        phaser.register()
+        val peersWithoutLeader = 4
 
-        val peerApplyCommitted = SignalListener {
-            phaser.arrive()
+        val electionPhaser = Phaser(peersWithoutLeader)
+        val change1Phaser = Phaser(peersWithoutLeader)
+        val change2Phaser = Phaser(peersWithoutLeader)
+        listOf(electionPhaser, change1Phaser, change2Phaser).forEach { it.register() }
+
+        val peerLeaderElected = SignalListener {
+            electionPhaser.arrive()
         }
 
-        val signalListener = mapOf(Signal.ConsensusLeaderElected to peerApplyCommitted)
+        val peerApplyChange = SignalListener {
+            if (change1Phaser.phase == 0) change1Phaser.arrive() else change2Phaser.arrive()
+        }
+
+        val signalListener = mapOf(
+            Signal.ConsensusLeaderElected to peerLeaderElected,
+            Signal.ConsensusFollowerChangeAccepted to peerApplyChange
+        )
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
         val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
         val peerAddresses = peerset.getPeers()[0]
 
-        delay(leaderElectionDelay)
+        awaitAdvanceInterruptiblyPhaser(electionPhaser)
 
         // when: peer1 executed change
         val change1 = createChange(null)
@@ -74,7 +81,7 @@ class ConsensusSpec {
             executeChange("${peerAddresses[0]}/consensus/create_change", change1)
         }.isSuccess()
 
-        delay(changePropagationDelay)
+        awaitAdvanceInterruptiblyPhaser(change1Phaser)
 
         val changes = askForChanges(peerAddresses[2])
 
@@ -85,13 +92,14 @@ class ConsensusSpec {
             that(changes[0].acceptNum).isEqualTo(null)
         }
 
+
         // when: peer2 executes change
         val change2 = createChange(1, userName = "userName2", parentId = change1Id)
         expectCatching {
             executeChange("${peerAddresses[1]}/consensus/create_change", change2)
         }.isSuccess()
 
-        delay(changePropagationDelay)
+        awaitAdvanceInterruptiblyPhaser(change2Phaser)
 
         val changes2 = askForChanges(peerAddresses[2])
 
@@ -107,14 +115,28 @@ class ConsensusSpec {
     @Test
     fun `less than half of peers response on ConsensusElectMe`(): Unit = runBlocking {
 
-        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(3, 4, 5))
+        val activePeers = 2
+        val triesToBecomeLeader = 5
+        val phaser = Phaser(activePeers * triesToBecomeLeader)
 
-        delay(leaderElectionDelay)
+        val peerTryToBecomeLeader = SignalListener {
+            phaser.arrive()
+        }
+
+        val signalListener = mapOf(
+            Signal.ConsensusTryToBecomeLeader to peerTryToBecomeLeader,
+        )
+        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
+        val peerset =
+            TestApplicationSet(1, listOf(5), appsToExclude = listOf(3, 4, 5), signalListeners = signalListeners)
+
+        awaitAdvanceInterruptiblyPhaser(phaser)
 
         peerset.getRunningApps().forEach {
             expect {
                 val leaderAddress = askForLeaderAddress(it)
-                that(leaderAddress).isEqualTo(noneLeader)
+                val selfAddress = "localhost:${it.getBoundPort()}"
+                that(leaderAddress).isContainedIn(listOf(noneLeader,selfAddress))
             }
         }
 
@@ -124,9 +146,21 @@ class ConsensusSpec {
     @Test
     fun `minimum number of peers response on ConsensusElectMe`(): Unit = runBlocking {
 
-        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(4, 5))
+        val peersWithoutLeader = 2
+        val phaser = Phaser(peersWithoutLeader)
 
-        delay(leaderElectionDelay * 2)
+        val peerLeaderElected = SignalListener {
+            phaser.arrive()
+        }
+
+        val signalListener = mapOf(
+            Signal.ConsensusLeaderElected to peerLeaderElected,
+        )
+        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
+
+        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(4, 5), signalListeners = signalListeners)
+
+        awaitAdvanceInterruptiblyPhaser(phaser)
 
         peerset.getRunningApps().forEach {
             expect {
@@ -141,25 +175,36 @@ class ConsensusSpec {
     @Test
     fun `leader failed and new leader is elected`(): Unit = runBlocking {
 
-        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(5))
+        val peersWithoutLeader = 4
+
+        val election1Phaser = Phaser(peersWithoutLeader)
+        val election2Phaser = Phaser(peersWithoutLeader - 1)
+        listOf(election1Phaser, election2Phaser).forEach { it.register() }
+
+        val peerLeaderElected = SignalListener {
+            if (election1Phaser.phase == 0) election1Phaser.arrive() else election2Phaser.arrive()
+        }
+
+        val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
+        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
+
+        val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
         var apps = peerset.getRunningApps()
 
-        delay(leaderElectionDelay)
+        awaitAdvanceInterruptiblyPhaser(election1Phaser)
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
 
-
         firstLeaderApplication.stop(0, 0)
 
         apps = apps.filter { it != firstLeaderApplication }
 
-        delay(leaderElectionDelay)
+        awaitAdvanceInterruptiblyPhaser(election2Phaser)
 
         expect {
-
             val secondLeaderAddress =
                 askForLeaderAddress(apps.first())
             that(secondLeaderAddress).isNotEqualTo(noneLeader)
@@ -172,11 +217,23 @@ class ConsensusSpec {
     @Test
     fun `less than half peers failed`(): Unit = runBlocking {
 
+        val peersWithoutLeader = 3
 
-        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(5))
+        val election1Phaser = Phaser(peersWithoutLeader)
+        val election2Phaser = Phaser(peersWithoutLeader - 1)
+        listOf(election1Phaser, election2Phaser).forEach { it.register() }
+
+        val peerLeaderElected = SignalListener {
+            if (election1Phaser.phase == 0) election1Phaser.arrive() else election2Phaser.arrive()
+        }
+
+        val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
+        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
+
+        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(5), signalListeners = signalListeners)
         var apps = peerset.getRunningApps()
 
-        delay(leaderElectionDelay)
+        awaitAdvanceInterruptiblyPhaser(election1Phaser)
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
@@ -187,7 +244,7 @@ class ConsensusSpec {
 
         apps = apps.filter { it != firstLeaderApplication }
 
-        delay(leaderElectionDelay)
+        awaitAdvanceInterruptiblyPhaser(election2Phaser)
 
         expect {
             val secondLeaderAddress =
@@ -203,24 +260,39 @@ class ConsensusSpec {
     @Test
     fun `leader fails during processing change`(): Unit = runBlocking {
 
+        var peersWithoutLeader = 4
+
+        val election1Phaser = Phaser(peersWithoutLeader)
+        peersWithoutLeader -= 1
+        val election2Phaser = Phaser(peersWithoutLeader)
+        val changePhaser = Phaser(peersWithoutLeader)
+        listOf(election1Phaser, election2Phaser, changePhaser).forEach { it.register() }
+
         val leaderAction = SignalListener {
             throw RuntimeException("Failed after proposing change")
         }
 
-        val signalListener = mapOf(Signal.ConsensusAfterProposingChange to leaderAction)
+        val peerLeaderElected =
+            SignalListener { if (election1Phaser.phase == 0) election1Phaser.arrive() else election2Phaser.arrive() }
 
-        val signalListeners = (1..5).associateWith { signalListener }
+        val peerApplyChange = SignalListener { changePhaser.arrive() }
+
+        val signalListener = mapOf(
+            Signal.ConsensusAfterProposingChange to leaderAction,
+            Signal.ConsensusLeaderElected to peerLeaderElected,
+            Signal.ConsensusFollowerChangeAccepted to peerApplyChange
+        )
+        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
         val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
-        var apps = peerset.getRunningApps()
+        val apps = peerset.getRunningApps()
 
-        delay(leaderElectionDelay)
+        awaitAdvanceInterruptiblyPhaser(election1Phaser)
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
-
 
 //      Start processing
         expectCatching {
@@ -241,7 +313,8 @@ class ConsensusSpec {
 
         }
 
-        delay(leaderElectionDelay + changePropagationDelay)
+        awaitAdvanceInterruptiblyPhaser(election2Phaser)
+        awaitAdvanceInterruptiblyPhaser(changePhaser)
 
         expect {
             val proposedChanges = askForProposedChanges(runningPeers.first())
@@ -258,21 +331,34 @@ class ConsensusSpec {
     @Test
     fun `less than half of peers fails after electing leader`(): Unit = runBlocking {
 
-        val peerset = TestApplicationSet(1, listOf(5))
-        var apps = peerset.getRunningApps()
+        val peersWithoutLeader = 4
+
+        val electionPhaser = Phaser(peersWithoutLeader)
+        val changePhaser = Phaser(peersWithoutLeader - 2)
+        listOf(electionPhaser, changePhaser).forEach { it.register() }
+
+        val peerLeaderElected = SignalListener { electionPhaser.arrive() }
+        val peerApplyChange = SignalListener { changePhaser.arrive() }
+
+        val signalListener = mapOf(
+            Signal.ConsensusLeaderElected to peerLeaderElected,
+            Signal.ConsensusFollowerChangeAccepted to peerApplyChange
+        )
+        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
+
+        val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
+        val apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
 
-        delay(leaderElectionDelay)
+        awaitAdvanceInterruptiblyPhaser(electionPhaser)
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
 
-
         val peersToStop = peerAddresses.zip(apps).filterNot { it.first.contains(firstLeaderPort) }.take(2)
-
         peersToStop.forEach { it.second.stop(0, 0) }
         val runningPeersAddressAndApplication = peerAddresses.zip(apps).filterNot { addressAndApplication ->
             val addressesStopped = peersToStop.map { it.first }
@@ -286,7 +372,7 @@ class ConsensusSpec {
             executeChange("${runningPeers.first()}/consensus/create_change", createChange(null))
         }.isSuccess()
 
-        delay(changePropagationDelay)
+        awaitAdvanceInterruptiblyPhaser(changePhaser)
 
         runningPeers.forEach {
             expect {
@@ -306,18 +392,32 @@ class ConsensusSpec {
     @Test
     fun `more than half of peers fails during propagating change`(): Unit = runBlocking {
 
-        val peerset = TestApplicationSet(1, listOf(5))
+        val peersWithoutLeader = 4
+
+        val electionPhaser = Phaser(peersWithoutLeader)
+        val changePhaser = Phaser(peersWithoutLeader - 3)
+        listOf(electionPhaser, changePhaser).forEach { it.register() }
+
+        val peerLeaderElected = SignalListener { electionPhaser.arrive() }
+        val peerApplyChange = SignalListener { changePhaser.arrive() }
+
+        val signalListener = mapOf(
+            Signal.ConsensusLeaderElected to peerLeaderElected,
+            Signal.ConsensusAfterProposingChange to peerApplyChange
+        )
+        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
+
+        val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
         var apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
 
-        delay(leaderElectionDelay)
+        awaitAdvanceInterruptiblyPhaser(electionPhaser)
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
-
 
         val peersToStop = peerAddresses.zip(apps).filterNot { it.first.contains(firstLeaderPort) }.take(3)
         peersToStop.forEach { it.second.stop(0, 0) }
@@ -333,7 +433,7 @@ class ConsensusSpec {
             executeChange("${runningPeers.first()}/consensus/create_change", createChange(null))
         }.isSuccess()
 
-        delay(changePropagationDelay)
+        awaitAdvanceInterruptiblyPhaser(changePhaser)
 
 //      As only one peer confirm changes it should be still proposedChange
         runningPeers.forEach {
@@ -350,16 +450,33 @@ class ConsensusSpec {
         peerset.stopApps()
     }
 
-    //    @Disabled("WIP")
     @Test
     fun `network divide on half and then merge`(): Unit = runBlocking {
+        println("Start divide on half and merge test")
+        val peersWithoutLeader = 4
 
-        val peerset = TestApplicationSet(1, listOf(5))
+        val election1Phaser = Phaser(peersWithoutLeader)
+        val election2Phaser = Phaser(peersWithoutLeader - 2)
+        val change1Phaser = Phaser(peersWithoutLeader - 2)
+        val change2Phaser = Phaser(2)
+        listOf(election1Phaser, election2Phaser, change1Phaser, change2Phaser).forEach { it.register() }
+
+        val peerLeaderElected =
+            SignalListener { if (election1Phaser.phase == 0) election1Phaser.arrive() else election2Phaser.arrive() }
+        val peerApplyChange = SignalListener { if(change1Phaser.phase == 0) change1Phaser.arrive() else change2Phaser.arrive() }
+
+        val signalListener = mapOf(
+            Signal.ConsensusLeaderElected to peerLeaderElected,
+            Signal.ConsensusFollowerChangeAccepted to peerApplyChange
+        )
+        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
+
+        val peerset = TestApplicationSet(1, listOf(5), signalListeners)
         var apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
 
-        delay(leaderElectionDelay)
+        awaitAdvanceInterruptiblyPhaser(election1Phaser)
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
@@ -378,28 +495,22 @@ class ConsensusSpec {
         firstHalf.forEach { address ->
             val application = addressToApplication[address]
             val peers = firstHalf.filter { it != address } + secondHalf.map { it.replace(knownPeerIp, unknownPeerIp) }
-            println("$ MODIFY PEERS: $firstLeaderAddress $address $peers")
             modifyPeers(application!!, peers)
         }
 
         secondHalf.forEach { address ->
             val application = addressToApplication[address]
             val peers = secondHalf.filter { it != address } + firstHalf.map { it.replace(knownPeerIp, unknownPeerIp) }
-            println("$ MODIFY PEERS: $firstLeaderAddress $address $peers")
             modifyPeers(application!!, peers)
         }
 
-//      Delay to chose leader in second half
-        delay(leaderElectionDelay)
-
+        awaitAdvanceInterruptiblyPhaser(election2Phaser)
 //      Check if second half chose new leader
         secondHalf.forEach {
             val app = addressToApplication[it]
             val newLeaderAddress = askForLeaderAddress(app!!)
-            println("$it $secondHalf \n newLeader: $newLeaderAddress old: $firstLeaderAddress")
             expectThat(newLeaderAddress).isNotEqualTo(firstLeaderAddress)
         }
-
 
 //      Run change in both halfs
         expectCatching {
@@ -410,14 +521,12 @@ class ConsensusSpec {
             executeChange("${secondHalf.first()}/consensus/create_change", createChange(2))
         }.isSuccess()
 
-
-        delay(changePropagationDelay)
+        awaitAdvanceInterruptiblyPhaser(change1Phaser)
 
         firstHalf.forEach {
             expect {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
-                println("$it $firstLeaderAddress \n $proposedChanges \n $acceptedChanges")
                 that(proposedChanges.size).isEqualTo(1)
                 that(proposedChanges.first()).isEqualTo(createChange(null))
                 that(proposedChanges.first().acceptNum).isEqualTo(1)
@@ -442,7 +551,7 @@ class ConsensusSpec {
             modifyPeers(application!!, peerAddresses.filter { it != address })
         }
 
-        delay(changePropagationDelay)
+        awaitAdvanceInterruptiblyPhaser(change2Phaser)
 
         peerAddresses.forEach {
             expect {
@@ -529,4 +638,10 @@ class ConsensusSpec {
         val newPeers = peers.map { it.replace("http://", "") }
         app.setPeers(mapOf(1 to newPeers), "127.0.0.1")
     }
+
+    private suspend fun awaitAdvanceInterruptiblyPhaser(phaser: Phaser) = withContext(Dispatchers.IO) {
+        phaser.awaitAdvanceInterruptibly(phaser.arrive(), 10, TimeUnit.SECONDS)
+    }
+
+
 }

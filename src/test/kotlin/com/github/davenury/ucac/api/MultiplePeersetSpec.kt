@@ -284,7 +284,7 @@ class MultiplePeersetSpec {
             val leaderAction = SignalListener {
                 val url2 = "${it.peers[0][1]}/apply"
                 runBlocking {
-                    testHttpClient.post<HttpResponse>(url2) {
+                    httpClient.post<HttpResponse>(url2) {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
                         body = Apply(
@@ -292,13 +292,13 @@ class MultiplePeersetSpec {
                             change(it.peers[1][0]),
                         )
                     }.also {
-                        logger.info("Got response ${it.status.value}")
+                        logger.info("Got response test apply ${it.status.value}")
                     }
                 }
                 logger.info("${it.peers[0][1]} sent response to apply")
                 val url3 = "${it.peers[0][2]}/apply"
                 runBlocking {
-                    testHttpClient.post<HttpResponse>(url3) {
+                    httpClient.post<HttpResponse>(url3) {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
                         body = Apply(
@@ -306,7 +306,7 @@ class MultiplePeersetSpec {
                             change(it.peers[1][0]),
                         )
                     }.also {
-                        logger.info("Got response ${it.status.value}")
+                        logger.info("Got response test apply ${it.status.value}")
                     }
                 }
                 logger.info("${it.peers[0][2]} sent response to apply")

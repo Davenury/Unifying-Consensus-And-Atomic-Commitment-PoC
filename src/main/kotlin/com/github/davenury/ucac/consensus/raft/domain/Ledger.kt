@@ -12,7 +12,7 @@ data class Ledger(
     private var commitIndex: Int = 0
     var lastApplied = -1
 
-    fun updateLedger(acceptedItems: List<LedgerItem>, proposedItems: List<LedgerItem>) {
+    fun updateLedger(acceptedItems: List<LedgerItem>, proposedItems: List<LedgerItem>): Boolean {
 
         val newAcceptedItems = acceptedItems - this.acceptedItems.toSet()
         this.acceptedItems.addAll(newAcceptedItems)
@@ -25,6 +25,7 @@ data class Ledger(
         this.proposedItems.addAll(newProposedItems)
         commitIndex = newProposedItems.maxOrDefault(commitIndex)
 
+        return newAcceptedItems.isNotEmpty()
     }
 
     fun getNewAcceptedItems(ledgerIndex: Int) = acceptedItems.filter { it.ledgerIndex > ledgerIndex }

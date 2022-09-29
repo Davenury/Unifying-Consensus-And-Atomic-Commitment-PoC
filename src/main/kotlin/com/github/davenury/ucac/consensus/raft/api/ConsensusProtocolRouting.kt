@@ -37,7 +37,6 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             val heartbeatResult = protocol.handleHeartbeat(message)
             semaphore.release()
             call.respond(heartbeatResult)
-            // TODO
         }
 
         // kiedy nie jesteś leaderem to prosisz leadera o zmianę
