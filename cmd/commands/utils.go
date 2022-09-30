@@ -2,6 +2,7 @@ package commands
 
 
 import (
+	"context"
 	"fmt"
 	"errors"
 	"strconv"
@@ -11,9 +12,11 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+	apiv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func GetClientset() (*kubernetes.Clientset, error)  {
+func GetKubernetesConfig() (*rest.Config, error) {
 	home := homedir.HomeDir()
 	if home == "" {
 		fmt.Println("Cannot get home directory")
@@ -23,7 +26,12 @@ func GetClientset() (*kubernetes.Clientset, error)  {
 	var config *rest.Config
 		_ = config
 
-	config, err := clientcmd.BuildConfigFromFlags("", fmt.Sprintf("%s/.kube/config", home))
+	return clientcmd.BuildConfigFromFlags("", fmt.Sprintf("%s/.kube/config", home))
+}
+
+func GetClientset() (*kubernetes.Clientset, error)  {
+	
+	config, err := GetKubernetesConfig()
 	if err != nil {
 		fmt.Printf("Error occured while trying to get kubeconfig: %s", err)
 		return nil, err
@@ -90,4 +98,20 @@ func generateServicesForPeers(peerConfig PeerConfig, startPort int, increment bo
 	}
 
 	return str
+}
+
+func CreateNamespace(namespaceName string) {
+	clientset, err := GetClientset()
+
+	if err != nil {
+		panic(err)
+	}
+
+	nsSpec := &apiv1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}
+
+	_, err = clientset.CoreV1().Namespaces().Create(context.Background(), nsSpec, metav1.CreateOptions{})
+
+	if err != nil {
+		panic(err)
+	}
 }
