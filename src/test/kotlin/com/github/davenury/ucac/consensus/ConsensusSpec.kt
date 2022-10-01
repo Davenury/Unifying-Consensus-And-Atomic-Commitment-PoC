@@ -446,7 +446,7 @@ class ConsensusSpec {
         )
 
 
-    private fun createChangeWithAcceptNum(acceptNum: Int?, peers: List<List<String>> = listOf(listOf())) = mapOf(
+    private fun createChangeWithAcceptNum(acceptNum: Int?, peers: List<String> = listOf()) = mapOf(
         "change" to exampleChange,
         "acceptNum" to acceptNum,
         "peers" to peers

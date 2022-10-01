@@ -83,9 +83,6 @@ class Application constructor(
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
-            println("here ${config.peers.peersAddresses}")
-            println(mode.peersetId)
-            println(mode.nodeId)
             val myAddress = config.peers.peersAddresses[mode.peersetId - 1][mode.nodeId - 1]
             gpacProtocol =
                 GPACProtocolImpl(
