@@ -22,7 +22,7 @@ interface GPACProtocolClient {
     suspend fun sendApply(otherPeers: List<List<String>>, message: Apply): List<Int>
 }
 
-class GPACProtocolClientImpl :  GPACProtocolClient {
+class GPACProtocolClientImpl : GPACProtocolClient {
 
     override suspend fun sendElectMe(
         otherPeers: List<List<String>>,
@@ -33,7 +33,7 @@ class GPACProtocolClientImpl :  GPACProtocolClient {
             message,
             "elect",
             { singlePeer, e -> "Peer $singlePeer responded with exception: $e - election" },
-            { accs -> accs.maxOf { it } }
+            { accs: List<Int> -> accs.also { println(it) }.maxOf { it } }
         )
 
     override suspend fun sendFTAgree(otherPeers: List<List<String>>, message: Agree): List<List<Agreed>> =
@@ -71,6 +71,7 @@ class GPACProtocolClientImpl :  GPACProtocolClient {
                 try {
                     job.await()
                 } catch (e: Exception) {
+                    e.printStackTrace()
                     logger.error("Error while evaluating responses: $e")
                     null
                 }
@@ -101,6 +102,7 @@ class GPACProtocolClientImpl :  GPACProtocolClient {
             // since we're updating ballot number in electing phase, this mechanism lets us
             // get any aggregation from all responses from "Not electing you" response, so we can get
             // max of all ballotNumbers sent back to the leader
+            e.printStackTrace()
             logger.error(errorMessage(url, e))
             if (e.response.status.value == 422) {
                 val value = e.response.content.readUTF8Line()?.let {
@@ -114,6 +116,7 @@ class GPACProtocolClientImpl :  GPACProtocolClient {
                 Pair(null, 0)
             }
         } catch (e: Exception) {
+            e.printStackTrace()
             logger.error(errorMessage(url, e))
             Pair(null, 0)
         }

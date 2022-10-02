@@ -261,6 +261,7 @@ class GPACProtocolImpl(
         acceptNum: Int? = null
     ): List<List<Agreed>> {
         transactionBlocker.tryToBlock()
+        println("Send agree messages")
 
         val agreedResponses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
         if (!superSet(agreedResponses, getPeersFromChange(change))) throw TooFewResponsesException()

@@ -16,35 +16,27 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         // głosujemy na leadera
         post("/consensus/request_vote") {
             val message: ConsensusElectMe = call.receive()
-            semaphore.acquire()
             val response = protocol.handleRequestVote(message.peerId, message.term, message.lastLogIndex)
-            semaphore.release()
             call.respond(response)
         }
 
         // potwierdzenie że mamy leadera
         post("/consensus/leader") {
             val message: ConsensusImTheLeader = call.receive()
-            semaphore.acquire()
             protocol.handleLeaderElected(message.peerId, message.peerAddress, message.leaderIteration)
-            semaphore.release()
             call.respond("OK")
         }
 
         post("/consensus/heartbeat") {
             val message: ConsensusHeartbeat = call.receive()
-            semaphore.acquire()
             val heartbeatResult = protocol.handleHeartbeat(message)
-            semaphore.release()
             call.respond(heartbeatResult)
         }
 
         // kiedy nie jesteś leaderem to prosisz leadera o zmianę
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
-            semaphore.acquire()
             val result = protocol.handleProposeChange(message)
-            semaphore.release()
             call.respond(result)
         }
 //      Endpoints for tests

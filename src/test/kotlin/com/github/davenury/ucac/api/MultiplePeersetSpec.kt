@@ -18,6 +18,7 @@ import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInfo
 import org.junit.jupiter.api.fail
 import org.slf4j.LoggerFactory
 import strikt.api.expect
@@ -39,9 +40,10 @@ class MultiplePeersetSpec {
     }
 
     @BeforeEach
-    fun setup() {
+    fun setup(testInfo: TestInfo) {
         System.setProperty("configFile", "application-integration.conf")
         deleteRaftHistories()
+        println("\n\n${testInfo.displayName}")
     }
 
     @Test
@@ -54,7 +56,7 @@ class MultiplePeersetSpec {
         executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
 
         // then - transaction is executed in same peerset
-        val peer2Change = httpClient.get<Change>("http://${peers[0][1]}/change") {
+        val peer2Change = testHttpClient.get<Change>("http://${peers[0][1]}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -64,7 +66,7 @@ class MultiplePeersetSpec {
         }
 
         // and - transaction is executed in other peerset
-        val peer4Change = httpClient.get<Change>("http://${peers[1][0]}/change") {
+        val peer4Change = testHttpClient.get<Change>("http://${peers[1][0]}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -156,13 +158,33 @@ class MultiplePeersetSpec {
 
     @Test
     fun `transaction should pass when more than half peers of all peersets are operative`(): Unit = runBlocking {
+
+        val phaser = Phaser(5)
+        phaser.register()
+
+        val peerApplyCommitted = SignalListener {
+            logger.info("Arrived: ${it.subject.getPeerName()}")
+            phaser.arrive()
+        }
+
+        val signalListenersForCohort = mapOf(
+            Signal.OnHandlingApplyCommitted to peerApplyCommitted,
+        )
+
         val appsToExclude = listOf(3, 7, 8)
-        val apps = TestApplicationSet(2, listOf(3, 5), appsToExclude = appsToExclude)
+        val apps = TestApplicationSet(2, listOf(3, 5), appsToExclude = appsToExclude,
+            signalListeners =  (0..8).associateWith { signalListenersForCohort })
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
 
         // when - executing transaction
         executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+
+
+        withContext(Dispatchers.IO) {
+            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 10, TimeUnit.SECONDS)
+        }
+
 
         // then - transaction should be executed in every peerset
         askForChanges("http://${peers[0][1]}")
@@ -189,7 +211,7 @@ class MultiplePeersetSpec {
         runBlocking {
 
             val failAction = SignalListener {
-                throw RuntimeException()
+                throw RuntimeException("Every peer from one peerset fails")
             }
             val apps = TestApplicationSet(
                 2, listOf(3, 5),
@@ -219,9 +241,8 @@ class MultiplePeersetSpec {
 
     @Test
     fun `transaction should be processed if leader fails after ft-agree`(): Unit = runBlocking {
-
         val failAction = SignalListener {
-            throw RuntimeException()
+            throw RuntimeException("Leader failed after ft-agree")
         }
 
         val phaser = Phaser(7)
@@ -264,8 +285,8 @@ class MultiplePeersetSpec {
             phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
         }
 
-        (0..1).forEach {
-            peers[it].map { askForChanges("http://$it") }.firstOrNull { it.isNotEmpty() }
+        peers.flatten().forEach {
+            askForChanges("http://$it")
                 .let {
                     expectThat(it?.size!!).isGreaterThanOrEqualTo(1)
                     expectThat(it[0]).isEqualTo(change(otherPeer))
@@ -310,7 +331,7 @@ class MultiplePeersetSpec {
                     }
                 }
                 logger.info("${it.peers[0][2]} sent response to apply")
-                throw RuntimeException()
+                throw RuntimeException("Leader failed after applying change in one peerset")
             }
 
             val arrivalCount = AtomicInteger(0)
@@ -352,7 +373,8 @@ class MultiplePeersetSpec {
             }
 
             // waiting for consensus to propagate change is waste of time and fails CI
-            peers[1].map { askForChanges("http://$it") }.firstOrNull { it.isNotEmpty() }
+            peers.flatten()
+                .map { askForChanges("http://$it") }
                 .let {
                     expectThat(it?.size!!).isGreaterThanOrEqualTo(1)
                     expectThat(it[0]).isEqualTo(change(otherPeer))

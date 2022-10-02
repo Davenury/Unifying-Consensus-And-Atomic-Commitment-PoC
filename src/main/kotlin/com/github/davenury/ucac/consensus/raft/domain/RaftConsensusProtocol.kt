@@ -14,4 +14,6 @@ interface RaftConsensusProtocol {
     fun getLeaderAddress(): String?
     fun getProposedChanges(): List<Change>
     fun getAcceptedChanges(): List<Change>
+
+    fun stop()
 }

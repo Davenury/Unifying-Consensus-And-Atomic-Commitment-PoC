@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInfo
 import org.junit.jupiter.api.fail
 import org.slf4j.LoggerFactory
 import strikt.api.expect
@@ -24,20 +25,25 @@ import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
 import java.time.Duration
+import java.util.*
 import java.util.concurrent.Phaser
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+
 @Suppress("HttpUrlsUsage")
 class SinglePeersetIntegrationTest {
+
+
     companion object {
         private val log = LoggerFactory.getLogger(SinglePeersetIntegrationTest::class.java)!!
     }
 
     @BeforeEach
-    fun setup() {
+    fun setup(testInfo: TestInfo) {
         System.setProperty("configFile", "single_peerset_application.conf")
         deleteRaftHistories()
+        println("\n\n${testInfo.displayName}")
     }
 
     @Test
@@ -76,7 +82,8 @@ class SinglePeersetIntegrationTest {
                 }.isFailure()
             }
 
-            val apps = TestApplicationSet(1, listOf(3),
+            val apps = TestApplicationSet(
+                1, listOf(3),
                 signalListeners = mapOf(1 to mapOf(Signal.BeforeSendingApply to signalListener)),
             )
             val peers = apps.getPeers()
@@ -107,13 +114,15 @@ class SinglePeersetIntegrationTest {
                 Signal.BeforeSendingAgree to firstLeaderAction
             )
             val afterHandlingApply = SignalListener {
-                phaser.arriveAndAwaitAdvance()
+                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+
             }
             val peer2Callbacks: Map<Signal, SignalListener> = mapOf(
                 Signal.OnHandlingApplyEnd to afterHandlingApply
             )
 
-            val apps = TestApplicationSet(1, listOf(3),
+            val apps = TestApplicationSet(
+                1, listOf(3),
                 signalListeners = mapOf(
                     1 to firstLeaderCallbacks,
                     2 to peer2Callbacks
@@ -130,11 +139,9 @@ class SinglePeersetIntegrationTest {
                 log.info("Leader 1 fails: $e")
             }
 
-            withContext(Dispatchers.IO) {
-                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
-            }
+            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
 
-            val change = testHttpClient.get<Change>("http://${peers[0][2]}/change") {
+            val response = testHttpClient.get<String>("http://${peers[0][2]}/change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }
@@ -188,13 +195,14 @@ class SinglePeersetIntegrationTest {
         )
 
         val peer3Action = SignalListener {
-            phaser.arriveAndAwaitAdvance()
+            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
         }
         val peer3Callbacks: Map<Signal, SignalListener> = mapOf(
             Signal.OnHandlingApplyEnd to peer3Action
         )
 
-        val apps = TestApplicationSet(1, listOf(5),
+        val apps = TestApplicationSet(
+            1, listOf(5),
             signalListeners = mapOf(
                 1 to firstLeaderCallbacks + consensusPeerCallback,
                 2 to consensusPeerCallback,

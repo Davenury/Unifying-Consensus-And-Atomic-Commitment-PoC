@@ -19,14 +19,16 @@ class InMemoryHistoryManagement(
                     ConsensusFailure -> {
                         HistoryChangeResult.HistoryChangeFailure
                     }
-
                     ConsensusSuccess -> {
                         HistoryChangeResult.HistoryChangeSuccess
                     }
-
                     ConsensusResultUnknown -> {
                         HistoryChangeResult.HistoryChangeSuccess
                     }
+                    ConsensusChangeAlreadyProposed -> {
+                        HistoryChangeResult.HistoryChangeUnknown
+                    }
+
                 }
             }
 

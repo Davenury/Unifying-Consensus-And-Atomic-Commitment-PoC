@@ -8,7 +8,7 @@ interface ConsensusProtocol<A, B> {
 
 
 enum class ConsensusResult {
-    ConsensusSuccess, ConsensusFailure, ConsensusResultUnknown
+    ConsensusSuccess, ConsensusFailure, ConsensusResultUnknown, ConsensusChangeAlreadyProposed
 }
 
 enum class RaftRole{

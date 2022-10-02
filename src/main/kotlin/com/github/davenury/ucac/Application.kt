@@ -56,7 +56,7 @@ class Application constructor(
     private val peerConstants: RaftConfiguration = RaftConfiguration(mode.peersetId, configOverrides)
     private val engine: NettyApplicationEngine
     private var raftNode: HistoryRaftNode? = null
-    private lateinit var consensusProtocol: RaftConsensusProtocol
+    private var consensusProtocol: RaftConsensusProtocol? = null
     private val ctx: ExecutorCoroutineDispatcher
     private lateinit var gpacProtocol: GPACProtocol
 
@@ -68,7 +68,7 @@ class Application constructor(
 
             val signalPublisher = SignalPublisher(signalListeners)
 
-            val raftProtocolClientImpl = RaftProtocolClientImpl()
+            val raftProtocolClientImpl = RaftProtocolClientImpl(mode.nodeId)
 
             consensusProtocol = RaftConsensusProtocolImpl(
                 mode.nodeId,
@@ -189,6 +189,7 @@ class Application constructor(
                 }
 
                 exception<Throwable> { cause ->
+                    cause.printStackTrace()
                     call.respond(
                         status = HttpStatusCode.InternalServerError,
                         ErrorMessage("UnexpectedError, $cause")
@@ -201,7 +202,7 @@ class Application constructor(
             commonRouting(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
             historyManagementRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
-            consensusProtocolRouting(consensusProtocol)
+            consensusProtocolRouting(consensusProtocol!!)
 
             runBlocking {
                 startConsensusProtocol()
@@ -220,13 +221,13 @@ class Application constructor(
     }
 
     suspend fun startConsensusProtocol() {
-        consensusProtocol.begin()
+        consensusProtocol?.begin()
     }
 
     fun startNonblocking() {
         engine.start(wait = false)
         val address = "${mode.host}:${getBoundPort()}"
-        consensusProtocol.setPeerAddress(address)
+        consensusProtocol?.setPeerAddress(address)
 
     }
 
@@ -234,6 +235,7 @@ class Application constructor(
         ctx.close()
         engine.stop(gracePeriodMillis, timeoutMillis)
         raftNode?.close()
+        consensusProtocol?.stop()
     }
 
     fun getBoundPort(): Int {
