@@ -11,6 +11,7 @@ import io.ktor.client.features.json.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import org.slf4j.LoggerFactory
+import java.security.MessageDigest
 
 val objectMapper: ObjectMapper =
     jacksonObjectMapper().configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
@@ -31,3 +32,8 @@ val testHttpClient = HttpClient(OkHttp) {
     }
 }
 
+fun sha512(string: String): String {
+    val md = MessageDigest.getInstance("SHA-512")
+    val digest = md.digest(string.toByteArray(Charsets.UTF_8))
+    return digest.joinToString(separator = "") { eachByte -> "%02x".format(eachByte) }
+}

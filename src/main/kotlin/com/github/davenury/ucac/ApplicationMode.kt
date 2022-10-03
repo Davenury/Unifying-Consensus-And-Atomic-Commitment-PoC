@@ -96,7 +96,7 @@ class LocalDevelopmentApplicationMode(
             }
 
         host = "localhost"
-        port = 8080 + args[0].toInt() + portOffsetFromPreviousPeersets
+        port = 8080 + nodeId + portOffsetFromPreviousPeersets
         otherPeers = getOtherPeers(config, port)
     }
 
