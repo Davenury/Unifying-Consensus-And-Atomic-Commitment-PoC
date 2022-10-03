@@ -3,6 +3,7 @@ package com.github.davenury.ucac
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.historyManagementRouting
 import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -57,7 +58,7 @@ class Application constructor(
 
     init {
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
-            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
+//            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
             val signalPublisher = SignalPublisher(signalListeners)
 
@@ -77,8 +78,8 @@ class Application constructor(
                 config.raft.leaderTimeout
             )
 
-            val historyManagement = RatisHistoryManagement(raftNode!!)
-//            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
+//           val historyManagement = RatisHistoryManagement(raftNode!!)
+            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
 
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()

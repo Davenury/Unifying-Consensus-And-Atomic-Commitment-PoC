@@ -154,6 +154,7 @@ class GPACProtocolImpl(
     override suspend fun performProtocolAsLeader(
         change: ChangeDto
     ) {
+        logger.info("Peer ${getPeerName()} starts performing GPAC")
         val enrichedChange = change.copy(peers = change.peers.toMutableList().also { it.add(myAddress) })
         val electResponses = electMePhase(enrichedChange, { responses -> superSet(responses, getPeersFromChange(enrichedChange)) })
 

@@ -68,7 +68,9 @@ class TestApplicationSet(
                     .map { it.filterNot { it == peer } }
                     .withIndex()
                     .associate { it.index + 1 to it.value }
-                    .let { app.setPeers(it, peer) }
+                    .let {
+                        app.setPeers(it, peer)
+                    }
         }
     }
 
