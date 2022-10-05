@@ -155,7 +155,12 @@ class GPACProtocolImpl(
         change: ChangeDto
     ) {
         logger.info("Peer ${getPeerName()} starts performing GPAC")
-        val enrichedChange = change.copy(peers = change.peers.toMutableList().also { it.add(myAddress) })
+        val enrichedChange =
+            if (change.peers.contains(myAddress)) {
+                change
+            } else {
+                change.copy(peers = change.peers.toMutableList().also { it.add(myAddress) })
+            }
         val electResponses = electMePhase(enrichedChange, { responses -> superSet(responses, getPeersFromChange(enrichedChange)) })
 
         val acceptVal =
@@ -325,8 +330,10 @@ class GPACProtocolImpl(
         return responses.withIndex()
             .all { (index, value) ->
                 val allPeers =
-                    if (index + 1 == myPeersetId) peers[index].size - 1 else peers[index].size
-                value.size >= allPeers / 2F
+                    if (index + 1 == myPeersetId) peers[index].size + 1 else peers[index].size
+                val agreedPeers =
+                    if (index + 1 == myPeersetId) value.size + 1 else value.size
+                agreedPeers >= allPeers / 2F
             } && allShards
     }
 
