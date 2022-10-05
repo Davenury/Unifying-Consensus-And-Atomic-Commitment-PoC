@@ -107,13 +107,13 @@ class Application constructor(
             install(StatusPages) {
                 exception<MissingParameterException> { cause ->
                     call.respond(
-                        status = HttpStatusCode.BadRequest,
+                        status = HttpStatusCode.UnprocessableEntity,
                         ErrorMessage("Missing parameter: ${cause.message}")
                     )
                 }
                 exception<UnknownOperationException> { cause ->
                     call.respond(
-                        status = HttpStatusCode.BadRequest,
+                        status = HttpStatusCode.UnprocessableEntity,
                         ErrorMessage(
                             "Unknown operation to perform: ${cause.desiredOperationName}"
                         )

@@ -44,6 +44,9 @@ data class ChangeDto(val properties: Map<String, String>, val peers: List<String
                 } catch (ex: IllegalArgumentException) {
                     logger.error("Error while creating Change class - unknown operation $it")
                     throw UnknownOperationException(it)
+                } catch (ex: NullPointerException) {
+                    logger.error("Parsing $it results in null pointer exception - message is malformed")
+                    throw MissingParameterException("Message $it doesn't include necessary fields!")
                 }
             } ?: throw MissingParameterException("\"operation\" value is required!")
 

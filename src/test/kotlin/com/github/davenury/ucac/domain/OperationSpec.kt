@@ -58,7 +58,7 @@ class OperationSpec {
     fun `should throw missing parameter exception, when that's the case`() {
         val changeDto = ChangeDto(mapOf("operation" to "ADD_RELATION"), listOf())
 
-        expectThrows<java.lang.NullPointerException> {
+        expectThrows<MissingParameterException> {
             changeDto.toChange()
         }
     }

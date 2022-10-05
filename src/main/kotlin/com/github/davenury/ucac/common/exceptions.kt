@@ -8,6 +8,6 @@ class MaxTriesExceededException : Exception()
 class TooFewResponsesException : Exception()
 class HistoryCannotBeBuildException : Exception()
 class AlreadyLockedException : Exception()
-class PeerNotInPeersetException(peer: String): Exception(message = "Peer $peer is not found in any of config peersets!")
+class PeerNotInPeersetException(peer: String): Exception("Peer $peer is not found in any of config peersets!")
 
 data class ErrorMessage(val msg: String)
