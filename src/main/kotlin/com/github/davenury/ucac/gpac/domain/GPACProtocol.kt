@@ -341,7 +341,7 @@ class GPACProtocolImpl(
         return change.peers.map { peer ->
             if (peer == myAddress) return@map allPeers[myPeersetId]!!
             allPeers.values.find { it.contains(peer) }
-                ?: throw java.lang.IllegalArgumentException("Peer $peer is not found in any of peersets")
+                ?: throw PeerNotInPeersetException(peer)
         }
     }
 

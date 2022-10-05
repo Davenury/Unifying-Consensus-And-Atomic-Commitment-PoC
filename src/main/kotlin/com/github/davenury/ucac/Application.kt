@@ -167,6 +167,14 @@ class Application constructor(
                         )
                     )
                 }
+
+                exception<PeerNotInPeersetException> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.BadRequest,
+                        ErrorMessage(cause.message!!)
+                    )
+                }
+
                 exception<Throwable> { cause ->
                     call.respond(
                         status = HttpStatusCode.InternalServerError,
