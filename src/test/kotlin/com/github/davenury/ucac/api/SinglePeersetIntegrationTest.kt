@@ -165,7 +165,7 @@ class SinglePeersetIntegrationTest {
             }
         }
         val consensusPeerCallback = mapOf(
-            Signal.ConsensusAfterHandlingHeartbeat to consensusPeersAction
+            Signal.ConsensusFollowerChangeAccepted to consensusPeersAction
         )
 
         val firstLeaderAction = SignalListener {

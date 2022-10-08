@@ -167,7 +167,8 @@ class RaftConsensusProtocolImpl(
             Signal.ConsensusFollowerChangeAccepted,
             this,
             listOf(consensusPeers),
-            null
+            null,
+            acceptedChanges.last().change
         )
 
         acceptedChanges.lastOrNull()?.let {

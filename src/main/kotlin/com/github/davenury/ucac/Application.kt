@@ -213,7 +213,7 @@ class Application constructor(
     fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
         gpacProtocol.setPeers(peers)
         gpacProtocol.setMyAddress(myAddress)
-        consensusProtocol.setOtherPeers(peers[mode.peersetId]!!)
+        consensusProtocol?.setOtherPeers(peers[mode.peersetId]!!)
     }
 
     fun startBlocking() {

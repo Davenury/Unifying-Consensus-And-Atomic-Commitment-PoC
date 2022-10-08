@@ -149,7 +149,7 @@ class ConsensusSpec {
 
     @Test
     fun `minimum number of peers response on ConsensusElectMe`(): Unit = runBlocking {
-        val peersWithoutLeader = 2
+        val peersWithoutLeader = 3
         val phaser = Phaser(peersWithoutLeader)
         var isLeaderElected = false
 
