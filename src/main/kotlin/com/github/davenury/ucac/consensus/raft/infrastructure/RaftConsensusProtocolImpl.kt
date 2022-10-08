@@ -1,14 +1,20 @@
 package com.github.davenury.ucac.consensus.raft.infrastructure
 
-import com.github.davenury.ucac.*
-import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.SignalSubject
+import com.github.davenury.ucac.common.Change
+import com.github.davenury.ucac.common.ChangeWithAcceptNum
+import com.github.davenury.ucac.common.History
+import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.raft.domain.*
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
+import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import java.time.Duration
 import org.slf4j.LoggerFactory
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
+import java.time.Duration
 
 /** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
@@ -113,11 +119,23 @@ class RaftConsensusProtocolImpl(
         logger.info("${this.peerId} - Received heartbeat from $peerId with \n newAcceptedChanges: $acceptedChanges \n newProposedChanges $proposedChanges")
         state.updateLedger(acceptedChanges, proposedChanges)
 
+        acceptedChanges.lastOrNull()?.let {
+            signalPublisher.signal(
+                Signal.ConsensusAfterHandlingHeartbeat,
+                this,
+                listOf(this.consensusPeers),
+                null,
+                it.change.change
+            )
+        }
+
         restartLeaderTimeout()
         return true
     }
 
-    override suspend fun handleProposeChange(change: ChangeWithAcceptNum) = proposeChange(change.change, change.acceptNum)
+    override suspend fun handleProposeChange(change: ChangeWithAcceptNum) =
+        proposeChange(change.change, change.acceptNum)
+
     override fun setPeerAddress(address: String) {
         this.peerAddress = address
     }
@@ -181,7 +199,6 @@ class RaftConsensusProtocolImpl(
         state.acceptItems(acceptedIndexes)
         acceptedIndexes.forEach { ledgerIdToVoteGranted.remove(it) }
 
-
         if (responses.all { it?.accepted == true }) {
             timer = getLeaderTimer()
             timer.startCounting { sendHeartbeat() }
@@ -222,10 +239,10 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendRequestToLeader(changeWithAcceptNum: ChangeWithAcceptNum): ConsensusResult = try {
         val response = httpClient.post<String>("http://$leaderAddress/consensus/request_apply_change") {
-                contentType(ContentType.Application.Json)
-                accept(ContentType.Application.Json)
-                body = changeWithAcceptNum.toDto()
-            }
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            body = changeWithAcceptNum.toDto()
+        }
         logger.info("Response from leader: $response")
         ConsensusSuccess
     } catch (e: Exception) {

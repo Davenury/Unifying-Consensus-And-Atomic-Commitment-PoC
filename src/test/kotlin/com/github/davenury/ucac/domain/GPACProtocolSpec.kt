@@ -25,24 +25,11 @@ class GPACProtocolSpec {
         timerMock,
         protocolClientMock,
         transactionBlockerMock,
-        listOf(listOf("http://localhost:8080")),
         myPeersetId = 0,
         myNodeId = 0,
+        allPeers = mapOf(0 to listOf("peer2", "peer3")),
+        myAddress = "peer1"
     )
-
-    @BeforeEach
-    fun setup() {
-        subject = GPACProtocolImpl(
-            historyManagement,
-            3,
-            timerMock,
-            protocolClientMock,
-            transactionBlockerMock,
-            listOf(listOf("http://localhost:8080")),
-            myPeersetId = 0,
-            myNodeId = 0,
-        )
-    }
 
     @Test
     fun `should return elected you, when ballot number is lower than proposed`(): Unit = runBlocking {
@@ -133,7 +120,7 @@ class GPACProtocolSpec {
         val message = Apply(10, true, Accept.COMMIT, changeDto)
 
         subject.handleApply(message)
-        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName"), 10))
+        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName", listOf("peer2")), 10))
     }
 
     @Test
@@ -157,7 +144,8 @@ class GPACProtocolSpec {
         mapOf(
             "operation" to "ADD_USER",
             "userName" to "userName"
-        )
+        ),
+        listOf("peer2")
     )
 
 }

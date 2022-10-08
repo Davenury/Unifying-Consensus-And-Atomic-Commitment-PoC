@@ -22,8 +22,6 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
-import java.util.*
-import kotlin.random.Random
 import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
@@ -46,7 +44,7 @@ class SinglePeersetIntegrationTest {
 
         val signalListener = SignalListener {
             expectCatching {
-                executeChange("http://${it.otherPeers[0][0]}/create_change")
+                executeChange("http://${it.peers[0][1]}/create_change", changeDto(listOf()))
             }.isSuccess()
             signalExecuted.set(true)
             throw RuntimeException("Stop")
@@ -60,7 +58,7 @@ class SinglePeersetIntegrationTest {
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/create_change")
+            executeChange("http://${peers[0][0]}/create_change", changeDto(listOf()))
         }
 
         apps.stopApps()
@@ -72,7 +70,7 @@ class SinglePeersetIntegrationTest {
 
             val signalListener = SignalListener {
                 expectCatching {
-                    executeChange("http://${it.otherPeers[0][0]}/create_change")
+                    executeChange("http://${it.peers[0][1]}/create_change", changeDto(listOf()))
                 }.isFailure()
             }
 
@@ -82,7 +80,7 @@ class SinglePeersetIntegrationTest {
             val peers = apps.getPeers()
 
             expectCatching {
-                executeChange("http://${peers[0][0]}/create_change")
+                executeChange("http://${peers[0][0]}/create_change", changeDto(listOf()))
             }.isSuccess()
 
             apps.stopApps()
@@ -95,11 +93,11 @@ class SinglePeersetIntegrationTest {
             val phaser = Phaser(2)
 
             val firstLeaderAction = SignalListener { runBlocking {
-                val url = "http://${it.otherPeers[0][0]}/ft-agree"
+                val url = "http://${it.peers[0][1]}/ft-agree"
                 val response = testHttpClient.post<Agreed>(url) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
-                    body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, changeDto)
+                    body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, changeDto(listOf(it.peers[0][0])))
                 }
                 throw RuntimeException("Stop")
             }}
@@ -124,7 +122,7 @@ class SinglePeersetIntegrationTest {
 
             // change that will cause leader to fall according to action
             try {
-                executeChange("http://${peers[0][0]}/create_change")
+                executeChange("http://${peers[0][0]}/create_change", changeDto(listOf()))
                 fail("Change passed")
             } catch (e: Exception) {
                 log.info("Leader 1 fails: $e")
@@ -139,7 +137,7 @@ class SinglePeersetIntegrationTest {
             val change = objectMapper.readValue<ChangeWithAcceptNumDto>(response).let {
                 ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum)
             }
-            expectThat(change.change).isEqualTo(AddUserChange("userName"))
+            expectThat(change.change.toDto().properties).isEqualTo(changeDto(listOf(peers[0][0])).properties)
 
             apps.stopApps()
         }
@@ -148,13 +146,21 @@ class SinglePeersetIntegrationTest {
     @Test
     fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
         val phaser = Phaser(2)
+        // since leader applies the change not in heartbeat
+        val consensusPhaser = Phaser(5)
 
-        val configOverrides = mapOf<String, Any>(
-            "peers.peersAddresses" to listOf(createPeersInRange(5)),
+        val consensusPeersAction = SignalListener {
+            val expectedChange = it.change
+            if (expectedChange?.toDto()?.properties == mapOf("operation" to "ADD_GROUP", "groupName" to "name")) {
+                consensusPhaser.arriveAndAwaitAdvance()
+            }
+        }
+        val consensusPeerCallback = mapOf(
+            Signal.ConsensusAfterHandlingHeartbeat to consensusPeersAction
         )
 
         val firstLeaderAction = SignalListener {
-            val url = "http://${it.otherPeers[0][0]}/apply"
+            val url = "http://${it.peers[0][1]}/apply"
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
@@ -163,7 +169,7 @@ class SinglePeersetIntegrationTest {
                         it.transaction!!.ballotNumber,
                         true,
                         Accept.COMMIT,
-                        ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
+                        ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"), listOf("http://${it.peers[0][1]}"))
                     )
                 }.also {
                     log.info("Got response ${it.status.value}")
@@ -184,16 +190,18 @@ class SinglePeersetIntegrationTest {
 
         val apps = TestApplicationSet(1, listOf(5),
             signalListeners = mapOf(
-                1 to firstLeaderCallbacks,
-                3 to peer3Callbacks
-            ),
-            configOverrides = (1..5).zip(List(5) { configOverrides }).toMap()
+                1 to firstLeaderCallbacks + consensusPeerCallback,
+                2 to consensusPeerCallback,
+                3 to peer3Callbacks + consensusPeerCallback,
+                4 to consensusPeerCallback,
+                5 to consensusPeerCallback
+            )
         )
         val peers = apps.getPeers()
 
         // change that will cause leader to fall according to action
         try {
-            executeChange("http://${peers[0][0]}/create_change", mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
+            executeChange("http://${peers[0][0]}/create_change", ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"), listOf()))
             fail("Change passed")
         } catch (e: Exception) {
             log.info("Leader 1 fails: $e")
@@ -201,6 +209,7 @@ class SinglePeersetIntegrationTest {
 
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
         phaser.arriveAndAwaitAdvance()
+        consensusPhaser.arriveAndAwaitAdvance()
 
         val response = testHttpClient.get<String>("http://${peers[0][3]}/change") {
             contentType(ContentType.Application.Json)
@@ -208,7 +217,7 @@ class SinglePeersetIntegrationTest {
         }
 
         val change = objectMapper.readValue(response, ChangeWithAcceptNumDto::class.java)
-        expectThat(change.changeDto.toChange()).isEqualTo(AddGroupChange("name"))
+        expectThat(change.changeDto.properties).isEqualTo(mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
 
         // and should not execute this change couple of times
         val response2 = testHttpClient.get<String>("http://${peers[0][1]}/changes") {
@@ -222,7 +231,7 @@ class SinglePeersetIntegrationTest {
         // only one change and this change shouldn't be applied for 8082 two times
         expect {
             that(values.size).isGreaterThanOrEqualTo(1)
-            that(values[0]).isEqualTo(ChangeWithAcceptNum(AddGroupChange("name"), 1))
+            that(values[0].change.toDto().properties).isEqualTo(mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
         }
 
         apps.stopApps()
@@ -231,18 +240,20 @@ class SinglePeersetIntegrationTest {
     private fun createPeersInRange(range: Int): List<String> =
         List(range) { "localhost:${8081 + it}" }
 
-    private suspend fun executeChange(uri: String, change: Map<String, Any> = changeDto.properties) =
+    private suspend fun executeChange(uri: String, change: ChangeDto) =
         testHttpClient.post<String>(uri) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = change
         }
 
-    private val changeDto = ChangeDto(
+    private fun changeDto(peers: List<String>) = ChangeDto(
         mapOf(
             "operation" to "ADD_USER",
             "userName" to "userName"
-        )
+        ),
+        // leader should enrich himself
+        peers
     )
 
     private fun deleteRaftHistories() {

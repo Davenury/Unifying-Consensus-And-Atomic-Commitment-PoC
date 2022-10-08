@@ -1,18 +1,19 @@
 package com.github.davenury.ucac
 
-import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.historyManagementRouting
 import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
+import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
 import com.github.davenury.ucac.consensus.ratis.RaftConfiguration
 import com.github.davenury.ucac.consensus.ratis.RatisHistoryManagement
 import com.github.davenury.ucac.gpac.api.gpacProtocolRouting
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
-import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
+import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
 import io.ktor.application.*
 import io.ktor.features.*
@@ -57,7 +58,7 @@ class Application constructor(
 
     init {
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
-            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
+//            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
             val signalPublisher = SignalPublisher(signalListeners)
 
@@ -77,12 +78,13 @@ class Application constructor(
                 config.raft.leaderTimeout
             )
 
-            val historyManagement = RatisHistoryManagement(raftNode!!)
-//            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
+//           val historyManagement = RatisHistoryManagement(raftNode!!)
+            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
 
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
+            val myAddress = config.peers.peersAddresses[mode.peersetId - 1][mode.nodeId - 1]
             gpacProtocol =
                 GPACProtocolImpl(
                     historyManagement,
@@ -90,10 +92,11 @@ class Application constructor(
                     timer,
                     protocolClient,
                     transactionBlocker,
-                    mode.otherPeers,
                     signalPublisher,
-                    mode.peersetId,
-                    mode.nodeId,
+                    allPeers = config.peers.peersAddresses.withIndex().associate { it.index + 1 to it.value.filterNot { it == myAddress } },
+                    myPeersetId = mode.peersetId,
+                    myNodeId = mode.nodeId,
+                    myAddress = myAddress
                 )
 
             install(ContentNegotiation) {
@@ -104,13 +107,13 @@ class Application constructor(
             install(StatusPages) {
                 exception<MissingParameterException> { cause ->
                     call.respond(
-                        status = HttpStatusCode.BadRequest,
+                        status = HttpStatusCode.UnprocessableEntity,
                         ErrorMessage("Missing parameter: ${cause.message}")
                     )
                 }
                 exception<UnknownOperationException> { cause ->
                     call.respond(
-                        status = HttpStatusCode.BadRequest,
+                        status = HttpStatusCode.UnprocessableEntity,
                         ErrorMessage(
                             "Unknown operation to perform: ${cause.desiredOperationName}"
                         )
@@ -164,6 +167,14 @@ class Application constructor(
                         )
                     )
                 }
+
+                exception<PeerNotInPeersetException> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.BadRequest,
+                        ErrorMessage(cause.message!!)
+                    )
+                }
+
                 exception<Throwable> { cause ->
                     call.respond(
                         status = HttpStatusCode.InternalServerError,
@@ -183,9 +194,10 @@ class Application constructor(
         }
     }
 
-    fun setOtherPeers(otherPeers: List<List<String>>) {
-        gpacProtocol.setOtherPeers(otherPeers)
-        consensusProtocol.setOtherPeers(otherPeers[mode.peersetId - 1])
+    fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
+        gpacProtocol.setPeers(peers)
+        gpacProtocol.setMyAddress(myAddress)
+        consensusProtocol.setOtherPeers(peers[mode.peersetId]!!)
     }
 
     fun startBlocking() {

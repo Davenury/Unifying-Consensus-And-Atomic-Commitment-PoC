@@ -18,7 +18,7 @@ data class ChangeWithAcceptNum(val change: Change, val acceptNum: Int?) {
         fun fromJson(json: String): ChangeWithAcceptNum {
             val map = objectMapper.readValue(json, HashMap<String, Any>().javaClass)
             val changeString = objectMapper.writeValueAsString(map["change"])
-            val change: Change = Change.fromJson(changeString)!!
+            val change: Change = Change.fromJson(changeString)
             val acceptNum = map["acceptNum"] as Int?
             return ChangeWithAcceptNum(change, acceptNum)
         }
@@ -34,7 +34,8 @@ data class ChangeWithAcceptNumDto(val changeDto: ChangeDto, val acceptNum: Int?)
 
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class ChangeDto(val properties: Map<String, String>) {
+// peers contains one entry for each peerset
+data class ChangeDto(val properties: Map<String, String>, val peers: List<String>) {
     fun toChange(): Change =
         (properties["operation"])
             ?.let {
@@ -43,6 +44,9 @@ data class ChangeDto(val properties: Map<String, String>) {
                 } catch (ex: IllegalArgumentException) {
                     logger.error("Error while creating Change class - unknown operation $it")
                     throw UnknownOperationException(it)
+                } catch (ex: NullPointerException) {
+                    logger.error("Parsing $it results in null pointer exception - message is malformed")
+                    throw MissingParameterException("Message $it doesn't include necessary fields!")
                 }
             } ?: throw MissingParameterException("\"operation\" value is required!")
 
@@ -54,42 +58,47 @@ data class ChangeDto(val properties: Map<String, String>) {
 @JsonIgnoreProperties(ignoreUnknown = true)
 sealed class Change(val operation: Operation) {
     abstract fun toDto(): ChangeDto
+    abstract val peers: List<String>
 
     companion object {
 
-        fun fromJson(json: String): Change? =
-            objectMapper
-                .readValue(json, HashMap<String, String>().javaClass)
-                ?.let { ChangeDto(it) }
-                ?.toChange()
+        fun fromJson(json: String): Change {
+            val properties = objectMapper
+                .readValue(json, HashMap<String, Any>()::class.java)
+
+            val peers = properties["peers"] as List<String>
+            val otherProperties = properties.filter { (key, _) -> key != "peers" } as Map<String, String>
+
+            return ChangeDto(otherProperties, peers).toChange()
+        }
     }
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class AddRelationChange(val from: String, val to: String) : Change(Operation.ADD_RELATION) {
+data class AddRelationChange(val from: String, val to: String, override val peers: List<String>) : Change(Operation.ADD_RELATION) {
     override fun toDto(): ChangeDto =
-        ChangeDto(mapOf("operation" to this.operation.name, "from" to from, "to" to to))
+        ChangeDto(mapOf("operation" to this.operation.name, "from" to from, "to" to to), peers)
 
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class DeleteRelationChange(val from: String, val to: String) :
+data class DeleteRelationChange(val from: String, val to: String, override val peers: List<String>) :
     Change(Operation.DELETE_RELATION) {
     override fun toDto(): ChangeDto =
-        ChangeDto(mapOf("operation" to this.operation.name, "from" to from, "to" to to))
+        ChangeDto(mapOf("operation" to this.operation.name, "from" to from, "to" to to), peers)
 
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class AddUserChange(val userName: String) : Change(Operation.ADD_USER) {
+data class AddUserChange(val userName: String, override val peers: List<String>) : Change(Operation.ADD_USER) {
     override fun toDto(): ChangeDto =
-        ChangeDto(mapOf("operation" to this.operation.name, "userName" to userName))
+        ChangeDto(mapOf("operation" to this.operation.name, "userName" to userName), peers)
 
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class AddGroupChange(val groupName: String) : Change(Operation.ADD_GROUP) {
+data class AddGroupChange(val groupName: String, override val peers: List<String>) : Change(Operation.ADD_GROUP) {
     override fun toDto(): ChangeDto =
-        ChangeDto(mapOf("operation" to this.operation.name, "groupName" to groupName))
+        ChangeDto(mapOf("operation" to this.operation.name, "groupName" to groupName), peers)
 
 }

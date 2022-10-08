@@ -13,7 +13,8 @@ interface GPACProtocol : SignalSubject {
     suspend fun performProtocolAsRecoveryLeader(change: ChangeDto)
     fun getTransaction(): Transaction
     fun getBallotNumber(): Int
-    fun setOtherPeers(otherPeers: List<List<String>>)
+    fun setPeers(peers: Map<Int, List<String>>)
+    fun setMyAddress(address: String)
 }
 
 class GPACProtocolImpl(
@@ -22,10 +23,11 @@ class GPACProtocolImpl(
     private val timer: ProtocolTimer,
     private val protocolClient: GPACProtocolClient,
     private val transactionBlocker: TransactionBlocker,
-    private var otherPeers: List<List<String>>,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     private val myPeersetId: Int,
     private val myNodeId: Int,
+    private var allPeers: Map<Int, List<String>>,
+    private var myAddress: String
 ) : GPACProtocol {
 
     private var myBallotNumber: Int = 0
@@ -42,7 +44,7 @@ class GPACProtocolImpl(
     override suspend fun handleElect(message: ElectMe): ElectedYou {
         val state = historyManagement.getState()
         val decision = message.acceptNum?.let { acceptNum ->
-            state?.find { it.acceptNum == acceptNum }
+            state.find { it.acceptNum == acceptNum }
         }
         if (decision != null) {
             // meaning that I'm the cohort that got apply for transaction of original leader
@@ -55,7 +57,7 @@ class GPACProtocolImpl(
             )
         }
 
-        signal(Signal.OnHandlingElectBegin, null)
+        signal(Signal.OnHandlingElectBegin, null, getPeersFromChange(message.change))
 
         transactionBlocker.assertICanSendElectedYou()
 
@@ -64,7 +66,7 @@ class GPACProtocolImpl(
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal)
 
-        signal(Signal.OnHandlingElectEnd, transaction)
+        signal(Signal.OnHandlingElectEnd, transaction, getPeersFromChange(message.change))
 
         return ElectedYou(
             message.ballotNumber,
@@ -77,7 +79,7 @@ class GPACProtocolImpl(
 
     override suspend fun handleAgree(message: Agree): Agreed {
 
-        signal(Signal.OnHandlingAgreeBegin, transaction)
+        signal(Signal.OnHandlingAgreeBegin, transaction, getPeersFromChange(message.change))
 
         if (!checkBallotNumber(message.ballotNumber)) {
             throw NotValidLeader(myBallotNumber, message.ballotNumber)
@@ -99,7 +101,7 @@ class GPACProtocolImpl(
             logger.info("${getPeerName()} Lock aquired: ${message.ballotNumber}")
         }
 
-        signal(Signal.OnHandlingAgreeEnd, transaction)
+        signal(Signal.OnHandlingAgreeEnd, transaction, getPeersFromChange(message.change))
 
         leaderFailTimeoutStart(message.change)
 
@@ -108,7 +110,7 @@ class GPACProtocolImpl(
 
     override suspend fun handleApply(message: Apply) {
         leaderFailTimeoutStop()
-        signal(Signal.OnHandlingApplyBegin, transaction)
+        signal(Signal.OnHandlingApplyBegin, transaction, getPeersFromChange(message.change))
 
         try {
             this.transaction =
@@ -117,7 +119,7 @@ class GPACProtocolImpl(
             logger.info("${getPeerName()} - my state: ${historyManagement.getState()}")
 
             if (message.acceptVal == Accept.COMMIT) {
-                signal(Signal.OnHandlingApplyCommitted, transaction)
+                signal(Signal.OnHandlingApplyCommitted, transaction, getPeersFromChange(message.change))
             }
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
                 historyManagement.change(message.change.toChange(), this.transaction.acceptNum)
@@ -128,12 +130,12 @@ class GPACProtocolImpl(
             logger.info("${getPeerName()} Releasing semaphore as cohort")
             transactionBlocker.releaseBlock()
 
-            signal(Signal.OnHandlingApplyEnd, transaction)
+            signal(Signal.OnHandlingApplyEnd, transaction, getPeersFromChange(message.change))
         }
     }
 
     private fun transactionWasAppliedBefore() =
-        historyManagement.getState()?.any { it.acceptNum == this.transaction.acceptNum } == true
+        historyManagement.getState().any { it.acceptNum == this.transaction.acceptNum }
 
     private suspend fun leaderFailTimeoutStart(change: ChangeDto) {
         logger.info("${getPeerName()} Start counting")
@@ -152,26 +154,33 @@ class GPACProtocolImpl(
     override suspend fun performProtocolAsLeader(
         change: ChangeDto
     ) {
-        val electResponses = electMePhase(change, { responses -> superSet(responses) })
+        logger.info("Peer ${getPeerName()} starts performing GPAC")
+        val enrichedChange =
+            if (change.peers.contains(myAddress)) {
+                change
+            } else {
+                change.copy(peers = change.peers.toMutableList().also { it.add(myAddress) })
+            }
+        val electResponses = electMePhase(enrichedChange, { responses -> superSet(responses, getPeersFromChange(enrichedChange)) })
 
         val acceptVal =
             if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
 
         this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
 
-        signal(Signal.BeforeSendingAgree, this.transaction)
+        signal(Signal.BeforeSendingAgree, this.transaction, getPeersFromChange(enrichedChange))
 
-        val agreedResponses = ftAgreePhase(change, acceptVal)
+        val agreedResponses = ftAgreePhase(enrichedChange, acceptVal)
 
-        signal(Signal.BeforeSendingApply, this.transaction)
+        signal(Signal.BeforeSendingApply, this.transaction, getPeersFromChange(enrichedChange))
 
-        val applyResponses = applyPhase(change, acceptVal)
+        val applyResponses = applyPhase(enrichedChange, acceptVal)
     }
 
     override suspend fun performProtocolAsRecoveryLeader(change: ChangeDto) {
         val electResponses = electMePhase(
             change,
-            { responses -> superMajority(responses) },
+            { responses -> superMajority(responses, getPeersFromChange(change)) },
             this.transaction,
             this.transaction.acceptNum
         )
@@ -181,7 +190,7 @@ class GPACProtocolImpl(
             logger.info("${getPeerName()} Got hit with message with decision true")
             // someone got to ft-agree phase
             this.transaction = this.transaction.copy(acceptVal = messageWithDecision.acceptVal)
-            signal(Signal.BeforeSendingAgree, this.transaction)
+            signal(Signal.BeforeSendingAgree, this.transaction, getPeersFromChange(change))
 
             val agreedResponses = ftAgreePhase(
                 change,
@@ -190,7 +199,7 @@ class GPACProtocolImpl(
                 acceptNum = this.transaction.acceptNum
             )
 
-            signal(Signal.BeforeSendingApply, this.transaction)
+            signal(Signal.BeforeSendingApply, this.transaction, getPeersFromChange(change))
 
             val applyResponses = applyPhase(change, messageWithDecision.acceptVal)
 
@@ -198,12 +207,12 @@ class GPACProtocolImpl(
         }
 
         // I got to ft-agree phase, so my voice of this is crucial
-        signal(Signal.BeforeSendingAgree, this.transaction)
+        signal(Signal.BeforeSendingAgree, this.transaction, getPeersFromChange(change))
 
         logger.info("${getPeerName()} Recovery leader transaction state: ${this.transaction}")
         val agreedResponses = ftAgreePhase(change, this.transaction.acceptVal!!, acceptNum = this.transaction.acceptNum)
 
-        signal(Signal.BeforeSendingApply, this.transaction)
+        signal(Signal.BeforeSendingApply, this.transaction, getPeersFromChange(change))
 
         val applyResponses = applyPhase(change, this.transaction.acceptVal!!)
 
@@ -227,9 +236,11 @@ class GPACProtocolImpl(
             myBallotNumber++
             if (!historyManagement.canBeBuild(change.toChange())) throw HistoryCannotBeBuildException()
             this.transaction = transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
-            signal(Signal.BeforeSendingElect, this.transaction)
+
+            signal(Signal.BeforeSendingElect, this.transaction, getPeersFromChange(change))
             logger.info("${getPeerName()} - sending ballot number: $myBallotNumber")
-            val (responses, maxBallotNumber) = getElectedYouResponses(change, otherPeers, acceptNum)
+            val (responses, maxBallotNumber) = getElectedYouResponses(change, getPeersFromChange(change), acceptNum)
+
             electResponses = responses
             tries++
             if (superFunction(electResponses)) {
@@ -251,15 +262,15 @@ class GPACProtocolImpl(
     ): List<List<Agreed>> {
         transactionBlocker.tryToBlock()
 
-        val agreedResponses = getAgreedResponses(change, otherPeers, acceptVal, decision, acceptNum)
-        if (!superSet(agreedResponses)) throw TooFewResponsesException()
+        val agreedResponses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
+        if (!superSet(agreedResponses, getPeersFromChange(change))) throw TooFewResponsesException()
 
         this.transaction = this.transaction.copy(decision = true)
         return agreedResponses
     }
 
     private suspend fun applyPhase(change: ChangeDto, acceptVal: Accept): List<Int> {
-        val applyMessages = sendApplyMessages(change, otherPeers, acceptVal)
+        val applyMessages = sendApplyMessages(change, getPeersFromChange(change), acceptVal)
         logger.info("Apply Messages Responses: $applyMessages")
         this.handleApply(
             Apply(
@@ -278,7 +289,7 @@ class GPACProtocolImpl(
         acceptNum: Int? = null
     ): ResponsesWithErrorAggregation<ElectedYou> =
         protocolClient.sendElectMe(
-            otherPeers.filterIndexed { index, _ -> isInTransaction(index) }, ElectMe(myBallotNumber, change, acceptNum)
+            otherPeers, ElectMe(myBallotNumber, change, acceptNum)
         )
 
     private suspend fun getAgreedResponses(
@@ -289,13 +300,13 @@ class GPACProtocolImpl(
         acceptNum: Int? = null
     ): List<List<Agreed>> =
         protocolClient.sendFTAgree(
-            otherPeers.filterIndexed { index, _ -> isInTransaction(index) },
+            otherPeers,
             Agree(myBallotNumber, acceptVal, change, decision, acceptNum)
         )
 
     private suspend fun sendApplyMessages(change: ChangeDto, otherPeers: List<List<String>>, acceptVal: Accept) =
         protocolClient.sendApply(
-            otherPeers.filterIndexed { index, _ -> isInTransaction(index) }, Apply(
+            otherPeers, Apply(
                 myBallotNumber,
                 this@GPACProtocolImpl.transaction.decision,
                 acceptVal,
@@ -303,37 +314,47 @@ class GPACProtocolImpl(
             )
         )
 
-    private fun isInTransaction(index: Int) = true
-
-    private fun signal(signal: Signal, transaction: Transaction?) {
-        signalPublisher.signal(signal, this, otherPeers, transaction)
+    private fun signal(signal: Signal, transaction: Transaction?, peers: List<List<String>>) {
+        signalPublisher.signal(signal, this, peers, transaction)
     }
 
-    private fun <T> superMajority(responses: List<List<T>>): Boolean =
-        superFunction(responses, 2)
+    private fun <T> superMajority(responses: List<List<T>>, peers: List<List<String>>): Boolean =
+        superFunction(responses, 2, peers)
 
-    private fun <T> superSet(responses: List<List<T>>): Boolean =
-        superFunction(responses, 1)
+    private fun <T> superSet(responses: List<List<T>>, peers: List<List<String>>): Boolean =
+        superFunction(responses, 1, peers)
 
-    private fun <T> superFunction(responses: List<List<T>>, divider: Int): Boolean {
-        val peersInTransaction = otherPeers.filterIndexed { index, _ -> isInTransaction(index) }
-        val allShards = peersInTransaction.size >= responses.size / divider.toDouble()
+    private fun <T> superFunction(responses: List<List<T>>, divider: Int, peers: List<List<String>>): Boolean {
+        val allShards = peers.size >= responses.size / divider.toDouble()
 
         return responses.withIndex()
             .all { (index, value) ->
-                val positiveResponses = if (index + 1 == myPeersetId) value.size + 1 else value.size
                 val allPeers =
-                    if (index + 1 == myPeersetId) peersInTransaction[index].size + 1 else peersInTransaction[index].size
-                positiveResponses > allPeers / 2F
+                    if (index + 1 == myPeersetId) peers[index].size + 1 else peers[index].size
+                val agreedPeers =
+                    if (index + 1 == myPeersetId) value.size + 1 else value.size
+                agreedPeers >= allPeers / 2F
             } && allShards
+    }
+
+    private fun getPeersFromChange(change: ChangeDto): List<List<String>> {
+        return change.peers.map { peer ->
+            if (peer == myAddress) return@map allPeers[myPeersetId]!!
+            allPeers.values.find { it.contains(peer) }
+                ?: throw PeerNotInPeersetException(peer)
+        }
+    }
+
+    override fun setPeers(peers: Map<Int, List<String>>) {
+        this.allPeers = peers
+    }
+
+    override fun setMyAddress(address: String) {
+        this.myAddress = address
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger(GPACProtocolImpl::class.java)
-    }
-
-    override fun setOtherPeers(otherPeers: List<List<String>>) {
-        this.otherPeers = otherPeers
     }
 
     override fun getPeerName() = "peerset${myPeersetId}/peer${myNodeId}"

@@ -15,7 +15,7 @@ class OperationSpec {
 
     @Test
     fun `should be able to make add relation operation`() {
-        val changeDto = ChangeDto(mapOf("operation" to "ADD_RELATION", "to" to "to", "from" to "from"))
+        val changeDto = ChangeDto(mapOf("operation" to "ADD_RELATION", "to" to "to", "from" to "from"), listOf())
         val change = changeDto.toChange()
 
         expectThat(change.operation).isEqualTo(Operation.ADD_RELATION)
@@ -23,7 +23,7 @@ class OperationSpec {
 
     @Test
     fun `should be able to make delete relation operation`() {
-        val changeDto = ChangeDto(mapOf("operation" to "DELETE_RELATION", "to" to "to", "from" to "from"))
+        val changeDto = ChangeDto(mapOf("operation" to "DELETE_RELATION", "to" to "to", "from" to "from"), listOf())
         val change = changeDto.toChange()
 
         expectThat(change.operation).isEqualTo(Operation.DELETE_RELATION)
@@ -31,7 +31,7 @@ class OperationSpec {
 
     @Test
     fun `should be able to make add user operation`() {
-        val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"))
+        val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"), listOf())
         val change = changeDto.toChange()
 
         expectThat(change.operation).isEqualTo(Operation.ADD_USER)
@@ -39,7 +39,7 @@ class OperationSpec {
 
     @Test
     fun `should be able to make add group operation`() {
-        val changeDto = ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "groupName"))
+        val changeDto = ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "groupName"), listOf())
         val change = changeDto.toChange()
 
         expectThat(change.operation).isEqualTo(Operation.ADD_GROUP)
@@ -47,7 +47,7 @@ class OperationSpec {
 
     @Test
     fun `should throw unknown operation exception, when operation is not known`() {
-        val changeDto = ChangeDto(mapOf("operation" to "SOME_UNKNOWN_OPERATION", "to" to "to", "from" to "from"))
+        val changeDto = ChangeDto(mapOf("operation" to "SOME_UNKNOWN_OPERATION", "to" to "to", "from" to "from"), listOf())
 
         expectThrows<UnknownOperationException> {
             changeDto.toChange()
@@ -56,7 +56,7 @@ class OperationSpec {
 
     @Test
     fun `should throw missing parameter exception, when that's the case`() {
-        val changeDto = ChangeDto(mapOf("operation" to "ADD_RELATION"))
+        val changeDto = ChangeDto(mapOf("operation" to "ADD_RELATION"), listOf())
 
         expectThrows<MissingParameterException> {
             changeDto.toChange()
@@ -66,7 +66,7 @@ class OperationSpec {
     @Test
     fun `should not throw missing parameter exception, when there's some garbage in message`() {
         val changeDto =
-            ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "groupName", "some_garbage" to "gfasdds"))
+            ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "groupName", "some_garbage" to "gfasdds"), listOf())
 
         expectCatching {
             changeDto.toChange()
