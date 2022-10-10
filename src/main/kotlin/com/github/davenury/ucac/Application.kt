@@ -76,7 +76,7 @@ class Application constructor(
                 mode.peersetId,
                 mode.host,
                 ctx,
-                mode.otherPeers.getOrElse(mode.peersetId) { listOf() },
+                mode.otherPeers.getOrElse(mode.peersetId - 1) { listOf() },
                 signalPublisher,
                 raftProtocolClientImpl,
                 config.raft.heartbeatTimeout,
@@ -89,7 +89,7 @@ class Application constructor(
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
-            val myAddress = config.peers.peersAddresses[mode.peersetId - 1][mode.nodeId - 1]
+            val myAddress = "${mode.host}:${mode.port}"
             gpacProtocol =
                 GPACProtocolImpl(
                     historyManagement,
@@ -98,7 +98,7 @@ class Application constructor(
                     protocolClient,
                     transactionBlocker,
                     signalPublisher,
-                    allPeers = config.peers.peersAddresses.withIndex().associate { it.index + 1 to it.value.filterNot { it == myAddress } },
+                    allPeers = mode.otherPeers.withIndex().associate { it.index + 1 to it.value },
                     myPeersetId = mode.peersetId,
                     myNodeId = mode.nodeId,
                     myAddress = myAddress
