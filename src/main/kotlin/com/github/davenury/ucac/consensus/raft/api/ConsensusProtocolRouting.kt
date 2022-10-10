@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.consensus.raft.api
 
-import com.github.davenury.ucac.common.toDto
+import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.consensus.raft.domain.*
 import io.ktor.application.*
 import io.ktor.http.*
@@ -45,16 +45,16 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
             semaphore.acquire()
-            val result = protocol.handleProposeChange(message.toChangeWithAcceptNum())
+            val result = protocol.handleProposeChange(message.toHistoryEntry())
             semaphore.release()
             call.respond(result)
         }
 //      Endpoints for tests
         get("/consensus/proposed_changes") {
-            call.respond(protocol.getProposedChanges().toDto())
+            call.respond(protocol.getProposedChanges().map { Change.fromHistoryEntry(it) })
         }
         get("/consensus/accepted_changes") {
-            call.respond(protocol.getAcceptedChanges().toDto())
+            call.respond(protocol.getAcceptedChanges().map { Change.fromHistoryEntry(it) })
         }
     }
 }

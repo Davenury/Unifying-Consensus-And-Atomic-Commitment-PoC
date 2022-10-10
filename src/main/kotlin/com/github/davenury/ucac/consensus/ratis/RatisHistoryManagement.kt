@@ -1,15 +1,15 @@
 package com.github.davenury.ucac.consensus.ratis
 
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.history.History
+import com.github.davenury.ucac.history.HistoryEntry
 import org.slf4j.LoggerFactory
 
-class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : HistoryManagement(historyRaftNode) {
-    override fun getLastChange(): ChangeWithAcceptNum? = try {
-        historyRaftNode.getState().last()
-    } catch (ex: java.util.NoSuchElementException) {
-        logger.error("History is empty!")
-        null
-    }
+class RatisHistoryManagement(
+    private val historyRaftNode: HistoryRaftNode,
+    history: History,
+) : HistoryManagement(historyRaftNode, history) {
+    override fun getLastChange(): HistoryEntry = historyRaftNode.getState().getCurrentEntry()
 
     /**
      * Dummy implementation for simplicity of protocol. Change to correct implementation with actually building history

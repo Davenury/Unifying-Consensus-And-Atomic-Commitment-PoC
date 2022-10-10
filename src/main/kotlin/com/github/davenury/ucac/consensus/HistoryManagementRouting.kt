@@ -1,7 +1,9 @@
 package com.github.davenury.ucac.consensus
 
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.history.InitialHistoryEntry
 import io.ktor.application.*
+import io.ktor.http.*
 import io.ktor.response.*
 import io.ktor.routing.*
 
@@ -12,16 +14,18 @@ fun Application.historyManagementRouting(historyManagement: HistoryManagement) {
         route("/change") {
             get {
                 val result = historyManagement.getLastChange()
-                call.respond((result?.toDto() ?: ErrorMessage("Error any change doesn't exist")))
+                if (result == InitialHistoryEntry) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(Change.fromHistoryEntry(result))
+                }
             }
         }
         route("/changes") {
             get {
-                val result = historyManagement.getState()
-                call.respond((result.toDto()))
+                val result = historyManagement.getState().toEntryList()
+                call.respond(Changes(result.map { Change.fromHistoryEntry(it) }))
             }
         }
     }
 }
-
-

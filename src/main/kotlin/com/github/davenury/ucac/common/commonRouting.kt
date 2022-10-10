@@ -2,37 +2,47 @@ package com.github.davenury.ucac.common
 
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
+import com.github.davenury.ucac.history.IntermediateHistoryEntry
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import java.lang.IllegalArgumentException
 
 fun Application.commonRouting(
     gpacProtocol: GPACProtocol,
-    consensusProtocol: ConsensusProtocol<Change, History>,
+    consensusProtocol: ConsensusProtocol,
 ) {
 
     routing {
 
         post("/create_change") {
-            val change = call.receive<ChangeDto>()
+            val change = call.receive<Change>()
             gpacProtocol.performProtocolAsLeader(change)
             call.respond(HttpStatusCode.OK)
         }
 
         post("/consensus/create_change") {
-            val properties = call.receive<Map<String, Any>>()
-            val change = ChangeDto(properties["change"] as Map<String, String>, properties["peers"] as List<String>)
-            consensusProtocol.proposeChange(change.toChange(), properties["acceptNum"] as Int?)
+            val change = call.receive<Change>()
+            consensusProtocol.proposeChange(change.toHistoryEntry())
             call.respond(HttpStatusCode.OK)
         }
 
         get("/consensus/changes") {
-            call.respond(consensusProtocol.getState()?.toDto() ?: listOf<ChangeWithAcceptNumDto>())
+            val history = consensusProtocol.getState()
+            val changes = generateSequence(history.getCurrentEntry()) {
+                val parentId = it.getParentId()
+                if (parentId != null) {
+                    history.getEntryFromHistory(parentId)!!
+                } else {
+                    null
+                }
+            }
+            call.respond(changes.map { Change.fromHistoryEntry(it) })
         }
         get("/consensus/change") {
-            call.respond(consensusProtocol.getState()?.lastOrNull()?.toDto() ?: HttpStatusCode.BadRequest)
+            call.respond(consensusProtocol.getState().getCurrentEntry().serialize())
         }
     }
 

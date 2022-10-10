@@ -2,6 +2,7 @@ package com.github.davenury.ucac
 
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.gpac.domain.Transaction
+import com.github.davenury.ucac.history.HistoryEntry
 
 enum class Signal {
     BeforeSendingElect,
@@ -15,7 +16,7 @@ enum class Signal {
     OnHandlingApplyEnd,
     OnHandlingApplyCommitted,
     ConsensusAfterProposingChange,
-    ConsensusAfterHandlingHeartbeat
+    ConsensusAfterHandlingHeartbeat,
 }
 
 
@@ -26,13 +27,13 @@ interface SignalSubject {
 class SignalPublisher(
     private val listeners: Map<Signal, SignalListener>
 ) {
-    fun signal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>, transaction: Transaction?, change: Change? = null) {
+    fun signal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>, transaction: Transaction?, entry: HistoryEntry? = null) {
         listeners[signal]?.onSignal(SignalData(
             signal,
             subject,
             otherPeers,
             transaction,
-            change
+            entry,
         ))
     }
 }
@@ -42,7 +43,7 @@ data class SignalData(
     val subject: SignalSubject,
     val peers: List<List<String>>,
     val transaction: Transaction?,
-    val change: Change? = null
+    val entry: HistoryEntry? = null
 )
 
 fun interface SignalListener {

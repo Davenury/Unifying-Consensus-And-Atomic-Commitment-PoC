@@ -1,26 +1,22 @@
 package com.github.davenury.ucac.utils
 
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.ChangeWithAcceptNum
-import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusSuccess
+import com.github.davenury.ucac.history.History
+import com.github.davenury.ucac.history.HistoryEntry
 
 
-object DummyConsensusProtocol : ConsensusProtocol<Change, MutableList<ChangeWithAcceptNum>> {
+class DummyConsensusProtocol : ConsensusProtocol {
     private var response: ConsensusResult = ConsensusSuccess
-    public var change: ChangeWithAcceptNum? = null
+    var history: History = History()
 
-    override suspend fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult = response
+    override suspend fun proposeChange(entry: HistoryEntry): ConsensusResult = response
 
 
     fun setResponse(response: ConsensusResult) {
         this.response = response
     }
 
-    override fun getState(): MutableList<ChangeWithAcceptNum> = mutableListOf(change).filterNotNull().toMutableList()
-
-
-
+    override fun getState(): History = history
 }

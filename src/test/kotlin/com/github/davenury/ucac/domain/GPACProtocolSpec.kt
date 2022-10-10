@@ -3,6 +3,8 @@ package com.github.davenury.ucac.domain
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.infrastructure.DummyConsensusProtocol
 import com.github.davenury.ucac.gpac.domain.*
+import com.github.davenury.ucac.history.History
+import com.github.davenury.ucac.history.InitialHistoryEntry
 import io.mockk.*
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
@@ -14,8 +16,9 @@ import strikt.assertions.isEqualTo
 
 class GPACProtocolSpec {
 
-    private val consensusProtocol = DummyConsensusProtocol()
-    private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
+    private val history = History()
+    private val consensusProtocol = DummyConsensusProtocol(history)
+    private val historyManagement = InMemoryHistoryManagement(consensusProtocol, history)
     private val timerMock = mockk<ProtocolTimer>()
     private val protocolClientMock = mockk<GPACProtocolClient>()
     private val transactionBlockerMock = mockk<TransactionBlocker>()
@@ -38,7 +41,7 @@ class GPACProtocolSpec {
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
 
-        val message = ElectMe(100000, changeDto)
+        val message = ElectMe(100000, change)
 
         val result = subject.handleElect(message)
 
@@ -57,7 +60,7 @@ class GPACProtocolSpec {
 
         // -1 is not possible value according to protocol, but extending protocol class
         // with functionality of changing state is not the way
-        val message = ElectMe(-1, changeDto)
+        val message = ElectMe(-1, change)
 
         expectThrows<NotElectingYou> {
             subject.handleElect(message)
@@ -71,7 +74,7 @@ class GPACProtocolSpec {
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
 
-        val message = ElectMe(3, changeDto)
+        val message = ElectMe(3, change)
 
         val result = subject.handleElect(message)
 
@@ -88,8 +91,8 @@ class GPACProtocolSpec {
         coEvery { timerMock.startCounting(any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
-        subject.handleElect(ElectMe(100, changeDto))
-        val message = Agree(100, Accept.COMMIT, changeDto)
+        subject.handleElect(ElectMe(100, change))
+        val message = Agree(100, Accept.COMMIT, change)
 
         val result = subject.handleAgree(message)
 
@@ -100,7 +103,7 @@ class GPACProtocolSpec {
 
     @Test
     fun `should throw not electing you, when proposed ballot number is less than state's`(): Unit = runBlocking {
-        val message = Agree(-1, Accept.COMMIT, changeDto)
+        val message = Agree(-1, Accept.COMMIT, change)
         expectThrows<NotValidLeader> {
             subject.handleAgree(message)
         }
@@ -115,12 +118,13 @@ class GPACProtocolSpec {
         coEvery { timerMock.startCounting(any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
-        subject.handleElect(ElectMe(10, changeDto))
-        subject.handleAgree(Agree(10, Accept.COMMIT, changeDto))
-        val message = Apply(10, true, Accept.COMMIT, changeDto)
+        subject.handleElect(ElectMe(10, change))
+        subject.handleAgree(Agree(10, Accept.COMMIT, change))
+        val message = Apply(10, true, Accept.COMMIT, change)
 
         subject.handleApply(message)
-        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName", listOf("peer2")), 10))
+        expectThat(historyManagement.getLastChange())
+            .isEqualTo(AddUserChange(InitialHistoryEntry.getId(), "userName", listOf("peer2"), 10).toHistoryEntry())
     }
 
     @Test
@@ -132,20 +136,18 @@ class GPACProtocolSpec {
         coEvery { timerMock.startCounting(any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
-        subject.handleElect(ElectMe(10, changeDto))
-        subject.handleAgree(Agree(10, Accept.ABORT, changeDto))
-        val message = Apply(10, true, Accept.ABORT, changeDto)
+        subject.handleElect(ElectMe(10, change))
+        subject.handleAgree(Agree(10, Accept.ABORT, change))
+        val message = Apply(10, true, Accept.ABORT, change)
 
         subject.handleApply(message)
         expectThat(historyManagement.getLastChange()).isEqualTo(null)
     }
 
-    private val changeDto = ChangeDto(
-        mapOf(
-            "operation" to "ADD_USER",
-            "userName" to "userName"
-        ),
-        listOf("peer2")
+    private val change = AddUserChange(
+        InitialHistoryEntry.getId(),
+        "userName",
+        listOf("peer2"),
     )
 
 }
