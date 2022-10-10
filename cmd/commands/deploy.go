@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/google/uuid"
@@ -20,8 +21,9 @@ import (
 const ratisPort = 10024
 const servicePort = 8080
 
-var numberOfPeersInPeerset int
+var numberOfPeersInPeersets []int
 var deployNamespace string
+var deployCreateNamespace bool
 
 func CreateDeployCommand() *cobra.Command {
 
@@ -29,29 +31,36 @@ func CreateDeployCommand() *cobra.Command {
 		Use: "deploy",
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
-			for i := 1; i <= numberOfPeersInPeerset; i++ {
-				peerId := strconv.Itoa(i)
 
-				peerConfig := PeerConfig{
-					PeerId: peerId,
-					PeersetId: "1",
-					PeersInPeerset: numberOfPeersInPeerset,
-				}
+			for idx, num := range(numberOfPeersInPeersets) {
+				for i := 1; i <= num; i++ {
+					peerId := strconv.Itoa(i)
+	
+					peerConfig := PeerConfig{
+						PeerId: peerId,
+						PeersetId: strconv.Itoa(idx + 1),
+						PeersInPeerset: num,
+						PeersetsConfig: numberOfPeersInPeersets,
+					}
 
-				deploySinglePeerService(deployNamespace, peerConfig, ratisPort + i)
-				
-				deploySinglePeerConfigMap(deployNamespace, peerConfig)
-
-				deploySinglePeerDeployment(deployNamespace, peerConfig)
-
-				fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
+					if deployCreateNamespace {
+						CreateNamespace(deployNamespace)
+					}
+	
+					deploySinglePeerService(deployNamespace, peerConfig, ratisPort + i)
+					
+					deploySinglePeerConfigMap(deployNamespace, peerConfig)
+	
+					deploySinglePeerDeployment(deployNamespace, peerConfig)
+	
+					fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
+				}	
 			}
 		},
 	}
 
-	deployCommand.Flags().IntVar(&numberOfPeersInPeerset, "peersInPeerset", 0, "Number of peers in single peerset")
-	deployCommand.MarkFlagRequired("peersInPeerset")
-
+	deployCommand.Flags().IntSliceVar(&numberOfPeersInPeersets, "peers", make([]int, 0), "Number of peers in peersets; example usage '--peers=1,2,3'")
+	deployCommand.Flags().BoolVarP(&deployCreateNamespace, "create-namespace", "", false, "Include if should create namespace")
 	deployCommand.Flags().StringVarP(&deployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
 
 	return deployCommand
@@ -107,6 +116,7 @@ func createPodTemplate(peerConfig PeerConfig) apiv1.PodTemplateSpec {
 			Labels: map[string]string{
 				"peerId": peerConfig.PeerId,
 				"peersetId": peerConfig.PeersetId,
+				"app.name": fmt.Sprintf("peer%s-peerset%s-app", peerConfig.PeerId, peerConfig.PeersetId),
 			},
 			Annotations: map[string]string{
 				"prometheus.io/scrape": "true",
@@ -149,6 +159,11 @@ func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig) {
 		panic(err)
 	}
 
+	gpacGroups := make([]string, len(peerConfig.PeersetsConfig))
+	for i := 0; i < len(peerConfig.PeersetsConfig); i++ {
+		gpacGroups[i] = uuid.New().String()
+	}
+
 	configMap := &apiv1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "ConfigMap",
@@ -164,11 +179,10 @@ func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig) {
 		Data: map[string]string{
 			"application_environment": "k8s",
 			"PEERSET_ID": peerConfig.PeersetId,
-			"RAFT_NODE_ID": peerConfig.PeerId,
-			// TODO - this isn't the right way of passing list of lists to env 
-			"RATIS_PEERS_ADDRESSES": fmt.Sprintf("[[%s]]", GenerateServicesForPeers(peerConfig, ratisPort)),
-			"RATIS_CLUSTER_GROUPS_IDS": fmt.Sprintf("[%s]", uuid.New()),
-			"GPAC_PEERS_ADDRESSES": fmt.Sprintf("[[%s]]", GenerateServicesForPeersStaticPort(peerConfig, servicePort)),
+			"RAFT_NODE_ID": peerConfig.PeerId, 
+			"RATIS_PEERS_ADDRESSES": fmt.Sprintf("[%s]", GenerateServicesForPeers(peerConfig, ratisPort, namespace)),
+			"RATIS_CLUSTER_GROUPS_IDS": fmt.Sprintf("[%s]", strings.Join(gpacGroups[:], ",")),
+			"GPAC_PEERS_ADDRESSES": fmt.Sprintf("[%s]", GenerateServicesForPeersStaticPort(peerConfig, servicePort, namespace)),
 		},
 	}
 
@@ -191,13 +205,12 @@ func deploySinglePeerService(namespace string, peerConfig PeerConfig, currentRat
 		},
 		Spec: apiv1.ServiceSpec{
 			Selector: map[string]string{
-				"peerId": peerConfig.PeerId,
-				"peersetId": peerConfig.PeersetId,
+				"app.name": fmt.Sprintf("peer%s-peerset%s-app", peerConfig.PeerId, peerConfig.PeersetId),
 			},
 			Ports: []apiv1.ServicePort{
 				{
 					Name: "service",
-					Port: servicePort,
+					Port: 8080,
 					TargetPort: intstr.FromInt(servicePort),
 				},
 				{

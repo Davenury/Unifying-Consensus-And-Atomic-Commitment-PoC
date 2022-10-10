@@ -50,6 +50,7 @@ type PeerConfig struct {
 	PeerId string
 	PeersetId string
 	PeersInPeerset int
+	PeersetsConfig []int
 }
 
 func ConfigMapName(peerConfig PeerConfig) string {
@@ -68,36 +69,51 @@ func DeploymentName(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-dep", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
-func GenerateServicesForPeers(peerConfig PeerConfig, startPort int) string {
-	return generateServicesForPeers(peerConfig, startPort, true)
+func GenerateServicesForPeers(peerConfig PeerConfig, startPort int, namespace string) string {
+	return generateServicesForPeers(peerConfig, startPort, true, namespace)
 }
 
-func GenerateServicesForPeersStaticPort(peerConfig PeerConfig, port int) string {
-	return generateServicesForPeers(peerConfig, port, false)
+func GenerateServicesForPeersStaticPort(peerConfig PeerConfig, port int, namespace string) string {
+	return generateServicesForPeers(peerConfig, port, false, namespace)
 }
 
-func generateServicesForPeers(peerConfig PeerConfig, startPort int, increment bool) string {
-	var sb strings.Builder
+func ServiceAddress(peerConfig PeerConfig, namespace string) string {
+	return fmt.Sprintf("peer%s-peerset%s-service.%s.svc.cluster.local", peerConfig.PeerId, peerConfig.PeersetId, namespace)
+}
 
-	for i := 1; i <= peerConfig.PeersInPeerset; i++ {
-		port := startPort
-		if increment {
-			port = port + i
+func generateServicesForPeers(peerConfig PeerConfig, startPort int, increment bool, namespace string) string {
+
+	var resultSb strings.Builder
+	for idx, peersNumber := range(numberOfPeersInPeersets) {
+		var sb strings.Builder
+
+		for i := 1; i <= peersNumber; i++ {
+			port := startPort
+			if increment {
+				port = port + i
+			}
+			sb.WriteString(fmt.Sprintf("\"%s:%d\",", ServiceAddress(PeerConfig{
+				PeerId: strconv.Itoa(i),
+				PeersetId: strconv.Itoa(idx + 1),
+				PeersInPeerset: peerConfig.PeersInPeerset,
+			}, namespace), port))
 		}
-		sb.WriteString(fmt.Sprintf("\"%s:%d\",", ServiceName(PeerConfig{
-			PeerId: strconv.Itoa(i),
-			PeersetId: peerConfig.PeersetId,
-			PeersInPeerset: peerConfig.PeersInPeerset,
-		}), port))
-	}
-	
-	str := sb.String()
+		
+		str := sb.String()
 
-	if len(str) > 0 {
-		str = str[:len(str)-1]
+		if len(str) > 0 {
+			str = str[:len(str)-1]
+		}
+
+		resultSb.WriteString(fmt.Sprintf("[%s],", str))
 	}
 
-	return str
+	result := resultSb.String()
+	if len(result) > 0 {
+		result = result[:len(result) - 1]
+	}
+
+	return result
 }
 
 func CreateNamespace(namespaceName string) {
