@@ -1,19 +1,18 @@
 package commands
 
-
 import (
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
+	apiv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	apiv1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func GetKubernetesConfig() (*rest.Config, error) {
@@ -22,15 +21,15 @@ func GetKubernetesConfig() (*rest.Config, error) {
 		fmt.Println("Cannot get home directory")
 		return nil, errors.New("Cannot get home directory")
 	}
-	
+
 	var config *rest.Config
-		_ = config
+	_ = config
 
 	return clientcmd.BuildConfigFromFlags("", fmt.Sprintf("%s/.kube/config", home))
 }
 
-func GetClientset() (*kubernetes.Clientset, error)  {
-	
+func GetClientset() (*kubernetes.Clientset, error) {
+
 	config, err := GetKubernetesConfig()
 	if err != nil {
 		fmt.Printf("Error occured while trying to get kubeconfig: %s", err)
@@ -47,8 +46,8 @@ func GetClientset() (*kubernetes.Clientset, error)  {
 }
 
 type PeerConfig struct {
-	PeerId string
-	PeersetId string
+	PeerId         string
+	PeersetId      string
 	PeersInPeerset int
 	PeersetsConfig []int
 }
@@ -84,7 +83,7 @@ func ServiceAddress(peerConfig PeerConfig, namespace string) string {
 func generateServicesForPeers(peerConfig PeerConfig, startPort int, increment bool, namespace string) string {
 
 	var resultSb strings.Builder
-	for idx, peersNumber := range(numberOfPeersInPeersets) {
+	for idx, peersNumber := range numberOfPeersInPeersets {
 		var sb strings.Builder
 
 		for i := 1; i <= peersNumber; i++ {
@@ -93,12 +92,12 @@ func generateServicesForPeers(peerConfig PeerConfig, startPort int, increment bo
 				port = port + i
 			}
 			sb.WriteString(fmt.Sprintf("\"%s:%d\",", ServiceAddress(PeerConfig{
-				PeerId: strconv.Itoa(i),
-				PeersetId: strconv.Itoa(idx + 1),
+				PeerId:         strconv.Itoa(i),
+				PeersetId:      strconv.Itoa(idx + 1),
 				PeersInPeerset: peerConfig.PeersInPeerset,
 			}, namespace), port))
 		}
-		
+
 		str := sb.String()
 
 		if len(str) > 0 {
@@ -110,7 +109,7 @@ func generateServicesForPeers(peerConfig PeerConfig, startPort int, increment bo
 
 	result := resultSb.String()
 	if len(result) > 0 {
-		result = result[:len(result) - 1]
+		result = result[:len(result)-1]
 	}
 
 	return result
