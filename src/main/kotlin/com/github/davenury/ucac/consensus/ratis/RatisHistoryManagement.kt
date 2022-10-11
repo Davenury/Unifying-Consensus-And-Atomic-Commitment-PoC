@@ -4,7 +4,7 @@ import com.github.davenury.ucac.common.*
 import org.slf4j.LoggerFactory
 
 class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : HistoryManagement(historyRaftNode) {
-    override fun getLastChange(): ChangeWithAcceptNum? = try {
+    override fun getLastChange(): Change? = try {
         historyRaftNode.getState().last()
     } catch (ex: java.util.NoSuchElementException) {
         logger.error("History is empty!")

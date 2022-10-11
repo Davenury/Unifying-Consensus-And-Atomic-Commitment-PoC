@@ -3,7 +3,6 @@ package com.github.davenury.ucac.common
 import kotlinx.coroutines.*
 import java.time.Duration
 import java.util.*
-import kotlin.coroutines.coroutineContext
 import kotlin.math.absoluteValue
 
 interface ProtocolTimer {

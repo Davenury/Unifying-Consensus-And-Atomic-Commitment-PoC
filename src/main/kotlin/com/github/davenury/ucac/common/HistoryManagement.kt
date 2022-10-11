@@ -4,8 +4,8 @@ import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 
 abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
-    open suspend fun change(change: Change, acceptNum: Int?) =
-        consensusProtocol.proposeChange(change, acceptNum)
+    open suspend fun change(change: Change) =
+        consensusProtocol.proposeChange(change)
             .let {
                 when (it) {
                     ConsensusFailure -> HistoryChangeResult.HistoryChangeFailure
@@ -14,7 +14,7 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
                 }
             }
 
-    abstract fun getLastChange(): ChangeWithAcceptNum?
+    abstract fun getLastChange(): Change?
     abstract fun getState(): History
 
     /**

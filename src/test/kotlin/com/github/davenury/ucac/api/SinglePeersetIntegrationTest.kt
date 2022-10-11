@@ -1,8 +1,6 @@
 package com.github.davenury.ucac.api
 
-import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.davenury.ucac.*
-import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.gpac.domain.*
 import com.github.davenury.ucac.utils.TestApplicationSet
@@ -44,7 +42,7 @@ class SinglePeersetIntegrationTest {
 
         val signalListener = SignalListener {
             expectCatching {
-                executeChange("http://${it.peers[0][1]}/create_change", changeDto(listOf()))
+                executeChange("http://${it.peers[0][1]}/create_change", change(listOf()))
             }.isSuccess()
             signalExecuted.set(true)
             throw RuntimeException("Stop")
@@ -58,7 +56,7 @@ class SinglePeersetIntegrationTest {
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/create_change", changeDto(listOf()))
+            executeChange("http://${peers[0][0]}/create_change", change(listOf()))
         }
 
         apps.stopApps()
@@ -70,7 +68,7 @@ class SinglePeersetIntegrationTest {
 
             val signalListener = SignalListener {
                 expectCatching {
-                    executeChange("http://${it.peers[0][1]}/create_change", changeDto(listOf()))
+                    executeChange("http://${it.peers[0][1]}/create_change", change(listOf()))
                 }.isFailure()
             }
 
@@ -80,7 +78,7 @@ class SinglePeersetIntegrationTest {
             val peers = apps.getPeers()
 
             expectCatching {
-                executeChange("http://${peers[0][0]}/create_change", changeDto(listOf()))
+                executeChange("http://${peers[0][0]}/create_change", change(listOf()))
             }.isSuccess()
 
             apps.stopApps()
@@ -97,7 +95,7 @@ class SinglePeersetIntegrationTest {
                 val response = testHttpClient.post<Agreed>(url) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
-                    body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, changeDto(listOf(it.peers[0][0])))
+                    body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, change(listOf(it.peers[0][0])))
                 }
                 throw RuntimeException("Stop")
             }}
@@ -122,22 +120,19 @@ class SinglePeersetIntegrationTest {
 
             // change that will cause leader to fall according to action
             try {
-                executeChange("http://${peers[0][0]}/create_change", changeDto(listOf()))
+                executeChange("http://${peers[0][0]}/create_change", change(listOf()))
                 fail("Change passed")
             } catch (e: Exception) {
                 log.info("Leader 1 fails: $e")
             }
 
             phaser.arriveAndAwaitAdvance()
-            val response = testHttpClient.get<String>("http://${peers[0][2]}/change") {
+            val change = testHttpClient.get<Change>("http://${peers[0][2]}/change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }
 
-            val change = objectMapper.readValue<ChangeWithAcceptNumDto>(response).let {
-                ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum)
-            }
-            expectThat(change.change.toDto().properties).isEqualTo(changeDto(listOf(peers[0][0])).properties)
+            expectThat(change).isEqualTo(change(listOf(peers[0][0])))
 
             apps.stopApps()
         }
@@ -151,7 +146,7 @@ class SinglePeersetIntegrationTest {
 
         val consensusPeersAction = SignalListener {
             val expectedChange = it.change
-            if (expectedChange?.toDto()?.properties == mapOf("operation" to "ADD_GROUP", "groupName" to "name")) {
+            if (expectedChange is AddGroupChange && expectedChange.groupName == "name") {
                 consensusPhaser.arriveAndAwaitAdvance()
             }
         }
@@ -169,7 +164,11 @@ class SinglePeersetIntegrationTest {
                         it.transaction!!.ballotNumber,
                         true,
                         Accept.COMMIT,
-                        ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"), listOf("http://${it.peers[0][1]}"))
+                        AddGroupChange(
+                            "TODO parentId",
+                            "groupName",
+                            listOf("http://${it.peers[0][1]}"),
+                        )
                     )
                 }.also {
                     log.info("Got response ${it.status.value}")
@@ -201,7 +200,11 @@ class SinglePeersetIntegrationTest {
 
         // change that will cause leader to fall according to action
         try {
-            executeChange("http://${peers[0][0]}/create_change", ChangeDto(mapOf("operation" to "ADD_GROUP", "groupName" to "name"), listOf()))
+            executeChange("http://${peers[0][0]}/create_change", AddGroupChange(
+                "TODO parentId",
+                "name",
+                listOf(),
+            ))
             fail("Change passed")
         } catch (e: Exception) {
             log.info("Leader 1 fails: $e")
@@ -211,49 +214,42 @@ class SinglePeersetIntegrationTest {
         phaser.arriveAndAwaitAdvance()
         consensusPhaser.arriveAndAwaitAdvance()
 
-        val response = testHttpClient.get<String>("http://${peers[0][3]}/change") {
+        val change = testHttpClient.get<Change>("http://${peers[0][3]}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
 
-        val change = objectMapper.readValue(response, ChangeWithAcceptNumDto::class.java)
-        expectThat(change.changeDto.properties).isEqualTo(mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
+        expectThat(change).isA<AddGroupChange>()
+        expectThat((change as AddGroupChange).groupName).isEqualTo("name")
 
         // and should not execute this change couple of times
-        val response2 = testHttpClient.get<String>("http://${peers[0][1]}/changes") {
+        val changes = testHttpClient.get<Changes>("http://${peers[0][1]}/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
 
-        val values: List<ChangeWithAcceptNum> = objectMapper.readValue<HistoryDto>(response2).changes.map {
-            ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum)
-        }
         // only one change and this change shouldn't be applied for 8082 two times
         expect {
-            that(values.size).isGreaterThanOrEqualTo(1)
-            that(values[0].change.toDto().properties).isEqualTo(mapOf("operation" to "ADD_GROUP", "groupName" to "name"))
+            that(changes.size).isGreaterThanOrEqualTo(1)
+            that(changes[0]).isA<AddGroupChange>()
+            that((changes[0] as AddGroupChange).groupName).isEqualTo("name")
         }
 
         apps.stopApps()
     }
 
-    private fun createPeersInRange(range: Int): List<String> =
-        List(range) { "localhost:${8081 + it}" }
-
-    private suspend fun executeChange(uri: String, change: ChangeDto) =
+    private suspend fun executeChange(uri: String, change: Change) =
         testHttpClient.post<String>(uri) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = change
         }
 
-    private fun changeDto(peers: List<String>) = ChangeDto(
-        mapOf(
-            "operation" to "ADD_USER",
-            "userName" to "userName"
-        ),
+    private fun change(peers: List<String>) = AddUserChange(
+        "TODO parentId",
+        "userName",
         // leader should enrich himself
-        peers
+        peers,
     )
 
     private fun deleteRaftHistories() {

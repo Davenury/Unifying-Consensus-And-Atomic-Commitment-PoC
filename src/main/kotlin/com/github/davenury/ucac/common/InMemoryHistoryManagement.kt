@@ -10,8 +10,8 @@ class InMemoryHistoryManagement(
 
     // TODO: think about what's better - if change asks consensus protocol if it
     // can be done or if something higher asks and then calls change
-    override suspend fun change(change: Change, acceptNum: Int?): HistoryChangeResult =
-        consensusProtocol.proposeChange(change, acceptNum)
+    override suspend fun change(change: Change): HistoryChangeResult =
+        consensusProtocol.proposeChange(change)
             .let {
                 when (it) {
                     ConsensusFailure -> {
@@ -26,7 +26,7 @@ class InMemoryHistoryManagement(
                 }
             }
 
-    override fun getLastChange(): ChangeWithAcceptNum? =
+    override fun getLastChange(): Change? =
         try {
             consensusProtocol.getState()?.last()
         } catch (ex: java.util.NoSuchElementException) {

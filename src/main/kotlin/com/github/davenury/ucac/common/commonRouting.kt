@@ -16,23 +16,23 @@ fun Application.commonRouting(
     routing {
 
         post("/create_change") {
-            val change = call.receive<ChangeDto>()
+            val change = call.receive<Change>()
             gpacProtocol.performProtocolAsLeader(change)
             call.respond(HttpStatusCode.OK)
         }
 
         post("/consensus/create_change") {
-            val properties = call.receive<Map<String, Any>>()
-            val change = ChangeDto(properties["change"] as Map<String, String>, properties["peers"] as List<String>)
-            consensusProtocol.proposeChange(change.toChange(), properties["acceptNum"] as Int?)
+            val change = call.receive<Change>()
+            consensusProtocol.proposeChange(change)
             call.respond(HttpStatusCode.OK)
         }
 
         get("/consensus/changes") {
-            call.respond(consensusProtocol.getState()?.toDto() ?: listOf<ChangeWithAcceptNumDto>())
+            call.respond(Changes(consensusProtocol.getState() ?: listOf()))
         }
+
         get("/consensus/change") {
-            call.respond(consensusProtocol.getState()?.lastOrNull()?.toDto() ?: HttpStatusCode.BadRequest)
+            call.respond(consensusProtocol.getState()?.lastOrNull() ?: HttpStatusCode.BadRequest)
         }
     }
 

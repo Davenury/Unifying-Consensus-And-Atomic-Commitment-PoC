@@ -1,6 +1,5 @@
 package com.github.davenury.ucac.gpac.domain
 
-import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
