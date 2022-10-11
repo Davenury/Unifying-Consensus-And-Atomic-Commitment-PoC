@@ -15,8 +15,6 @@ fun Application.commonRouting(
     consensusProtocol: ConsensusProtocol<Change, History>,
 ) {
 
-    val counter = meterRegistry.counter("test_counter")
-
     routing {
 
         post("/create_change") {
@@ -39,23 +37,6 @@ fun Application.commonRouting(
             call.respond(consensusProtocol.getState()?.lastOrNull()?.toDto() ?: HttpStatusCode.BadRequest)
         }
 
-        post("/bump/counter") {
-            counter.increment()
-            call.respond(HttpStatusCode.OK)
-        }
-
-        post("/random_fail") {
-
-            val result = Random.nextInt(10)
-            if (result % 4 == 0) {
-                call.respond(HttpStatusCode.BadRequest)
-            } else if (result % 3 == 0) {
-                call.respond(HttpStatusCode.ServiceUnavailable)
-            } else {
-                call.respond(HttpStatusCode.OK)
-            }
-
-        }
     }
 
 }
