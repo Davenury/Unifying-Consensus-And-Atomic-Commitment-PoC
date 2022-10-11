@@ -28,6 +28,14 @@ func CreateDeployCommand() *cobra.Command {
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
 
+			ratisPeers := fmt.Sprintf("[%s]", GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort, deployNamespace))
+			gpacPeers := fmt.Sprintf("[%s]", GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort, deployNamespace))
+			ratisGroups := make([]string, len(numberOfPeersInPeersets))
+			for i := 0; i < len(numberOfPeersInPeersets); i++ {
+				gpacGroups[i] = uuid.New().String()
+			}
+			ratisGroupsString := strings.Join(ratisGroups[:], ",")
+
 			for idx, num := range numberOfPeersInPeersets {
 				for i := 1; i <= num; i++ {
 					peerId := strconv.Itoa(i)
@@ -45,7 +53,7 @@ func CreateDeployCommand() *cobra.Command {
 
 					deploySinglePeerService(deployNamespace, peerConfig, ratisPort+i)
 
-					deploySinglePeerConfigMap(deployNamespace, peerConfig)
+					deploySinglePeerConfigMap(deployNamespace, peerConfig, ratisPeers, gpacPeers, ratisGroupsString)
 
 					deploySinglePeerDeployment(deployNamespace, peerConfig)
 
@@ -149,15 +157,10 @@ func createSingleContainer(containerName string, peerConfig PeerConfig) apiv1.Co
 	}
 }
 
-func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig) {
+func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig, ratisPeers string, gpacPeers string, ratisGroups string) {
 	clientset, err := GetClientset()
 	if err != nil {
 		panic(err)
-	}
-
-	gpacGroups := make([]string, len(peerConfig.PeersetsConfig))
-	for i := 0; i < len(peerConfig.PeersetsConfig); i++ {
-		gpacGroups[i] = uuid.New().String()
 	}
 
 	configMap := &apiv1.ConfigMap{
@@ -177,9 +180,9 @@ func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig) {
 			"CONFIG_FILE":              "application-kubernetes.conf",
 			"PEERSET_ID":               peerConfig.PeersetId,
 			"RAFT_NODE_ID":             peerConfig.PeerId,
-			"RATIS_PEERS_ADDRESSES":    fmt.Sprintf("[%s]", GenerateServicesForPeers(peerConfig, ratisPort, namespace)),
-			"RATIS_CLUSTER_GROUPS_IDS": strings.Join(gpacGroups[:], ","),
-			"GPAC_PEERS_ADDRESSES":     fmt.Sprintf("[%s]", GenerateServicesForPeersStaticPort(peerConfig, servicePort, namespace)),
+			"RATIS_PEERS_ADDRESSES":    ratisPeers,
+			"RATIS_CLUSTER_GROUPS_IDS": ratisGroups,
+			"GPAC_PEERS_ADDRESSES":     gpacPeers,
 		},
 	}
 
