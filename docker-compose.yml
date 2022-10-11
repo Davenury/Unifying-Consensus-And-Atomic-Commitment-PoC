@@ -1,9 +1,5 @@
 version: "3.3"
 
-volumes:
-  prometheus_data: {}
-  grafana_data: {}
-
 services:
   _image_build:
     image: poc
@@ -84,18 +80,3 @@ services:
       - PEERSET_ID=2
       - CONFIG_FILE=application-compose.conf
       - application_environment = "docker_compose"
-  prometheus:
-    image: prom/prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./metrics/compose:/etc/prometheus/
-      - prometheus_data:/prometheus
-  grafana:
-    image: grafana/grafana
-    depends_on:
-      - prometheus
-    ports:
-      - 3000:3000
-    volumes:
-      - grafana_data:/var/lib/grafana
