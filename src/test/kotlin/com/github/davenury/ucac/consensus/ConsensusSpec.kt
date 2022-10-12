@@ -1,11 +1,10 @@
 package com.github.davenury.ucac.consensus
 
-import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
-import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.AddUserChange
-import com.github.davenury.ucac.common.ChangeWithAcceptNum
-import com.github.davenury.ucac.common.HistoryDto
+import com.github.davenury.ucac.common.Change
+import com.github.davenury.ucac.common.Changes
+import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -34,7 +33,6 @@ class ConsensusSpec {
     private val unknownPeerIp = "198.18.0.0"
     private val noneLeader = null
 
-
     @BeforeEach
     internal fun setUp() {
         System.setProperty("configFile", "consensus_application.conf")
@@ -50,16 +48,14 @@ class ConsensusSpec {
         //* peer 1 proponuje zmianę (akceptowana)
         //* peer 2 proponuje zmianę (akceptowana)
 
-
         val peerset = TestApplicationSet(1, listOf(5))
         val peerAddresses = peerset.getPeers()[0]
-
 
         delay(leaderElectionDelay)
 
         // when: peer1 executed change
         expectCatching {
-            executeChange("${peerAddresses[0]}/consensus/create_change", createChangeWithAcceptNum(null))
+            executeChange("${peerAddresses[0]}/consensus/create_change", createChange(null))
         }.isSuccess()
 
         delay(changePropagationDelay)
@@ -69,13 +65,13 @@ class ConsensusSpec {
         // then: there's one change and it's change we've requested
         expect {
             that(changes.size).isEqualTo(1)
-            that(changes[0].change).isEqualTo(AddUserChange("userName", listOf()))
+            that(changes[0]).isEqualTo(createChange(null))
             that(changes[0].acceptNum).isEqualTo(null)
         }
 
         // when: peer2 executes change
         expectCatching {
-            executeChange("${peerAddresses[1]}/consensus/create_change", createChangeWithAcceptNum(1))
+            executeChange("${peerAddresses[1]}/consensus/create_change", createChange(1, userName = "userName2"))
         }.isSuccess()
 
         delay(changePropagationDelay)
@@ -84,7 +80,7 @@ class ConsensusSpec {
 
         // then: there are two changes
         expect {
-            that(changes2[1].change).isEqualTo(AddUserChange("userName", listOf()))
+            that(changes2[1]).isEqualTo(createChange(null, userName = "userName2"))
             that(changes2[1].acceptNum).isEqualTo(1)
         }
 
@@ -93,7 +89,6 @@ class ConsensusSpec {
 
     @Test
     fun `less than half of peers response on ConsensusElectMe`(): Unit = runBlocking {
-
 
         val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(3, 4, 5))
 
@@ -213,7 +208,7 @@ class ConsensusSpec {
 
 //      Start processing
         expectCatching {
-            executeChange("$firstLeaderAddress/consensus/create_change", createChangeWithAcceptNum(null))
+            executeChange("$firstLeaderAddress/consensus/create_change", createChange(null))
         }.isFailure()
 
         firstLeaderApplication.stop(0, 0)
@@ -224,7 +219,7 @@ class ConsensusSpec {
             val proposedChanges = askForProposedChanges(runningPeers.first())
             val acceptedChanges = askForAcceptedChanges(runningPeers.first())
             that(proposedChanges.size).isEqualTo(1)
-            that(proposedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
+            that(proposedChanges.first()).isEqualTo(createChange(null))
             that(proposedChanges.first().acceptNum).isEqualTo(null)
             that(acceptedChanges.size).isEqualTo(0)
 
@@ -237,7 +232,7 @@ class ConsensusSpec {
             that(proposedChanges.size).isEqualTo(0)
             val acceptedChanges = askForAcceptedChanges(runningPeers.first())
             that(acceptedChanges.size).isEqualTo(1)
-            that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
+            that(acceptedChanges.first()).isEqualTo(createChange(null))
             that(acceptedChanges.first().acceptNum).isEqualTo(null)
         }
 
@@ -272,7 +267,7 @@ class ConsensusSpec {
 
 //      Start processing
         expectCatching {
-            executeChange("${runningPeers.first()}/consensus/create_change", createChangeWithAcceptNum(null))
+            executeChange("${runningPeers.first()}/consensus/create_change", createChange(null))
         }.isSuccess()
 
         delay(changePropagationDelay)
@@ -283,7 +278,7 @@ class ConsensusSpec {
                 val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
-                that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
+                that(acceptedChanges.first()).isEqualTo(createChange(null))
                 that(acceptedChanges.first().acceptNum).isEqualTo(null)
             }
 
@@ -319,7 +314,7 @@ class ConsensusSpec {
 
 //      Start processing
         expectCatching {
-            executeChange("${runningPeers.first()}/consensus/create_change", createChangeWithAcceptNum(null))
+            executeChange("${runningPeers.first()}/consensus/create_change", createChange(null))
         }.isSuccess()
 
         delay(changePropagationDelay)
@@ -330,7 +325,7 @@ class ConsensusSpec {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(1)
-                that(proposedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
+                that(proposedChanges.first()).isEqualTo(createChange(null))
                 that(proposedChanges.first().acceptNum).isEqualTo(null)
                 that(acceptedChanges.size).isEqualTo(0)
             }
@@ -383,11 +378,11 @@ class ConsensusSpec {
 
 //      Run change in both halfs
         expectCatching {
-            executeChange("${firstHalf.first()}/consensus/create_change", createChangeWithAcceptNum(1))
+            executeChange("${firstHalf.first()}/consensus/create_change", createChange(1))
         }.isSuccess()
 
         expectCatching {
-            executeChange("${secondHalf.first()}/consensus/create_change", createChangeWithAcceptNum(2))
+            executeChange("${secondHalf.first()}/consensus/create_change", createChange(2))
         }.isSuccess()
 
 
@@ -399,7 +394,7 @@ class ConsensusSpec {
                 val proposedChanges = askForProposedChanges(it)
                 val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(1)
-                that(proposedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
+                that(proposedChanges.first()).isEqualTo(createChange(null))
                 that(proposedChanges.first().acceptNum).isEqualTo(1)
                 that(acceptedChanges.size).isEqualTo(0)
             }
@@ -410,7 +405,7 @@ class ConsensusSpec {
                 val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
-                that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
+                that(acceptedChanges.first()).isEqualTo(createChange(null))
                 that(acceptedChanges.first().acceptNum).isEqualTo(2)
             }
         }
@@ -430,7 +425,7 @@ class ConsensusSpec {
                 val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
-                that(acceptedChanges.first().change).isEqualTo(AddUserChange("userName", listOf()))
+                that(acceptedChanges.first()).isEqualTo(createChange(null))
                 that(acceptedChanges.first().acceptNum).isEqualTo(2)
             }
         }
@@ -438,34 +433,29 @@ class ConsensusSpec {
         peerset.stopApps()
     }
 
-
-    private val exampleChange =
-        mapOf(
-            "operation" to "ADD_USER",
-            "userName" to "userName"
-        )
-
-
-    private fun createChangeWithAcceptNum(acceptNum: Int?, peers: List<String> = listOf()) = mapOf(
-        "change" to exampleChange,
-        "acceptNum" to acceptNum,
-        "peers" to peers
+    private fun createChange(
+        acceptNum: Int?,
+        peers: List<String> = listOf(),
+        userName: String = "userName",
+    ) = AddUserChange(
+        "TODO parentId",
+        userName,
+        peers,
+        acceptNum,
     )
 
-
-    private suspend fun executeChange(uri: String, requestBody: Map<String, Any?>) =
+    private suspend fun executeChange(uri: String, change: Change) =
         testHttpClient.post<String>("http://${uri}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-            body = requestBody
+            body = change
         }
 
-    private suspend fun genericAskForChange(suffix: String, peer: String): List<ChangeWithAcceptNum> =
-        testHttpClient.get<String>("http://$peer/consensus/$suffix") {
+    private suspend fun genericAskForChange(suffix: String, peer: String): List<Change> =
+        testHttpClient.get<Changes>("http://$peer/consensus/$suffix") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-        }.let { objectMapper.readValue<HistoryDto>(it) }
-            .changes.map { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
+        }
 
 
     private suspend fun askForChanges(peer: String) = genericAskForChange("changes", peer)
@@ -476,18 +466,16 @@ class ConsensusSpec {
         val consensusProperty =
             Application::class.declaredMemberProperties.single { it.name == "consensusProtocol" }
         val consensusOldAccessible = consensusProperty.isAccessible
-        var leaderAddress: String? = null
         try {
             consensusProperty.isAccessible = true
             val consensusProtocol = consensusProperty.get(app) as RaftConsensusProtocolImpl
-            leaderAddress = consensusProtocol.getLeaderAddress()
-            return leaderAddress
+            return consensusProtocol.getLeaderAddress()
         } finally {
             consensusProperty.isAccessible = consensusOldAccessible
         }
     }
 
-    private suspend fun getLeaderAddressPortAndApplication(peers: List<Application>): LeaderAddressPortAndApplication {
+    private fun getLeaderAddressPortAndApplication(peers: List<Application>): LeaderAddressPortAndApplication {
         val peerAddresses = getPeerAddresses(peers)
         val address =
             askForLeaderAddress(peers[0])!!
@@ -512,9 +500,7 @@ class ConsensusSpec {
     private fun getPortFromAddress(address: String) = address.split(":")[1]
 
     private fun modifyPeers(app: Application, peers: List<String>) {
-        val peers = peers.map { it.replace("http://", "") }
-        app.setPeers(mapOf(1 to peers), "127.0.0.1")
+        val newPeers = peers.map { it.replace("http://", "") }
+        app.setPeers(mapOf(1 to newPeers), "127.0.0.1")
     }
-
-
 }

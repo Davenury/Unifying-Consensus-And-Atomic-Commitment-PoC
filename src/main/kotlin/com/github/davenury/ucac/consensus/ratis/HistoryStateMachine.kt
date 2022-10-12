@@ -2,7 +2,6 @@ package com.github.davenury.ucac.consensus.ratis
 
 import com.fasterxml.jackson.databind.JsonMappingException
 import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.ChangeWithAcceptNum
 import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory
@@ -14,7 +13,7 @@ class HistoryStateMachine(override var state: History = mutableListOf()) :
 
     override fun applyOperation(operation: String): String? =
         try {
-            state.add(ChangeWithAcceptNum.fromJson(operation))
+            state.add(Change.fromJson(operation))
             null
         } catch (e: JsonMappingException) {
             logger.error("Error during applyOperation ${e.message}")

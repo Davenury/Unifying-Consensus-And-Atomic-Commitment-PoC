@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
-import com.github.davenury.ucac.common.ChangeWithAcceptNumDto
+import com.github.davenury.ucac.common.Change
 
 
 data class ConsensusElectMe(val peerId: Int, val leaderIteration: Int, val lastAcceptedId: Int)
@@ -22,4 +22,4 @@ data class ConsensusHeartbeatResponse(
     val leaderAddress: String?
 )
 
-typealias ConsensusProposeChange = ChangeWithAcceptNumDto
+typealias ConsensusProposeChange = Change

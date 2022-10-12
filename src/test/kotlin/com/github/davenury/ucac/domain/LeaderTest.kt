@@ -3,14 +3,13 @@ package com.github.davenury.ucac.domain
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.infrastructure.DummyConsensusProtocol
 import com.github.davenury.ucac.gpac.domain.Accept
-import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
+import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
 import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
 import strikt.api.expectThrows
@@ -58,8 +57,8 @@ class LeaderTest {
 
         runBlocking { subject.performProtocolAsLeader(changeDto) }
 
-        expectThat(historyManagement.getLastChange()?.change?.toDto()?.properties)
-            .isEqualTo(changeDto.properties)
+        expectThat(historyManagement.getLastChange())
+            .isEqualTo(changeDto)
     }
 
     private val allPeers = listOf(listOf("localhost:9091", "localhost:9092", "localhost:9093"))
@@ -81,5 +80,5 @@ class LeaderTest {
             allPeers = mapOf(1 to listOf("localhost:9092", "localhost:9093")),
             myAddress = "localhost:8081"
         )
-    private val changeDto = ChangeDto(mapOf("operation" to "ADD_USER", "userName" to "userName"), listOf())
+    private val changeDto = AddUserChange("TODO parentId", "userName", listOf())
 }

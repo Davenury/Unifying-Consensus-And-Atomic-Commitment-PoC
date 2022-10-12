@@ -1,7 +1,6 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
-import com.github.davenury.ucac.common.ChangeWithAcceptNum
-import com.github.davenury.ucac.common.ChangeWithAcceptNumDto
+import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.History
 
 
@@ -32,7 +31,7 @@ data class Ledger(
         proposedItems.removeAll(newAcceptedItems)
     }
 
-    fun proposeChange(change: ChangeWithAcceptNum, iteration: Int): Int {
+    fun proposeChange(change: Change, iteration: Int): Int {
         val previousId = proposedItems.lastOrNull()?.id ?: acceptedItems.lastOrNull()?.id ?: -1
         val newId = previousId + 1
         proposedItems.add(LedgerItem(newId,iteration, change))
@@ -45,15 +44,15 @@ data class Ledger(
     fun getAcceptedChanges(): History = acceptedItems.map { it.change }.toMutableList()
     fun getProposedChanges(): History = proposedItems.map { it.change }.toMutableList()
 
-    fun changeAlreadyProposed(change: ChangeWithAcceptNum): Boolean =
+    fun changeAlreadyProposed(change: Change): Boolean =
         (acceptedItems + proposedItems).any { it.change == change }
 
 }
 
-data class LedgerItemDto(val id: Int,val iteration: Int, val change: ChangeWithAcceptNumDto) {
-    fun toLedgerItem(): LedgerItem = LedgerItem(id,iteration, change.toChangeWithAcceptNum())
+data class LedgerItemDto(val id: Int,val iteration: Int, val change: Change) {
+    fun toLedgerItem(): LedgerItem = LedgerItem(id,iteration, change)
 }
 
-data class LedgerItem(val id: Int, val iteration: Int,  val change: ChangeWithAcceptNum) {
-    fun toDto(): LedgerItemDto = LedgerItemDto(id,iteration, change.toDto())
+data class LedgerItem(val id: Int, val iteration: Int,  val change: Change) {
+    fun toDto(): LedgerItemDto = LedgerItemDto(id,iteration, change)
 }

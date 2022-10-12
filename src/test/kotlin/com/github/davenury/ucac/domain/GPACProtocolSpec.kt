@@ -5,7 +5,6 @@ import com.github.davenury.ucac.consensus.raft.infrastructure.DummyConsensusProt
 import com.github.davenury.ucac.gpac.domain.*
 import io.mockk.*
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expect
 import strikt.api.expectThat
@@ -120,7 +119,7 @@ class GPACProtocolSpec {
         val message = Apply(10, true, Accept.COMMIT, changeDto)
 
         subject.handleApply(message)
-        expectThat(historyManagement.getLastChange()).isEqualTo(ChangeWithAcceptNum(AddUserChange("userName", listOf("peer2")), 10))
+        expectThat(historyManagement.getLastChange()).isEqualTo(AddUserChange("TODO parentId", "userName", listOf("peer2"), 10))
     }
 
     @Test
@@ -140,12 +139,10 @@ class GPACProtocolSpec {
         expectThat(historyManagement.getLastChange()).isEqualTo(null)
     }
 
-    private val changeDto = ChangeDto(
-        mapOf(
-            "operation" to "ADD_USER",
-            "userName" to "userName"
-        ),
-        listOf("peer2")
+    private val changeDto = AddUserChange(
+        "TODO parentId",
+        "userName",
+        listOf("peer2"),
     )
 
 }

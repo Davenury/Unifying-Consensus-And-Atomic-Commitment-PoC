@@ -9,7 +9,6 @@ import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
 import com.github.davenury.ucac.consensus.ratis.RaftConfiguration
-import com.github.davenury.ucac.consensus.ratis.RatisHistoryManagement
 import com.github.davenury.ucac.gpac.api.gpacProtocolRouting
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl

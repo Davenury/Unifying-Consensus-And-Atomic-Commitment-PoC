@@ -1,9 +1,8 @@
 package com.github.davenury.ucac.consensus.raft.api
 
-import com.github.davenury.ucac.common.toDto
+import com.github.davenury.ucac.common.Changes
 import com.github.davenury.ucac.consensus.raft.domain.*
 import io.ktor.application.*
-import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
@@ -11,7 +10,7 @@ import java.util.concurrent.Semaphore
 
 fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
 
-    val semaphore: Semaphore = Semaphore(1)
+    val semaphore = Semaphore(1)
 
     routing {
         // głosujemy na leadera
@@ -45,16 +44,16 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
             semaphore.acquire()
-            val result = protocol.handleProposeChange(message.toChangeWithAcceptNum())
+            val result = protocol.handleProposeChange(message)
             semaphore.release()
             call.respond(result)
         }
 //      Endpoints for tests
         get("/consensus/proposed_changes") {
-            call.respond(protocol.getProposedChanges().toDto())
+            call.respond(Changes(protocol.getProposedChanges()))
         }
         get("/consensus/accepted_changes") {
-            call.respond(protocol.getAcceptedChanges().toDto())
+            call.respond(Changes(protocol.getAcceptedChanges()))
         }
     }
 }

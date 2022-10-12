@@ -1,6 +1,5 @@
 package com.github.davenury.ucac.api
 
-import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.gpac.domain.Accept
@@ -51,30 +50,26 @@ class MultiplePeersetSpec {
         val otherPeer = apps.getPeers()[1][0]
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/create_change", changeDto(otherPeer))
+        executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
 
         // then - transaction is executed in same peerset
-        val peer2Change = httpClient.get<String>("http://${peers[0][1]}/change") {
+        val peer2Change = httpClient.get<Change>("http://${peers[0][1]}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
-            .let { objectMapper.readValue<ChangeWithAcceptNumDto>(it) }
-            .let { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
         expect {
-            that(peer2Change.change.toDto().properties).isEqualTo(changeDto(otherPeer).properties)
+            that(peer2Change).isEqualTo(change(otherPeer))
         }
 
         // and - transaction is executed in other peerset
-        val peer4Change = httpClient.get<String>("http://${peers[1][0]}/change") {
+        val peer4Change = httpClient.get<Change>("http://${peers[1][0]}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
-            .let { objectMapper.readValue<ChangeWithAcceptNumDto>(it) }
-            .let { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
 
         expect {
-            that(peer4Change.change.toDto().properties).isEqualTo(changeDto(otherPeer).properties)
+            that(peer4Change).isEqualTo(change(otherPeer))
         }
 
         // and - there's only one change in history of both peersets
@@ -82,7 +77,7 @@ class MultiplePeersetSpec {
             .let {
                 expect {
                     that(it.size).isGreaterThanOrEqualTo(1)
-                    that(it[0].change.toDto().properties).isEqualTo(changeDto(otherPeer).properties)
+                    that(it[0]).isEqualTo(change(otherPeer))
                 }
             }
 
@@ -90,7 +85,7 @@ class MultiplePeersetSpec {
             .let {
                 expect {
                     that(it.size).isGreaterThanOrEqualTo(1)
-                    that(it[0].change.toDto().properties).isEqualTo(changeDto(otherPeer).properties)
+                    that(it[0]).isEqualTo(change(otherPeer))
                 }
             }
 
@@ -106,7 +101,7 @@ class MultiplePeersetSpec {
 
         // when - executing transaction
         try {
-            executeChange("http://${peers[0][0]}/create_change", changeDto(otherPeer))
+            executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
             fail("Exception not thrown")
         } catch (e: Exception) {
             expect {
@@ -137,7 +132,7 @@ class MultiplePeersetSpec {
 
         // when - executing transaction
         try {
-            executeChange("http://${peers[0][0]}/create_change", changeDto(otherPeer))
+            executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
             fail("Exception not thrown")
         } catch (e: Exception) {
             expectThat(e).isA<ServerResponseException>()
@@ -166,14 +161,14 @@ class MultiplePeersetSpec {
         val otherPeer = apps.getPeers()[1][0]
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/create_change", changeDto(otherPeer))
+        executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
 
         // then - transaction should be executed in every peerset
         askForChanges("http://${peers[0][1]}")
             .let {
                 expect {
                     that(it.size).isGreaterThanOrEqualTo(1)
-                    that(it[0].change.toDto().properties).isEqualTo(changeDto(otherPeer).properties)
+                    that(it[0]).isEqualTo(change(otherPeer))
                 }
             }
 
@@ -181,7 +176,7 @@ class MultiplePeersetSpec {
             .let {
                 expect {
                     that(it.size).isGreaterThanOrEqualTo(1)
-                    that(it[0].change.toDto().properties).isEqualTo(changeDto(otherPeer).properties)
+                    that(it[0]).isEqualTo(change(otherPeer))
                 }
             }
 
@@ -204,7 +199,7 @@ class MultiplePeersetSpec {
 
             // when - executing transaction - should throw too few responses exception
             try {
-                executeChange("http://${peers[0][0]}/create_change", changeDto(otherPeer))
+                executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
                 fail("executing change didn't fail")
             } catch (e: Exception) {
                 expectThat(e).isA<ServerResponseException>()
@@ -261,7 +256,7 @@ class MultiplePeersetSpec {
 
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/create_change", changeDto(otherPeer))
+            executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
         }
 
         withContext(Dispatchers.IO) {
@@ -272,11 +267,11 @@ class MultiplePeersetSpec {
             peers[it].map { askForChanges("http://$it") }.firstOrNull { it.isNotEmpty() }
                 .let {
                     expectThat(it?.size!!).isGreaterThanOrEqualTo(1)
-                    expectThat(it[0].change.toDto().properties).isEqualTo(changeDto(otherPeer).properties)
+                    expectThat(it[0]).isEqualTo(change(otherPeer))
                 }
         }
 
-            apps.stopApps()
+        apps.stopApps()
     }
 
     @Test
@@ -292,13 +287,8 @@ class MultiplePeersetSpec {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
                         body = Apply(
-                            it.transaction!!.ballotNumber, true, Accept.COMMIT, ChangeDto(
-                                mapOf(
-                                    "operation" to "ADD_USER",
-                                    "userName" to "userName"
-                                ),
-                                listOf(it.peers[1][0])
-                            )
+                            it.transaction!!.ballotNumber, true, Accept.COMMIT,
+                            change(it.peers[1][0]),
                         )
                     }.also {
                         logger.info("Got response ${it.status.value}")
@@ -311,13 +301,8 @@ class MultiplePeersetSpec {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
                         body = Apply(
-                            it.transaction!!.ballotNumber, true, Accept.COMMIT, ChangeDto(
-                                mapOf(
-                                    "operation" to "ADD_USER",
-                                    "userName" to "userName"
-                                ),
-                                listOf(it.peers[1][0])
-                            )
+                            it.transaction!!.ballotNumber, true, Accept.COMMIT,
+                            change(it.peers[1][0]),
                         )
                     }.also {
                         logger.info("Got response ${it.status.value}")
@@ -358,7 +343,7 @@ class MultiplePeersetSpec {
 
             // when - executing transaction something should go wrong after ft-agree
             expectThrows<ServerResponseException> {
-                executeChange("http://${peers[0][0]}/create_change", changeDto(otherPeer))
+                executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
             }
 
             withContext(Dispatchers.IO) {
@@ -369,14 +354,14 @@ class MultiplePeersetSpec {
             peers[1].map { askForChanges("http://$it") }.firstOrNull { it.isNotEmpty() }
                 .let {
                     expectThat(it?.size!!).isGreaterThanOrEqualTo(1)
-                    expectThat(it[0].change.toDto().properties).isEqualTo(changeDto(otherPeer).properties)
+                    expectThat(it[0]).isEqualTo(change(otherPeer))
                 }
 
             apps.stopApps()
         }
 
 
-    private suspend fun executeChange(uri: String, change: ChangeDto) =
+    private suspend fun executeChange(uri: String, change: Change) =
         testHttpClient.post<String>(uri) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
@@ -384,17 +369,14 @@ class MultiplePeersetSpec {
         }
 
     private suspend fun askForChanges(peer: String) =
-        testHttpClient.get<String>("$peer/changes") {
+        testHttpClient.get<Changes>("$peer/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-        }.let { objectMapper.readValue<HistoryDto>(it) }
-            .changes.map { ChangeWithAcceptNum(it.changeDto.toChange(), it.acceptNum) }
+        }
 
-    private fun changeDto(otherPeersetPeer: String) = ChangeDto(
-        mapOf(
-            "operation" to "ADD_USER",
-            "userName" to "userName"
-        ),
+    private fun change(otherPeersetPeer: String) = AddUserChange(
+        "TODO parentId",
+        "userName",
         // leader should enrich himself
         listOf(otherPeersetPeer)
     )

@@ -4,7 +4,6 @@ import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.ChangeWithAcceptNum
 import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.raft.domain.*
@@ -125,7 +124,7 @@ class RaftConsensusProtocolImpl(
                 this,
                 listOf(this.consensusPeers),
                 null,
-                it.change.change
+                it.change
             )
         }
 
@@ -133,8 +132,8 @@ class RaftConsensusProtocolImpl(
         return true
     }
 
-    override suspend fun handleProposeChange(change: ChangeWithAcceptNum) =
-        proposeChange(change.change, change.acceptNum)
+    override suspend fun handleProposeChange(change: Change) =
+        proposeChange(change)
 
     override fun setPeerAddress(address: String) {
         this.peerAddress = address
@@ -217,7 +216,7 @@ class RaftConsensusProtocolImpl(
         }
     }
 
-    private suspend fun proposeChangeToLedger(changeWithAcceptNum: ChangeWithAcceptNum): ConsensusResult {
+    private suspend fun proposeChangeToLedger(changeWithAcceptNum: Change): ConsensusResult {
         if (state.changeAlreadyProposed(changeWithAcceptNum)) return ConsensusFailure
         val id = state.proposeChange(changeWithAcceptNum, leaderIteration)
 
@@ -237,11 +236,11 @@ class RaftConsensusProtocolImpl(
         return ConsensusSuccess
     }
 
-    private suspend fun sendRequestToLeader(changeWithAcceptNum: ChangeWithAcceptNum): ConsensusResult = try {
+    private suspend fun sendRequestToLeader(change: Change): ConsensusResult = try {
         val response = httpClient.post<String>("http://$leaderAddress/consensus/request_apply_change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-            body = changeWithAcceptNum.toDto()
+            body = change
         }
         logger.info("Response from leader: $response")
         ConsensusSuccess
@@ -250,7 +249,7 @@ class RaftConsensusProtocolImpl(
         ConsensusFailure
     }
 
-    private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: ChangeWithAcceptNum): ConsensusResult {
+    private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: Change): ConsensusResult {
         val id = state.proposeChange(changeWithAcceptNum, leaderIteration)
         ledgerIdToVoteGranted[id] = 0
         timer.startCounting {
@@ -260,14 +259,13 @@ class RaftConsensusProtocolImpl(
         return ConsensusSuccess
     }
 
-    override suspend fun proposeChange(change: Change, acceptNum: Int?): ConsensusResult {
+    override suspend fun proposeChange(change: Change): ConsensusResult {
         // TODO
-        val changeWithAcceptNum = ChangeWithAcceptNum(change, acceptNum)
-        logger.info("$peerId received change: $changeWithAcceptNum")
+        logger.info("$peerId received change: $change")
         return when {
-            amILeader() -> proposeChangeToLedger(changeWithAcceptNum)
-            leaderAddress != null -> sendRequestToLeader(changeWithAcceptNum)
-            else -> tryToProposeChangeMyself(changeWithAcceptNum)
+            amILeader() -> proposeChangeToLedger(change)
+            leaderAddress != null -> sendRequestToLeader(change)
+            else -> tryToProposeChangeMyself(change)
         }
     }
 
