@@ -53,9 +53,12 @@ class ConsensusSpec {
 
         val peersWithoutLeader = 4
 
+
+//      TODO: Change to one phaser with use of advance
         val electionPhaser = Phaser(peersWithoutLeader)
         val change1Phaser = Phaser(peersWithoutLeader)
         val change2Phaser = Phaser(peersWithoutLeader)
+
         listOf(electionPhaser, change1Phaser, change2Phaser).forEach { it.register() }
 
         val peerLeaderElected = SignalListener {
@@ -118,7 +121,7 @@ class ConsensusSpec {
     }
 
     @Test
-    fun `less than half of peers response on ConsensusElectMe`(): Unit = runBlocking {
+    fun `less than half of peers respond on ConsensusElectMe`(): Unit = runBlocking {
         val activePeers = 2
         val triesToBecomeLeader = 2
         val phaser = Phaser(activePeers * triesToBecomeLeader)
@@ -140,6 +143,7 @@ class ConsensusSpec {
             expect {
                 val leaderAddress = askForLeaderAddress(it)
                 val selfAddress = "localhost:${it.getBoundPort()}"
+//              TODO  it should always be noneLeader
                 that(leaderAddress).isContainedIn(listOf(noneLeader, selfAddress))
             }
         }
@@ -148,7 +152,7 @@ class ConsensusSpec {
     }
 
     @Test
-    fun `minimum number of peers response on ConsensusElectMe`(): Unit = runBlocking {
+    fun `minimum number of peers respond on ConsensusElectMe`(): Unit = runBlocking {
         val peersWithoutLeader = 3
         val phaser = Phaser(peersWithoutLeader)
         var isLeaderElected = false
@@ -219,6 +223,8 @@ class ConsensusSpec {
         peerset.stopApps()
     }
 
+
+//    TODO: Exactly half of peers is running
     @Test
     fun `less than half peers failed`(): Unit = runBlocking {
         val peersWithoutLeader = 3

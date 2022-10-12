@@ -93,17 +93,15 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
     private suspend inline fun <Message, reified Response> sendConsensusMessage(
         url: String,
         message: Message
-    ): Response? = try {
+    ): Response? {
         logger.info("$id - Sending to: $url")
-        raftHttpClient.post<Response>(url) {
+        return raftHttpClient.post<Response>(url) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = message!!
         }
-    } catch (e: Exception) {
-        logger.error("Request to $url ends with: $e")
-        null
     }
+
 
     companion object {
         private val logger = LoggerFactory.getLogger(RaftProtocolClientImpl::class.java)

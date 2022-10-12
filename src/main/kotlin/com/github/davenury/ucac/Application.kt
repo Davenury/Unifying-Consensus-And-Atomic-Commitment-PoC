@@ -78,8 +78,8 @@ class Application constructor(
                 mode.otherPeers.getOrElse(mode.peersetId - 1) { listOf() },
                 signalPublisher,
                 raftProtocolClientImpl,
-                heartbeatDue = config.raft.heartbeatTimeout,
-                leaderTimeout = config.raft.leaderTimeout
+                heartbeatTimeout = config.raft.heartbeatTimeout,
+                heartbeatDelay = config.raft.leaderTimeout
             )
 
 //           val historyManagement = RatisHistoryManagement(raftNode!!)
