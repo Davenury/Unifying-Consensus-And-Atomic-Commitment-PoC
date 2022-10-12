@@ -18,7 +18,7 @@ fun Application.historyManagementRouting(historyManagement: HistoryManagement) {
         route("/changes") {
             get {
                 val result = historyManagement.getState()
-                call.respond(Changes(result))
+                call.respond(Changes.fromHistory(result))
             }
         }
     }

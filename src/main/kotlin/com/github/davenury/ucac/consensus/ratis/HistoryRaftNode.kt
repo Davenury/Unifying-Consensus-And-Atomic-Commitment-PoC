@@ -4,6 +4,7 @@ import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
+import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -22,12 +23,8 @@ class HistoryRaftNode(peerId: Int, peersetId: Int, constants: RaftConfiguration)
     override fun getState(): History {
         val msg = HistoryStateMachine.OperationType.STATE.toString()
         val result = queryData(msg)
-        return try {
-            objectMapper.readValue(result, Changes::class.java)
-        } catch (e: Exception) {
-            logger.error("Can't parse result from state machine \n ${e.message}")
-            mutableListOf()
-        }
+        val changes = objectMapper.readValue(result, Changes::class.java)
+        return changes.toHistory()
     }
 
     companion object {

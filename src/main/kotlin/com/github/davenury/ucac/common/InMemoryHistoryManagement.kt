@@ -1,7 +1,9 @@
 package com.github.davenury.ucac.common
 
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
+import com.github.davenury.ucac.history.History
+import com.github.davenury.ucac.history.InitialHistoryEntry
 import org.slf4j.LoggerFactory
 
 class InMemoryHistoryManagement(
@@ -17,24 +19,25 @@ class InMemoryHistoryManagement(
                     ConsensusFailure -> {
                         HistoryChangeResult.HistoryChangeFailure
                     }
+
                     ConsensusSuccess -> {
                         HistoryChangeResult.HistoryChangeSuccess
                     }
+
                     ConsensusResultUnknown -> {
                         HistoryChangeResult.HistoryChangeSuccess
                     }
                 }
             }
 
-    override fun getLastChange(): Change? =
-        try {
-            consensusProtocol.getState()?.last()
-        } catch (ex: java.util.NoSuchElementException) {
-            logger.error("History is empty!")
-            null
-        }
+    override fun getLastChange(): Change? {
+        return consensusProtocol.getState()
+            .getCurrentEntry()
+            .takeIf { it != InitialHistoryEntry }
+            ?.let { Change.fromHistoryEntry(it) }
+    }
 
-    override fun getState(): History = consensusProtocol.getState() ?: mutableListOf()
+    override fun getState(): History = consensusProtocol.getState()
 
     override fun canBeBuild(newChange: Change): Boolean = true
 

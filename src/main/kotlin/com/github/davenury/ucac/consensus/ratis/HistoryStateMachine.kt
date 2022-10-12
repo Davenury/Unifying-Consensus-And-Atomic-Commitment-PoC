@@ -2,18 +2,18 @@ package com.github.davenury.ucac.consensus.ratis
 
 import com.fasterxml.jackson.databind.JsonMappingException
 import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.History
+import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.objectMapper
 import org.slf4j.LoggerFactory
 
-class HistoryStateMachine(override var state: History = mutableListOf()) :
+class HistoryStateMachine(override var state: History = History()) :
     StateMachine<History>(state) {
 
     override fun serializeState(): String = objectMapper.writeValueAsString(state)
 
     override fun applyOperation(operation: String): String? =
         try {
-            state.add(Change.fromJson(operation))
+            state.addEntry(Change.fromJson(operation).toHistoryEntry())
             null
         } catch (e: JsonMappingException) {
             logger.error("Error during applyOperation ${e.message}")
@@ -31,7 +31,9 @@ class HistoryStateMachine(override var state: History = mutableListOf()) :
     enum class OperationType {
         LAST {
             override fun invokeOperation(state: History): String {
-                return state.last().let { objectMapper.writeValueAsString(it) }
+                return state.getCurrentEntry()
+                    .let { Change.fromHistoryEntry(it) }
+                    .let { objectMapper.writeValueAsString(it) }
             }
         },
         STATE {

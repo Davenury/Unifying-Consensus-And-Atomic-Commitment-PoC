@@ -5,6 +5,7 @@ import com.github.davenury.ucac.common.AddUserChange
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.Changes
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -54,8 +55,10 @@ class ConsensusSpec {
         delay(leaderElectionDelay)
 
         // when: peer1 executed change
+        val change1 = createChange(null)
+        val change1Id = change1.toHistoryEntry().getId()
         expectCatching {
-            executeChange("${peerAddresses[0]}/consensus/create_change", createChange(null))
+            executeChange("${peerAddresses[0]}/consensus/create_change", change1)
         }.isSuccess()
 
         delay(changePropagationDelay)
@@ -65,13 +68,14 @@ class ConsensusSpec {
         // then: there's one change and it's change we've requested
         expect {
             that(changes.size).isEqualTo(1)
-            that(changes[0]).isEqualTo(createChange(null))
+            that(changes[0]).isEqualTo(change1)
             that(changes[0].acceptNum).isEqualTo(null)
         }
 
         // when: peer2 executes change
+        val change2 = createChange(1, userName = "userName2", parentId = change1Id)
         expectCatching {
-            executeChange("${peerAddresses[1]}/consensus/create_change", createChange(1, userName = "userName2"))
+            executeChange("${peerAddresses[1]}/consensus/create_change", change2)
         }.isSuccess()
 
         delay(changePropagationDelay)
@@ -80,7 +84,7 @@ class ConsensusSpec {
 
         // then: there are two changes
         expect {
-            that(changes2[1]).isEqualTo(createChange(null, userName = "userName2"))
+            that(changes2[1]).isEqualTo(change2)
             that(changes2[1].acceptNum).isEqualTo(1)
         }
 
@@ -437,8 +441,9 @@ class ConsensusSpec {
         acceptNum: Int?,
         peers: List<String> = listOf(),
         userName: String = "userName",
+        parentId: String = InitialHistoryEntry.getId(),
     ) = AddUserChange(
-        "TODO parentId",
+        parentId,
         userName,
         peers,
         acceptNum,

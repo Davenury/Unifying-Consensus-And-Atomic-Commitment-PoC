@@ -6,6 +6,7 @@ import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
+import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -80,5 +81,5 @@ class LeaderTest {
             allPeers = mapOf(1 to listOf("localhost:9092", "localhost:9093")),
             myAddress = "localhost:8081"
         )
-    private val changeDto = AddUserChange("TODO parentId", "userName", listOf())
+    private val changeDto = AddUserChange(InitialHistoryEntry.getId(), "userName", listOf())
 }

@@ -1,7 +1,6 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
 import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.History
 
 interface RaftConsensusProtocol {
     suspend fun begin()
@@ -13,6 +12,6 @@ interface RaftConsensusProtocol {
     suspend fun handleProposeChange(change: Change): ConsensusResult
     fun setPeerAddress(address: String)
     fun getLeaderAddress(): String?
-    fun getProposedChanges(): History
-    fun getAcceptedChanges(): History
+    fun getProposedChanges(): List<Change>
+    fun getAcceptedChanges(): List<Change>
 }
