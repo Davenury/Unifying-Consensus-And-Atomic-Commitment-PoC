@@ -3,6 +3,7 @@ package com.github.davenury.ucac.infrastructure
 import com.github.davenury.ucac.common.AddRelationChange
 import com.github.davenury.ucac.common.InMemoryHistoryManagement
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
+import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.DummyConsensusProtocol
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
@@ -21,7 +22,7 @@ class InMemoryHistoryManagementSpec {
     @Test
     fun `should be able to add change, when consensus protocol is ok with it`() {
         // given - some change
-        val change = AddRelationChange("TODO parentId", "from", "to", listOf(), 1)
+        val change = AddRelationChange(InitialHistoryEntry.getId(), "from", "to", listOf(), 1)
         // and - consensus protocol that's ok with changes
         consensusProtocol.change = change
         consensusProtocol.setResponse(ConsensusSuccess)
@@ -35,7 +36,7 @@ class InMemoryHistoryManagementSpec {
     @Test
     fun `should not add change if consensus protocol isn't ok with this`() {
         // given - some change
-        val change = AddRelationChange("TODO parentId", "from", "to", listOf(), 1)
+        val change = AddRelationChange(InitialHistoryEntry.getId(), "from", "to", listOf(), 1)
         // and - consensus protocol that isn't ok with changes
         consensusProtocol.change = null
         consensusProtocol.setResponse(ConsensusFailure)

@@ -4,6 +4,7 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.Apply
+import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -375,7 +376,7 @@ class MultiplePeersetSpec {
         }
 
     private fun change(otherPeersetPeer: String) = AddUserChange(
-        "TODO parentId",
+        InitialHistoryEntry.getId(),
         "userName",
         // leader should enrich himself
         listOf(otherPeersetPeer)

@@ -3,6 +3,7 @@ package com.github.davenury.ucac.common
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
+import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.history.HistoryEntry
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.history.IntermediateHistoryEntry
@@ -10,13 +11,28 @@ import com.github.davenury.ucac.objectMapper
 import java.util.*
 import kotlin.collections.ArrayList
 
-typealias History = MutableList<Change>
-
 
 // see https://github.com/FasterXML/jackson-databind/issues/2742#issuecomment-637708397
 class Changes : ArrayList<Change> {
     constructor() : super()
+
     constructor(collection: List<Change>) : super(collection)
+
+    fun toHistory(): History {
+        val h = History()
+        this.map { it.toHistoryEntry() }
+            .forEach { h.addEntry(it) }
+        return h
+    }
+
+    companion object {
+        fun fromHistory(history: History): Changes {
+            return history.toEntryList()
+                .reversed()
+                .map { Change.fromHistoryEntry(it) }
+                .let { Changes(it) }
+        }
+    }
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)

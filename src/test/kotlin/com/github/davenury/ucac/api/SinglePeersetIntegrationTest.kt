@@ -3,12 +3,15 @@ package com.github.davenury.ucac.api
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.gpac.domain.*
+import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -22,6 +25,7 @@ import strikt.assertions.*
 import java.io.File
 import java.time.Duration
 import java.util.concurrent.Phaser
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Suppress("HttpUrlsUsage")
@@ -126,7 +130,10 @@ class SinglePeersetIntegrationTest {
                 log.info("Leader 1 fails: $e")
             }
 
-            phaser.arriveAndAwaitAdvance()
+            withContext(Dispatchers.IO) {
+                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+            }
+
             val change = testHttpClient.get<Change>("http://${peers[0][2]}/change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
@@ -165,7 +172,7 @@ class SinglePeersetIntegrationTest {
                         true,
                         Accept.COMMIT,
                         AddGroupChange(
-                            "TODO parentId",
+                            InitialHistoryEntry.getId(),
                             "groupName",
                             listOf("http://${it.peers[0][1]}"),
                         )
@@ -201,7 +208,7 @@ class SinglePeersetIntegrationTest {
         // change that will cause leader to fall according to action
         try {
             executeChange("http://${peers[0][0]}/create_change", AddGroupChange(
-                "TODO parentId",
+                InitialHistoryEntry.getId(),
                 "name",
                 listOf(),
             ))
@@ -246,7 +253,7 @@ class SinglePeersetIntegrationTest {
         }
 
     private fun change(peers: List<String>) = AddUserChange(
-        "TODO parentId",
+        InitialHistoryEntry.getId(),
         "userName",
         // leader should enrich himself
         peers,

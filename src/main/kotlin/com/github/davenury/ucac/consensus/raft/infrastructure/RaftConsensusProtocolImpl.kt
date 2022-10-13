@@ -4,10 +4,10 @@ import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.History
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.raft.domain.*
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
+import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -140,8 +140,8 @@ class RaftConsensusProtocolImpl(
     }
 
     override fun getLeaderAddress(): String? = leaderAddress
-    override fun getProposedChanges(): History = state.getProposedChanges()
-    override fun getAcceptedChanges(): History = state.getAcceptedChanges()
+    override fun getProposedChanges(): List<Change> = state.getProposedChanges()
+    override fun getAcceptedChanges(): List<Change> = state.getAcceptedChanges()
 
 
     private suspend fun sendHeartbeat() {

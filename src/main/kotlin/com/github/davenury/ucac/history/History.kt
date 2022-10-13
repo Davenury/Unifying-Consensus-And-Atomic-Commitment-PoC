@@ -68,4 +68,17 @@ class History {
             }
         }
     }
+
+    fun toEntryList(skipInitial: Boolean = true): List<HistoryEntry> {
+        val list = ArrayList<HistoryEntry>()
+        var entry = getCurrentEntry()
+        while (true) {
+            if (skipInitial && entry == InitialHistoryEntry) {
+                return list
+            }
+            list.add(entry)
+            val parentId = entry.getParentId() ?: return list
+            entry = getEntryFromHistory(parentId)!!
+        }
+    }
 }

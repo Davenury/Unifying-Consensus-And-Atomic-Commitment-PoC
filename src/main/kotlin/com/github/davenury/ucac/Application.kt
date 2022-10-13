@@ -14,6 +14,7 @@ import com.github.davenury.ucac.gpac.domain.GPACProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
+import com.github.davenury.ucac.history.History
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
