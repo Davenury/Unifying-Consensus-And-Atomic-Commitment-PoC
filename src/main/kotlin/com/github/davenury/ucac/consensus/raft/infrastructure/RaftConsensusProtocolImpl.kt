@@ -219,8 +219,8 @@ class RaftConsensusProtocolImpl(
             }
         }
 
-    override fun getProposedChanges(): List<Change> = state.getProposedChanges()
-    override fun getAcceptedChanges(): List<Change> = state.getAcceptedChanges()
+    override suspend fun getProposedChanges(): List<Change> = state.getProposedChanges()
+    override suspend fun getAcceptedChanges(): List<Change> = state.getAcceptedChanges()
 
     private suspend fun sendHeartbeatToPeer(peerUrl: String) {
         val peerWithMessage = Pair(peerUrl, getMessageForPeer(peerUrl))
@@ -286,7 +286,7 @@ class RaftConsensusProtocolImpl(
         }
     }
 
-    private fun applyAcceptedChanges() {
+    private suspend fun applyAcceptedChanges() {
 //      DONE: change name of ledgerIndexToMatchIndex
         val acceptedIndexes: List<Int> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
 
@@ -304,7 +304,7 @@ class RaftConsensusProtocolImpl(
     }
 
 
-    private fun handleSuccessHeartbeatResponseFromPeer(peerUrl: String) {
+    private suspend fun handleSuccessHeartbeatResponseFromPeer(peerUrl: String) {
         val peerIndices = peerUrlToNextIndex.getOrDefault(peerUrl, PeerIndices())
         val newAcceptedChanges = state.getNewAcceptedItems(peerIndices.acceptedIndex)
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedIndex)
@@ -327,7 +327,7 @@ class RaftConsensusProtocolImpl(
         applyAcceptedChanges()
     }
 
-    private fun getMessageForPeer(peerUrl: String): ConsensusHeartbeat {
+    private suspend fun getMessageForPeer(peerUrl: String): ConsensusHeartbeat {
         val peerIndices = peerUrlToNextIndex.getOrDefault(peerUrl, PeerIndices())
         val newAcceptedChanges = state.getNewAcceptedItems(peerIndices.acceptedIndex)
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedIndex)

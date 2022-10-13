@@ -12,8 +12,8 @@ interface RaftConsensusProtocol {
     suspend fun handleProposeChange(change: Change): ConsensusResult
     fun setPeerAddress(address: String)
     suspend fun getLeaderAddress(): String?
-    fun getProposedChanges(): List<Change>
-    fun getAcceptedChanges(): List<Change>
+    suspend fun getProposedChanges(): List<Change>
+    suspend fun getAcceptedChanges(): List<Change>
 
     fun stop()
 }

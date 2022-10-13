@@ -18,13 +18,6 @@ class Changes : ArrayList<Change> {
 
     constructor(collection: List<Change>) : super(collection)
 
-    fun toHistory(): History {
-        val h = History()
-        this.map { it.toHistoryEntry() }
-            .forEach { h.addEntry(it) }
-        return h
-    }
-
     companion object {
         fun fromHistory(history: History): Changes {
             return history.toEntryList()
