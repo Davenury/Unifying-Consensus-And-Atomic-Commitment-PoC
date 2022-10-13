@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.consensus.ratis
 
 import com.github.davenury.ucac.loadConfig
+import com.github.davenury.ucac.objectMapper
 import org.apache.ratis.protocol.RaftGroup
 import org.apache.ratis.protocol.RaftGroupId
 import org.apache.ratis.protocol.RaftPeer
@@ -33,14 +34,22 @@ class RaftConfiguration(
     private val PATH: String
     private val CLUSTER_GROUP_ID: UUID
     val RAFT_GROUP: RaftGroup
+    private val configPeers: List<List<String>>
 
     init {
         val config = loadConfig(overrides)
+
+        configPeers = if (config.applicationEnv == "k8s") {
+            System.getenv()["RATIS_PEERS_ADDRESSES"].let { objectMapper.readValue(it, ArrayList<ArrayList<String>>()::class.java) }
+        } else {
+            config.raft.server.addresses
+        }
+
         PATH = config.raft.server.root.storage.path
-        PEERS = config.raft.server.addresses[peersetId - 1].mapIndexed { index, address ->
+        CLUSTER_GROUP_ID = UUID.fromString(config.raft.clusterGroupIds[peersetId - 1])
+        PEERS = configPeers[peersetId - 1].mapIndexed { index, address ->
             RaftPeer.newBuilder().setId("n$index").setAddress(address).build()
         }
-        CLUSTER_GROUP_ID = UUID.fromString(config.raft.clusterGroupIds[peersetId - 1])
         RAFT_GROUP = RaftGroup.valueOf(RaftGroupId.valueOf(CLUSTER_GROUP_ID), PEERS)
     }
 

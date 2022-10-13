@@ -13,7 +13,7 @@ plugins {
 group = "com.example"
 version = "0.0.1"
 application {
-    mainClass.set("com.example.ApplicationKt")
+    mainClass.set("com.github.davenury.ucac.ApplicationKt")
 
     val isDevelopment: Boolean = project.ext.has("development")
     applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
@@ -46,6 +46,10 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1")
 
+    // metrics
+    implementation("io.micrometer:micrometer-registry-prometheus:1.9.2")
+    implementation("io.ktor:ktor-metrics-micrometer:$ktor_version")
+
     implementation("org.apache.ratis:ratis:$ratis_version")
     implementation("org.apache.ratis:ratis-proto:$ratis_version")
     implementation("org.apache.ratis:ratis-grpc:$ratis_version")
@@ -75,6 +79,6 @@ tasks.test {
 
 tasks.withType<Jar> {
     manifest {
-        attributes["Main-Class"] = "com.example.ApplicationKt"
+        attributes["Main-Class"] = "com.github.davenury.ucac.ApplicationKt"
     }
 }

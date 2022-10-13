@@ -2,11 +2,13 @@ package com.github.davenury.ucac.common
 
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
+import com.github.davenury.ucac.meterRegistry
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import kotlin.random.Random
 
 fun Application.commonRouting(
     gpacProtocol: GPACProtocol,
@@ -26,7 +28,7 @@ fun Application.commonRouting(
             consensusProtocol.proposeChange(change)
             call.respond(HttpStatusCode.OK)
         }
-
+        
         get("/consensus/changes") {
             call.respond(Changes(consensusProtocol.getState() ?: listOf()))
         }
@@ -34,6 +36,7 @@ fun Application.commonRouting(
         get("/consensus/change") {
             call.respond(consensusProtocol.getState()?.lastOrNull() ?: HttpStatusCode.BadRequest)
         }
+
     }
 
 }

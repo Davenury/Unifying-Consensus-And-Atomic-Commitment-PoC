@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "peer1-from-peerset1-deployment" # TODO sth like peer_n_from_peerset_k_deployment
+  namespace: "tryout"
+spec:
+  selector:
+    matchLabels:
+      peerId: "1"
+      peersetId: "1"
+  replicas: 1
+  template:
+    metadata:
+      name: "peer1-from-peerset1" # TODO
+      labels: 
+        peerId: "1"
+        peersetId: "1"
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/_meta/metrics'
+        prometheus.io/port: '8080'
+    spec:
+      containers:
+        - name: "peer1-from-peerset1" # TODO - sth like peer_n_from_peerset_k
+          image: davenury/ucac
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: peer-config

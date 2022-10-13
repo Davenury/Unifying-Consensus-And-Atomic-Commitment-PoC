@@ -18,9 +18,13 @@ import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
+import io.ktor.metrics.micrometer.*
 import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
+import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
+import io.micrometer.core.instrument.binder.system.ProcessorMetrics
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -37,7 +41,7 @@ fun createApplication(
     args: Array<String>,
     signalListeners: Map<Signal, SignalListener> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
-    mode: ApplicationMode = LocalDevelopmentApplicationMode(args)
+    mode: ApplicationMode = determineApplicationMode(args)
 ): Application {
     return Application(signalListeners, configOverrides, mode)
 }
@@ -56,6 +60,7 @@ class Application constructor(
     private lateinit var gpacProtocol: GPACProtocol
 
     init {
+
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
 //            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
@@ -70,7 +75,7 @@ class Application constructor(
                 mode.peersetId,
                 mode.host,
                 ctx,
-                mode.otherPeers.getOrElse(mode.peersetId) { listOf() },
+                mode.otherPeers.getOrElse(mode.peersetId - 1) { listOf() },
                 signalPublisher,
                 raftProtocolClientImpl,
                 config.raft.heartbeatTimeout,
@@ -83,7 +88,7 @@ class Application constructor(
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
-            val myAddress = config.peers.peersAddresses[mode.peersetId - 1][mode.nodeId - 1]
+            val myAddress = "${mode.host}:${mode.port}"
             gpacProtocol =
                 GPACProtocolImpl(
                     historyManagement,
@@ -92,7 +97,7 @@ class Application constructor(
                     protocolClient,
                     transactionBlocker,
                     signalPublisher,
-                    allPeers = config.peers.peersAddresses.withIndex().associate { it.index + 1 to it.value.filterNot { it == myAddress } },
+                    allPeers = mode.otherPeers.withIndex().associate { it.index + 1 to it.value },
                     myPeersetId = mode.peersetId,
                     myNodeId = mode.nodeId,
                     myAddress = myAddress
@@ -100,6 +105,15 @@ class Application constructor(
 
             install(ContentNegotiation) {
                 register(ContentType.Application.Json, JacksonConverter(objectMapper))
+            }
+
+            install(MicrometerMetrics) {
+                registry = meterRegistry
+                meterBinders = listOf(
+                    JvmMemoryMetrics(),
+                    JvmGcMetrics(),
+                    ProcessorMetrics()
+                )
             }
 
 
@@ -181,6 +195,8 @@ class Application constructor(
                     )
                 }
             }
+
+            metaRouting()
 
             commonRouting(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
             historyManagementRouting(historyManagement)

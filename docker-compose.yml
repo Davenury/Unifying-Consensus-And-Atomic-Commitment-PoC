@@ -1,4 +1,5 @@
 version: "3.3"
+
 services:
   _image_build:
     image: poc
@@ -18,6 +19,7 @@ services:
       - RAFT_NODE_ID=1
       - PEERSET_ID=1
       - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
   peer2:
     image: poc
     depends_on:
@@ -29,6 +31,7 @@ services:
       - RAFT_NODE_ID=2
       - PEERSET_ID=1
       - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
   peer3:
     image: poc
     depends_on:
@@ -40,6 +43,7 @@ services:
       - RAFT_NODE_ID=3
       - PEERSET_ID=1
       - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
   peer4:
     image: poc
     depends_on:
@@ -51,6 +55,7 @@ services:
       - RAFT_NODE_ID=1
       - PEERSET_ID=2
       - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
   peer5:
     image: poc
     depends_on:
@@ -62,6 +67,7 @@ services:
       - RAFT_NODE_ID=2
       - PEERSET_ID=2
       - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"
   peer6:
     image: poc
     depends_on:
@@ -73,3 +79,4 @@ services:
       - RAFT_NODE_ID=3
       - PEERSET_ID=2
       - CONFIG_FILE=application-compose.conf
+      - application_environment = "docker_compose"

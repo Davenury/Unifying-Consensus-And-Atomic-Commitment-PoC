@@ -6,7 +6,7 @@ import com.sksamuel.hoplite.MapPropertySource
 import com.sksamuel.hoplite.addResourceSource
 import java.time.Duration
 
-data class Config(val raft: RaftConfig, val peers: PeersConfig, val protocol: ProtocolConfig)
+data class Config(val raft: RaftConfig, val peers: PeersConfig, val protocol: ProtocolConfig, val applicationEnv: String?)
 data class PeersConfig(val peersAddresses: List<List<String>>, val maxLeaderElectionTries: Int)
 data class RaftConfig(
     val server: ServerConfig,
@@ -24,10 +24,13 @@ fun loadConfig(overrides: Map<String, Any> = emptyMap()): Config {
     val configFile = System.getProperty("configFile")
         ?: System.getenv("CONFIG_FILE")
         ?: "application.conf"
-    return ConfigLoaderBuilder
+    return loadConfig(configFile, overrides)
+}
+
+fun loadConfig(configFileName: String, overrides: Map<String, Any> = emptyMap()): Config =
+    ConfigLoaderBuilder
         .default()
         .addSource(MapPropertySource(overrides))
-        .addResourceSource("/$configFile")
+        .addResourceSource("/$configFileName")
         .build()
         .loadConfigOrThrow()
-}
