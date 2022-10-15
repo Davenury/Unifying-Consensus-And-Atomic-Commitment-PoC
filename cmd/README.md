@@ -34,7 +34,7 @@ where `tryout` is the namespace where everything was deployed.
 Deploy command will create all necessary k8s resources for system to work.
 Flags:
 * -n / --namespace - namespace to deploy system to
-* --create-namespace - determines if namespace should be created (for now it's throwing "exception" when namespace already exists)
+* --create-namespace - determines if namespace should be created
 * --peers - requires sequence of ints separated by commas. Determines number of peers in peersets. E.g. --peers=2,1,3 means that first peerset will have 2 peers, second peerset - 1 and third peerset will have 3 peers
 
 Pods deployed by this command automatically are scrapped by prometheus.

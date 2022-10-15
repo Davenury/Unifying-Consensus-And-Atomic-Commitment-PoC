@@ -121,6 +121,16 @@ func CreateNamespace(namespaceName string) {
 		panic(err)
 	}
 
+	nsList, err := clientset.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	for _, ns := range nsList.Items {
+		if ns.Name == namespaceName {
+			return
+		}
+	}
+
 	nsSpec := &apiv1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}
 
 	_, err = clientset.CoreV1().Namespaces().Create(context.Background(), nsSpec, metav1.CreateOptions{})
