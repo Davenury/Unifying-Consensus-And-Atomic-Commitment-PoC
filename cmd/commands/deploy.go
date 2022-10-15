@@ -32,9 +32,13 @@ func CreateDeployCommand() *cobra.Command {
 			gpacPeers := fmt.Sprintf("[%s]", GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort, deployNamespace))
 			ratisGroups := make([]string, len(numberOfPeersInPeersets))
 			for i := 0; i < len(numberOfPeersInPeersets); i++ {
-				gpacGroups[i] = uuid.New().String()
+				ratisGroups[i] = uuid.New().String()
 			}
 			ratisGroupsString := strings.Join(ratisGroups[:], ",")
+
+			if deployCreateNamespace {
+				CreateNamespace(deployNamespace)
+			}
 
 			for idx, num := range numberOfPeersInPeersets {
 				for i := 1; i <= num; i++ {
@@ -45,10 +49,6 @@ func CreateDeployCommand() *cobra.Command {
 						PeersetId:      strconv.Itoa(idx + 1),
 						PeersInPeerset: num,
 						PeersetsConfig: numberOfPeersInPeersets,
-					}
-
-					if deployCreateNamespace {
-						CreateNamespace(deployNamespace)
 					}
 
 					deploySinglePeerService(deployNamespace, peerConfig, ratisPort+i)
@@ -103,7 +103,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig PeerConfig) {
 	}
 
 	fmt.Println("Creating deployment...")
-	result, err := deploymentClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
+	result, err := deploymentClient.Create(context.Background(), deployment, metav1.CreateOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -186,7 +186,7 @@ func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig, ratisPee
 		},
 	}
 
-	clientset.CoreV1().ConfigMaps(namespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+	clientset.CoreV1().ConfigMaps(namespace).Create(context.Background(), configMap, metav1.CreateOptions{})
 }
 
 func deploySinglePeerService(namespace string, peerConfig PeerConfig, currentRatisPort int) {
@@ -222,5 +222,5 @@ func deploySinglePeerService(namespace string, peerConfig PeerConfig, currentRat
 		},
 	}
 
-	clientset.CoreV1().Services(namespace).Create(context.TODO(), service, metav1.CreateOptions{})
+	clientset.CoreV1().Services(namespace).Create(context.Background(), service, metav1.CreateOptions{})
 }

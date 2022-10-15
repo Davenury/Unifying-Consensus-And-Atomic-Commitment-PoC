@@ -83,7 +83,7 @@ func ServiceAddress(peerConfig PeerConfig, namespace string) string {
 func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool, namespace string) string {
 
 	var resultSb strings.Builder
-	for idx, peersNumber := range numberOfPeersInPeersets {
+	for idx, peersNumber := range peersInPeerset {
 		var sb strings.Builder
 
 		for i := 1; i <= peersNumber; i++ {
@@ -92,9 +92,8 @@ func generateServicesForPeers(peersInPeerset []int, startPort int, increment boo
 				port = port + i
 			}
 			sb.WriteString(fmt.Sprintf("\"%s:%d\",", ServiceAddress(PeerConfig{
-				PeerId:         strconv.Itoa(i),
-				PeersetId:      strconv.Itoa(idx + 1),
-				PeersInPeerset: peersInPeerset,
+				PeerId:    strconv.Itoa(i),
+				PeersetId: strconv.Itoa(idx + 1),
 			}, namespace), port))
 		}
 

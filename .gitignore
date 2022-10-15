@@ -37,3 +37,6 @@ out/
 
 [0-9]*
 history-*
+
+cmd/main
+cmd/ucac

@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: "peer1-from-peerset1-deployment" # TODO sth like peer_n_from_peerset_k_deployment
+  name: "peer1-from-peerset1-deployment"
   namespace: "tryout"
 spec:
   selector:
@@ -11,7 +11,7 @@ spec:
   replicas: 1
   template:
     metadata:
-      name: "peer1-from-peerset1" # TODO
+      name: "peer1-from-peerset1"
       labels: 
         peerId: "1"
         peersetId: "1"
@@ -21,7 +21,7 @@ spec:
         prometheus.io/port: '8080'
     spec:
       containers:
-        - name: "peer1-from-peerset1" # TODO - sth like peer_n_from_peerset_k
+        - name: "peer1-from-peerset1"
           image: davenury/ucac
           ports:
             - containerPort: 8080

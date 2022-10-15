@@ -1,13 +1,11 @@
 package commands
 
 import (
-
 	"context"
 	"github.com/spf13/cobra"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-
 )
 
 var cleanupNamespace string
@@ -15,7 +13,7 @@ var cleanupNamespace string
 func CreateCleanupCommand() *cobra.Command {
 
 	var cmd = &cobra.Command{
-		Use: "cleanup",
+		Use:   "cleanup",
 		Short: "Cleanups deployment",
 		Run: func(cmd *cobra.Command, args []string) {
 
@@ -36,13 +34,13 @@ func CreateCleanupCommand() *cobra.Command {
 }
 
 func deleteDeployments(clientset *kubernetes.Clientset, namespace string) {
-	clientset.AppsV1().Deployments(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{
+	clientset.AppsV1().Deployments(namespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
 		LabelSelector: "project=ucac",
 	})
 }
 
 func deleteConfigMaps(clientset *kubernetes.Clientset, namespace string) {
-	clientset.CoreV1().ConfigMaps(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{
+	clientset.CoreV1().ConfigMaps(namespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
 		LabelSelector: "project=ucac",
 	})
 }
@@ -50,12 +48,12 @@ func deleteConfigMaps(clientset *kubernetes.Clientset, namespace string) {
 func deleteService(clientset *kubernetes.Clientset, namespace string) {
 
 	serviceClient := clientset.CoreV1().Services(namespace)
-	services, _ := serviceClient.List(context.TODO(), metav1.ListOptions{
+	services, _ := serviceClient.List(context.Background(), metav1.ListOptions{
 		LabelSelector: "project=ucac",
 	})
 
 	for _, service := range services.Items {
-		serviceClient.Delete(context.TODO(), service.ObjectMeta.Name, metav1.DeleteOptions{})
+		serviceClient.Delete(context.Background(), service.ObjectMeta.Name, metav1.DeleteOptions{})
 	}
 
 }
