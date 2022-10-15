@@ -32,11 +32,10 @@ class RaftConsensusProtocolImpl(
     private val heartbeatDelay: Duration = Duration.ofMillis(500)
 ) : ConsensusProtocol<Change, History>, RaftConsensusProtocol, SignalSubject {
 
-//    TODO: Add map peerIdToUrl
-
+    //    TODO: Add map peerIdToUrl
     private var currentTerm: Int = 0
-    private val peerUrlToNextIndex: MutableMap<String, PeerIndexes> = mutableMapOf()
-    private val ledgerIndexToMatchIndex: MutableMap<Int, Int> = mutableMapOf()
+    private val peerUrlToNextIndex: MutableMap<String, PeerIndices> = mutableMapOf()
+    private val ledgerIndexToAcceptedNumber: ChangesLedger = ChangesLedger()
     private var votedFor: VotedFor? = null
     private var state: Ledger = Ledger()
 
@@ -44,9 +43,8 @@ class RaftConsensusProtocolImpl(
     private var role: RaftRole = RaftRole.Candidate
     private var timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofSeconds(2), ctx)
 
-    //    TODO: Use only one mutex
-    private val leaderMutex = Mutex()
-    private val ledgerMutex = Mutex()
+    //    DONE: Use only one mutex
+    private val mutex = Mutex()
 
     private var executorService: ExecutorCoroutineDispatcher =
         Executors.newSingleThreadExecutor().asCoroutineDispatcher()
@@ -68,7 +66,7 @@ class RaftConsensusProtocolImpl(
     private suspend fun sendLeaderRequest() {
         logger.info("Peer $peerId try to become leader in term $currentTerm")
         signalPublisher.signal(Signal.ConsensusTryToBecomeLeader, this, listOf(consensusPeers), null)
-        leaderMutex.withLock {
+        mutex.withLock {
             currentTerm += 1
             role = RaftRole.Candidate
             votedFor = VotedFor(peerId, peerAddress)
@@ -89,7 +87,7 @@ class RaftConsensusProtocolImpl(
 
 //      TODO: ConsensusPeers should include yourself
         if (!isMoreThanHalf(positiveResponses) || consensusPeers.isEmpty()) {
-            leaderMutex.withLock {
+            mutex.withLock {
                 if (role == RaftRole.Candidate) {
                     role = RaftRole.Follower
                     votedFor = null
@@ -110,12 +108,12 @@ class RaftConsensusProtocolImpl(
 
         logger.info("Affirmations responses: $leaderAffirmationReactions")
 
-        leaderMutex.withLock {
+        mutex.withLock {
             role = RaftRole.Leader
         }
 
         peerUrlToNextIndex.keys.forEach {
-            peerUrlToNextIndex.replace(it, PeerIndexes(state.lastApplied, state.lastApplied))
+            peerUrlToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
         }
 
         scheduleHeartbeatToPeers()
@@ -123,7 +121,7 @@ class RaftConsensusProtocolImpl(
 
 
     override suspend fun handleRequestVote(peerId: Int, iteration: Int, lastLogIndex: Int): ConsensusElectedYou {
-        leaderMutex.lock()
+        mutex.lock()
         try {
             logger.info("${this.peerId}/-/${this.peerAddress} - handleRequestVote - ($peerId,$iteration,$lastLogIndex) ($currentTerm,${state.lastApplied})")
             if (amILeader() || iteration <= currentTerm || lastLogIndex < state.lastApplied) {
@@ -131,7 +129,7 @@ class RaftConsensusProtocolImpl(
             }
             currentTerm = iteration
         } finally {
-            leaderMutex.unlock()
+            mutex.unlock()
         }
         restartTimer()
         return ConsensusElectedYou(this.peerId, currentTerm, true)
@@ -143,8 +141,8 @@ class RaftConsensusProtocolImpl(
             return
         }
         logger.info("${this.peerId} - Leader Elected! Is $peerId $peerAddress")
-        leaderMutex.withLock {
-            votedFor = VotedFor(peerId, peerAddress)
+        mutex.withLock {
+            votedFor = VotedFor(peerId, peerAddress, true)
 //          TODO: Check if stop() function make sure if you need to wait to all job finish
             if (role == RaftRole.Leader) stop()
             role = RaftRole.Follower
@@ -176,11 +174,11 @@ class RaftConsensusProtocolImpl(
         }
         val anyAcceptedChange: Boolean
 
-        ledgerMutex.lock()
+        mutex.lock()
         try {
             anyAcceptedChange = state.updateLedger(acceptedChanges, proposedChanges)
         } finally {
-            ledgerMutex.unlock()
+            mutex.unlock()
         }
         if (anyAcceptedChange) signalPublisher.signal(
             Signal.ConsensusFollowerChangeAccepted,
@@ -211,8 +209,13 @@ class RaftConsensusProtocolImpl(
         this.peerAddress = address
     }
 
-//    TODO: It should return null if votedFor haven't yet became leader
-    override fun getLeaderAddress(): String? = votedFor?.address
+    //    DONE: It should return null if votedFor haven't yet became leader
+    override fun getLeaderAddress(): String? = if (votedFor != null && votedFor!!.elected) {
+        votedFor!!.address
+    } else {
+        null
+    }
+
     override fun getProposedChanges(): List<Change> = state.getProposedChanges()
     override fun getAcceptedChanges(): List<Change> = state.getAcceptedChanges()
 
@@ -230,10 +233,10 @@ class RaftConsensusProtocolImpl(
 
             response.message.term <= currentTerm -> {
                 val oldValues = peerUrlToNextIndex[peerUrl]
-//                TODO: Add decrement method for PeerIndices
+//                Done: Add decrement method for PeerIndices
                 peerUrlToNextIndex[peerUrl] = oldValues
-                    ?.let { PeerIndexes(it.acceptedIndex - 1, it.acceptedIndex - 1) }
-                    ?: PeerIndexes()
+                    ?.decrement()
+                    ?: PeerIndices()
             }
 
             response.message.term > currentTerm -> stopBeingLeader(response.message.term)
@@ -263,8 +266,8 @@ class RaftConsensusProtocolImpl(
         needUpdatesResponses.map { (peerUrl, heartbeatResponse) ->
             val oldValues = peerUrlToNextIndex[peerUrl]
             peerUrlToNextIndex[peerUrl] = oldValues
-                ?.let { PeerIndexes(it.acceptedIndex - 1, it.acceptedIndex - 1) }
-                ?: PeerIndexes()
+                ?.let { PeerIndices(it.acceptedIndex - 1, it.acceptedIndex - 1) }
+                ?: PeerIndices()
         }
 
         applyAcceptedChanges()
@@ -278,16 +281,12 @@ class RaftConsensusProtocolImpl(
     }
 
     private fun applyAcceptedChanges() {
-//      TODO: change name of ledgerIndexToMatchIndex
-        val acceptedIndexes: List<Int> = ledgerIndexToMatchIndex
-            .filter { (_, value) ->
-                isMoreThanHalf(value)
-            }
-            .map { it.key }
+//      DONE: change name of ledgerIndexToMatchIndex
+        val acceptedIndexes: List<Int> = ledgerIndexToAcceptedNumber.getAcceptedIndexes { isMoreThanHalf(it) }
 
         logger.info("$peerId accept indexes: $acceptedIndexes")
         state.acceptItems(acceptedIndexes)
-        acceptedIndexes.forEach { ledgerIndexToMatchIndex.remove(it) }
+        ledgerIndexToAcceptedNumber.removeIndexes(acceptedIndexes)
     }
 
     private suspend fun stopBeingLeader(newTerm: Int) {
@@ -299,34 +298,33 @@ class RaftConsensusProtocolImpl(
 
 
     private fun handleSuccessHeartbeatResponseFromPeer(peerUrl: String) {
-        val peerIndexes = peerUrlToNextIndex.getOrDefault(peerUrl, PeerIndexes())
-        val newAcceptedChanges = state.getNewAcceptedItems(peerIndexes.acceptedIndex)
-        val newProposedChanges = state.getNewProposedItems(peerIndexes.acknowledgedIndex)
+        val peerIndices = peerUrlToNextIndex.getOrDefault(peerUrl, PeerIndices())
+        val newAcceptedChanges = state.getNewAcceptedItems(peerIndices.acceptedIndex)
+        val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedIndex)
 
         if (newProposedChanges.isNotEmpty()) {
             newProposedChanges.forEach {
-//              TODO: increment number of peers which accept this ledgerIndex
-                ledgerIndexToMatchIndex[it.ledgerIndex] =
-                    ledgerIndexToMatchIndex.getOrDefault(it.ledgerIndex, 0) + 1
+//              Done: increment number of peers which accept this ledgerIndex
+                ledgerIndexToAcceptedNumber.incrementKey(it.ledgerIndex)
             }
             peerUrlToNextIndex[peerUrl] =
-                peerIndexes.copy(acknowledgedIndex = newProposedChanges.maxOf { it.ledgerIndex })
+                peerIndices.copy(acknowledgedIndex = newProposedChanges.maxOf { it.ledgerIndex })
         }
 
         if (newAcceptedChanges.isNotEmpty()) {
-            val newPeerIndexes = peerUrlToNextIndex.getOrDefault(peerUrl, PeerIndexes())
+            val newPeerIndices = peerUrlToNextIndex.getOrDefault(peerUrl, PeerIndices())
             peerUrlToNextIndex[peerUrl] =
-                newPeerIndexes.copy(acceptedIndex = newAcceptedChanges.maxOf { it.ledgerIndex })
+                newPeerIndices.copy(acceptedIndex = newAcceptedChanges.maxOf { it.ledgerIndex })
         }
 
         applyAcceptedChanges()
     }
 
     private fun getMessageForPeer(peerUrl: String): ConsensusHeartbeat {
-        val peerIndexes = peerUrlToNextIndex.getOrDefault(peerUrl, PeerIndexes())
-        val newAcceptedChanges = state.getNewAcceptedItems(peerIndexes.acceptedIndex)
-        val newProposedChanges = state.getNewProposedItems(peerIndexes.acknowledgedIndex)
-        val lastAppliedChangeIdAndTerm = state.getLastAppliedChangeIdAndTermBeforeIndex(peerIndexes.acceptedIndex)
+        val peerIndices = peerUrlToNextIndex.getOrDefault(peerUrl, PeerIndices())
+        val newAcceptedChanges = state.getNewAcceptedItems(peerIndices.acceptedIndex)
+        val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedIndex)
+        val lastAppliedChangeIdAndTerm = state.getLastAppliedChangeIdAndTermBeforeIndex(peerIndices.acceptedIndex)
 
         return ConsensusHeartbeat(
             peerId,
@@ -363,8 +361,6 @@ class RaftConsensusProtocolImpl(
     }
 
     //  TODO: sync change will have to use Condition/wait/notifyAll
-
-    //  TODO: sync change will have to use Condition/wait/notifyAll
     private suspend fun proposeChangeToLedger(changeWithAcceptNum: Change): ConsensusResult {
 
 //      TODO: it will be changed
@@ -375,7 +371,7 @@ class RaftConsensusProtocolImpl(
         logger.info("Propose change to ledger: $changeWithAcceptNum")
         val id = state.proposeChange(changeWithAcceptNum, currentTerm)
 
-        ledgerIndexToMatchIndex[id] = 0
+        ledgerIndexToAcceptedNumber.initializeKey(id)
 //      Propose change
         sendHeartbeat()
         signalPublisher.signal(Signal.ConsensusAfterProposingChange, this, listOf(consensusPeers), null)
@@ -404,7 +400,7 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: Change): ConsensusResult {
         val id = state.proposeChange(changeWithAcceptNum, currentTerm)
-        ledgerIndexToMatchIndex[id] = 0
+        ledgerIndexToAcceptedNumber.initializeKey(id)
         timer.startCounting {
             logger.info("$peerId - change was proposed a no leader is elected")
             sendLeaderRequest()
@@ -416,7 +412,7 @@ class RaftConsensusProtocolImpl(
     override suspend fun proposeChange(change: Change): ConsensusResult {
         logger.info("$peerId received change: $change")
 
-        leaderMutex.lock()
+        mutex.lock()
         try {
             return when {
                 amILeader() -> proposeChangeToLedger(change)
@@ -425,7 +421,7 @@ class RaftConsensusProtocolImpl(
                 else -> tryToProposeChangeMyself(change)
             }
         } finally {
-            leaderMutex.unlock()
+            mutex.unlock()
         }
     }
 
@@ -470,7 +466,8 @@ class RaftConsensusProtocolImpl(
 
 }
 
-data class PeerIndexes(val acceptedIndex: Int = -1, val acknowledgedIndex: Int = -1)
+data class PeerIndices(val acceptedIndex: Int = -1, val acknowledgedIndex: Int = -1) {
+    public fun decrement(): PeerIndices = PeerIndices(acceptedIndex - 1, acceptedIndex - 1)
+}
 
-// TODO: add information if it became a leader
-data class VotedFor(val id: Int, val address: String)
+data class VotedFor(val id: Int, val address: String, val elected: Boolean = false)
