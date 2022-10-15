@@ -173,7 +173,7 @@ class MultiplePeersetSpec {
 
         val appsToExclude = listOf(3, 7, 8)
         val apps = TestApplicationSet(2, listOf(3, 5), appsToExclude = appsToExclude,
-            signalListeners =  (0..8).associateWith { signalListenersForCohort })
+            signalListeners = (0..8).associateWith { signalListenersForCohort })
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
 
@@ -374,10 +374,11 @@ class MultiplePeersetSpec {
 
             // waiting for consensus to propagate change is waste of time and fails CI
             peers.flatten()
-                .map { askForChanges("http://$it") }
-                .let {
-                    expectThat(it?.size!!).isGreaterThanOrEqualTo(1)
-                    expectThat(it[0]).isEqualTo(change(otherPeer))
+                .forEach {
+                    askForChanges("http://$it").let {
+                        expectThat(it.size).isGreaterThanOrEqualTo(1)
+                        expectThat(it[0]).isEqualTo(change(otherPeer) as Change)
+                    }
                 }
 
             apps.stopApps()

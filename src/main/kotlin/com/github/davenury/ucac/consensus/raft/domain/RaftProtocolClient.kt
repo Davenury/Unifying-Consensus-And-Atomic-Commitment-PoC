@@ -62,6 +62,7 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
             val result = try {
                 it.second.await()
             } catch (e: Exception) {
+                e.printStackTrace()
                 logger.error("$id - Error while evaluating response from ${it.first}: $e")
                 null
             }
@@ -82,6 +83,7 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
             val result = try {
                 it.second.await()
             } catch (e: Exception) {
+                e.printStackTrace()
                 logger.error("$id - Error while evaluating response from ${it.first}: $e")
                 null
             }

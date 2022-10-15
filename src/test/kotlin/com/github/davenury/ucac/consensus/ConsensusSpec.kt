@@ -224,7 +224,7 @@ class ConsensusSpec {
     }
 
 
-//    TODO: Exactly half of peers is running
+    //    TODO: Exactly half of peers is running
     @Test
     fun `less than half peers failed`(): Unit = runBlocking {
         val peersWithoutLeader = 3
@@ -469,7 +469,6 @@ class ConsensusSpec {
     @Test
     fun `network divide on half and then merge`(): Unit = runBlocking {
         val testName = "network divide on half and then merge"
-        val resultChange = AddUserChange(testName, listOf())
         var peersWithoutLeader = 4
 
         var isNetworkDivided = false

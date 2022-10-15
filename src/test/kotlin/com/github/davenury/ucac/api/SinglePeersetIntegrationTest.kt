@@ -141,12 +141,12 @@ class SinglePeersetIntegrationTest {
 
             phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
 
-            val response = testHttpClient.get<String>("http://${peers[0][2]}/change") {
+            val response = testHttpClient.get<Change>("http://${peers[0][2]}/change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }
 
-            expectThat(change).isEqualTo(change(listOf(peers[0][0])))
+            expectThat(response).isEqualTo(change(listOf(peers[0][0])))
 
             apps.stopApps()
         }
