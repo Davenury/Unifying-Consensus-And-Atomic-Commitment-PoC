@@ -57,7 +57,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         crossinline errorMessage: (String, Throwable) -> String,
         crossinline aggregateErrors: (accs: List<Int>) -> Int = { _: List<Int> -> 0 }
     ): ResponsesWithErrorAggregation<K> {
-        val acc = mutableListOf<Int>()
+        val acc = mutableListOf<Int?>()
         val responses: List<List<K>> = otherPeers.map { peersets ->
             peersets.map {
                 CoroutineScope(Dispatchers.IO).async {
@@ -81,7 +81,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
 
         return ResponsesWithErrorAggregation(
             responses,
-            aggregateErrors(acc)
+            aggregateErrors(acc.filterNotNull())
         )
     }
 

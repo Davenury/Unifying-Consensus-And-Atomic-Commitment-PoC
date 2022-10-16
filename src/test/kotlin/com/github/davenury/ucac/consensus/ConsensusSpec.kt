@@ -4,26 +4,23 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.AddUserChange
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.Changes
+import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.request.*
 import io.ktor.http.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInfo
 import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.assertions.*
+import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -54,7 +51,7 @@ class ConsensusSpec {
         val peersWithoutLeader = 4
 
 
-//      TODO: Change to one phaser with use of advance
+//      TODO: Change to one phaser with use of advance -> will be done in next PR
         val electionPhaser = Phaser(peersWithoutLeader)
         val change1Phaser = Phaser(peersWithoutLeader)
         val change2Phaser = Phaser(peersWithoutLeader)
@@ -143,8 +140,8 @@ class ConsensusSpec {
             expect {
                 val leaderAddress = askForLeaderAddress(it)
                 val selfAddress = "localhost:${it.getBoundPort()}"
-//              TODO  it should always be noneLeader
-                that(leaderAddress).isContainedIn(listOf(noneLeader, selfAddress))
+//              DONE  it should always be noneLeader
+                that(leaderAddress).isEqualTo(noneLeader)
             }
         }
 
@@ -224,7 +221,6 @@ class ConsensusSpec {
     }
 
 
-    //    TODO: Exactly half of peers is running
     @Test
     fun `less than half peers failed`(): Unit = runBlocking {
         val peersWithoutLeader = 3
@@ -261,6 +257,54 @@ class ConsensusSpec {
                 askForLeaderAddress(apps.first())
             that(secondLeaderAddress).isNotEqualTo(noneLeader)
             that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress)
+        }
+
+        peerset.stopApps()
+    }
+
+    //    DONE: Exactly half of peers is running
+    @Test
+    fun `exactly half of peers is failed`(): Unit = runBlocking {
+        val peersWithoutLeader = 3
+        val activePeers = 3
+        val triesToBecomeLeader = 3
+
+        val electionPhaser = Phaser(peersWithoutLeader)
+        val tryToBecomeLeaderPhaser = Phaser(activePeers * triesToBecomeLeader)
+
+        listOf(electionPhaser, tryToBecomeLeaderPhaser).forEach { it.register() }
+
+        val peerTryToBecomeLeader = SignalListener { tryToBecomeLeaderPhaser.arrive() }
+
+
+        val peerLeaderElected = SignalListener { electionPhaser.arrive() }
+
+        val signalListener = mapOf(
+            Signal.ConsensusLeaderElected to peerLeaderElected,
+            Signal.ConsensusTryToBecomeLeader to peerTryToBecomeLeader,
+        )
+        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..6).associateWith { signalListener }
+
+        val peerset = TestApplicationSet(1, listOf(6), appsToExclude = listOf(5, 6), signalListeners = signalListeners)
+        var apps = peerset.getRunningApps()
+
+        awaitAdvanceInterruptiblyPhaser(electionPhaser)
+
+        val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
+        val firstLeaderApplication = triple.third
+        val firstLeaderPort = triple.second
+        val firstLeaderAddress = triple.first
+
+        firstLeaderApplication.stop(0, 0)
+
+        apps = apps.filter { it != firstLeaderApplication }
+
+        awaitAdvanceInterruptiblyPhaser(tryToBecomeLeaderPhaser, 20)
+
+        expect {
+            val secondLeaderAddress = askForLeaderAddress(apps.first())
+            that(secondLeaderAddress).isEqualTo(noneLeader)
+
         }
 
         peerset.stopApps()
@@ -598,6 +642,51 @@ class ConsensusSpec {
         peerset.stopApps()
     }
 
+    @Test
+    fun `unit tests of isMoreThanHalf() function`(): Unit = runBlocking {
+        val listOfPeers = mutableListOf("2", "3")
+
+        val initializeConsensusProtocol = { otherPeers: List<String> ->
+            RaftConsensusProtocolImpl(
+                0,
+                0,
+                "1",
+                Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
+                otherPeers,
+                protocolClient = RaftProtocolClientImpl(0)
+            )
+        }
+
+        val consensus = initializeConsensusProtocol(listOfPeers)
+        expectThat(consensus.isMoreThanHalf(0)).isFalse()
+        expectThat(consensus.isMoreThanHalf(1)).isTrue()
+        expectThat(consensus.isMoreThanHalf(2)).isTrue()
+
+        listOfPeers.add("4")
+        consensus.setOtherPeers(listOfPeers)
+        expectThat(consensus.isMoreThanHalf(0)).isFalse()
+        expectThat(consensus.isMoreThanHalf(1)).isFalse()
+        expectThat(consensus.isMoreThanHalf(2)).isTrue()
+        expectThat(consensus.isMoreThanHalf(3)).isTrue()
+
+        listOfPeers.add("5")
+        consensus.setOtherPeers(listOfPeers)
+        expectThat(consensus.isMoreThanHalf(0)).isFalse()
+        expectThat(consensus.isMoreThanHalf(1)).isFalse()
+        expectThat(consensus.isMoreThanHalf(2)).isTrue()
+        expectThat(consensus.isMoreThanHalf(3)).isTrue()
+        expectThat(consensus.isMoreThanHalf(4)).isTrue()
+
+        listOfPeers.add("6")
+        consensus.setOtherPeers(listOfPeers)
+        expectThat(consensus.isMoreThanHalf(0)).isFalse()
+        expectThat(consensus.isMoreThanHalf(1)).isFalse()
+        expectThat(consensus.isMoreThanHalf(2)).isFalse()
+        expectThat(consensus.isMoreThanHalf(3)).isTrue()
+        expectThat(consensus.isMoreThanHalf(4)).isTrue()
+        expectThat(consensus.isMoreThanHalf(5)).isTrue()
+    }
+
     private fun createChange(
         acceptNum: Int?,
         peers: List<String> = listOf(),
@@ -670,9 +759,10 @@ class ConsensusSpec {
         app.setPeers(mapOf(1 to newPeers), "127.0.0.1")
     }
 
-    private suspend fun awaitAdvanceInterruptiblyPhaser(phaser: Phaser) = withContext(Dispatchers.IO) {
-        phaser.awaitAdvanceInterruptibly(phaser.arrive(), 15, TimeUnit.SECONDS)
-    }
+    private suspend fun awaitAdvanceInterruptiblyPhaser(phaser: Phaser, secondsTimeout: Long = 15) =
+        withContext(Dispatchers.IO) {
+            phaser.awaitAdvanceInterruptibly(phaser.arrive(), secondsTimeout, TimeUnit.SECONDS)
+        }
 
 
 }

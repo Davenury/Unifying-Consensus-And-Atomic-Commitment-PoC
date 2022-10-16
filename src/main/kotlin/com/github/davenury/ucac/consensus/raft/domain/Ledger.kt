@@ -48,6 +48,8 @@ data class Ledger(
     fun getHistory(): History {
         // TODO why proposed??
         val h = History()
+        val allChanges = (acceptedItems + proposedItems)
+        println("Sizes: ${allChanges.size} /-/ ${allChanges.toSet().size}")
         acceptedItems.forEach { h.addEntry(it.change.toHistoryEntry()) }
         proposedItems.forEach { h.addEntry(it.change.toHistoryEntry()) }
         return h
@@ -74,7 +76,22 @@ data class Ledger(
             ?: Pair(null, null)
 
     fun changeAlreadyProposed(change: Change): Boolean =
-        (acceptedItems + proposedItems).any { it.change == change }
+        (acceptedItems + proposedItems)
+            .also {
+                println(
+                    """Check if change (${
+                        change.toHistoryEntry().getId()
+                    }) exists by 
+                    change: ${it.any { it.change == change }} 
+                    history: ${it.any { it.change.toHistoryEntry() == change.toHistoryEntry() }} 
+                    historyId: ${
+                        it.any {
+                            it.change.toHistoryEntry().getId() == change.toHistoryEntry().getId()
+                        }
+                    }"""
+                )
+            }
+            .any { it.change.toHistoryEntry() == change.toHistoryEntry() }
 
 
     private fun List<LedgerItem>.maxOrDefault(defaultValue: Int): Int =
@@ -86,9 +103,9 @@ data class Ledger(
 }
 
 data class LedgerItemDto(val ledgerIndex: Int, val term: Int, val change: Change) {
-    fun toLedgerItem(): LedgerItem = LedgerItem(ledgerIndex,term, change)
+    fun toLedgerItem(): LedgerItem = LedgerItem(ledgerIndex, term, change)
 }
 
 data class LedgerItem(val ledgerIndex: Int, val term: Int, val change: Change) {
-    fun toDto(): LedgerItemDto = LedgerItemDto(ledgerIndex,term, change)
+    fun toDto(): LedgerItemDto = LedgerItemDto(ledgerIndex, term, change)
 }
