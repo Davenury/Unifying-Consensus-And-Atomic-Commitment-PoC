@@ -56,20 +56,18 @@ class Application constructor(
     private val peerConstants: RaftConfiguration = RaftConfiguration(mode.peersetId, configOverrides)
     private val engine: NettyApplicationEngine
     private var raftNode: HistoryRaftNode? = null
-    private lateinit var consensusProtocol: RaftConsensusProtocol
-    private lateinit var ctx: ExecutorCoroutineDispatcher
+    private var consensusProtocol: RaftConsensusProtocol? = null
+    private val ctx: ExecutorCoroutineDispatcher
     private lateinit var gpacProtocol: GPACProtocol
 
     init {
 
+        ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
         engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
-//            raftNode = HistoryRaftNode(mode.nodeId, mode.peersetId, peerConstants)
 
             val signalPublisher = SignalPublisher(signalListeners)
 
-            ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
-
-            val raftProtocolClientImpl = RaftProtocolClientImpl()
+            val raftProtocolClientImpl = RaftProtocolClientImpl(mode.nodeId)
 
             consensusProtocol = RaftConsensusProtocolImpl(
                 mode.nodeId,
@@ -79,11 +77,10 @@ class Application constructor(
                 mode.otherPeers.getOrElse(mode.peersetId - 1) { listOf() },
                 signalPublisher,
                 raftProtocolClientImpl,
-                config.raft.heartbeatTimeout,
-                config.raft.leaderTimeout
+                heartbeatTimeout = config.raft.heartbeatTimeout,
+                heartbeatDelay = config.raft.leaderTimeout
             )
 
-//           val historyManagement = RatisHistoryManagement(raftNode!!)
             val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
 
             val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
@@ -190,6 +187,7 @@ class Application constructor(
                 }
 
                 exception<Throwable> { cause ->
+                    log.error("Throwable has been thrown in Application: ", cause)
                     call.respond(
                         status = HttpStatusCode.InternalServerError,
                         ErrorMessage("UnexpectedError, $cause")
@@ -202,7 +200,7 @@ class Application constructor(
             commonRouting(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
             historyManagementRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
-            consensusProtocolRouting(consensusProtocol)
+            consensusProtocolRouting(consensusProtocol!!)
 
             runBlocking {
                 startConsensusProtocol()
@@ -213,7 +211,7 @@ class Application constructor(
     fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
         gpacProtocol.setPeers(peers)
         gpacProtocol.setMyAddress(myAddress)
-        consensusProtocol.setOtherPeers(peers[mode.peersetId]!!)
+        consensusProtocol?.setOtherPeers(peers[mode.peersetId]!!)
     }
 
     fun startBlocking() {
@@ -221,19 +219,21 @@ class Application constructor(
     }
 
     suspend fun startConsensusProtocol() {
-        consensusProtocol.begin()
+        consensusProtocol?.begin()
     }
 
     fun startNonblocking() {
         engine.start(wait = false)
         val address = "${mode.host}:${getBoundPort()}"
-        consensusProtocol.setPeerAddress(address)
+        consensusProtocol?.setPeerAddress(address)
 
     }
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
+        ctx.close()
         engine.stop(gracePeriodMillis, timeoutMillis)
         raftNode?.close()
+        consensusProtocol?.stop()
     }
 
     fun getBoundPort(): Int {

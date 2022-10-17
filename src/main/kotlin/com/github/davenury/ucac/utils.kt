@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
 
+
 val objectMapper: ObjectMapper =
     jacksonObjectMapper().configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
 val httpClient = HttpClient(OkHttp) {
@@ -19,7 +20,15 @@ val httpClient = HttpClient(OkHttp) {
         serializer = JacksonSerializer(objectMapper)
     }
     install(HttpTimeout) {
-        requestTimeoutMillis = 2000
+        requestTimeoutMillis = 2_000
+    }
+}
+val raftHttpClient = HttpClient(OkHttp) {
+    install(JsonFeature) {
+        serializer = JacksonSerializer(objectMapper)
+    }
+    install(HttpTimeout) {
+        requestTimeoutMillis = 500
     }
 }
 val testHttpClient = HttpClient(OkHttp) {

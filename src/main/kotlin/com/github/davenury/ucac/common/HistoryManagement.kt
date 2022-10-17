@@ -12,6 +12,7 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
                     ConsensusFailure -> HistoryChangeResult.HistoryChangeFailure
                     ConsensusSuccess -> HistoryChangeResult.HistoryChangeSuccess
                     ConsensusResultUnknown -> HistoryChangeResult.HistoryChangeUnknown
+                    ConsensusChangeAlreadyProposed -> HistoryChangeResult.HistoryChangeUnknown
                 }
             }
 

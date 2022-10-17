@@ -22,7 +22,7 @@ interface GPACProtocolClient {
     suspend fun sendApply(otherPeers: List<List<String>>, message: Apply): List<Int>
 }
 
-class GPACProtocolClientImpl :  GPACProtocolClient {
+class GPACProtocolClientImpl : GPACProtocolClient {
 
     override suspend fun sendElectMe(
         otherPeers: List<List<String>>,
@@ -33,7 +33,7 @@ class GPACProtocolClientImpl :  GPACProtocolClient {
             message,
             "elect",
             { singlePeer, e -> "Peer $singlePeer responded with exception: $e - election" },
-            { accs -> accs.maxOf { it } }
+            { accs: List<Int> -> accs.maxOf { it } }
         )
 
     override suspend fun sendFTAgree(otherPeers: List<List<String>>, message: Agree): List<List<Agreed>> =
@@ -57,7 +57,7 @@ class GPACProtocolClientImpl :  GPACProtocolClient {
         crossinline errorMessage: (String, Throwable) -> String,
         crossinline aggregateErrors: (accs: List<Int>) -> Int = { _: List<Int> -> 0 }
     ): ResponsesWithErrorAggregation<K> {
-        val acc = mutableListOf<Int>()
+        val acc = mutableListOf<Int?>()
         val responses: List<List<K>> = otherPeers.map { peersets ->
             peersets.map {
                 CoroutineScope(Dispatchers.IO).async {
@@ -71,7 +71,7 @@ class GPACProtocolClientImpl :  GPACProtocolClient {
                 try {
                     job.await()
                 } catch (e: Exception) {
-                    logger.error("Error while evaluating responses: $e")
+                    logger.error("Error while evaluating responses: $e", e)
                     null
                 }
             }
@@ -80,7 +80,7 @@ class GPACProtocolClientImpl :  GPACProtocolClient {
 
         return ResponsesWithErrorAggregation(
             responses,
-            aggregateErrors(acc)
+            aggregateErrors(acc.filterNotNull())
         )
     }
 
@@ -101,7 +101,7 @@ class GPACProtocolClientImpl :  GPACProtocolClient {
             // since we're updating ballot number in electing phase, this mechanism lets us
             // get any aggregation from all responses from "Not electing you" response, so we can get
             // max of all ballotNumbers sent back to the leader
-            logger.error(errorMessage(url, e))
+            logger.error(errorMessage(url, e), e)
             if (e.response.status.value == 422) {
                 val value = e.response.content.readUTF8Line()?.let {
                     return@let Regex("[0-9]+").findAll(it)
@@ -114,7 +114,7 @@ class GPACProtocolClientImpl :  GPACProtocolClient {
                 Pair(null, 0)
             }
         } catch (e: Exception) {
-            logger.error(errorMessage(url, e))
+            logger.error(errorMessage(url, e), e)
             Pair(null, 0)
         }
 
