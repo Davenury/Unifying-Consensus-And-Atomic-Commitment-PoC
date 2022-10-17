@@ -717,7 +717,7 @@ class ConsensusSpec {
     private suspend fun askForProposedChanges(peer: String) = genericAskForChange("proposed_changes", peer)
     private suspend fun askForAcceptedChanges(peer: String) = genericAskForChange("accepted_changes", peer)
 
-    private fun askForLeaderAddress(app: Application): String? {
+    private suspend fun askForLeaderAddress(app: Application): String? {
         val consensusProperty =
             Application::class.declaredMemberProperties.single { it.name == "consensusProtocol" }
         val consensusOldAccessible = consensusProperty.isAccessible
@@ -730,7 +730,7 @@ class ConsensusSpec {
         }
     }
 
-    private fun getLeaderAddressPortAndApplication(peers: List<Application>): LeaderAddressPortAndApplication {
+    private suspend fun getLeaderAddressPortAndApplication(peers: List<Application>): LeaderAddressPortAndApplication {
         val peerAddresses = getPeerAddresses(peers)
         val address =
             askForLeaderAddress(peers[0])!!

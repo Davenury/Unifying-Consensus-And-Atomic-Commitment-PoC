@@ -78,7 +78,7 @@ class LeaderTest {
             transactionBlocker,
             myPeersetId = 1,
             myNodeId = 0,
-            allPeers = mapOf(1 to listOf("localhost:9092", "localhost:9093")),
+            allPeers = mapOf(1 to listOf("localhost:${PeerTwo.getPort()}", "localhost:${PeerThree.getPort()}")),
             myAddress = "localhost:8081"
         )
     private val changeDto = AddUserChange(InitialHistoryEntry.getId(), "userName", listOf())

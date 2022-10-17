@@ -71,8 +71,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
                 try {
                     job.await()
                 } catch (e: Exception) {
-                    e.printStackTrace()
-                    logger.error("Error while evaluating responses: $e")
+                    logger.error("Error while evaluating responses: $e", e)
                     null
                 }
             }
@@ -102,8 +101,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
             // since we're updating ballot number in electing phase, this mechanism lets us
             // get any aggregation from all responses from "Not electing you" response, so we can get
             // max of all ballotNumbers sent back to the leader
-            e.printStackTrace()
-            logger.error(errorMessage(url, e))
+            logger.error(errorMessage(url, e), e)
             if (e.response.status.value == 422) {
                 val value = e.response.content.readUTF8Line()?.let {
                     return@let Regex("[0-9]+").findAll(it)
@@ -116,8 +114,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
                 Pair(null, 0)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
-            logger.error(errorMessage(url, e))
+            logger.error(errorMessage(url, e), e)
             Pair(null, 0)
         }
 

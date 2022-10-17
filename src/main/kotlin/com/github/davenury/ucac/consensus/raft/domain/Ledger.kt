@@ -48,8 +48,6 @@ data class Ledger(
     fun getHistory(): History {
         // TODO why proposed??
         val h = History()
-        val allChanges = (acceptedItems + proposedItems)
-        println("Sizes: ${allChanges.size} /-/ ${allChanges.toSet().size}")
         acceptedItems.forEach { h.addEntry(it.change.toHistoryEntry()) }
         proposedItems.forEach { h.addEntry(it.change.toHistoryEntry()) }
         return h
@@ -68,29 +66,14 @@ data class Ledger(
         acceptedItems.removeAll { it.ledgerIndex > logIndex || it.term > logTerm }
     }
 
-    fun getLastAppliedChangeIdAndTermBeforeIndex(index: Int): Pair<Int?, Int?> =
+    fun getLastAppliedChangeIdAndTermBeforeIndex(index: Int): Pair<Int, Int>? =
         acceptedItems
             .sortedBy { it.ledgerIndex }
             .lastOrNull { it.ledgerIndex <= index }
             ?.let { Pair(it.ledgerIndex, it.term) }
-            ?: Pair(null, null)
 
     fun changeAlreadyProposed(change: Change): Boolean =
         (acceptedItems + proposedItems)
-            .also {
-                println(
-                    """Check if change (${
-                        change.toHistoryEntry().getId()
-                    }) exists by 
-                    change: ${it.any { it.change == change }} 
-                    history: ${it.any { it.change.toHistoryEntry() == change.toHistoryEntry() }} 
-                    historyId: ${
-                        it.any {
-                            it.change.toHistoryEntry().getId() == change.toHistoryEntry().getId()
-                        }
-                    }"""
-                )
-            }
             .any { it.change.toHistoryEntry() == change.toHistoryEntry() }
 
 

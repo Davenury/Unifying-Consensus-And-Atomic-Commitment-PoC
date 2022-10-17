@@ -1,5 +1,5 @@
 package com.github.davenury.ucac.utils
 
-object PeerTwo : BaseWiremock(9092)
+object PeerTwo : BaseWiremock()
 
-object PeerThree : BaseWiremock(9093)
+object PeerThree : BaseWiremock()

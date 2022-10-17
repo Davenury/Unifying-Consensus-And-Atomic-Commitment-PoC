@@ -113,7 +113,6 @@ abstract class StateMachine<A>(open var state: A) : BaseStateMachine() {
                 loadState(newState)
             }
         } catch (e: ClassNotFoundException) {
-            println("Casting error\n\n")
             throw IllegalStateException(e)
         }
         return last.index

@@ -14,15 +14,15 @@ interface RaftProtocolClient {
     suspend fun sendConsensusElectMe(
         otherPeers: List<String>,
         message: ConsensusElectMe
-    ): List<Response<ConsensusElectedYou?>>
+    ): List<RaftResponse<ConsensusElectedYou?>>
 
     suspend fun sendConsensusImTheLeader(
         otherPeers: List<String>,
         message: ConsensusImTheLeader
-    ): List<Response<String?>>
+    ): List<RaftResponse<String?>>
 
-    suspend fun sendConsensusHeartbeat(peersWithMessage: List<Pair<String, ConsensusHeartbeat>>): List<Response<ConsensusHeartbeatResponse?>>
-    suspend fun sendConsensusHeartbeat(peerWithMessage: Pair<String, ConsensusHeartbeat>): Response<ConsensusHeartbeatResponse?>
+    suspend fun sendConsensusHeartbeat(peersWithMessage: List<Pair<String, ConsensusHeartbeat>>): List<RaftResponse<ConsensusHeartbeatResponse?>>
+    suspend fun sendConsensusHeartbeat(peerWithMessage: Pair<String, ConsensusHeartbeat>): RaftResponse<ConsensusHeartbeatResponse?>
 }
 
 class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
@@ -30,7 +30,7 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
     override suspend fun sendConsensusElectMe(
         otherPeers: List<String>,
         message: ConsensusElectMe
-    ): List<Response<ConsensusElectedYou?>> =
+    ): List<RaftResponse<ConsensusElectedYou?>> =
         otherPeers
             .map { Pair(it, message) }
             .let { sendRequests(it, "consensus/request_vote") }
@@ -38,19 +38,19 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
     override suspend fun sendConsensusImTheLeader(
         otherPeers: List<String>,
         message: ConsensusImTheLeader
-    ): List<Response<String?>> =
+    ): List<RaftResponse<String?>> =
         otherPeers
             .map { Pair(it, message) }
             .let { sendRequests(it, "consensus/leader") }
 
     override suspend fun sendConsensusHeartbeat(
         peersWithMessage: List<Pair<String, ConsensusHeartbeat>>
-    ): List<Response<ConsensusHeartbeatResponse?>> =
+    ): List<RaftResponse<ConsensusHeartbeatResponse?>> =
         sendRequests(peersWithMessage, "consensus/heartbeat")
 
     override suspend fun sendConsensusHeartbeat(
         peerWithMessage: Pair<String, ConsensusHeartbeat>
-    ): Response<ConsensusHeartbeatResponse?> =
+    ): RaftResponse<ConsensusHeartbeatResponse?> =
         CoroutineScope(Dispatchers.IO).async {
             sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(
                 "http://${peerWithMessage.first}/consensus/heartbeat",
@@ -62,17 +62,16 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
             val result = try {
                 it.second.await()
             } catch (e: Exception) {
-                e.printStackTrace()
-                logger.error("$id - Error while evaluating response from ${it.first}: $e")
+                logger.error("$id - Error while evaluating response from ${it.first}: $e", e)
                 null
             }
-            Response(it.first, result)
+            RaftResponse(it.first, result)
         }
 
     private suspend inline fun <T, reified K> sendRequests(
         peersWithBody: List<Pair<String, T>>,
         urlPath: String
-    ): List<Response<K?>> =
+    ): List<RaftResponse<K?>> =
         peersWithBody.map {
             CoroutineScope(Dispatchers.IO).async {
                 sendConsensusMessage<T, K>("http://${it.first}/$urlPath", it.second)
@@ -83,12 +82,11 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
             val result = try {
                 it.second.await()
             } catch (e: Exception) {
-                e.printStackTrace()
-                logger.error("$id - Error while evaluating response from ${it.first}: $e")
+                logger.error("$id - Error while evaluating response from ${it.first}: $e", e)
                 null
             }
 
-            Response(it.first, result)
+            RaftResponse(it.first, result)
         }
 
 
@@ -110,4 +108,4 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
     }
 }
 
-data class Response<K>(val from: String, val message: K)
+data class RaftResponse<K>(val from: String, val message: K)

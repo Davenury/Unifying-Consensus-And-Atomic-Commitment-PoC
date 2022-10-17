@@ -6,10 +6,9 @@ import com.github.davenury.ucac.gpac.domain.Accept
 import org.junit.jupiter.api.AfterAll
 
 abstract class BaseWiremock(
-    PORT: Int
 ) {
 
-    private var wireMockServer: WireMockServer = WireMockServer(PORT)
+    private var wireMockServer: WireMockServer = WireMockServer(0)
 
     init {
         wireMockServer.start()
@@ -79,5 +78,7 @@ abstract class BaseWiremock(
     fun verifyApplyStub(expected: Int) {
         wireMockServer.verify(expected, postRequestedFor(urlMatching("/apply")))
     }
+
+    fun getPort(): Int = wireMockServer.port()
 
 }
