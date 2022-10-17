@@ -23,6 +23,7 @@ data class Config(
     val gpac: GpacConfig,
 ) {
     fun peerAddresses(): List<List<String>> = parsePeers(peers)
+    fun peerAddresses(peersetId: Int): List<String> = peerAddresses()[peersetId - 1]
 }
 
 data class RatisConfig(

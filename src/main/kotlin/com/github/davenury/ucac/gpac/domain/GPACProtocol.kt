@@ -3,12 +3,16 @@ package com.github.davenury.ucac.gpac.domain
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import org.slf4j.LoggerFactory
+import java.util.concurrent.CompletableFuture
 import kotlin.math.max
 
 interface GPACProtocol : SignalSubject {
+    suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult>
+
     suspend fun handleElect(message: ElectMe): ElectedYou
     suspend fun handleAgree(message: Agree): Agreed
     suspend fun handleApply(message: Apply)
+    @Deprecated("use proposeChangeAsync")
     suspend fun performProtocolAsLeader(change: Change, iteration: Int = 1): TransactionResult
     suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int = 1)
     fun getTransaction(): Transaction
