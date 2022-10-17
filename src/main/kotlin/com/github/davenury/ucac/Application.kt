@@ -187,7 +187,7 @@ class Application constructor(
                 }
 
                 exception<Throwable> { cause ->
-                    log.error("Throwable has been throw in Application: ", cause)
+                    log.error("Throwable has been thrown in Application: ", cause)
                     call.respond(
                         status = HttpStatusCode.InternalServerError,
                         ErrorMessage("UnexpectedError, $cause")

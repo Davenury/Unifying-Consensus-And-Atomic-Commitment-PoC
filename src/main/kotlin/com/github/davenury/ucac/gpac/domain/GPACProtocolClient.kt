@@ -33,7 +33,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
             message,
             "elect",
             { singlePeer, e -> "Peer $singlePeer responded with exception: $e - election" },
-            { accs: List<Int> -> accs.also { println(it) }.maxOf { it } }
+            { accs: List<Int> -> accs.maxOf { it } }
         )
 
     override suspend fun sendFTAgree(otherPeers: List<List<String>>, message: Agree): List<List<Agreed>> =
