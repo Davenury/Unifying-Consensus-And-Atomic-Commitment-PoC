@@ -7,7 +7,7 @@ import com.github.davenury.ucac.history.InitialHistoryEntry
 import org.slf4j.LoggerFactory
 
 class InMemoryHistoryManagement(
-    private val consensusProtocol: ConsensusProtocol<Change, History>
+    private val consensusProtocol: ConsensusProtocol,
 ) : HistoryManagement(consensusProtocol) {
 
     // TODO: think about what's better - if change asks consensus protocol if it

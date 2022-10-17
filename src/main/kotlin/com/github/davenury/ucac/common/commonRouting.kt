@@ -11,20 +11,20 @@ import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 
-fun Application.commonRouting(
+fun Application.commonRoutingOld(
     gpacProtocol: GPACProtocol,
-    consensusProtocol: ConsensusProtocol<Change, History>,
+    consensusProtocol: ConsensusProtocol,
 ) {
 
     routing {
 
-        get("/change_status/{transaction_id}"){
+        get("/gpac/change_status/{transaction_id}"){
             val transactionId: String = call.parameters["transaction_id"]!!
             val transactionResult = gpacProtocol.getChangeStatus(transactionId)
             call.respond(transactionResult)
         }
 
-        post("/create_change") {
+        post("/gpac/create_change") {
             val change = call.receive<Change>()
             val statusCode = when (gpacProtocol.performProtocolAsLeader(change)) {
                 TransactionResult.DONE -> HttpStatusCode.OK

@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.api
+package com.github.davenury.ucac.gpac
 
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
@@ -31,11 +31,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 
 @Suppress("HttpUrlsUsage")
-class SinglePeersetIntegrationTest {
+class SinglePeersetSpec {
 
 
     companion object {
-        private val logger = LoggerFactory.getLogger(SinglePeersetIntegrationTest::class.java)!!
+        private val logger = LoggerFactory.getLogger(SinglePeersetSpec::class.java)!!
     }
 
     @BeforeEach
@@ -51,7 +51,7 @@ class SinglePeersetIntegrationTest {
 
         val signalListener = SignalListener {
             expectCatching {
-                executeChange("http://${it.peers[0][1]}/create_change", change(listOf()))
+                executeChange("http://${it.peers[0][1]}/gpac/create_change", change(listOf()))
             }.isSuccess()
             signalExecuted.set(true)
             throw RuntimeException("Stop")
@@ -65,7 +65,7 @@ class SinglePeersetIntegrationTest {
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/create_change", change(listOf()))
+            executeChange("http://${peers[0][0]}/gpac/create_change", change(listOf()))
         }
 
         apps.stopApps()
@@ -85,7 +85,7 @@ class SinglePeersetIntegrationTest {
 
             val signalListener = SignalListener {
                 expectCatching {
-                    executeChange("http://${it.peers[0][1]}/create_change", change(listOf()))
+                    executeChange("http://${it.peers[0][1]}/gpac/create_change", change(listOf()))
                 }
             }
 
@@ -104,7 +104,7 @@ class SinglePeersetIntegrationTest {
             val peers = apps.getPeers()
 
             expectCatching {
-                executeChange("http://${peers[0][0]}/create_change", change(listOf()))
+                executeChange("http://${peers[0][0]}/gpac/create_change", change(listOf()))
             }.isSuccess()
 
             withContext(Dispatchers.IO) {
@@ -154,14 +154,14 @@ class SinglePeersetIntegrationTest {
 
             // change that will cause leader to fall according to action
             try {
-                executeChange("http://${peers[0][0]}/create_change", change(listOf()))
+                executeChange("http://${peers[0][0]}/gpac/create_change", change(listOf()))
                 fail("Change passed")
             } catch (e: Exception) {
                 logger.info("Leader 1 fails: $e")
             }
 
             withContext(Dispatchers.IO) {
-                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 120, TimeUnit.SECONDS)
             }
 
             val response = testHttpClient.get<Change>("http://${peers[0][2]}/change") {
@@ -239,7 +239,7 @@ class SinglePeersetIntegrationTest {
         // change that will cause leader to fall according to action
         try {
             executeChange(
-                "http://${peers[0][0]}/create_change", AddGroupChange(
+                "http://${peers[0][0]}/gpac/create_change", AddGroupChange(
                     InitialHistoryEntry.getId(),
                     "name",
                     listOf(),

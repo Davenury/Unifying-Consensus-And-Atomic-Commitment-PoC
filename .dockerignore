@@ -1,0 +1,6 @@
+.gradle/
+.idea/
+out/
+k8s-stuff/
+cmd/
+gradle/

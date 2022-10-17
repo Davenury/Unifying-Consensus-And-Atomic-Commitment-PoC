@@ -4,7 +4,7 @@ import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.history.History
 
-abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol<Change, History>) {
+abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol) {
     open suspend fun change(change: Change) =
         consensusProtocol.proposeChange(change)
             .let {

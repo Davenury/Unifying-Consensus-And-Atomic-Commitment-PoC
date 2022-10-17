@@ -11,3 +11,7 @@ class AlreadyLockedException : Exception()
 class PeerNotInPeersetException(peer: String): Exception("Peer $peer is not found in any of config peersets!")
 
 data class ErrorMessage(val msg: String)
+data class ChangeCreationErrorMessage(
+    val msg: String,
+    val changeApplied: String,
+)

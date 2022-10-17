@@ -139,7 +139,6 @@ class ConsensusSpec {
         peerset.getRunningApps().forEach {
             expect {
                 val leaderAddress = askForLeaderAddress(it)
-                val selfAddress = "localhost:${it.getBoundPort()}"
 //              DONE  it should always be noneLeader
                 that(leaderAddress).isEqualTo(noneLeader)
             }
