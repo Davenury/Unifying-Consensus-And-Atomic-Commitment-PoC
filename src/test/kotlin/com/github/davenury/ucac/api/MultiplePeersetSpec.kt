@@ -369,7 +369,7 @@ class MultiplePeersetSpec {
             }
 
             withContext(Dispatchers.IO) {
-                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 120, TimeUnit.SECONDS)
             }
 
             // waiting for consensus to propagate change is waste of time and fails CI
