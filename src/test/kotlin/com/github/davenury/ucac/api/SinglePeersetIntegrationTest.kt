@@ -25,7 +25,6 @@ import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
 import java.time.Duration
-import java.util.*
 import java.util.concurrent.Phaser
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -76,21 +75,41 @@ class SinglePeersetIntegrationTest {
     fun `first leader is already in ft-agree phase and second leader tries to execute its transaction - second should be rejected`(): Unit =
         runBlocking {
 
+            val phaser = Phaser(1)
+            phaser.register()
+
+            val changeAborted = SignalListener {
+                phaser.arrive()
+            }
+
+
             val signalListener = SignalListener {
                 expectCatching {
                     executeChange("http://${it.peers[0][1]}/create_change", change(listOf()))
-                }.isFailure()
+                }
             }
+
+            val signalListenersForCohort = mapOf(
+                Signal.OnSendingElectBuildFail to changeAborted,
+            )
 
             val apps = TestApplicationSet(
                 1, listOf(3),
-                signalListeners = mapOf(1 to mapOf(Signal.BeforeSendingApply to signalListener)),
+                signalListeners = mapOf(
+                    1 to mapOf(Signal.BeforeSendingApply to signalListener),
+                    2 to signalListenersForCohort,
+                    3 to signalListenersForCohort
+                ),
             )
             val peers = apps.getPeers()
 
             expectCatching {
                 executeChange("http://${peers[0][0]}/create_change", change(listOf()))
             }.isSuccess()
+
+            withContext(Dispatchers.IO) {
+                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
+            }
 
             apps.stopApps()
         }
@@ -101,15 +120,17 @@ class SinglePeersetIntegrationTest {
 
             val phaser = Phaser(2)
 
-            val firstLeaderAction = SignalListener { runBlocking {
-                val url = "http://${it.peers[0][1]}/ft-agree"
-                val response = testHttpClient.post<Agreed>(url) {
-                    contentType(ContentType.Application.Json)
-                    accept(ContentType.Application.Json)
-                    body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, change(listOf(it.peers[0][0])))
+            val firstLeaderAction = SignalListener {
+                runBlocking {
+                    val url = "http://${it.peers[0][1]}/ft-agree"
+                    val response = testHttpClient.post<Agreed>(url) {
+                        contentType(ContentType.Application.Json)
+                        accept(ContentType.Application.Json)
+                        body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, change(listOf(it.peers[0][0])))
+                    }
+                    throw RuntimeException("Stop")
                 }
-                throw RuntimeException("Stop")
-            }}
+            }
             val firstLeaderCallbacks: Map<Signal, SignalListener> = mapOf(
                 Signal.BeforeSendingAgree to firstLeaderAction
             )
@@ -215,11 +236,13 @@ class SinglePeersetIntegrationTest {
 
         // change that will cause leader to fall according to action
         try {
-            executeChange("http://${peers[0][0]}/create_change", AddGroupChange(
-                InitialHistoryEntry.getId(),
-                "name",
-                listOf(),
-            ))
+            executeChange(
+                "http://${peers[0][0]}/create_change", AddGroupChange(
+                    InitialHistoryEntry.getId(),
+                    "name",
+                    listOf(),
+                )
+            )
             fail("Change passed")
         } catch (e: Exception) {
             log.info("Leader 1 fails: $e")

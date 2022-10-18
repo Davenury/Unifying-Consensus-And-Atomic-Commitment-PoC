@@ -98,19 +98,32 @@ class MultiplePeersetSpec {
     @Test
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
 
-        val apps = TestApplicationSet(2, listOf(3, 3), appsToExclude = listOf(4, 5, 6))
+        val phaser = Phaser(1)
+        phaser.register()
+
+        val peerReachedMaxRetries = SignalListener {
+            logger.info("Arrived: ${it.subject.getPeerName()}")
+            phaser.arrive()
+        }
+
+        val signalListenersForCohort = mapOf(
+            Signal.ReachedMaxRetries to peerReachedMaxRetries
+        )
+
+
+        val apps = TestApplicationSet(
+            2,
+            listOf(3, 3),
+            appsToExclude = listOf(4, 5, 6),
+            signalListeners = (0..6).associateWith { signalListenersForCohort })
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
 
-        // when - executing transaction
-        try {
-            executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
-            fail("Exception not thrown")
-        } catch (e: Exception) {
-            expect {
-                that(e).isA<ServerResponseException>()
-                that(e.message!!).contains("Transaction failed due to too many retries of becoming a leader.")
-            }
+
+        executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+
+        withContext(Dispatchers.IO) {
+            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
         }
 
         // then - transaction should not be executed

@@ -85,7 +85,7 @@ class GPACProtocolSpec {
         every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
-        coEvery { timerMock.startCounting(any()) } just Runs
+        coEvery { timerMock.startCounting(action = any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
         subject.handleElect(ElectMe(100, change))
@@ -112,7 +112,7 @@ class GPACProtocolSpec {
         every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
-        coEvery { timerMock.startCounting(any()) } just Runs
+        coEvery { timerMock.startCounting(action = any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
         subject.handleElect(ElectMe(10, change))
@@ -129,7 +129,7 @@ class GPACProtocolSpec {
         every { transactionBlockerMock.assertICanSendElectedYou() } just Runs
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
-        coEvery { timerMock.startCounting(any()) } just Runs
+        coEvery { timerMock.startCounting(action = any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
         subject.handleElect(ElectMe(10, change))

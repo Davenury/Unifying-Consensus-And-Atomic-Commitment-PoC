@@ -9,8 +9,8 @@ interface GPACProtocol : SignalSubject {
     suspend fun handleElect(message: ElectMe): ElectedYou
     suspend fun handleAgree(message: Agree): Agreed
     suspend fun handleApply(message: Apply)
-    suspend fun performProtocolAsLeader(change: Change)
-    suspend fun performProtocolAsRecoveryLeader(change: Change)
+    suspend fun performProtocolAsLeader(change: Change, iteration: Int = 1)
+    suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int = 1)
     fun getTransaction(): Transaction
     fun getBallotNumber(): Int
     fun setPeers(peers: Map<Int, List<String>>)
@@ -109,11 +109,13 @@ class GPACProtocolImpl(
     }
 
     override suspend fun handleApply(message: Apply) {
-        leaderFailTimeoutStop()
+        val isCurrentTransaction = message.ballotNumber==this.myBallotNumber
+
+        if(isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, getPeersFromChange(message.change))
 
         try {
-            this.transaction =
+            if(isCurrentTransaction)this.transaction =
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
             logger.info("${getPeerName()} - my state: ${historyManagement.getState()}, proposed change: ${this.transaction.acceptNum}")
@@ -152,16 +154,34 @@ class GPACProtocolImpl(
     }
 
     override suspend fun performProtocolAsLeader(
-        change: Change
+        change: Change,
+        iteration: Int
     ) {
-        logger.info("Peer ${getPeerName()} starts performing GPAC")
+        logger.info("Peer ${getPeerName()} starts performing GPAC iteration: $iteration")
         val enrichedChange =
             if (change.peers.contains(myAddress)) {
                 change
             } else {
                 change.withAddress(myAddress)
             }
-        val electResponses = electMePhase(enrichedChange, { responses -> superSet(responses, getPeersFromChange(enrichedChange)) })
+
+        val electMeResult =
+            electMePhase(enrichedChange, { responses -> superSet(responses, getPeersFromChange(enrichedChange)) })
+
+        if (iteration == maxLeaderElectionTries) {
+            logger.error("Transaction failed due to too many retries of becoming a leader.")
+            signal(Signal.ReachedMaxRetries, transaction, getPeersFromChange(change))
+            return
+        }
+
+        if (!electMeResult.success) {
+            timer.startCounting(iteration) {
+                performProtocolAsLeader(change, iteration + 1)
+            }
+            return
+        }
+
+        val electResponses = electMeResult.responses
 
         val acceptVal =
             if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
@@ -177,13 +197,28 @@ class GPACProtocolImpl(
         val applyResponses = applyPhase(enrichedChange, acceptVal)
     }
 
-    override suspend fun performProtocolAsRecoveryLeader(change: Change) {
-        val electResponses = electMePhase(
+    override suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int) {
+        val electMeResult = electMePhase(
             change,
             { responses -> superMajority(responses, getPeersFromChange(change)) },
             this.transaction,
             this.transaction.acceptNum
         )
+
+        if (iteration == maxLeaderElectionTries) {
+            logger.error("Transaction failed due to too many retries of becoming a leader.")
+            signal(Signal.ReachedMaxRetries, transaction, getPeersFromChange(change))
+            return
+        }
+
+        if (!electMeResult.success) {
+            timer.startCounting(iteration) {
+                performProtocolAsRecoveryLeader(change, iteration + 1)
+            }
+            return
+        }
+
+        val electResponses = electMeResult.responses
 
         val messageWithDecision = electResponses.flatten().find { it.decision }
         if (messageWithDecision != null) {
@@ -219,39 +254,38 @@ class GPACProtocolImpl(
         return
     }
 
+    data class ElectMeResult(val responses: List<List<ElectedYou>>, val success: Boolean)
+
     private suspend fun electMePhase(
         change: Change,
         superFunction: (List<List<ElectedYou>>) -> Boolean,
         transaction: Transaction? = null,
         acceptNum: Int? = null
-    ): List<List<ElectedYou>> {
-        var tries = 0
-        var electResponses: List<List<ElectedYou>>
+    ): ElectMeResult {
 
         if (!historyManagement.canBeBuild(change)) {
+            signal(Signal.OnSendingElectBuildFail, this.transaction, getPeersFromChange(change))
             throw HistoryCannotBeBuildException()
         }
 
-        do {
-            myBallotNumber++
-            if (!historyManagement.canBeBuild(change)) throw HistoryCannotBeBuildException()
-            this.transaction = transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
+        myBallotNumber++
+        if (!historyManagement.canBeBuild(change)) throw HistoryCannotBeBuildException()
+        this.transaction = transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT)
 
-            signal(Signal.BeforeSendingElect, this.transaction, getPeersFromChange(change))
-            logger.info("${getPeerName()} - sending ballot number: $myBallotNumber")
-            val (responses, maxBallotNumber) = getElectedYouResponses(change, getPeersFromChange(change), acceptNum)
+        signal(Signal.BeforeSendingElect, this.transaction, getPeersFromChange(change))
+        logger.info("${getPeerName()} - sending ballot number: $myBallotNumber")
+        val (responses, maxBallotNumber) = getElectedYouResponses(change, getPeersFromChange(change), acceptNum)
 
-            electResponses = responses
-            tries++
-            if (superFunction(electResponses)) {
-                return electResponses
-            }
-            myBallotNumber = max(maxBallotNumber, myBallotNumber)
-            logger.info("${getPeerName()} Bumped ballot number to: $myBallotNumber")
-        } while (tries < maxLeaderElectionTries)
+        val electResponses: List<List<ElectedYou>> = responses
+        if (superFunction(electResponses)) {
+            return ElectMeResult(electResponses, true)
+        }
+        myBallotNumber = max(maxBallotNumber, myBallotNumber)
+        logger.info("${getPeerName()} Bumped ballot number to: $myBallotNumber")
 
-        transactionBlocker.releaseBlock()
-        throw MaxTriesExceededException()
+        return ElectMeResult(electResponses, false)
+//        transactionBlocker.releaseBlock()
+//        throw MaxTriesExceededException()
     }
 
     private suspend fun ftAgreePhase(
