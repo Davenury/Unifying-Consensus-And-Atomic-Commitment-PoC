@@ -45,7 +45,7 @@ class InMemoryHistoryManagement(
     override fun getState(): History = consensusProtocol.getState()
 
     override fun canBeBuild(newChange: Change): Boolean =
-        newChange.parentId == getState().getCurrentEntry().getId()
+        getState().getCurrentEntry().getId().let { it == newChange.toHistoryEntry().getId() || it == newChange.parentId }
 
     override fun build() {}
 

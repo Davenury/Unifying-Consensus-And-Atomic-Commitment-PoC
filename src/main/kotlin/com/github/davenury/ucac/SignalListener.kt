@@ -17,6 +17,7 @@ enum class Signal {
     OnHandlingApplyCommitted,
     ReachedMaxRetries,
     ConsensusLeaderElected,
+    ConsensusLeaderDoesNotSendHeartbeat,
     ConsensusAfterProposingChange,
     ConsensusFollowerChangeAccepted,
     ConsensusTryToBecomeLeader

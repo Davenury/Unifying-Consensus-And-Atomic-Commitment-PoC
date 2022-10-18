@@ -258,12 +258,12 @@ class MultiplePeersetSpec {
             throw RuntimeException("Leader failed after ft-agree")
         }
 
-        val phaser = Phaser(7)
-        phaser.register()
+        val applyCommittedPhaser = Phaser(7)
+        applyCommittedPhaser.register()
 
         val peerApplyCommitted = SignalListener {
             logger.info("Arrived: ${it.subject.getPeerName()}")
-            phaser.arrive()
+            applyCommittedPhaser.arrive()
         }
 
         val signalListenersForLeaders = mapOf(
@@ -295,7 +295,7 @@ class MultiplePeersetSpec {
         }
 
         withContext(Dispatchers.IO) {
-            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+            applyCommittedPhaser.awaitAdvanceInterruptibly(applyCommittedPhaser.arrive(), 60, TimeUnit.SECONDS)
         }
 
         peers.flatten().forEach {

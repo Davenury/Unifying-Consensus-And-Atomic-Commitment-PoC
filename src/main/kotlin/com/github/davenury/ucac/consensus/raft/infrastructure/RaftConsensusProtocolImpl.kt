@@ -363,6 +363,7 @@ class RaftConsensusProtocolImpl(
             }
         }
         timer.startCounting {
+            signalPublisher.signal(Signal.ConsensusLeaderDoesNotSendHeartbeat, this, listOf(otherConsensusPeers), null)
             logger.info(text)
             sendLeaderRequest()
         }
