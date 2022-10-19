@@ -18,15 +18,14 @@ class TestApplicationSet(
     private val nonRunningPeer = "localhost:0"
 
     init {
-        val ratisConfigOverrides = mapOf(
-            "raft.server.addresses" to List(numberOfPeersets) {
+        val testConfigOverrides = mapOf(
+            "ratis.addresses" to List(numberOfPeersets) {
                 List(numberOfPeersInPeersets[it]) { "localhost:${Random.nextInt(5000, 20000) + 11124}" }
-            },
-            "raft.clusterGroupIds" to List(numberOfPeersets) { UUID.randomUUID() }
-        )
-
-        val addressesOverrides = mapOf(
-            "peers.peersAddresses" to (1..numberOfPeersets).map { (1..numberOfPeersInPeersets[it - 1]).map { nonRunningPeer } }
+            }.joinToString(";") { it.joinToString(",") },
+            "peers" to (1..numberOfPeersets).map { (1..numberOfPeersInPeersets[it - 1]).map { nonRunningPeer } }
+                .joinToString(";") { it.joinToString(",") },
+            "port" to 0,
+            "host" to "localhost",
         )
 
         var currentApp = 0
@@ -34,10 +33,10 @@ class TestApplicationSet(
             (1..numberOfPeersInPeersets[peersetId - 1]).map { peerId ->
                 currentApp++
                 createApplication(
-                    arrayOf("$peerId", "$peersetId"),
                     signalListeners[currentApp] ?: emptyMap(),
-                    ratisConfigOverrides + addressesOverrides + (configOverrides[peerId] ?: emptyMap()),
-                    TestApplicationMode(peerId, peersetId)
+                    mapOf("peerId" to peerId, "peersetId" to peersetId) +
+                            testConfigOverrides +
+                            (configOverrides[peerId] ?: emptyMap()),
                 )
             }.toMutableList()
         }.toMutableList()

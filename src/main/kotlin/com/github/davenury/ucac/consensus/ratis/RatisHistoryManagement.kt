@@ -4,9 +4,9 @@ import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.history.History
 import org.slf4j.LoggerFactory
 
-class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : HistoryManagement(historyRaftNode) {
+class RatisHistoryManagement(private val historyRatisNode: HistoryRatisNode) : HistoryManagement(historyRatisNode) {
     override fun getLastChange(): Change? = try {
-        historyRaftNode.getState().getCurrentEntry()
+        historyRatisNode.getState().getCurrentEntry()
             .let { Change.fromHistoryEntry(it) }
     } catch (ex: IllegalArgumentException) {
         logger.error("History is empty!")
@@ -20,7 +20,7 @@ class RatisHistoryManagement(private val historyRaftNode: HistoryRaftNode) : His
     override fun canBeBuild(newChange: Change): Boolean = true
 
     override fun getState(): History =
-        historyRaftNode.getState()
+        historyRatisNode.getState()
 
     override fun build() {}
 

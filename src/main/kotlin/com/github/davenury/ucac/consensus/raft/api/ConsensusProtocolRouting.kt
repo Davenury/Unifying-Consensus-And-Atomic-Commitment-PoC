@@ -6,12 +6,8 @@ import io.ktor.application.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
-import java.util.concurrent.Semaphore
 
 fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
-
-    val semaphore = Semaphore(1)
-
     routing {
         // głosujemy na leadera
         post("/consensus/request_vote") {

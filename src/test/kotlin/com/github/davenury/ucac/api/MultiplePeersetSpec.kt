@@ -315,12 +315,11 @@ class MultiplePeersetSpec {
             applyCommittedPhaser.awaitAdvanceInterruptibly(applyCommittedPhaser.arrive(), 60, TimeUnit.SECONDS)
         }
 
-        peers.flatten().forEach {
-            askForChanges("http://$it")
-                .let {
-                    expectThat(it?.size!!).isGreaterThanOrEqualTo(1)
-                    expectThat(it[0]).isEqualTo(change(otherPeer))
-                }
+        peers.flatten().forEach { address ->
+            askForChanges("http://$address").let {
+                expectThat(it.size).isGreaterThanOrEqualTo(1)
+                expectThat(it[0]).isEqualTo(change(otherPeer))
+            }
         }
 
         apps.stopApps()
@@ -403,13 +402,12 @@ class MultiplePeersetSpec {
             }
 
             // waiting for consensus to propagate change is waste of time and fails CI
-            peers.flatten()
-                .forEach {
-                    askForChanges("http://$it").let {
-                        expectThat(it.size).isGreaterThanOrEqualTo(1)
-                        expectThat(it[0]).isEqualTo(change(otherPeer) as Change)
-                    }
+            peers.flatten().forEach { address ->
+                askForChanges("http://$address").let {
+                    expectThat(it.size).isGreaterThanOrEqualTo(1)
+                    expectThat(it[0]).isEqualTo(change(otherPeer) as Change)
                 }
+            }
 
             apps.stopApps()
         }

@@ -3,15 +3,13 @@ package commands
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
-
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"strconv"
 )
 
 const ratisPort = 10024
@@ -28,13 +26,12 @@ func CreateDeployCommand() *cobra.Command {
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
 
-			ratisPeers := fmt.Sprintf("[%s]", GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort, deployNamespace))
-			gpacPeers := fmt.Sprintf("[%s]", GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort, deployNamespace))
+			ratisPeers := GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort)
+			gpacPeers := GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort)
 			ratisGroups := make([]string, len(numberOfPeersInPeersets))
 			for i := 0; i < len(numberOfPeersInPeersets); i++ {
 				ratisGroups[i] = uuid.New().String()
 			}
-			ratisGroupsString := strings.Join(ratisGroups[:], ",")
 
 			if deployCreateNamespace {
 				CreateNamespace(deployNamespace)
@@ -53,7 +50,7 @@ func CreateDeployCommand() *cobra.Command {
 
 					deploySinglePeerService(deployNamespace, peerConfig, ratisPort+i)
 
-					deploySinglePeerConfigMap(deployNamespace, peerConfig, ratisPeers, gpacPeers, ratisGroupsString)
+					deploySinglePeerConfigMap(deployNamespace, peerConfig, ratisPeers, gpacPeers)
 
 					deploySinglePeerDeployment(deployNamespace, peerConfig)
 
@@ -157,7 +154,7 @@ func createSingleContainer(containerName string, peerConfig PeerConfig) apiv1.Co
 	}
 }
 
-func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig, ratisPeers string, gpacPeers string, ratisGroups string) {
+func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig, ratisPeers string, gpacPeers string) {
 	clientset, err := GetClientset()
 	if err != nil {
 		panic(err)
@@ -176,13 +173,13 @@ func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig, ratisPee
 			},
 		},
 		Data: map[string]string{
-			"application_environment":  "k8s",
-			"CONFIG_FILE":              "application-kubernetes.conf",
-			"PEERSET_ID":               peerConfig.PeersetId,
-			"RAFT_NODE_ID":             peerConfig.PeerId,
-			"RATIS_PEERS_ADDRESSES":    ratisPeers,
-			"RATIS_CLUSTER_GROUPS_IDS": ratisGroups,
-			"GPAC_PEERS_ADDRESSES":     gpacPeers,
+			"CONFIG_FILE":            "application-kubernetes.conf",
+			"config_host":            ServiceAddress(peerConfig),
+			"config_port":            "8080",
+			"config_peersetId":       peerConfig.PeersetId,
+			"config_peerId":          peerConfig.PeerId,
+			"config_ratis_addresses": ratisPeers,
+			"config_peers":           gpacPeers,
 		},
 	}
 

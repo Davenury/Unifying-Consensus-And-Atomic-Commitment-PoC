@@ -1,5 +1,6 @@
 package com.github.davenury.ucac.consensus.ratis
 
+import com.github.davenury.ucac.RatisConfig
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult
@@ -10,17 +11,18 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.*
 
-class HistoryRaftNode(
+class HistoryRatisNode(
     peerId: Int,
     peersetId: Int,
-    constants: RaftConfiguration,
+    config: RatisConfig,
     private val history: History = History(),
 ) :
-    RaftNode(
+    RatisNode(
         peerId,
         HistoryStateMachine(history),
         File("./history-$peerId-$peersetId-${UUID.randomUUID()}"),
-        constants,
+        peersetId,
+        config,
     ),
     ConsensusProtocol<Change, History> {
 

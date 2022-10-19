@@ -4,7 +4,6 @@ metadata:
   name: peer-config
   namespace: tryout # TODO
 data:
-  application_environment: "k8s"
   PEERSET_ID: "1"
   RAFT_NODE_ID: "1"
   RATIS_PEERS_ADDRESSES: "[]"
