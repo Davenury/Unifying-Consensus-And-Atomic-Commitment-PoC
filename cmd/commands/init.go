@@ -2,11 +2,11 @@ package commands
 
 import (
 	"fmt"
-	"log"
 	"github.com/spf13/cobra"
 	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/cli"
+	"log"
 )
 
 var settings *cli.EnvSettings
@@ -16,7 +16,7 @@ var initCreateNamespace bool
 func CreateInitCommand() *cobra.Command {
 
 	var initCommand = &cobra.Command{
-		Use: "init",
+		Use:   "init",
 		Short: "deploy prometheus and grafana to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
 			initCommand()
@@ -25,13 +25,13 @@ func CreateInitCommand() *cobra.Command {
 
 	initCommand.Flags().StringVarP(&initNamespace, "namespace", "n", "monitoring", "Namespace to deploy cluster to")
 	initCommand.Flags().BoolVarP(&initCreateNamespace, "create-namespace", "", false, "Include if passed namespace should be created")
-	
+
 	return initCommand
 }
 
 func initCommand() {
 	settings = cli.New()
-	
+
 	// create namespace
 	if initCreateNamespace {
 		CreateNamespace(initNamespace)
@@ -67,5 +67,5 @@ func installChart(namespace string, repoName string, chartName string, releaseNa
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Installed %s release to namespace %s", release.Name, namespace)
+	fmt.Printf("Installed %s release to namespace %s\n", release.Name, namespace)
 }

@@ -77,13 +77,13 @@ func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int, namespac
 }
 
 func ServiceAddress(peerConfig PeerConfig, namespace string) string {
-	return fmt.Sprintf("peer%s-peerset%s-service.%s.svc.cluster.local", peerConfig.PeerId, peerConfig.PeersetId, namespace)
+	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
 func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool, namespace string) string {
 
 	var resultSb strings.Builder
-	for idx, peersNumber := range numberOfPeersInPeersets {
+	for idx, peersNumber := range peersInPeerset {
 		var sb strings.Builder
 
 		for i := 1; i <= peersNumber; i++ {
@@ -92,9 +92,8 @@ func generateServicesForPeers(peersInPeerset []int, startPort int, increment boo
 				port = port + i
 			}
 			sb.WriteString(fmt.Sprintf("\"%s:%d\",", ServiceAddress(PeerConfig{
-				PeerId:         strconv.Itoa(i),
-				PeersetId:      strconv.Itoa(idx + 1),
-				PeersInPeerset: peersInPeerset,
+				PeerId:    strconv.Itoa(i),
+				PeersetId: strconv.Itoa(idx + 1),
 			}, namespace), port))
 		}
 
@@ -120,6 +119,16 @@ func CreateNamespace(namespaceName string) {
 
 	if err != nil {
 		panic(err)
+	}
+
+	nsList, err := clientset.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	for _, ns := range nsList.Items {
+		if ns.Name == namespaceName {
+			return
+		}
 	}
 
 	nsSpec := &apiv1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}
