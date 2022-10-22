@@ -20,6 +20,7 @@ enum class Signal {
     ConsensusLeaderDoesNotSendHeartbeat,
     ConsensusAfterProposingChange,
     ConsensusFollowerChangeAccepted,
+    ConsensusFollowerChangeProposed,
     ConsensusTryToBecomeLeader
 }
 

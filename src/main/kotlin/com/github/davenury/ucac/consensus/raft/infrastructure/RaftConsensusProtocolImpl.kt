@@ -16,6 +16,7 @@ import java.time.Duration
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import org.slf4j.LoggerFactory
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.*
@@ -46,8 +47,8 @@ class RaftConsensusProtocolImpl(
 
     //    DONE: Use only one mutex
     private val mutex = Mutex()
-
     private var executorService: ExecutorCoroutineDispatcher? = null
+    private val channel = Channel<Unit>()
 
     private fun otherConsensusPeers(): List<String> {
         return allPeers.filter { it != peerAddress }
@@ -184,29 +185,34 @@ class RaftConsensusProtocolImpl(
             state.removeNotAcceptedItems(prevLogIndex, prevLogTerm)
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
-        val anyAcceptedChange: Boolean
+        val anyChanges: LedgerUpdateResult
 
-        mutex.lock()
-        try {
-            anyAcceptedChange = state.updateLedger(acceptedChanges, proposedChanges)
-        } finally {
-            mutex.unlock()
+
+        mutex.withLock {
+            anyChanges = state.updateLedger(acceptedChanges, proposedChanges)
         }
 
-        if (anyAcceptedChange) signalPublisher.signal(
+        if (anyChanges.anyAcceptedChange) signalPublisher.signal(
             Signal.ConsensusFollowerChangeAccepted,
             this,
             listOf(otherConsensusPeers()),
             null,
             acceptedChanges.last().change
         )
+        if (anyChanges.anyProposedChange) signalPublisher.signal(
+            Signal.ConsensusFollowerChangeProposed,
+            this,
+            listOf(otherConsensusPeers()),
+            null,
+            proposedChanges.last().change
+        )
 
         restartTimer()
         return ConsensusHeartbeatResponse(true, currentTerm)
     }
 
-    override suspend fun handleProposeChange(change: Change) =
-        proposeChange(change)
+    override suspend fun handleSyncProposeChange(change: Change) = syncProposeChange(change)
+    override suspend fun handleAsyncProposeChange(change: Change): String = asyncProposeChange(change)
 
     override fun setPeerAddress(address: String) {
         this.peerAddress = address
@@ -227,7 +233,13 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendHeartbeatToPeer(peerUrl: String) {
         val peerWithMessage = Pair(peerUrl, getMessageForPeer(peerUrl))
+
         val response = protocolClient.sendConsensusHeartbeat(peerWithMessage)
+
+        //      We should schedule heartbeat even if something failed during handling response
+        if (role == RaftRole.Leader && otherConsensusPeers().contains(peerUrl) && executorService != null)
+            launchHeartBeatToPeer(peerUrl)
+
         when {
             response.message == null -> {
                 logger.info("Peer doesn't respond $peerUrl")
@@ -249,53 +261,27 @@ class RaftConsensusProtocolImpl(
 
             response.message.term > currentTerm -> stopBeingLeader(response.message.term)
         }
-
-        if (role == RaftRole.Leader && otherConsensusPeers().contains(peerUrl) && executorService != null)
-            launchHeartBeatToPeer(peerUrl)
     }
 
-    //  TODO: Modify this after implementing async propose change
-    private suspend fun sendHeartbeat() {
-        logger.info("SendHeartbeat from $peerId in $currentTerm to peers: ${otherConsensusPeers()}")
-        val peersWithMessage = otherConsensusPeers().map { peerUrl ->
-            Pair(peerUrl, getMessageForPeer(peerUrl))
-        }
-        val responses = protocolClient.sendConsensusHeartbeat(peersWithMessage)
-
-        val (successResponses, failResponses) = responses
-            .filter { it.message != null }
-            .partition { it.message!!.success }
-
-        successResponses.map { (peerUrl, heartbeatResponse) -> handleSuccessHeartbeatResponseFromPeer(peerUrl) }
-
-        logger.info("$peerId - heartbeat responses: \n sucess: $successResponses \n failure: $failResponses")
-
-        val (oldTermResponses, needUpdatesResponses) = failResponses.partition { it.message!!.term > currentTerm }
-
-        needUpdatesResponses.map { (peerUrl, heartbeatResponse) ->
-            val oldValues = peerUrlToNextIndex[peerUrl]
-            peerUrlToNextIndex[peerUrl] = oldValues
-                ?.let { PeerIndices(it.acceptedIndex - 1, it.acceptedIndex - 1) }
-                ?: PeerIndices()
-        }
-
-        applyAcceptedChanges()
-
-        if (oldTermResponses.isNotEmpty()) {
-            timer.startCounting {
-                val newTerm = oldTermResponses.maxOf { it.message!!.term }
-                stopBeingLeader(newTerm)
-            }
-        }
-    }
 
     private suspend fun applyAcceptedChanges() {
 //      DONE: change name of ledgerIndexToMatchIndex
         val acceptedIndexes: List<Int> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
 
         logger.info("$peerId accept indexes: $acceptedIndexes")
+        state.getProposedChanges(acceptedIndexes).forEach {
+            signalPublisher.signal(
+                Signal.ConsensusAfterProposingChange,
+                this,
+                listOf(otherConsensusPeers()),
+                transaction = null,
+                change = it
+            )
+        }
+
         state.acceptItems(acceptedIndexes)
         voteContainer.removeChanges(acceptedIndexes)
+        channel.trySend(Unit)
     }
 
     private suspend fun stopBeingLeader(newTerm: Int) {
@@ -366,55 +352,66 @@ class RaftConsensusProtocolImpl(
             }
         }
         timer.startCounting {
-            signalPublisher.signal(Signal.ConsensusLeaderDoesNotSendHeartbeat, this, listOf(otherConsensusPeers()), null)
+            signalPublisher.signal(
+                Signal.ConsensusLeaderDoesNotSendHeartbeat,
+                this,
+                listOf(otherConsensusPeers()),
+                null
+            )
             logger.info(text)
             sendLeaderRequest()
         }
     }
 
+
+    private suspend fun syncProposeChangeToLedger(change: Change): ConsensusResult {
+        asyncProposeChangeToLedger(change)
+
+        while (!state.isChangeAccepted(change) && state.changeAlreadyProposed(change))
+            channel.receive()
+
+
+        if (!state.changeAlreadyProposed(change) && !state.isChangeAccepted(change)) return ConsensusFailure
+
+        return ConsensusSuccess
+    }
+
     //  TODO: sync change will have to use Condition/wait/notifyAll
-    private suspend fun proposeChangeToLedger(changeWithAcceptNum: Change): ConsensusResult {
+    private suspend fun asyncProposeChangeToLedger(change: Change): String {
 
 //      TODO: it will be changed
         val id: Int
 
         mutex.withLock {
-            if (state.changeAlreadyProposed(changeWithAcceptNum)) {
-                return ConsensusChangeAlreadyProposed
+            if (state.changeAlreadyProposed(change)) {
+                return change.toHistoryEntry().getId()
             }
 
             timer.cancelCounting()
-            logger.info("Propose change to ledger: $changeWithAcceptNum")
-            id = state.proposeChange(changeWithAcceptNum, currentTerm)
+            logger.info("Propose change to ledger: $change")
+            id = state.proposeChange(change, currentTerm)
         }
-
-
         voteContainer.initializeChange(id)
-//      Propose change
-        sendHeartbeat()
-        signalPublisher.signal(Signal.ConsensusAfterProposingChange, this, listOf(otherConsensusPeers()), null)
-
-        if (state.lastApplied != id) return ConsensusResultUnknown
-        timer.cancelCounting()
-        logger.info("Change accepted and propagate it: $changeWithAcceptNum")
-//      If change accepted, propagate it
-        sendHeartbeat()
-
-        return ConsensusSuccess
+        return change.toHistoryEntry().getId()
     }
 
-    private suspend fun sendRequestToLeader(change: Change): ConsensusResult = try {
-        val response = httpClient.post<String>("http://${votedFor!!.address}/consensus/request_apply_change") {
+    private suspend inline fun <reified K> sendRequestToLeader(change: Change, suffix: String): K? = try {
+        val response = httpClient.post<K>("http://${votedFor!!.address}/consensus/request_apply_change/${suffix}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = change
         }
         logger.info("Response from leader: $response")
-        ConsensusResult.values().find { it.toString() == response } ?: ConsensusFailure
+        response
     } catch (e: Exception) {
         logger.info("$peerId - request to leader (${votedFor!!.address}) failed with exception: $e", e)
-        ConsensusFailure
+        null
     }
+
+    private suspend fun asyncSendRequestToLeader(change: Change): String? = sendRequestToLeader<String>(change, "async")
+    private suspend fun syncSendRequestToLeader(change: Change): ConsensusResult =
+        sendRequestToLeader<ConsensusResult>(change, "sync") ?: ConsensusFailure
+
 
     private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: Change): ConsensusResult {
         val id = state.proposeChange(changeWithAcceptNum, currentTerm)
@@ -432,8 +429,8 @@ class RaftConsensusProtocolImpl(
         logger.info("$peerId received change: $change")
 
         return when {
-            amILeader() -> proposeChangeToLedger(change)
-            votedFor != null -> sendRequestToLeader(change)
+            amILeader() -> syncProposeChangeToLedger(change)
+            votedFor != null -> syncSendRequestToLeader(change)
 //              TODO: Change after queue
             else -> tryToProposeChangeMyself(change)
         }
@@ -441,7 +438,19 @@ class RaftConsensusProtocolImpl(
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
         TODO("Not yet implemented")
+        logger.info("$peerId received change: $change")
+
+        return when {
+            amILeader() -> asyncProposeChangeToLedger(change)
+            votedFor != null ->
+                asyncSendRequestToLeader(change) ?: throw Exception("Error during processing change")
+//
+//              TODO: Change after queue
+            else ->
+                throw Exception("There should be always a leader")
+        }
     }
+
 
     private fun scheduleHeartbeatToPeers() {
         otherConsensusPeers().forEach {

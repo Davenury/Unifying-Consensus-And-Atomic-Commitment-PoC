@@ -34,6 +34,11 @@ class HistoryRatisNode(
         return if (result == "ERROR") ConsensusFailure else ConsensusSuccess
     }
 
+    private suspend fun asyncProposeChange(change: Change): String {
+        val result = applyTransaction(change.toHistoryEntry().serialize())
+        return  change.toHistoryEntry().getId()
+    }
+
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
         TODO("Not yet implemented")
     }

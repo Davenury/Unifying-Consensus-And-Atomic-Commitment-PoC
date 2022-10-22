@@ -6,7 +6,7 @@ import com.github.davenury.ucac.history.History
 
 abstract class HistoryManagement(private val consensusProtocol: ConsensusProtocol) {
     open suspend fun change(change: Change) =
-        consensusProtocol.proposeChange(change)
+        consensusProtocol.syncProposeChange(change)
             .let {
                 when (it) {
                     ConsensusFailure -> HistoryChangeResult.HistoryChangeFailure

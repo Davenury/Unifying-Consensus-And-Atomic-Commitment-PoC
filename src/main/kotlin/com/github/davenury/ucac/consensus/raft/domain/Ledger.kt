@@ -15,7 +15,7 @@ data class Ledger(
     private var commitIndex: Int = 0
     var lastApplied = -1
 
-    suspend fun updateLedger(acceptedItems: List<LedgerItem>, proposedItems: List<LedgerItem>): Boolean {
+    suspend fun updateLedger(acceptedItems: List<LedgerItem>, proposedItems: List<LedgerItem>): LedgerUpdateResult {
         mutex.withLock {
             val newAcceptedItems = acceptedItems - this.acceptedItems.toSet()
             this.acceptedItems.addAll(newAcceptedItems)
@@ -27,7 +27,10 @@ data class Ledger(
             this.proposedItems.addAll(newProposedItems)
             commitIndex = newProposedItems.maxOrDefault(commitIndex)
 
-            return newAcceptedItems.isNotEmpty()
+            return LedgerUpdateResult(
+                anyAcceptedChange = newAcceptedItems.isNotEmpty(),
+                anyProposedChange = newProposedItems.isNotEmpty()
+            )
         }
     }
 
@@ -35,19 +38,19 @@ data class Ledger(
         mutex.withLock {
             acceptedItems.filter { it.ledgerIndex > ledgerIndex }
         }
+
     suspend fun getNewProposedItems(ledgerIndex: Int) =
         mutex.withLock {
             proposedItems.filter { it.ledgerIndex > ledgerIndex }
         }
 
-    suspend fun acceptItems(acceptedIndexes: List<Int>) {
+    suspend fun acceptItems(acceptedIndexes: List<Int>) =
         mutex.withLock {
             val newAcceptedItems = proposedItems.filter { acceptedIndexes.contains(it.ledgerIndex) }
             acceptedItems.addAll(newAcceptedItems)
             proposedItems.removeAll(newAcceptedItems)
             lastApplied = newAcceptedItems.maxOrDefault(lastApplied)
         }
-    }
 
     suspend fun proposeChange(change: Change, term: Int): Int {
         mutex.withLock {
@@ -72,9 +75,23 @@ data class Ledger(
         mutex.withLock {
             acceptedItems.map { it.change }.toMutableList()
         }
+
     suspend fun getProposedChanges(): List<Change> =
         mutex.withLock {
             proposedItems.map { it.change }.toMutableList()
+        }
+
+    suspend fun getProposedChanges(ids: List<Int>): List<Change> =
+        mutex.withLock {
+            proposedItems
+                .filter { ids.contains(it.ledgerIndex) }
+                .map { it.change }.toMutableList()
+        }
+
+
+    suspend fun isChangeAccepted(change: Change): Boolean =
+        mutex.withLock {
+            acceptedItems.any { it.change == change }
         }
 
     suspend fun checkIfItemExist(logIndex: Int, logTerm: Int): Boolean =
@@ -105,6 +122,12 @@ data class Ledger(
                 .any { it.change.toHistoryEntry() == change.toHistoryEntry() }
         }
 
+    suspend fun getLedgerIdByChange(change: Change): Int =
+        mutex.withLock {
+            (acceptedItems + proposedItems)
+                .find { it.change.toHistoryEntry() == change.toHistoryEntry() }!!.ledgerIndex
+        }
+
 
     private fun List<LedgerItem>.maxOrDefault(defaultValue: Int): Int =
         this.maxOfOrNull { it.ledgerIndex } ?: defaultValue
@@ -121,3 +144,5 @@ data class LedgerItemDto(val ledgerIndex: Int, val term: Int, val change: Change
 data class LedgerItem(val ledgerIndex: Int, val term: Int, val change: Change) {
     fun toDto(): LedgerItemDto = LedgerItemDto(ledgerIndex, term, change)
 }
+
+data class LedgerUpdateResult(val anyAcceptedChange: Boolean, val anyProposedChange: Boolean)
