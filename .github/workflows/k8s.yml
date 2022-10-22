@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubutnu-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v2
@@ -26,6 +26,7 @@ jobs:
         run: ./cmd deploy -n test --create-namespace --peers=3,1
       - name: wait for deploy
         run: sleep 100
-      # todo - change this to test
-      - name: get pods
-        run: kubectl get pods -n test
+      - name: test command
+        run: ./cmd test -n test
+      - name: cleanup pods
+        run: ./cmd cleanup -n test
