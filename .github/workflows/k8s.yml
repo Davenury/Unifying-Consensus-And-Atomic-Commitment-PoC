@@ -1,4 +1,4 @@
-name: Example action
+name: K8s
 
 on: [push, pull_request]
 

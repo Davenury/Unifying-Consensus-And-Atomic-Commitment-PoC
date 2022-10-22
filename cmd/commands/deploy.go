@@ -118,6 +118,7 @@ func createPodTemplate(peerConfig PeerConfig) apiv1.PodTemplateSpec {
 				"peerId":    peerConfig.PeerId,
 				"peersetId": peerConfig.PeersetId,
 				"app.name":  fmt.Sprintf("peer%s-peerset%s-app", peerConfig.PeerId, peerConfig.PeersetId),
+				"project":   "ucac",
 			},
 			Annotations: map[string]string{
 				"prometheus.io/scrape": "true",
