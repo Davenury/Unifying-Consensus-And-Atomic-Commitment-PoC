@@ -20,7 +20,7 @@ jobs:
           go-version: 1.18
       - name: build command
         working-directory: ./cmd
-        run: go build -o cmd
+        run: go get && go build -o cmd
       - name: deploy pods
         working-directory: ./cmd
         run: ./cmd deploy -n test --create-namespace --peers=3,1
