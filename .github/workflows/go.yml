@@ -1,0 +1,18 @@
+name: Go
+
+on: [ push, pull_request ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '>=1.19'
+      - name: Go get
+        working-directory: cmd
+        run: go get
+      - name: Go build
+        working-directory: cmd
+        run: go build -o ucac

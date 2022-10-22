@@ -7,8 +7,7 @@ import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
-import com.github.davenury.ucac.consensus.ratis.HistoryRaftNode
-import com.github.davenury.ucac.consensus.ratis.RaftConfiguration
+import com.github.davenury.ucac.consensus.ratis.HistoryRatisNode
 import com.github.davenury.ucac.gpac.api.gpacProtocolRouting
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
@@ -30,74 +29,94 @@ import io.netty.channel.socket.nio.NioServerSocketChannel
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
 fun main(args: Array<String>) {
-    createApplication(args).startBlocking()
+    val configPrefix = "config_"
+    val configOverrides = HashMap<String, String>()
+    configOverrides.putAll(System.getenv()
+        .filterKeys { it.startsWith(configPrefix) }
+        .mapKeys { it.key.replaceFirst(configPrefix, "") }
+        .mapKeys { it.key.replace("_", ".") })
+
+    Application.logger.info("Using overrides: $configOverrides")
+
+    val application = createApplication(configOverrides = configOverrides)
+    application.startNonblocking()
+
+    while (!Thread.interrupted()) {
+        try {
+            Thread.sleep(1000)
+        } catch (e: InterruptedException) {
+            break;
+        }
+    }
+
+    application.stop(5000, 5000)
 }
 
 fun createApplication(
-    args: Array<String>,
     signalListeners: Map<Signal, SignalListener> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
-    mode: ApplicationMode = determineApplicationMode(args)
 ): Application {
-    return Application(signalListeners, configOverrides, mode)
+    val config = loadConfig(configOverrides)
+    return Application(signalListeners, config)
 }
 
 class Application constructor(
     private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
-    configOverrides: Map<String, Any>,
-    private val mode: ApplicationMode
+    private val config: Config,
 ) {
-    private val config: Config = loadConfig(configOverrides)
-    private val peerConstants: RaftConfiguration = RaftConfiguration(mode.peersetId, configOverrides)
+    companion object {
+        val logger = LoggerFactory.getLogger(Application::class.java)
+    }
+
     private val engine: NettyApplicationEngine
-    private var raftNode: HistoryRaftNode? = null
+    private var raftNode: HistoryRatisNode? = null
     private var consensusProtocol: RaftConsensusProtocol? = null
-    private val ctx: ExecutorCoroutineDispatcher
+    private val ctx: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
     private lateinit var gpacProtocol: GPACProtocol
 
     init {
-
-        ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
-        engine = embeddedServer(Netty, port = mode.port, host = "0.0.0.0") {
-
+        logger.info("Starting application with config: $config")
+        engine = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
             val signalPublisher = SignalPublisher(signalListeners)
 
-            val raftProtocolClientImpl = RaftProtocolClientImpl(mode.nodeId)
+            val raftProtocolClientImpl = RaftProtocolClientImpl(config.peerId)
 
             consensusProtocol = RaftConsensusProtocolImpl(
-                mode.nodeId,
-                mode.peersetId,
-                mode.host,
+                config.peerId,
+                config.peersetId,
+                config.host + ":" + config.port,
                 ctx,
-                mode.otherPeers.getOrElse(mode.peersetId - 1) { listOf() },
+                config.peerAddresses()[config.peersetId - 1],
                 signalPublisher,
                 raftProtocolClientImpl,
                 heartbeatTimeout = config.raft.heartbeatTimeout,
-                heartbeatDelay = config.raft.leaderTimeout
+                heartbeatDelay = config.raft.leaderTimeout,
             )
 
             val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
 
-            val timer = ProtocolTimerImpl(config.protocol.leaderFailTimeout, config.protocol.backoffBound, ctx)
+            val timer = ProtocolTimerImpl(config.gpac.leaderFailTimeout, config.gpac.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
-            val myAddress = "${mode.host}:${mode.port}"
+            val myAddress = "${config.host}:${config.port}"
             gpacProtocol =
                 GPACProtocolImpl(
                     historyManagement,
-                    config.peers.maxLeaderElectionTries,
+                    config.gpac.maxLeaderElectionTries,
                     timer,
                     protocolClient,
                     transactionBlocker,
                     signalPublisher,
-                    allPeers = mode.otherPeers.withIndex().associate { it.index + 1 to it.value },
-                    myPeersetId = mode.peersetId,
-                    myNodeId = mode.nodeId,
+                    allPeers = config.peerAddresses().withIndex().associate { it.index + 1 to it.value },
+                    myPeersetId = config.peersetId,
+                    myNodeId = config.peerId,
                     myAddress = myAddress
                 )
 
@@ -113,7 +132,6 @@ class Application constructor(
                     ProcessorMetrics()
                 )
             }
-
 
             install(StatusPages) {
                 exception<MissingParameterException> { cause ->
@@ -211,11 +229,7 @@ class Application constructor(
     fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
         gpacProtocol.setPeers(peers)
         gpacProtocol.setMyAddress(myAddress)
-        consensusProtocol?.setOtherPeers(peers[mode.peersetId]!!)
-    }
-
-    fun startBlocking() {
-        engine.start(wait = true)
+        consensusProtocol?.setOtherPeers(peers[config.peersetId]!!)
     }
 
     suspend fun startConsensusProtocol() {
@@ -224,9 +238,8 @@ class Application constructor(
 
     fun startNonblocking() {
         engine.start(wait = false)
-        val address = "${mode.host}:${getBoundPort()}"
+        val address = "${config.host}:${getBoundPort()}"
         consensusProtocol?.setPeerAddress(address)
-
     }
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
@@ -250,6 +263,5 @@ class Application constructor(
         }
     }
 
-    fun getPeersetId() = mode.peersetId
+    fun getPeersetId() = config.peersetId
 }
-

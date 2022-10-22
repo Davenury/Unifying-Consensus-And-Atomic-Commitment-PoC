@@ -68,19 +68,19 @@ func DeploymentName(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-dep", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
-func GenerateServicesForPeers(peersInPeerset []int, startPort int, namespace string) string {
-	return generateServicesForPeers(peersInPeerset, startPort, true, namespace)
+func GenerateServicesForPeers(peersInPeerset []int, startPort int) string {
+	return generateServicesForPeers(peersInPeerset, startPort, true)
 }
 
-func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int, namespace string) string {
-	return generateServicesForPeers(peersInPeerset, port, false, namespace)
+func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int) string {
+	return generateServicesForPeers(peersInPeerset, port, false)
 }
 
-func ServiceAddress(peerConfig PeerConfig, namespace string) string {
+func ServiceAddress(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
-func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool, namespace string) string {
+func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool) string {
 
 	var resultSb strings.Builder
 	for idx, peersNumber := range peersInPeerset {
@@ -91,10 +91,10 @@ func generateServicesForPeers(peersInPeerset []int, startPort int, increment boo
 			if increment {
 				port = port + i
 			}
-			sb.WriteString(fmt.Sprintf("\"%s:%d\",", ServiceAddress(PeerConfig{
+			sb.WriteString(fmt.Sprintf("%s:%d,", ServiceAddress(PeerConfig{
 				PeerId:    strconv.Itoa(i),
 				PeersetId: strconv.Itoa(idx + 1),
-			}, namespace), port))
+			}), port))
 		}
 
 		str := sb.String()
@@ -103,7 +103,7 @@ func generateServicesForPeers(peersInPeerset []int, startPort int, increment boo
 			str = str[:len(str)-1]
 		}
 
-		resultSb.WriteString(fmt.Sprintf("[%s],", str))
+		resultSb.WriteString(fmt.Sprintf("%s;", str))
 	}
 
 	result := resultSb.String()

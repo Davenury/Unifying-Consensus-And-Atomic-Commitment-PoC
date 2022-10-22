@@ -35,7 +35,7 @@ class SinglePeersetIntegrationTest {
 
 
     companion object {
-        private val log = LoggerFactory.getLogger(SinglePeersetIntegrationTest::class.java)!!
+        private val logger = LoggerFactory.getLogger(SinglePeersetIntegrationTest::class.java)!!
     }
 
     @BeforeEach
@@ -123,7 +123,7 @@ class SinglePeersetIntegrationTest {
             val firstLeaderAction = SignalListener {
                 runBlocking {
                     val url = "http://${it.peers[0][1]}/ft-agree"
-                    val response = testHttpClient.post<Agreed>(url) {
+                    testHttpClient.post<Agreed>(url) {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
                         body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, change(listOf(it.peers[0][0])))
@@ -157,10 +157,12 @@ class SinglePeersetIntegrationTest {
                 executeChange("http://${peers[0][0]}/create_change", change(listOf()))
                 fail("Change passed")
             } catch (e: Exception) {
-                log.info("Leader 1 fails: $e")
+                logger.info("Leader 1 fails: $e")
             }
 
-            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+            withContext(Dispatchers.IO) {
+                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+            }
 
             val response = testHttpClient.get<Change>("http://${peers[0][2]}/change") {
                 contentType(ContentType.Application.Json)
@@ -189,24 +191,24 @@ class SinglePeersetIntegrationTest {
             Signal.ConsensusFollowerChangeAccepted to consensusPeersAction
         )
 
-        val firstLeaderAction = SignalListener {
-            val url = "http://${it.peers[0][1]}/apply"
+        val firstLeaderAction = SignalListener { signalData ->
+            val url = "http://${signalData.peers[0][1]}/apply"
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
                     body = Apply(
-                        it.transaction!!.ballotNumber,
+                        signalData.transaction!!.ballotNumber,
                         true,
                         Accept.COMMIT,
                         AddGroupChange(
                             InitialHistoryEntry.getId(),
                             "groupName",
-                            listOf("http://${it.peers[0][1]}"),
+                            listOf("http://${signalData.peers[0][1]}"),
                         )
                     )
                 }.also {
-                    log.info("Got response ${it.status.value}")
+                    logger.info("Got response ${it.status.value}")
                 }
             }
             throw RuntimeException()
@@ -245,7 +247,7 @@ class SinglePeersetIntegrationTest {
             )
             fail("Change passed")
         } catch (e: Exception) {
-            log.info("Leader 1 fails: $e")
+            logger.info("Leader 1 fails: $e")
         }
 
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction

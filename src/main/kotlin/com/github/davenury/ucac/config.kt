@@ -1,24 +1,46 @@
 package com.github.davenury.ucac
 
-
 import com.sksamuel.hoplite.ConfigLoaderBuilder
 import com.sksamuel.hoplite.MapPropertySource
 import com.sksamuel.hoplite.addResourceSource
 import java.time.Duration
 
-data class Config(val raft: RaftConfig, val peers: PeersConfig, val protocol: ProtocolConfig, val applicationEnv: String?)
-data class PeersConfig(val peersAddresses: List<List<String>>, val maxLeaderElectionTries: Int)
-data class RaftConfig(
-    val server: ServerConfig,
-    val clusterGroupIds: List<String>,
-    val heartbeatTimeout: Duration,
-    val leaderTimeout: Duration
+fun parsePeers(peers: String): List<List<String>> {
+    return peers.split(";")
+        .map { peerset -> peerset.split(",").map { it.trim() } }
+}
+
+data class Config(
+    val host: String,
+    val port: Int,
+    val peerId: Int,
+    val peersetId: Int,
+    // peer1,peer2;peer3,peer4
+    val peers: String,
+
+    val raft: RaftConfig,
+    val ratis: RatisConfig,
+    val gpac: GpacConfig,
+) {
+    fun peerAddresses(): List<List<String>> = parsePeers(peers)
+}
+
+data class RatisConfig(
+    val addresses: String = "",
+) {
+    fun peerAddresses(): List<List<String>> = parsePeers(addresses)
+}
+
+data class GpacConfig(
+    val maxLeaderElectionTries: Int = 5,
+    val leaderFailTimeout: Duration = Duration.ofSeconds(60),
+    val backoffBound: Duration = Duration.ofSeconds(120),
 )
 
-data class ServerConfig(val addresses: List<List<String>>, val root: RootConfig)
-data class RootConfig(val storage: StorageConfig)
-data class StorageConfig(val path: String)
-data class ProtocolConfig(val leaderFailTimeout: Duration, val backoffBound: Duration)
+data class RaftConfig(
+    val heartbeatTimeout: Duration = Duration.ofSeconds(2),
+    val leaderTimeout: Duration = Duration.ofSeconds(1),
+)
 
 fun loadConfig(overrides: Map<String, Any> = emptyMap()): Config {
     val configFile = System.getProperty("configFile")
