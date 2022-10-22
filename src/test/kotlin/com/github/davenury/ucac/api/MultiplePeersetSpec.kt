@@ -4,6 +4,7 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.Apply
+import com.github.davenury.ucac.gpac.domain.TransactionResult
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.features.*
@@ -119,8 +120,11 @@ class MultiplePeersetSpec {
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
 
+        val change = change(otherPeer)
 
-        executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+        val result = executeChange("http://${peers[0][0]}/create_change", change)
+
+        expectThat(result.status).isEqualTo(HttpStatusCode.Created)
 
         withContext(Dispatchers.IO) {
             phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
@@ -131,6 +135,19 @@ class MultiplePeersetSpec {
             .let {
                 expectThat(it.size).isEqualTo(0)
             }
+
+
+        val transactionResult = testHttpClient.get<TransactionResult>(
+            "http://${peers[0][0]}/change_status/${
+                change.toHistoryEntry().getId()
+            }"
+        ) {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }
+
+        expectThat(transactionResult).isEqualTo(TransactionResult.FAILED)
+
 
         apps.stopApps()
     }
@@ -398,8 +415,8 @@ class MultiplePeersetSpec {
         }
 
 
-    private suspend fun executeChange(uri: String, change: Change) =
-        testHttpClient.post<String>(uri) {
+    private suspend fun executeChange(uri: String, change: Change): HttpResponse =
+        testHttpClient.post(uri) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = change

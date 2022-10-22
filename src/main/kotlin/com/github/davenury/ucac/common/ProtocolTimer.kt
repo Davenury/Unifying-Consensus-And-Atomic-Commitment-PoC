@@ -37,7 +37,6 @@ class ProtocolTimerImpl(
                         )
                     .let { Duration.ofMillis(it) }
                 val timeout = delay.plus(backoff)
-                if (iteration != 0) println("Sleeping for: $timeout /-/ $backoff /-/ $exponent /-/ $iteration")
                 delay(timeout.toMillis())
                 action()
             }

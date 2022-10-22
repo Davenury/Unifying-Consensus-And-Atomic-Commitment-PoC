@@ -76,7 +76,7 @@ class GPACProtocolSpec {
         val result = subject.handleElect(message)
 
         expectThat(result.initVal).isEqualTo(Accept.COMMIT)
-        expectThat(subject.getTransaction()).isEqualTo(Transaction(3, Accept.COMMIT, 0, null, false))
+        expectThat(subject.getTransaction()).isEqualTo(Transaction(3, Accept.COMMIT, 0, null, false, change = change))
     }
 
     @Test
