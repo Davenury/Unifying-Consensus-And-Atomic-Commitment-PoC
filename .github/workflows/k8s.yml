@@ -25,7 +25,7 @@ jobs:
         working-directory: ./cmd
         run: ./cmd deploy -n test --create-namespace --peers=3,1
       - name: wait for deploy
-        run: sleep 5
+        run: sleep 15
       - name: test command
         working-directory: ./cmd
         run: ./cmd test -n test
