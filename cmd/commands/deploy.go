@@ -10,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
+	"time"
 )
 
 const ratisPort = 10024
@@ -18,6 +19,7 @@ const servicePort = 8080
 var numberOfPeersInPeersets []int
 var deployNamespace string
 var deployCreateNamespace bool
+var waitForReady bool
 
 func CreateDeployCommand() *cobra.Command {
 
@@ -57,15 +59,48 @@ func CreateDeployCommand() *cobra.Command {
 					fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
 				}
 			}
+
+			waitForPodsReady()
 		},
 	}
 
 	deployCommand.Flags().IntSliceVar(&numberOfPeersInPeersets, "peers", make([]int, 0), "Number of peers in peersets; example usage '--peers=1,2,3'")
 	deployCommand.Flags().BoolVarP(&deployCreateNamespace, "create-namespace", "", false, "Include if should create namespace")
 	deployCommand.Flags().StringVarP(&deployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
+	deployCommand.Flags().BoolVarP(&waitForReady, "wait-for-ready", "", false, "Wait for deployment to be ready")
 
 	return deployCommand
 
+}
+
+func waitForPodsReady() {
+	for anyPodNotReady() {
+		time.Sleep(1 * time.Second)
+		fmt.Println("Waiting for pods to be ready")
+	}
+}
+
+func anyPodNotReady() bool {
+
+	clientset, err := GetClientset()
+	if err != nil {
+		panic(err)
+	}
+
+	pods, err := clientset.CoreV1().Pods(deployNamespace).List(context.Background(), metav1.ListOptions{})
+
+	if len(pods.Items) == 0 {
+		// we assume that we always have at least one pod
+		return true
+	}
+
+	for _, pod := range pods.Items {
+		if !pod.Status.ContainerStatuses[0].Ready {
+			return true
+		}
+	}
+
+	return false
 }
 
 func deploySinglePeerDeployment(namespace string, peerConfig PeerConfig) {
