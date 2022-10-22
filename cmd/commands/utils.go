@@ -77,7 +77,7 @@ func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int, namespac
 }
 
 func ServiceAddress(peerConfig PeerConfig, namespace string) string {
-	return fmt.Sprintf("peer%s-peerset%s-service.%s.svc.cluster.local", peerConfig.PeerId, peerConfig.PeersetId, namespace)
+	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
 func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool, namespace string) string {
