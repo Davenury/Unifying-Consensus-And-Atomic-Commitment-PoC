@@ -4,6 +4,7 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.Apply
+import com.github.davenury.ucac.gpac.domain.TransactionResult
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.features.*
@@ -98,19 +99,35 @@ class MultiplePeersetSpec {
     @Test
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
 
-        val apps = TestApplicationSet(2, listOf(3, 3), appsToExclude = listOf(4, 5, 6))
+        val phaser = Phaser(1)
+        phaser.register()
+
+        val peerReachedMaxRetries = SignalListener {
+            logger.info("Arrived: ${it.subject.getPeerName()}")
+            phaser.arrive()
+        }
+
+        val signalListenersForCohort = mapOf(
+            Signal.ReachedMaxRetries to peerReachedMaxRetries
+        )
+
+
+        val apps = TestApplicationSet(
+            2,
+            listOf(3, 3),
+            appsToExclude = listOf(4, 5, 6),
+            signalListeners = (0..6).associateWith { signalListenersForCohort })
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
 
-        // when - executing transaction
-        try {
-            executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
-            fail("Exception not thrown")
-        } catch (e: Exception) {
-            expect {
-                that(e).isA<ServerResponseException>()
-                that(e.message!!).contains("Transaction failed due to too many retries of becoming a leader.")
-            }
+        val change = change(otherPeer)
+
+        val result = executeChange("http://${peers[0][0]}/create_change", change)
+
+        expectThat(result.status).isEqualTo(HttpStatusCode.Created)
+
+        withContext(Dispatchers.IO) {
+            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
         }
 
         // then - transaction should not be executed
@@ -118,6 +135,19 @@ class MultiplePeersetSpec {
             .let {
                 expectThat(it.size).isEqualTo(0)
             }
+
+
+        val transactionResult = testHttpClient.get<TransactionResult>(
+            "http://${peers[0][0]}/change_status/${
+                change.toHistoryEntry().getId()
+            }"
+        ) {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }
+
+        expectThat(transactionResult).isEqualTo(TransactionResult.FAILED)
+
 
         apps.stopApps()
     }
@@ -245,12 +275,12 @@ class MultiplePeersetSpec {
             throw RuntimeException("Leader failed after ft-agree")
         }
 
-        val phaser = Phaser(7)
-        phaser.register()
+        val applyCommittedPhaser = Phaser(7)
+        applyCommittedPhaser.register()
 
         val peerApplyCommitted = SignalListener {
             logger.info("Arrived: ${it.subject.getPeerName()}")
-            phaser.arrive()
+            applyCommittedPhaser.arrive()
         }
 
         val signalListenersForLeaders = mapOf(
@@ -282,7 +312,7 @@ class MultiplePeersetSpec {
         }
 
         withContext(Dispatchers.IO) {
-            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+            applyCommittedPhaser.awaitAdvanceInterruptibly(applyCommittedPhaser.arrive(), 60, TimeUnit.SECONDS)
         }
 
         peers.flatten().forEach {
@@ -385,8 +415,8 @@ class MultiplePeersetSpec {
         }
 
 
-    private suspend fun executeChange(uri: String, change: Change) =
-        testHttpClient.post<String>(uri) {
+    private suspend fun executeChange(uri: String, change: Change): HttpResponse =
+        testHttpClient.post(uri) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = change

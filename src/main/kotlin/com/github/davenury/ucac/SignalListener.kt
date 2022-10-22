@@ -5,6 +5,7 @@ import com.github.davenury.ucac.gpac.domain.Transaction
 
 enum class Signal {
     BeforeSendingElect,
+    OnSendingElectBuildFail,
     OnHandlingElectBegin,
     OnHandlingElectEnd,
     BeforeSendingAgree,
@@ -14,7 +15,9 @@ enum class Signal {
     OnHandlingApplyBegin,
     OnHandlingApplyEnd,
     OnHandlingApplyCommitted,
+    ReachedMaxRetries,
     ConsensusLeaderElected,
+    ConsensusLeaderDoesNotSendHeartbeat,
     ConsensusAfterProposingChange,
     ConsensusFollowerChangeAccepted,
     ConsensusTryToBecomeLeader

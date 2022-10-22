@@ -269,17 +269,19 @@ class ConsensusSpec {
         val activePeers = 3
         val triesToBecomeLeader = 3
 
+        val leaderFailedPhaser = Phaser(peersWithoutLeader)
         val electionPhaser = Phaser(peersWithoutLeader)
         val tryToBecomeLeaderPhaser = Phaser(activePeers * triesToBecomeLeader)
 
-        listOf(electionPhaser, tryToBecomeLeaderPhaser).forEach { it.register() }
+        listOf(leaderFailedPhaser, electionPhaser, tryToBecomeLeaderPhaser).forEach { it.register() }
 
         val peerTryToBecomeLeader = SignalListener { tryToBecomeLeaderPhaser.arrive() }
 
-
+        val peerLeaderFailed = SignalListener { leaderFailedPhaser.arrive() }
         val peerLeaderElected = SignalListener { electionPhaser.arrive() }
 
         val signalListener = mapOf(
+            Signal.ConsensusLeaderDoesNotSendHeartbeat to peerLeaderFailed,
             Signal.ConsensusLeaderElected to peerLeaderElected,
             Signal.ConsensusTryToBecomeLeader to peerTryToBecomeLeader,
         )
@@ -299,12 +301,12 @@ class ConsensusSpec {
 
         apps = apps.filter { it != firstLeaderApplication }
 
+        awaitAdvanceInterruptiblyPhaser(leaderFailedPhaser)
         awaitAdvanceInterruptiblyPhaser(tryToBecomeLeaderPhaser, 20)
 
         expect {
             val secondLeaderAddress = askForLeaderAddress(apps.first())
             that(secondLeaderAddress).isEqualTo(noneLeader)
-
         }
 
         peerset.stopApps()

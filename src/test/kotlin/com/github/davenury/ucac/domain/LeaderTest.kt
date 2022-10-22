@@ -1,6 +1,12 @@
 package com.github.davenury.ucac.domain
 
-import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.common.AddUserChange
+import com.github.davenury.ucac.common.InMemoryHistoryManagement
+import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.TooFewResponsesException
 import com.github.davenury.ucac.consensus.raft.infrastructure.DummyConsensusProtocol
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
@@ -9,14 +15,18 @@ import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.isEqualTo
 import java.time.Duration
 import java.util.concurrent.Executors
+import java.util.concurrent.Phaser
+import java.util.concurrent.TimeUnit
 
 class LeaderTest {
 
@@ -26,8 +36,15 @@ class LeaderTest {
     fun `should throw max retires exceeded, when too many times tried to be a leader`() {
         PeerTwo.stubForNotElectingYou()
         PeerThree.stubForNotElectingYou()
-        
-        expectThrows<MaxTriesExceededException> { subject.performProtocolAsLeader(changeDto) }
+
+        runBlocking { subject.performProtocolAsLeader(changeDto) }
+
+
+        runBlocking {
+            withContext(Dispatchers.IO) {
+                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
+            }
+        }
 
         // assert that we're actually asking 3 times
         PeerTwo.verifyMaxRetriesForElectionPassed(3)
@@ -69,6 +86,14 @@ class LeaderTest {
     private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)
     private val client = GPACProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
+    private val phaser: Phaser = Phaser(1).also { it.register() }
+    private val peerReachedMaxRetries = SignalListener {
+        phaser.arrive()
+    }
+
+    val signalListenersForCohort = mapOf(
+        Signal.ReachedMaxRetries to peerReachedMaxRetries
+    )
     private var subject =
         GPACProtocolImpl(
             historyManagement,
@@ -79,7 +104,8 @@ class LeaderTest {
             myPeersetId = 1,
             myNodeId = 0,
             allPeers = mapOf(1 to listOf("localhost:${PeerTwo.getPort()}", "localhost:${PeerThree.getPort()}")),
-            myAddress = "localhost:8081"
+            myAddress = "localhost:8081",
+            signalPublisher = SignalPublisher(signalListenersForCohort)
         )
     private val changeDto = AddUserChange(InitialHistoryEntry.getId(), "userName", listOf())
 }

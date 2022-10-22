@@ -19,12 +19,15 @@ class InMemoryHistoryManagement(
                     ConsensusFailure -> {
                         HistoryChangeResult.HistoryChangeFailure
                     }
+
                     ConsensusSuccess -> {
                         HistoryChangeResult.HistoryChangeSuccess
                     }
+
                     ConsensusResultUnknown -> {
                         HistoryChangeResult.HistoryChangeSuccess
                     }
+
                     ConsensusChangeAlreadyProposed -> {
                         HistoryChangeResult.HistoryChangeUnknown
                     }
@@ -41,7 +44,8 @@ class InMemoryHistoryManagement(
 
     override fun getState(): History = consensusProtocol.getState()
 
-    override fun canBeBuild(newChange: Change): Boolean = true
+    override fun canBeBuild(newChange: Change): Boolean =
+        getState().getCurrentEntry().getId().let { it == newChange.toHistoryEntry().getId() || it == newChange.parentId }
 
     override fun build() {}
 

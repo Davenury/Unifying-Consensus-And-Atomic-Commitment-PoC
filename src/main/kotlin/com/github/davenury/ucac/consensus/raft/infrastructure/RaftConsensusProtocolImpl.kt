@@ -363,6 +363,7 @@ class RaftConsensusProtocolImpl(
             }
         }
         timer.startCounting {
+            signalPublisher.signal(Signal.ConsensusLeaderDoesNotSendHeartbeat, this, listOf(otherConsensusPeers), null)
             logger.info(text)
             sendLeaderRequest()
         }
@@ -406,7 +407,7 @@ class RaftConsensusProtocolImpl(
             body = change
         }
         logger.info("Response from leader: $response")
-        ConsensusResult.values().find { it.toString() == response }!!
+        ConsensusResult.values().find { it.toString() == response } ?: ConsensusFailure
     } catch (e: Exception) {
         logger.info("$peerId - request to leader (${votedFor!!.address}) failed with exception: $e", e)
         ConsensusFailure

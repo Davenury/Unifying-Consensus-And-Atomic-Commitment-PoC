@@ -16,6 +16,8 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
                 }
             }
 
+    fun contains(changeId: String): Boolean = getState().getEntryFromHistory(changeId) != null
+
     abstract fun getLastChange(): Change?
     abstract fun getState(): History
 
