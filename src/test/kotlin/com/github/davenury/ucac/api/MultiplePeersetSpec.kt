@@ -49,21 +49,39 @@ class MultiplePeersetSpec {
 
     @Test
     fun `should execute transaction in every peer from every of two peersets`(): Unit = runBlocking {
-        val apps = TestApplicationSet(2, listOf(3, 3))
+        val phaser = Phaser(6)
+        phaser.register()
+
+        val signalListenersForCohort = mapOf(
+            Signal.OnHandlingApplyEnd to SignalListener {
+                logger.info("Arrived: ${it.subject.getPeerName()}")
+                phaser.arrive()
+            }
+        )
+
+        val apps = TestApplicationSet(
+            2, listOf(3, 3),
+            signalListeners = (0..6).associateWith { signalListenersForCohort }
+        )
         val peers = apps.getPeers()
-        val otherPeer = apps.getPeers()[1][0]
+        val change = change(peers[1][0])
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+        executeChange("http://${peers[0][0]}/create_change", change)
+
+        withContext(Dispatchers.IO) {
+            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
+        }
+
+        // TODO Currently GPAC does not apply changes, but instead
+        //  delegates them to the consensus protocol.
+        //  When this behavior is fixed, this delay must be removed.
+        delay(5000)
 
         // then - transaction is executed in same peerset
         val peer2Change = testHttpClient.get<Change>("http://${peers[0][1]}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-        }
-
-        expect {
-            that(peer2Change).isEqualTo(change(otherPeer))
         }
 
         // and - transaction is executed in other peerset
@@ -73,24 +91,21 @@ class MultiplePeersetSpec {
         }
 
         expect {
-            that(peer4Change).isEqualTo(change(otherPeer))
+            that(peer2Change).isEqualTo(change)
+            that(peer4Change).isEqualTo(change)
         }
 
         // and - there's only one change in history of both peersets
         askForChanges("http://${peers[0][1]}")
             .let {
-                expect {
-                    that(it.size).isGreaterThanOrEqualTo(1)
-                    that(it[0]).isEqualTo(change(otherPeer))
-                }
+                expectThat(it.size).isGreaterThanOrEqualTo(1)
+                expectThat(it[0]).isEqualTo(change)
             }
 
         askForChanges("http://${peers[1][0]}")
             .let {
-                expect {
-                    that(it.size).isGreaterThanOrEqualTo(1)
-                    that(it[0]).isEqualTo(change(otherPeer))
-                }
+                expectThat(it.size).isGreaterThanOrEqualTo(1)
+                expectThat(it[0]).isEqualTo(change)
             }
 
         apps.stopApps()
@@ -110,7 +125,6 @@ class MultiplePeersetSpec {
         val signalListenersForCohort = mapOf(
             Signal.ReachedMaxRetries to peerReachedMaxRetries
         )
-
 
         val apps = TestApplicationSet(
             2,
@@ -178,9 +192,7 @@ class MultiplePeersetSpec {
         // then - transaction should not be executed
         askForChanges("http://${peers[0][1]}")
             .let {
-                expect {
-                    that(it.size).isEqualTo(0)
-                }
+                expectThat(it.size).isEqualTo(0)
             }
 
         apps.stopApps()
@@ -188,7 +200,6 @@ class MultiplePeersetSpec {
 
     @Test
     fun `transaction should pass when more than half peers of all peersets are operative`(): Unit = runBlocking {
-
         val phaser = Phaser(5)
         phaser.register()
 
@@ -201,36 +212,36 @@ class MultiplePeersetSpec {
             Signal.OnHandlingApplyCommitted to peerApplyCommitted,
         )
 
-        val appsToExclude = listOf(3, 7, 8)
-        val apps = TestApplicationSet(2, listOf(3, 5), appsToExclude = appsToExclude,
-            signalListeners = (0..8).associateWith { signalListenersForCohort })
+        val apps = TestApplicationSet(
+            2, listOf(3, 5),
+            appsToExclude = listOf(3, 7, 8),
+            signalListeners = (1..8).associateWith { signalListenersForCohort })
         val peers = apps.getPeers()
-        val otherPeer = apps.getPeers()[1][0]
+        val change = change(apps.getPeers()[1][0])
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
-
+        executeChange("http://${peers[0][0]}/create_change", change)
 
         withContext(Dispatchers.IO) {
             phaser.awaitAdvanceInterruptibly(phaser.arrive(), 10, TimeUnit.SECONDS)
         }
 
+        // TODO Currently GPAC does not apply changes, but instead
+        //  delegates them to the consensus protocol.
+        //  When this behavior is fixed, this delay must be removed.
+        delay(5000)
 
         // then - transaction should be executed in every peerset
         askForChanges("http://${peers[0][1]}")
             .let {
-                expect {
-                    that(it.size).isGreaterThanOrEqualTo(1)
-                    that(it[0]).isEqualTo(change(otherPeer))
-                }
+                expectThat(it.size).isGreaterThanOrEqualTo(1)
+                expectThat(it[0]).isEqualTo(change)
             }
 
         askForChanges("http://${peers[1][0]}")
             .let {
-                expect {
-                    that(it.size).isGreaterThanOrEqualTo(1)
-                    that(it[0]).isEqualTo(change(otherPeer))
-                }
+                expectThat(it.size).isGreaterThanOrEqualTo(1)
+                expectThat(it[0]).isEqualTo(change)
             }
 
         apps.stopApps()

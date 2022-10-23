@@ -64,7 +64,7 @@ class GPACProtocolImpl(
             )
         }
 
-        signal(Signal.OnHandlingElectBegin, null, getPeersFromChange(message.change))
+        signal(Signal.OnHandlingElectBegin, null, message.change)
 
         transactionBlocker.assertICanSendElectedYou()
 
@@ -73,7 +73,7 @@ class GPACProtocolImpl(
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal, change = message.change)
 
-        signal(Signal.OnHandlingElectEnd, transaction, getPeersFromChange(message.change))
+        signal(Signal.OnHandlingElectEnd, transaction, message.change)
 
         return ElectedYou(
             message.ballotNumber,
@@ -86,7 +86,7 @@ class GPACProtocolImpl(
 
     override suspend fun handleAgree(message: Agree): Agreed {
 
-        signal(Signal.OnHandlingAgreeBegin, transaction, getPeersFromChange(message.change))
+        signal(Signal.OnHandlingAgreeBegin, transaction, message.change)
 
         if (!checkBallotNumber(message.ballotNumber)) {
             throw NotValidLeader(myBallotNumber, message.ballotNumber)
@@ -108,7 +108,7 @@ class GPACProtocolImpl(
             logger.info("${getPeerName()} Lock aquired: ${message.ballotNumber}")
         }
 
-        signal(Signal.OnHandlingAgreeEnd, transaction, getPeersFromChange(message.change))
+        signal(Signal.OnHandlingAgreeEnd, transaction, message.change)
 
         leaderFailTimeoutStart(message.change)
 
@@ -120,16 +120,16 @@ class GPACProtocolImpl(
         val isCurrentTransaction = message.ballotNumber == this.myBallotNumber
 
         if (isCurrentTransaction) leaderFailTimeoutStop()
-        signal(Signal.OnHandlingApplyBegin, transaction, getPeersFromChange(message.change))
+        signal(Signal.OnHandlingApplyBegin, transaction, message.change)
 
         try {
-            if (isCurrentTransaction) this.transaction =
-                this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
-
-
+            if (isCurrentTransaction) {
+                this.transaction =
+                    this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
+            }
 
             if (message.acceptVal == Accept.COMMIT) {
-                signal(Signal.OnHandlingApplyCommitted, transaction, getPeersFromChange(message.change))
+                signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
             }
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
                 historyManagement.change(message.change)
@@ -140,7 +140,7 @@ class GPACProtocolImpl(
             logger.info("${getPeerName()} Releasing semaphore as cohort")
             transactionBlocker.releaseBlock()
 
-            signal(Signal.OnHandlingApplyEnd, transaction, getPeersFromChange(message.change))
+            signal(Signal.OnHandlingApplyEnd, transaction, message.change)
         }
     }
 
@@ -178,7 +178,7 @@ class GPACProtocolImpl(
 
         if (iteration == maxLeaderElectionTries) {
             logger.error("Transaction failed due to too many retries of becoming a leader.")
-            signal(Signal.ReachedMaxRetries, transaction, getPeersFromChange(change))
+            signal(Signal.ReachedMaxRetries, transaction, change)
             transaction = transaction.copy(change = null)
             return TransactionResult.FAILED
         }
@@ -197,11 +197,11 @@ class GPACProtocolImpl(
 
         this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
 
-        signal(Signal.BeforeSendingAgree, this.transaction, getPeersFromChange(enrichedChange))
+        signal(Signal.BeforeSendingAgree, this.transaction, enrichedChange)
 
         val agreedResponses = ftAgreePhase(enrichedChange, acceptVal)
 
-        signal(Signal.BeforeSendingApply, this.transaction, getPeersFromChange(enrichedChange))
+        signal(Signal.BeforeSendingApply, this.transaction, enrichedChange)
 
         val applyResponses = applyPhase(enrichedChange, acceptVal)
 
@@ -219,7 +219,7 @@ class GPACProtocolImpl(
 
         if (iteration == maxLeaderElectionTries) {
             logger.error("Transaction failed due to too many retries of becoming a leader.")
-            signal(Signal.ReachedMaxRetries, transaction, getPeersFromChange(change))
+            signal(Signal.ReachedMaxRetries, transaction, change)
             transaction = transaction.copy(change = null)
             return
         }
@@ -238,7 +238,7 @@ class GPACProtocolImpl(
             logger.info("${getPeerName()} Got hit with message with decision true")
             // someone got to ft-agree phase
             this.transaction = this.transaction.copy(acceptVal = messageWithDecision.acceptVal)
-            signal(Signal.BeforeSendingAgree, this.transaction, getPeersFromChange(change))
+            signal(Signal.BeforeSendingAgree, this.transaction, change)
 
             val agreedResponses = ftAgreePhase(
                 change,
@@ -247,7 +247,7 @@ class GPACProtocolImpl(
                 acceptNum = this.transaction.acceptNum
             )
 
-            signal(Signal.BeforeSendingApply, this.transaction, getPeersFromChange(change))
+            signal(Signal.BeforeSendingApply, this.transaction, change)
 
             val applyResponses = applyPhase(change, messageWithDecision.acceptVal)
 
@@ -255,12 +255,12 @@ class GPACProtocolImpl(
         }
 
         // I got to ft-agree phase, so my voice of this is crucial
-        signal(Signal.BeforeSendingAgree, this.transaction, getPeersFromChange(change))
+        signal(Signal.BeforeSendingAgree, this.transaction, change)
 
         logger.info("${getPeerName()} Recovery leader transaction state: ${this.transaction}")
         val agreedResponses = ftAgreePhase(change, this.transaction.acceptVal!!, acceptNum = this.transaction.acceptNum)
 
-        signal(Signal.BeforeSendingApply, this.transaction, getPeersFromChange(change))
+        signal(Signal.BeforeSendingApply, this.transaction, change)
 
         val applyResponses = applyPhase(change, this.transaction.acceptVal!!)
 
@@ -277,7 +277,7 @@ class GPACProtocolImpl(
     ): ElectMeResult {
 
         if (!historyManagement.canBeBuild(change)) {
-            signal(Signal.OnSendingElectBuildFail, this.transaction, getPeersFromChange(change))
+            signal(Signal.OnSendingElectBuildFail, this.transaction, change)
             throw HistoryCannotBeBuildException()
         }
 
@@ -286,7 +286,7 @@ class GPACProtocolImpl(
         this.transaction =
             transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT, change = change)
 
-        signal(Signal.BeforeSendingElect, this.transaction, getPeersFromChange(change))
+        signal(Signal.BeforeSendingElect, this.transaction, change)
         logger.info("${getPeerName()} - sending ballot number: $myBallotNumber")
         val (responses, maxBallotNumber) = getElectedYouResponses(change, getPeersFromChange(change), acceptNum)
 
@@ -362,8 +362,8 @@ class GPACProtocolImpl(
             )
         )
 
-    private fun signal(signal: Signal, transaction: Transaction?, peers: List<List<String>>) {
-        signalPublisher.signal(signal, this, peers, transaction)
+    private fun signal(signal: Signal, transaction: Transaction?, change: Change) {
+        signalPublisher.signal(signal, this, getPeersFromChange(change), transaction, change)
     }
 
     private fun <T> superMajority(responses: List<List<T>>, peers: List<List<String>>): Boolean =

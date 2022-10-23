@@ -372,30 +372,30 @@ class RaftConsensusProtocolImpl(
     }
 
     //  TODO: sync change will have to use Condition/wait/notifyAll
-    private suspend fun proposeChangeToLedger(changeWithAcceptNum: Change): ConsensusResult {
+    private suspend fun proposeChangeToLedger(change: Change): ConsensusResult {
 
 //      TODO: it will be changed
         val id: Int
 
         mutex.withLock {
-            if (state.changeAlreadyProposed(changeWithAcceptNum)) {
+            if (state.changeAlreadyProposed(change)) {
                 return ConsensusChangeAlreadyProposed
             }
 
             timer.cancelCounting()
-            logger.info("Propose change to ledger: $changeWithAcceptNum")
-            id = state.proposeChange(changeWithAcceptNum, currentTerm)
+            logger.info("Propose change to ledger: $change")
+            id = state.proposeChange(change, currentTerm)
         }
 
 
         voteContainer.initializeChange(id)
 //      Propose change
         sendHeartbeat()
-        signalPublisher.signal(Signal.ConsensusAfterProposingChange, this, listOf(otherConsensusPeers()), null)
+        signalPublisher.signal(Signal.ConsensusAfterProposingChange, this, listOf(otherConsensusPeers()), null, change)
 
         if (state.lastApplied != id) return ConsensusResultUnknown
         timer.cancelCounting()
-        logger.info("Change accepted and propagate it: $changeWithAcceptNum")
+        logger.info("Change accepted and propagate it: $change")
 //      If change accepted, propagate it
         sendHeartbeat()
 
@@ -415,8 +415,8 @@ class RaftConsensusProtocolImpl(
         ConsensusFailure
     }
 
-    private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: Change): ConsensusResult {
-        val id = state.proposeChange(changeWithAcceptNum, currentTerm)
+    private suspend fun tryToProposeChangeMyself(change: Change): ConsensusResult {
+        val id = state.proposeChange(change, currentTerm)
         voteContainer.initializeChange(id)
         timer.startCounting {
             logger.info("$peerId - change was proposed a no leader is elected")
@@ -456,13 +456,6 @@ class RaftConsensusProtocolImpl(
         val history: History
         runBlocking {
             mutex.withLock {
-                val changes = state.getAcceptedChanges() + state.getProposedChanges()
-                changes.map {
-                    "${it.acceptNum}/-/${
-                        it.toHistoryEntry().getId()
-                    }"
-                }
-
                 history = state.getHistory()
                 logger.info("$peerId - request for state: $history")
             }
