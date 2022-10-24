@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const TEST_ITERATION_LIMIT = 60
+
 var testNamespace string
 
 func CreateTestCommand() *cobra.Command {
@@ -75,19 +77,25 @@ func test() {
 		fmt.Printf("Response from post - Status Code: %d, Response body: %s\n", resp.StatusCode, string(body))
 		resp.Body.Close()
 
-		time.Sleep(5 * time.Second)
+		iteration := 0
 
-		resp, err = http.Get(fmt.Sprintf("http://localhost:%d/consensus/change", int(localPort)))
+		for iteration < TEST_ITERATION_LIMIT {
 
-		body, err = ioutil.ReadAll(resp.Body)
-		fmt.Printf("Response from get - Status Code: %d, Response body: %s\n", resp.StatusCode, string(body))
-		resp.Body.Close()
+			time.Sleep(1 * time.Second)
 
-		if resp.StatusCode != 200 {
-			return errors.New("Change wasn't applied")
+			resp, err = http.Get(fmt.Sprintf("http://localhost:%d/consensus/change", int(localPort)))
+
+			body, err = ioutil.ReadAll(resp.Body)
+			fmt.Printf("Response from get - Status Code: %d, Response body: %s\n", resp.StatusCode, string(body))
+			resp.Body.Close()
+
+			if resp.StatusCode == 200 {
+				return
+			}
+	
 		}
 
-		return nil
+		return errors.New("Change wasn't applied")
 	}); err != nil {
 		panic(err)
 	}

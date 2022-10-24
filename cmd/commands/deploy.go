@@ -170,6 +170,16 @@ func createPodTemplate(peerConfig PeerConfig) apiv1.PodTemplateSpec {
 }
 
 func createSingleContainer(containerName string, peerConfig PeerConfig) apiv1.Container {
+	
+	probe := &apiv1.Probe{
+		ProbeHandler: apiv1.ProbeHandler {
+			HTTPGet: &apiv1.HTTPGetAction{
+				Path: "/_meta/health",
+				Port: intstr.FromInt(8080),
+			},
+		},
+	}
+
 	return apiv1.Container{
 		Name:  containerName,
 		Image: "davenury/ucac",
@@ -187,22 +197,8 @@ func createSingleContainer(containerName string, peerConfig PeerConfig) apiv1.Co
 				},
 			},
 		},
-		ReadinessProbe: &apiv1.Probe{
-			ProbeHandler: apiv1.ProbeHandler {
-				HTTPGet: &apiv1.HTTPGetAction{
-					Path: "/_meta/health",
-					Port: intstr.FromInt(8080),
-				},
-			},
-		},
-		LivenessProbe: &apiv1.Probe{
-			ProbeHandler: apiv1.ProbeHandler {
-				HTTPGet: &apiv1.HTTPGetAction{
-					Path: "/_meta/health",
-					Port: intstr.FromInt(8080),
-				},
-			},
-		},
+		ReadinessProbe: probe,
+		LivenessProbe: probe,
 	}
 }
 
