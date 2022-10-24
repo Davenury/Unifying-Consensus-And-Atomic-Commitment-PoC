@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.api
+package com.github.davenury.ucac.gpac
 
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
@@ -54,7 +54,7 @@ class MultiplePeersetSpec {
         val otherPeer = apps.getPeers()[1][0]
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+        executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
 
         // then - transaction is executed in same peerset
         val peer2Change = testHttpClient.get<Change>("http://${peers[0][1]}/change") {
@@ -122,7 +122,7 @@ class MultiplePeersetSpec {
 
         val change = change(otherPeer)
 
-        val result = executeChange("http://${peers[0][0]}/create_change", change)
+        val result = executeChange("http://${peers[0][0]}/gpac/create_change", change)
 
         expectThat(result.status).isEqualTo(HttpStatusCode.Created)
 
@@ -138,7 +138,7 @@ class MultiplePeersetSpec {
 
 
         val transactionResult = testHttpClient.get<TransactionResult>(
-            "http://${peers[0][0]}/change_status/${
+            "http://${peers[0][0]}/gpac/change_status/${
                 change.toHistoryEntry().getId()
             }"
         ) {
@@ -165,7 +165,7 @@ class MultiplePeersetSpec {
 
         // when - executing transaction
         try {
-            executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+            executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
             fail("Exception not thrown")
         } catch (e: Exception) {
             expectThat(e).isA<ServerResponseException>()
@@ -208,7 +208,7 @@ class MultiplePeersetSpec {
         val otherPeer = apps.getPeers()[1][0]
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+        executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
 
 
         withContext(Dispatchers.IO) {
@@ -252,7 +252,7 @@ class MultiplePeersetSpec {
 
             // when - executing transaction - should throw too few responses exception
             try {
-                executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+                executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
                 fail("executing change didn't fail")
             } catch (e: Exception) {
                 expectThat(e).isA<ServerResponseException>()
@@ -308,7 +308,7 @@ class MultiplePeersetSpec {
 
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+            executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
         }
 
         withContext(Dispatchers.IO) {
@@ -394,7 +394,7 @@ class MultiplePeersetSpec {
 
             // when - executing transaction something should go wrong after ft-agree
             expectThrows<ServerResponseException> {
-                executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+                executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
             }
 
             withContext(Dispatchers.IO) {

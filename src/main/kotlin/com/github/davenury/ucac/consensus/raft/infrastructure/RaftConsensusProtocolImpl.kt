@@ -4,6 +4,7 @@ import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.common.Change
+import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.raft.domain.*
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
@@ -30,7 +31,7 @@ class RaftConsensusProtocolImpl(
     private val protocolClient: RaftProtocolClient,
     private val heartbeatTimeout: Duration = Duration.ofSeconds(4),
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
-) : ConsensusProtocol<Change, History>, RaftConsensusProtocol, SignalSubject {
+) : ConsensusProtocol, RaftConsensusProtocol, SignalSubject {
     //    TODO: Add map peerIdToUrl
     private var peerIdToAddress: Map<Int, String> = mapOf()
     private var currentTerm: Int = 0
@@ -426,6 +427,7 @@ class RaftConsensusProtocolImpl(
     }
 
     //   TODO: only one change can be proposed at the same time
+    @Deprecated("use proposeChangeAsync")
     override suspend fun proposeChange(change: Change): ConsensusResult {
         logger.info("$peerId received change: $change")
 
@@ -435,6 +437,10 @@ class RaftConsensusProtocolImpl(
 //              TODO: Change after queue
             else -> tryToProposeChangeMyself(change)
         }
+    }
+
+    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
+        TODO("Not yet implemented")
     }
 
     private fun scheduleHeartbeatToPeers() {
