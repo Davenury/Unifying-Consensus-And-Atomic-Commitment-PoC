@@ -90,7 +90,7 @@ func test() {
 			resp.Body.Close()
 
 			if resp.StatusCode == 200 {
-				return
+				return nil
 			}
 	
 		}
