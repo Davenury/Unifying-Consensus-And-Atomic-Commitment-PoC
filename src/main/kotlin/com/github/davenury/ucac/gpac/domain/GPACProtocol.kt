@@ -132,7 +132,7 @@ class GPACProtocolImpl(
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
             }
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
-                historyManagement.change(message.change)
+                historyManagement.getState().addEntry(message.change.toHistoryEntry())
             }
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = message.change)
