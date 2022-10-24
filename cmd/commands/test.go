@@ -84,13 +84,23 @@ func test() {
 			time.Sleep(1 * time.Second)
 
 			resp, err = http.Get(fmt.Sprintf("http://localhost:%d/consensus/change", int(localPort)))
+			if err != nil {
+				panic(err)
+			}
 
 			body, err = ioutil.ReadAll(resp.Body)
+			if err != nil {
+				panic(err)
+			}
+
 			fmt.Printf("Response from get - Status Code: %d, Response body: %s\n", resp.StatusCode, string(body))
 			resp.Body.Close()
 
 			if resp.StatusCode == 200 {
 				return nil
+			}
+			if resp.StatusCode != 404 {
+				return errors.New(fmt.Sprintf("Status code of change is: %d", resp.StatusCode))
 			}
 	
 		}
