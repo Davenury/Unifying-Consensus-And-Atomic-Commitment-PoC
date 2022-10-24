@@ -60,10 +60,8 @@ data class Ledger(
 
     suspend fun getHistory(): History {
         mutex.withLock {
-            // TODO why proposed??
             val h = History()
             acceptedItems.forEach { h.addEntry(it.change.toHistoryEntry()) }
-            proposedItems.forEach { h.addEntry(it.change.toHistoryEntry()) }
             return h
         }
     }

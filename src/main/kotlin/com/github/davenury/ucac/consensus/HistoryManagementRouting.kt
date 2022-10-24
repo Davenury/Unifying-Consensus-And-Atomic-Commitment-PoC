@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus
 
 import com.github.davenury.ucac.common.*
 import io.ktor.application.*
+import io.ktor.http.*
 import io.ktor.response.*
 import io.ktor.routing.*
 
@@ -11,8 +12,12 @@ fun Application.historyManagementRouting(historyManagement: HistoryManagement) {
     routing {
         route("/change") {
             get {
-                val result = historyManagement.getLastChange()
-                call.respond(result ?: ErrorMessage("Error any change doesn't exist"))
+                historyManagement.getLastChange()
+                    ?.let { call.respond(it) }
+                    ?: call.respond(
+                        HttpStatusCode.NotFound,
+                        ErrorMessage("Error any change doesn't exist")
+                    )
             }
         }
         route("/changes") {
