@@ -3,6 +3,7 @@ module github.com/davenury/ucac/cmd
 go 1.19
 
 require (
+	github.com/goccy/kpoward v0.1.0
 	github.com/google/uuid v1.3.0
 	github.com/spf13/cobra v1.5.0
 	helm.sh/helm/v3 v3.10.0
@@ -47,7 +48,6 @@ require (
 	github.com/go-openapi/jsonreference v0.19.5 // indirect
 	github.com/go-openapi/swag v0.19.14 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
-	github.com/goccy/kpoward v0.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/btree v1.0.1 // indirect

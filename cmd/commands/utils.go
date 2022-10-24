@@ -93,7 +93,7 @@ func generateServicesForPeers(peersInPeerset []int, startPort int, increment boo
 			}
 			sb.WriteString(fmt.Sprintf("%s:%d,", ServiceAddress(PeerConfig{
 				PeerId:    strconv.Itoa(i),
-				PeersetId: strconv.Itoa(idx + 1),
+				PeersetId: strconv.Itoa(idx),
 			}), port))
 		}
 

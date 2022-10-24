@@ -59,7 +59,9 @@ class SinglePeersetSpec {
 
         val apps = TestApplicationSet(
             listOf(3),
-            signalListeners = mapOf(1 to mapOf(Signal.BeforeSendingAgree to signalListener))
+            signalListeners = mapOf(
+                0 to mapOf(Signal.BeforeSendingAgree to signalListener)
+            ),
         )
         val peers = apps.getPeers()
 
@@ -74,14 +76,12 @@ class SinglePeersetSpec {
     @Test
     fun `first leader is already in ft-agree phase and second leader tries to execute its transaction - second should be rejected`(): Unit =
         runBlocking {
-
             val phaser = Phaser(1)
             phaser.register()
 
             val changeAborted = SignalListener {
                 phaser.arrive()
             }
-
 
             val signalListener = SignalListener {
                 expectCatching {
@@ -96,9 +96,9 @@ class SinglePeersetSpec {
             val apps = TestApplicationSet(
                 listOf(3),
                 signalListeners = mapOf(
-                    1 to mapOf(Signal.BeforeSendingApply to signalListener),
-                    2 to signalListenersForCohort,
-                    3 to signalListenersForCohort
+                    0 to mapOf(Signal.BeforeSendingApply to signalListener),
+                    1 to signalListenersForCohort,
+                    2 to signalListenersForCohort
                 ),
             )
             val peers = apps.getPeers()
@@ -143,11 +143,13 @@ class SinglePeersetSpec {
             val apps = TestApplicationSet(
                 listOf(3),
                 signalListeners = mapOf(
-                    1 to firstLeaderCallbacks,
+                    0 to firstLeaderCallbacks,
+                    1 to otherPeersCallbacks,
                     2 to otherPeersCallbacks,
-                    3 to otherPeersCallbacks,
                 ),
-                configOverrides = mapOf(2 to mapOf("gpac.leaderFailTimeout" to Duration.ZERO))
+                configOverrides = mapOf(
+                    1 to mapOf("gpac.leaderFailTimeout" to Duration.ZERO),
+                ),
             )
             val peers = apps.getPeers()
 
@@ -214,8 +216,8 @@ class SinglePeersetSpec {
         val apps = TestApplicationSet(
             listOf(5),
             signalListeners = mapOf(
-                1 to firstLeaderCallbacks,
-                3 to peer3Callbacks,
+                0 to firstLeaderCallbacks,
+                2 to peer3Callbacks,
             )
         )
         val peers = apps.getPeers()
