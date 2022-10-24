@@ -102,6 +102,8 @@ func test() {
 			if resp.StatusCode != 404 {
 				return errors.New(fmt.Sprintf("Status code of change is: %d", resp.StatusCode))
 			}
+
+			iteration++
 	
 		}
 
