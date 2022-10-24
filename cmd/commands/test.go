@@ -58,10 +58,11 @@ func test() {
 
 	if err := kpow.Run(context.Background(), func(ctx context.Context, localPort uint16) error {
 
-		request := map[string]string{
+		request := map[string]interface{}{
 			"parentId": "27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd",
 			"userName": "user1",
-			"peers":    "[]",
+			"peers":    []int{},
+			"@type":    "ADD_USER",
 		}
 		requestData, err := json.Marshal(request)
 		if err != nil {
