@@ -94,7 +94,7 @@ public class ApplicationUcac constructor(
                 config.peersetId,
                 config.host + ":" + config.port,
                 ctx,
-                config.peerAddresses()[config.peersetId - 1],
+                config.peerAddresses()[config.peersetId],
                 signalPublisher,
                 raftProtocolClientImpl,
                 heartbeatTimeout = config.raft.heartbeatTimeout,
@@ -112,7 +112,7 @@ public class ApplicationUcac constructor(
                     protocolClient,
                     transactionBlocker,
                     signalPublisher,
-                    allPeers = config.peerAddresses().withIndex().associate { it.index + 1 to it.value },
+                    allPeers = config.peerAddresses().withIndex().associate { it.index to it.value },
                     myPeersetId = config.peersetId,
                     myNodeId = config.peerId,
                     myAddress = myAddress

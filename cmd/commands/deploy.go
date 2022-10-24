@@ -43,12 +43,12 @@ func CreateDeployCommand() *cobra.Command {
 			totalPeers := 0
 			for idx, num := range numberOfPeersInPeersets {
 				totalPeers += num
-				for i := 1; i <= num; i++ {
+				for i := 0; i < num; i++ {
 					peerId := strconv.Itoa(i)
 
 					peerConfig := PeerConfig{
 						PeerId:         peerId,
-						PeersetId:      strconv.Itoa(idx + 1),
+						PeersetId:      strconv.Itoa(idx),
 						PeersInPeerset: num,
 						PeersetsConfig: numberOfPeersInPeersets,
 					}

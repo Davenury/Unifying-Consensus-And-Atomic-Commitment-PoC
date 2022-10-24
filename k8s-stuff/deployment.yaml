@@ -6,15 +6,15 @@ metadata:
 spec:
   selector:
     matchLabels:
-      peerId: "1"
-      peersetId: "1"
+      peerId: "0"
+      peersetId: "0"
   replicas: 1
   template:
     metadata:
       name: "peer1-from-peerset1"
       labels: 
-        peerId: "1"
-        peersetId: "1"
+        peerId: "0"
+        peersetId: "0"
       annotations:
         prometheus.io/scrape: 'true'
         prometheus.io/path: '/_meta/metrics'

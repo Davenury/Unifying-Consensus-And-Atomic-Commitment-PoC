@@ -67,7 +67,7 @@ class ConsensusSpec {
 
         val peerset = TestApplicationSet(
             listOf(5),
-            signalListeners = (1..5).associateWith {
+            signalListeners = (0..4).associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
                     Signal.ConsensusFollowerChangeAccepted to peerApplyChange
@@ -130,9 +130,11 @@ class ConsensusSpec {
         val signalListener = mapOf(
             Signal.ConsensusTryToBecomeLeader to peerTryToBecomeLeader,
         )
-        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
-        val peerset =
-            TestApplicationSet(listOf(5), appsToExclude = listOf(3, 4, 5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(
+             listOf(5),
+            appsToExclude = listOf(2, 3, 4),
+            signalListeners = (0..4).associateWith { signalListener },
+        )
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -160,9 +162,12 @@ class ConsensusSpec {
         val signalListener = mapOf(
             Signal.ConsensusLeaderElected to peerLeaderElected,
         )
-        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(listOf(5), appsToExclude = listOf(4, 5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(
+             listOf(5),
+            appsToExclude = listOf(3, 4),
+            signalListeners = (0..4).associateWith { signalListener },
+        )
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
         isLeaderElected = true
@@ -190,9 +195,11 @@ class ConsensusSpec {
         }
 
         val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
-        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(
+             listOf(5),
+            signalListeners = (0..4).associateWith { signalListener },
+        )
         var apps = peerset.getRunningApps()
 
         election1Phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -231,9 +238,12 @@ class ConsensusSpec {
         }
 
         val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
-        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(listOf(5), appsToExclude = listOf(5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(
+             listOf(5),
+            signalListeners = (0..4).associateWith { signalListener },
+            appsToExclude = listOf(4),
+        )
         var apps = peerset.getRunningApps()
 
         election1Phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -288,9 +298,12 @@ class ConsensusSpec {
             Signal.ConsensusLeaderElected to peerLeaderElected,
             Signal.ConsensusTryToBecomeLeader to peerTryToBecomeLeader,
         )
-        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..6).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(listOf(6), appsToExclude = listOf(5, 6), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(
+             listOf(6),
+            appsToExclude = listOf(4, 5),
+            signalListeners = (0..5).associateWith { signalListener },
+        )
         var apps = peerset.getRunningApps()
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -314,10 +327,8 @@ class ConsensusSpec {
         peerset.stopApps()
     }
 
-
     @Test
     fun `leader fails during processing change`(): Unit = runBlocking {
-        val testName = "leader fails during processing change"
         var peersWithoutLeader = 4
 
         val election1Phaser = Phaser(peersWithoutLeader)
@@ -347,9 +358,11 @@ class ConsensusSpec {
             Signal.ConsensusLeaderElected to peerLeaderElected,
             Signal.ConsensusFollowerChangeAccepted to peerApplyChange
         )
-        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(
+             listOf(5),
+            signalListeners = (0..4).associateWith { signalListener },
+        )
         val apps = peerset.getRunningApps()
 
         election1Phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -382,11 +395,13 @@ class ConsensusSpec {
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
+        val proposedChanges = askForProposedChanges(runningPeers.first())
+        val acceptedChanges = askForAcceptedChanges(runningPeers.first())
         expect {
-            val proposedChanges = askForProposedChanges(runningPeers.first())
             that(proposedChanges.size).isEqualTo(0)
-            val acceptedChanges = askForAcceptedChanges(runningPeers.first())
             that(acceptedChanges.size).isEqualTo(1)
+        }
+        expect {
             that(acceptedChanges.first()).isEqualTo(createChange(null))
             that(acceptedChanges.first().acceptNum).isEqualTo(null)
         }
@@ -396,7 +411,6 @@ class ConsensusSpec {
 
     @Test
     fun `less than half of peers fails after electing leader`(): Unit = runBlocking {
-        val testName = "less than half of peers fails after electing leader"
         val peersWithoutLeader = 4
 
         val electionPhaser = Phaser(peersWithoutLeader)
@@ -410,9 +424,11 @@ class ConsensusSpec {
             Signal.ConsensusLeaderElected to peerLeaderElected,
             Signal.ConsensusFollowerChangeAccepted to peerApplyChange
         )
-        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(
+             listOf(5),
+            signalListeners = (0..4).associateWith { signalListener },
+        )
         val apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
@@ -439,11 +455,13 @@ class ConsensusSpec {
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
         runningPeers.forEach {
+            val proposedChanges = askForProposedChanges(it)
+            val acceptedChanges = askForAcceptedChanges(it)
             expect {
-                val proposedChanges = askForProposedChanges(it)
-                val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
+            }
+            expect {
                 that(acceptedChanges.first()).isEqualTo(createChange(null))
                 that(acceptedChanges.first().acceptNum).isEqualTo(null)
             }
@@ -455,7 +473,6 @@ class ConsensusSpec {
 
     @Test
     fun `more than half of peers fails during propagating change`(): Unit = runBlocking {
-        val testName = "more than half of peers fails during propagating change"
         val peersWithoutLeader = 4
 
         val electionPhaser = Phaser(peersWithoutLeader)
@@ -469,11 +486,13 @@ class ConsensusSpec {
 
         val signalListener = mapOf(
             Signal.ConsensusLeaderElected to peerLeaderElected,
-            Signal.ConsensusFollowerChangeProposed to peerApplyChange
+            Signal.ConsensusFollowerChangeProposed to peerApplyChange,
         )
-        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(
+             listOf(5),
+            signalListeners = (0..4).associateWith { signalListener },
+        )
         val apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
@@ -518,7 +537,6 @@ class ConsensusSpec {
 
     @Test
     fun `network divide on half and then merge`(): Unit = runBlocking {
-        val testName = "network divide on half and then merge"
         var peersWithoutLeader = 4
 
         var isNetworkDivided = false
@@ -544,9 +562,11 @@ class ConsensusSpec {
             Signal.ConsensusLeaderElected to peerLeaderElected,
             Signal.ConsensusFollowerChangeAccepted to peerApplyChange
         )
-        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(listOf(5), signalListeners)
+        val peerset = TestApplicationSet(
+             listOf(5),
+            signalListeners = (0..4).associateWith { signalListener },
+        )
         val apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
@@ -563,11 +583,8 @@ class ConsensusSpec {
         val secondHalf = notLeaderPeers.drop(1)
 
         val addressToApplication: Map<String, ApplicationUcac> = peerAddresses.zip(apps).toMap()
-
-
 //      Divide network
         isNetworkDivided = true
-
 
         firstHalf.forEach { address ->
             val application = addressToApplication[address]
@@ -601,22 +618,26 @@ class ConsensusSpec {
         change1Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         firstHalf.forEach {
+            val proposedChanges = askForProposedChanges(it)
+            val acceptedChanges = askForAcceptedChanges(it)
             expect {
-                val proposedChanges = askForProposedChanges(it)
-                val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(1)
+                that(acceptedChanges.size).isEqualTo(0)
+            }
+            expect {
                 that(proposedChanges.first()).isEqualTo(createChange(null))
                 that(proposedChanges.first().acceptNum).isEqualTo(1)
-                that(acceptedChanges.size).isEqualTo(0)
             }
         }
 
         secondHalf.forEach {
+            val proposedChanges = askForProposedChanges(it)
+            val acceptedChanges = askForAcceptedChanges(it)
             expect {
-                val proposedChanges = askForProposedChanges(it)
-                val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
+            }
+            expect {
                 that(acceptedChanges.first()).isEqualTo(createChange(null))
                 that(acceptedChanges.first().acceptNum).isEqualTo(2)
             }
@@ -631,11 +652,13 @@ class ConsensusSpec {
         change2Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         peerAddresses.forEach {
+            val proposedChanges = askForProposedChanges(it)
+            val acceptedChanges = askForAcceptedChanges(it)
             expect {
-                val proposedChanges = askForProposedChanges(it)
-                val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
+            }
+            expect {
                 that(acceptedChanges.first()).isEqualTo(createChange(null))
                 that(acceptedChanges.first().acceptNum).isEqualTo(2)
             }
@@ -745,9 +768,7 @@ class ConsensusSpec {
         val address =
             askForLeaderAddress(peers[0])!!
 
-        expect {
-            that(address).isNotEqualTo(noneLeader)
-        }
+        expectThat(address).isNotEqualTo(noneLeader)
 
         val port = getPortFromAddress(address)
 
@@ -766,6 +787,6 @@ class ConsensusSpec {
 
     private fun modifyPeers(app: ApplicationUcac, peers: List<String>) {
         val newPeers = peers.map { it.replace("http://", "") }
-        app.setPeers(mapOf(1 to newPeers), "127.0.0.1")
+        app.setPeers(mapOf(0 to newPeers), "127.0.0.1")
     }
 }

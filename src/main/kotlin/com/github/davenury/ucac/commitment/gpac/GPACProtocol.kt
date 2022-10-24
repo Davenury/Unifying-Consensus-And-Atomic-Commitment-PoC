@@ -415,9 +415,9 @@ class GPACProtocolImpl(
         return responses.withIndex()
             .all { (index, value) ->
                 val allPeers =
-                    if (index + 1 == myPeersetId) peers[index].size + 1 else peers[index].size
+                    if (index == myPeersetId) peers[index].size + 1 else peers[index].size
                 val agreedPeers =
-                    if (index + 1 == myPeersetId) value.size + 1 else value.size
+                    if (index == myPeersetId) value.size + 1 else value.size
                 agreedPeers >= allPeers / 2F
             } && allShards
     }

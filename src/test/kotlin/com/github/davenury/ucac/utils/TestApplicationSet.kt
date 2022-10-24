@@ -4,6 +4,7 @@ import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.createApplication
+import java.util.*
 import kotlin.random.Random
 
 class TestApplicationSet(
@@ -22,18 +23,17 @@ class TestApplicationSet(
             "ratis.addresses" to List(numberOfPeersets) {
                 List(numberOfPeersInPeersets[it]) { "localhost:${Random.nextInt(5000, 20000) + 11124}" }
             }.joinToString(";") { it.joinToString(",") },
-            "peers" to (1..numberOfPeersets).map { (1..numberOfPeersInPeersets[it - 1]).map { NON_RUNNING_PEER } }
+            "peers" to (0 until numberOfPeersets).map { (0 until numberOfPeersInPeersets[it]).map { NON_RUNNING_PEER } }
                 .joinToString(";") { it.joinToString(",") },
             "port" to 0,
             "host" to "localhost",
         )
 
         var currentApp = 0
-        apps = (1..numberOfPeersets).map { peersetId ->
-            (1..numberOfPeersInPeersets[peersetId - 1]).map { peerId ->
-                currentApp++
+        apps = (0 until numberOfPeersets).map { peersetId ->
+            (0 until numberOfPeersInPeersets[peersetId]).map { peerId ->
                 createApplication(
-                    signalListeners[currentApp] ?: emptyMap(),
+                    signalListeners[currentApp++] ?: emptyMap(),
                     mapOf("peerId" to peerId, "peersetId" to peersetId) +
                             testConfigOverrides +
                             (configOverrides[peerId] ?: emptyMap()),
@@ -41,19 +41,23 @@ class TestApplicationSet(
             }.toMutableList()
         }.toMutableList()
 
+        validateAppIds(signalListeners.keys, currentApp)
+        validateAppIds(configOverrides.keys, currentApp)
+        validateAppIds(appsToExclude, currentApp)
+
         // start and address discovery
         apps
             .flatten()
-            .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
+            .filterIndexed { index, _ -> !appsToExclude.contains(index) }
             .forEach { it.startNonblocking() }
         peers =
             apps.flatten()
                 .asSequence()
                 .mapIndexed { index, it ->
-                    val address = if (index + 1 in appsToExclude) NON_RUNNING_PEER else "localhost:${it.getBoundPort()}"
+                    val address = if (index in appsToExclude) NON_RUNNING_PEER else "localhost:${it.getBoundPort()}"
                     Pair(it, address)
                 }
-                .groupBy{ it.first.getPeersetId() }
+                .groupBy { it.first.getPeersetId() }
                 .values
                 .map { it.map { it.second } }
                 .toList()
@@ -61,15 +65,27 @@ class TestApplicationSet(
         apps
             .flatten()
             .zip(peers.flatten())
-            .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
+            .filterIndexed { index, _ -> !appsToExclude.contains(index) }
             .forEach { (app, peer) ->
                 peers
                     .map { it.filterNot { it == peer } }
                     .withIndex()
-                    .associate { it.index + 1 to it.value }
+                    .associate { it.index to it.value }
                     .let {
                         app.setPeers(it, peer)
                     }
+            }
+    }
+
+    private fun validateAppIds(
+        appIds: Collection<Int>,
+        appCount: Int,
+    ) {
+        if (appIds.isNotEmpty()) {
+            val sorted = TreeSet(appIds)
+            if (sorted.first() < 0 || sorted.last() >= appCount) {
+                throw AssertionError("Wrong app IDs: $sorted (total number of apps: $appCount)")
+            }
         }
     }
 
@@ -84,7 +100,7 @@ class TestApplicationSet(
     fun getRunningApps(): List<ApplicationUcac> = apps
         .flatten()
         .zip(peers.flatten())
-        .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }
+        .filterIndexed { index, _ -> !appsToExclude.contains(index) }
         .map { it.first }
 
     companion object {

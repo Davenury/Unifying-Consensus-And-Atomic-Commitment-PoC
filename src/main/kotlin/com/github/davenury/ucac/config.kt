@@ -24,7 +24,7 @@ data class Config(
     val rest: RestConfig = RestConfig(),
 ) {
     fun peerAddresses(): List<List<String>> = parsePeers(peers)
-    fun peerAddresses(peersetId: Int): List<String> = peerAddresses()[peersetId - 1]
+    fun peerAddresses(peersetId: Int): List<String> = peerAddresses()[peersetId]
 
 
 }
