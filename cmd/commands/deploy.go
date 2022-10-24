@@ -20,6 +20,7 @@ var numberOfPeersInPeersets []int
 var deployNamespace string
 var deployCreateNamespace bool
 var waitForReadiness bool
+var imageName string
 
 func CreateDeployCommand() *cobra.Command {
 
@@ -39,7 +40,9 @@ func CreateDeployCommand() *cobra.Command {
 				CreateNamespace(deployNamespace)
 			}
 
+			totalPeers := 0
 			for idx, num := range numberOfPeersInPeersets {
+				totalPeers += num
 				for i := 1; i <= num; i++ {
 					peerId := strconv.Itoa(i)
 
@@ -60,7 +63,9 @@ func CreateDeployCommand() *cobra.Command {
 				}
 			}
 
-			waitForPodsReadiness()
+			if waitForReadiness {
+				waitForPodsReadiness(totalPeers)
+			}
 		},
 	}
 
@@ -68,19 +73,24 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVarP(&deployCreateNamespace, "create-namespace", "", false, "Include if should create namespace")
 	deployCommand.Flags().StringVarP(&deployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
 	deployCommand.Flags().BoolVarP(&waitForReadiness, "wait-for-readiness", "", false, "Wait for deployment to be ready")
+	deployCommand.Flags().StringVarP(&imageName, "image", "", "davenury/ucac", "A Docker image to be used in the deployment")
 
 	return deployCommand
 
 }
 
-func waitForPodsReadiness() {
-	for anyPodNotReady() {
+func waitForPodsReadiness(expectedPeers int) {
+	fmt.Println("Waiting for pods to be ready")
+	deadline := time.Now().Add(2 * time.Minute)
+	for anyPodNotReady(expectedPeers) {
+		if time.Now().After(deadline) {
+			panic("Timed out while waiting for pod readiness")
+		}
 		time.Sleep(1 * time.Second)
-		fmt.Println("Waiting for pods to be ready")
 	}
 }
 
-func anyPodNotReady() bool {
+func anyPodNotReady(expectedPeers int) bool {
 
 	clientset, err := GetClientset()
 	if err != nil {
@@ -89,18 +99,18 @@ func anyPodNotReady() bool {
 
 	pods, err := clientset.CoreV1().Pods(deployNamespace).List(context.Background(), metav1.ListOptions{})
 
-	if len(pods.Items) == 0 {
-		// we assume that we always have at least one pod
-		return true
-	}
-
+	totalCount := len(pods.Items)
+	notReadyCount := 0
 	for _, pod := range pods.Items {
-		if !pod.Status.ContainerStatuses[0].Ready {
-			return true
+		containerStatuses := pod.Status.ContainerStatuses
+		if len(containerStatuses) != 1 || !containerStatuses[0].Ready {
+			notReadyCount += 1
 		}
 	}
 
-	return false
+	fmt.Printf("Ready pods: %d/%d (expected %d)\n", totalCount-notReadyCount, totalCount, expectedPeers)
+
+	return totalCount != expectedPeers || notReadyCount > 0
 }
 
 func deploySinglePeerDeployment(namespace string, peerConfig PeerConfig) {
@@ -170,9 +180,9 @@ func createPodTemplate(peerConfig PeerConfig) apiv1.PodTemplateSpec {
 }
 
 func createSingleContainer(containerName string, peerConfig PeerConfig) apiv1.Container {
-	
+
 	probe := &apiv1.Probe{
-		ProbeHandler: apiv1.ProbeHandler {
+		ProbeHandler: apiv1.ProbeHandler{
 			HTTPGet: &apiv1.HTTPGetAction{
 				Path: "/_meta/health",
 				Port: intstr.FromInt(8080),
@@ -182,7 +192,7 @@ func createSingleContainer(containerName string, peerConfig PeerConfig) apiv1.Co
 
 	return apiv1.Container{
 		Name:  containerName,
-		Image: "davenury/ucac",
+		Image: imageName,
 		Ports: []apiv1.ContainerPort{
 			{
 				ContainerPort: 8080,
@@ -198,7 +208,7 @@ func createSingleContainer(containerName string, peerConfig PeerConfig) apiv1.Co
 			},
 		},
 		ReadinessProbe: probe,
-		LivenessProbe: probe,
+		LivenessProbe:  probe,
 	}
 }
 
