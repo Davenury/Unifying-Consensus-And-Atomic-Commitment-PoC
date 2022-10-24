@@ -1,7 +1,7 @@
 package com.github.davenury.ucac.domain
 
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.raft.infrastructure.DummyConsensusProtocol
+import com.github.davenury.ucac.utils.DummyConsensusProtocol2
 import com.github.davenury.ucac.gpac.domain.*
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import io.mockk.*
@@ -14,7 +14,7 @@ import strikt.assertions.isEqualTo
 
 class GPACProtocolSpec {
 
-    private val consensusProtocol = DummyConsensusProtocol()
+    private val consensusProtocol = DummyConsensusProtocol2()
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
     private val timerMock = mockk<ProtocolTimer>()
     private val protocolClientMock = mockk<GPACProtocolClient>()
