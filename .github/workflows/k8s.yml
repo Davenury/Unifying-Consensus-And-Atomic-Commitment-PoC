@@ -1,0 +1,29 @@
+name: K8s
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v2
+      - name: start minikube
+        id: minikube
+        uses: medyagh/setup-minikube@v0.0.8
+      - name: setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+      - name: build command
+        working-directory: ./cmd
+        run: go get && go build -o cmd
+      - name: deploy pods
+        working-directory: ./cmd
+        run: ./cmd deploy -n test --create-namespace --peers=3,1 --wait-for-readiness
+      - name: test command
+        working-directory: ./cmd
+        run: ./cmd test -n test
+      - name: cleanup pods
+        working-directory: ./cmd
+        run: ./cmd cleanup -n test
