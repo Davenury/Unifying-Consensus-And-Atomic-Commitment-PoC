@@ -20,7 +20,7 @@ jobs:
         run: go get && go build -o cmd
       - name: deploy pods
         working-directory: ./cmd
-        run: ./cmd deploy -n test --create-namespace --peers=3,1 --wait-for-ready
+        run: ./cmd deploy -n test --create-namespace --peers=3,1 --wait-for-readiness
       - name: test command
         working-directory: ./cmd
         run: ./cmd test -n test
