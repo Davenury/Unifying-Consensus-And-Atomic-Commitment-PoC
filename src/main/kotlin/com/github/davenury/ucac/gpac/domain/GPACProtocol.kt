@@ -2,6 +2,7 @@ package com.github.davenury.ucac.gpac.domain
 
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.history.History
 import org.slf4j.LoggerFactory
 import kotlin.math.max
 
@@ -25,7 +26,7 @@ enum class TransactionResult {
 }
 
 class GPACProtocolImpl(
-    private val historyManagement: HistoryManagement,
+    private val history: History,
     private val maxLeaderElectionTries: Int,
     private val timer: ProtocolTimer,
     private val protocolClient: GPACProtocolClient,
@@ -49,9 +50,8 @@ class GPACProtocolImpl(
     override fun getBallotNumber(): Int = myBallotNumber
 
     override suspend fun handleElect(message: ElectMe): ElectedYou {
-        val state = historyManagement.getState()
         val decision = message.acceptNum?.let { acceptNum ->
-            Changes.fromHistory(state).find { it.acceptNum == acceptNum }
+            Changes.fromHistory(history).find { it.acceptNum == acceptNum }
         }
         if (decision != null) {
             // meaning that I'm the cohort that got apply for transaction of original leader
@@ -69,7 +69,7 @@ class GPACProtocolImpl(
         transactionBlocker.assertICanSendElectedYou()
 
         if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber, message.ballotNumber)
-        val initVal = if (historyManagement.canBeBuild(message.change)) Accept.COMMIT else Accept.ABORT
+        val initVal = if (history.isEntryCompatible(message.change.toHistoryEntry())) Accept.COMMIT else Accept.ABORT
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal, change = message.change)
 
@@ -132,7 +132,7 @@ class GPACProtocolImpl(
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
             }
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
-                historyManagement.getState().addEntry(message.change.toHistoryEntry())
+                history.addEntry(message.change.toHistoryEntry())
             }
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = message.change)
@@ -145,7 +145,7 @@ class GPACProtocolImpl(
     }
 
     private fun transactionWasAppliedBefore() =
-        Changes.fromHistory(historyManagement.getState()).any { it.acceptNum == this.transaction.acceptNum }
+        Changes.fromHistory(history).any { it.acceptNum == this.transaction.acceptNum }
 
     private suspend fun leaderFailTimeoutStart(change: Change) {
         logger.info("${getPeerName()} Start counting")
@@ -276,13 +276,13 @@ class GPACProtocolImpl(
         acceptNum: Int? = null
     ): ElectMeResult {
 
-        if (!historyManagement.canBeBuild(change)) {
+        if (!history.isEntryCompatible(change.toHistoryEntry())) {
             signal(Signal.OnSendingElectBuildFail, this.transaction, change)
             throw HistoryCannotBeBuildException()
         }
 
         myBallotNumber++
-        if (!historyManagement.canBeBuild(change)) throw HistoryCannotBeBuildException()
+        if (!history.isEntryCompatible(change.toHistoryEntry())) throw HistoryCannotBeBuildException()
         this.transaction =
             transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT, change = change)
 
@@ -403,7 +403,7 @@ class GPACProtocolImpl(
 
     override fun getChangeStatus(changeId: String): TransactionResult =
         when {
-            historyManagement.contains(changeId) -> TransactionResult.DONE
+            history.containsEntry(changeId) -> TransactionResult.DONE
             transaction.change?.toHistoryEntry()?.getId() == changeId -> TransactionResult.PROCESSED
             else -> TransactionResult.FAILED
         }

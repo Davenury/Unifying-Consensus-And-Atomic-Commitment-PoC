@@ -7,10 +7,9 @@ import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.features.*
 import io.ktor.client.features.json.*
-import java.security.MessageDigest
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
+import java.security.MessageDigest
 
 
 val objectMapper: ObjectMapper =

@@ -21,7 +21,7 @@ import java.util.concurrent.*
 
 /** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
-    private val history: History,
+    history: History,
     private val peerId: Int,
     private val peersetId: Int,
     private var peerAddress: String,
@@ -477,7 +477,6 @@ class RaftConsensusProtocolImpl(
 
     private fun amILeader(): Boolean = role == RaftRole.Leader
 
-    private fun getLeaderTimer(backoff: Duration = Duration.ZERO) = ProtocolTimerImpl(heartbeatDelay, backoff, ctx)
     private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout.dividedBy(2), ctx)
 
     companion object {
@@ -488,7 +487,7 @@ class RaftConsensusProtocolImpl(
 }
 
 data class PeerIndices(val acceptedIndex: Int = -1, val acknowledgedIndex: Int = -1) {
-    public fun decrement(): PeerIndices = PeerIndices(acceptedIndex - 1, acceptedIndex - 1)
+    fun decrement(): PeerIndices = PeerIndices(acceptedIndex - 1, acceptedIndex - 1)
 }
 
 data class VotedFor(val id: Int, val address: String, val elected: Boolean = false)

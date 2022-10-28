@@ -4,22 +4,20 @@ import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.common.AddUserChange
-import com.github.davenury.ucac.common.InMemoryHistoryManagement
+import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.common.TooFewResponsesException
-import com.github.davenury.ucac.utils.DummyConsensusProtocol2
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
+import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
 import strikt.api.expectThrows
@@ -27,7 +25,6 @@ import strikt.assertions.isEqualTo
 import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
-import java.util.concurrent.TimeUnit
 
 class LeaderTest {
 
@@ -38,7 +35,7 @@ class LeaderTest {
         PeerTwo.stubForNotElectingYou()
         PeerThree.stubForNotElectingYou()
 
-        runBlocking { subject.performProtocolAsLeader(changeDto) }
+        runBlocking { subject.performProtocolAsLeader(change) }
 
 
         runBlocking {
@@ -57,7 +54,7 @@ class LeaderTest {
         PeerTwo.stubForNotAgree()
         PeerThree.stubForNotAgree()
 
-        expectThrows<TooFewResponsesException> { subject.performProtocolAsLeader(changeDto) }
+        expectThrows<TooFewResponsesException> { subject.performProtocolAsLeader(change) }
 
         PeerTwo.verifyAgreeStub(1)
         PeerThree.verifyAgreeStub(1)
@@ -72,16 +69,13 @@ class LeaderTest {
         PeerTwo.stubForApply()
         PeerThree.stubForApply()
 
-        runBlocking { subject.performProtocolAsLeader(changeDto) }
+        runBlocking { subject.performProtocolAsLeader(change) }
 
-        expectThat(historyManagement.getLastChange())
-            .isEqualTo(changeDto)
+        expectThat(history.getCurrentEntry().let { Change.fromHistoryEntry(it) })
+            .isEqualTo(change)
     }
 
-    private val allPeers = listOf(listOf("localhost:9091", "localhost:9092", "localhost:9093"))
-    private val otherPeers = listOf(listOf("localhost:9092", "localhost:9093"))
-    private val consensusProtocol = DummyConsensusProtocol2()
-    private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
+    private val history = History()
     private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)
     private val client = GPACProtocolClientImpl()
     private val transactionBlocker = TransactionBlockerImpl()
@@ -90,12 +84,9 @@ class LeaderTest {
         phaser.arrive()
     }
 
-    val signalListenersForCohort = mapOf(
-        Signal.ReachedMaxRetries to peerReachedMaxRetries
-    )
     private var subject =
         GPACProtocolImpl(
-            historyManagement,
+            history,
             3,
             timer,
             client,
@@ -104,7 +95,11 @@ class LeaderTest {
             myNodeId = 0,
             allPeers = mapOf(1 to listOf("localhost:${PeerTwo.getPort()}", "localhost:${PeerThree.getPort()}")),
             myAddress = "localhost:8081",
-            signalPublisher = SignalPublisher(signalListenersForCohort)
+            signalPublisher = SignalPublisher(
+                mapOf(
+                    Signal.ReachedMaxRetries to peerReachedMaxRetries
+                )
+            )
         )
-    private val changeDto = AddUserChange(InitialHistoryEntry.getId(), "userName", listOf())
+    private val change = AddUserChange(InitialHistoryEntry.getId(), "userName", listOf())
 }
