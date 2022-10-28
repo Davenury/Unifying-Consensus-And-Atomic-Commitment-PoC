@@ -3,10 +3,10 @@ package com.github.davenury.ucac.consensus.ratis
 import com.github.davenury.ucac.RatisConfig
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusFailure
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusSuccess
+import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.github.davenury.ucac.consensus.ConsensusResult
+import com.github.davenury.ucac.consensus.ConsensusResult.ConsensusFailure
+import com.github.davenury.ucac.consensus.ConsensusResult.ConsensusSuccess
 import com.github.davenury.ucac.history.History
 import java.io.File
 import java.util.*

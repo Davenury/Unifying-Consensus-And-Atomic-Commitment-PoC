@@ -6,7 +6,10 @@ import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.github.davenury.ucac.consensus.ConsensusResult
 import com.github.davenury.ucac.consensus.raft.domain.*
+import com.github.davenury.ucac.consensus.ConsensusResult.*
 import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*

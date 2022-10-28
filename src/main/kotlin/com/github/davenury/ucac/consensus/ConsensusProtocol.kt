@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.consensus.raft.domain
+package com.github.davenury.ucac.consensus
 
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
@@ -13,18 +13,3 @@ interface ConsensusProtocol {
 
     fun getState(): History
 }
-
-
-enum class ConsensusResult {
-    ConsensusSuccess,
-    ConsensusFailure,
-    ConsensusResultUnknown,
-    ConsensusChangeAlreadyProposed,
-}
-
-enum class RaftRole {
-    Leader,
-    Follower,
-    Candidate,
-}
-

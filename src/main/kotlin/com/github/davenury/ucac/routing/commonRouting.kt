@@ -1,8 +1,10 @@
-package com.github.davenury.ucac.common
+package com.github.davenury.ucac.routing
 
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
-import com.github.davenury.ucac.gpac.domain.GPACProtocol
-import com.github.davenury.ucac.gpac.domain.TransactionResult
+import com.github.davenury.ucac.common.Change
+import com.github.davenury.ucac.common.Changes
+import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.github.davenury.ucac.gpac.GPACProtocol
+import com.github.davenury.ucac.gpac.TransactionResult
 import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import io.ktor.application.*

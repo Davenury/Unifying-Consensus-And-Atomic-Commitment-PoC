@@ -2,11 +2,10 @@ package com.github.davenury.ucac.utils
 
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock.*
-import com.github.davenury.ucac.gpac.domain.Accept
+import com.github.davenury.ucac.gpac.Accept
 import org.junit.jupiter.api.AfterAll
 
-abstract class BaseWiremock(
-) {
+abstract class BaseWiremock {
 
     private var wireMockServer: WireMockServer = WireMockServer(0)
 
