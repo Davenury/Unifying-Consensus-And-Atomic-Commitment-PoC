@@ -84,11 +84,13 @@ class Application constructor(
     init {
         logger.info("Starting application with config: $config")
         engine = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
+            val history = History()
             val signalPublisher = SignalPublisher(signalListeners)
 
             val raftProtocolClientImpl = RaftProtocolClientImpl(config.peerId)
 
             consensusProtocol = RaftConsensusProtocolImpl(
+                history,
                 config.peerId,
                 config.peersetId,
                 config.host + ":" + config.port,

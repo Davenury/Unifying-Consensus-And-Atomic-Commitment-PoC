@@ -6,6 +6,7 @@ import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.Changes
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import io.ktor.client.request.*
@@ -50,33 +51,33 @@ class ConsensusSpec {
 
         val peersWithoutLeader = 4
 
-
 //      TODO: Change to one phaser with use of advance -> will be done in next PR
-        val electionPhaser = Phaser(peersWithoutLeader)
-        val change1Phaser = Phaser(peersWithoutLeader)
-        val change2Phaser = Phaser(peersWithoutLeader)
-
-        listOf(electionPhaser, change1Phaser, change2Phaser).forEach { it.register() }
+        val phaser = Phaser(peersWithoutLeader)
+        phaser.register()
 
         val peerLeaderElected = SignalListener {
-            electionPhaser.arrive()
+            expectThat(phaser.phase).isEqualTo(0)
+            phaser.arrive()
         }
 
         val peerApplyChange = SignalListener {
             println("Change phaser: ${it.subject.getPeerName()}")
-            if (change1Phaser.phase == 0) change1Phaser.arrive() else change2Phaser.arrive()
+            expectThat(phaser.phase).isContainedIn(listOf(1, 2))
+            phaser.arrive()
         }
 
-        val signalListener = mapOf(
-            Signal.ConsensusLeaderElected to peerLeaderElected,
-            Signal.ConsensusFollowerChangeAccepted to peerApplyChange
+        val peerset = TestApplicationSet(
+            listOf(5),
+            signalListeners = (1..5).associateWith {
+                mapOf(
+                    Signal.ConsensusLeaderElected to peerLeaderElected,
+                    Signal.ConsensusFollowerChangeAccepted to peerApplyChange
+                )
+            }
         )
-        val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
-
-        val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
         val peerAddresses = peerset.getPeers()[0]
 
-        awaitAdvanceInterruptiblyPhaser(electionPhaser)
+        awaitAdvanceInterruptiblyPhaser(phaser)
 
         // when: peer1 executed change
         val change1 = createChange(null)
@@ -85,13 +86,13 @@ class ConsensusSpec {
             executeChange("${peerAddresses[0]}/consensus/create_change", change1)
         }.isSuccess()
 
-        awaitAdvanceInterruptiblyPhaser(change1Phaser)
+        awaitAdvanceInterruptiblyPhaser(phaser)
 
         val changes = askForChanges(peerAddresses[2])
 
         // then: there's one change and it's change we've requested
+        expectThat(changes.size).isEqualTo(1)
         expect {
-            that(changes.size).isEqualTo(1)
             that(changes[0]).isEqualTo(change1)
             that(changes[0].acceptNum).isEqualTo(null)
         }
@@ -103,14 +104,15 @@ class ConsensusSpec {
             executeChange("${peerAddresses[1]}/consensus/create_change", change2)
         }.isSuccess()
 
-        awaitAdvanceInterruptiblyPhaser(change2Phaser)
+        awaitAdvanceInterruptiblyPhaser(phaser)
 
         val changes2 = askForChanges(peerAddresses[2])
 
         // then: there are two changes
+        expectThat(changes2.size).isEqualTo(2)
         expect {
-            that(changes2.size).isEqualTo(2)
             that(changes2[1]).isEqualTo(change2)
+            that(changes2[0]).isEqualTo(change1)
             that(changes2[1].acceptNum).isEqualTo(1)
         }
 
@@ -132,7 +134,7 @@ class ConsensusSpec {
         )
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
         val peerset =
-            TestApplicationSet(1, listOf(5), appsToExclude = listOf(3, 4, 5), signalListeners = signalListeners)
+            TestApplicationSet(listOf(5), appsToExclude = listOf(3, 4, 5), signalListeners = signalListeners)
 
         awaitAdvanceInterruptiblyPhaser(phaser)
 
@@ -163,7 +165,7 @@ class ConsensusSpec {
         )
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(4, 5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(listOf(5), appsToExclude = listOf(4, 5), signalListeners = signalListeners)
 
         awaitAdvanceInterruptiblyPhaser(phaser)
         isLeaderElected = true
@@ -194,7 +196,7 @@ class ConsensusSpec {
         val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
         var apps = peerset.getRunningApps()
 
         awaitAdvanceInterruptiblyPhaser(election1Phaser)
@@ -236,7 +238,7 @@ class ConsensusSpec {
         val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(1, listOf(5), appsToExclude = listOf(5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(listOf(5), appsToExclude = listOf(5), signalListeners = signalListeners)
         var apps = peerset.getRunningApps()
 
         awaitAdvanceInterruptiblyPhaser(election1Phaser)
@@ -287,7 +289,7 @@ class ConsensusSpec {
         )
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..6).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(1, listOf(6), appsToExclude = listOf(5, 6), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(listOf(6), appsToExclude = listOf(5, 6), signalListeners = signalListeners)
         var apps = peerset.getRunningApps()
 
         awaitAdvanceInterruptiblyPhaser(electionPhaser)
@@ -346,7 +348,7 @@ class ConsensusSpec {
         )
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
         val apps = peerset.getRunningApps()
 
         awaitAdvanceInterruptiblyPhaser(election1Phaser)
@@ -408,7 +410,7 @@ class ConsensusSpec {
         )
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
         val apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
@@ -469,7 +471,7 @@ class ConsensusSpec {
         )
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(1, listOf(5), signalListeners = signalListeners)
+        val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
         var apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
@@ -499,13 +501,15 @@ class ConsensusSpec {
 
 //      As only one peer confirm changes it should be still proposedChange
         runningPeers.forEach {
+            val proposedChanges = askForProposedChanges(it)
+            val acceptedChanges = askForAcceptedChanges(it)
             expect {
-                val proposedChanges = askForProposedChanges(it)
-                val acceptedChanges = askForAcceptedChanges(it)
                 that(proposedChanges.size).isEqualTo(1)
+                that(acceptedChanges.size).isEqualTo(0)
+            }
+            expect {
                 that(proposedChanges.first()).isEqualTo(createChange(null))
                 that(proposedChanges.first().acceptNum).isEqualTo(null)
-                that(acceptedChanges.size).isEqualTo(0)
             }
         }
 
@@ -542,7 +546,7 @@ class ConsensusSpec {
         )
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
-        val peerset = TestApplicationSet(1, listOf(5), signalListeners)
+        val peerset = TestApplicationSet(listOf(5), signalListeners)
         var apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
@@ -650,6 +654,7 @@ class ConsensusSpec {
 
         val initializeConsensusProtocol = { otherPeers: List<String> ->
             RaftConsensusProtocolImpl(
+                History(),
                 0,
                 0,
                 "1",

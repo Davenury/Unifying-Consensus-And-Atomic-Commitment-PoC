@@ -6,7 +6,6 @@ import java.util.*
 import kotlin.random.Random
 
 class TestApplicationSet(
-    numberOfPeersets: Int,
     numberOfPeersInPeersets: List<Int>,
     signalListeners: Map<Int, Map<Signal, SignalListener>> = emptyMap(),
     configOverrides: Map<Int, Map<String, Any>> = emptyMap(),
@@ -18,6 +17,7 @@ class TestApplicationSet(
     private val nonRunningPeer = "localhost:0"
 
     init {
+        val numberOfPeersets = numberOfPeersInPeersets.size
         val testConfigOverrides = mapOf(
             "ratis.addresses" to List(numberOfPeersets) {
                 List(numberOfPeersInPeersets[it]) { "localhost:${Random.nextInt(5000, 20000) + 11124}" }

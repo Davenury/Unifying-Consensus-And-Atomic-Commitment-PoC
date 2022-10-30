@@ -7,11 +7,11 @@ import kotlinx.coroutines.sync.withLock
 
 
 data class Ledger(
+    private val history: History,
     val acceptedItems: MutableList<LedgerItem> = mutableListOf(),
     val proposedItems: MutableList<LedgerItem> = mutableListOf(),
     private val mutex: Mutex = Mutex(),
 ) {
-
     private var commitIndex: Int = 0
     var lastApplied = -1
 
@@ -27,6 +27,7 @@ data class Ledger(
             this.proposedItems.addAll(newProposedItems)
             commitIndex = newProposedItems.maxOrDefault(commitIndex)
 
+            newAcceptedItems.forEach { history.addEntry(it.change.toHistoryEntry()) }
             return newAcceptedItems.isNotEmpty()
         }
     }
@@ -44,6 +45,7 @@ data class Ledger(
         mutex.withLock {
             val newAcceptedItems = proposedItems.filter { acceptedIndexes.contains(it.ledgerIndex) }
             acceptedItems.addAll(newAcceptedItems)
+            newAcceptedItems.forEach { history.addEntry(it.change.toHistoryEntry()) }
             proposedItems.removeAll(newAcceptedItems)
             lastApplied = newAcceptedItems.maxOrDefault(lastApplied)
         }
@@ -58,12 +60,8 @@ data class Ledger(
         }
     }
 
-    suspend fun getHistory(): History {
-        mutex.withLock {
-            val h = History()
-            acceptedItems.forEach { h.addEntry(it.change.toHistoryEntry()) }
-            return h
-        }
+    fun getHistory(): History {
+        return history
     }
 
     suspend fun getAcceptedChanges(): List<Change> =

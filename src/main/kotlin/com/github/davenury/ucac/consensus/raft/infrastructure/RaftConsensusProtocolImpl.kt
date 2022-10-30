@@ -21,6 +21,7 @@ import java.util.concurrent.*
 
 /** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
+    private val history: History,
     private val peerId: Int,
     private val peersetId: Int,
     private var peerAddress: String,
@@ -37,7 +38,7 @@ class RaftConsensusProtocolImpl(
     private val peerUrlToNextIndex: MutableMap<String, PeerIndices> = mutableMapOf()
     private val voteContainer: VoteContainer = VoteContainer()
     private var votedFor: VotedFor? = null
-    private var state: Ledger = Ledger()
+    private var state: Ledger = Ledger(history)
 
     @Volatile
     private var role: RaftRole = RaftRole.Candidate

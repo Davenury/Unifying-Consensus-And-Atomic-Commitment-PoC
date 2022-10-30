@@ -15,7 +15,7 @@ class HistoryRatisNode(
     peerId: Int,
     peersetId: Int,
     config: RatisConfig,
-    private val history: History = History(),
+    private val history: History,
 ) :
     RatisNode(
         peerId,
@@ -33,9 +33,5 @@ class HistoryRatisNode(
 
     override fun getState(): History {
         return history
-    }
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(RatisHistoryManagement::class.java)
     }
 }

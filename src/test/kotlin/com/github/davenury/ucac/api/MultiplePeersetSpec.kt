@@ -60,7 +60,7 @@ class MultiplePeersetSpec {
         )
 
         val apps = TestApplicationSet(
-            2, listOf(3, 3),
+            listOf(3, 3),
             signalListeners = (0..6).associateWith { signalListenersForCohort }
         )
         val peers = apps.getPeers()
@@ -127,7 +127,6 @@ class MultiplePeersetSpec {
         )
 
         val apps = TestApplicationSet(
-            2,
             listOf(3, 3),
             appsToExclude = listOf(4, 5, 6),
             signalListeners = (0..6).associateWith { signalListenersForCohort })
@@ -143,6 +142,11 @@ class MultiplePeersetSpec {
         withContext(Dispatchers.IO) {
             phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
         }
+
+        // TODO Currently GPAC does not apply changes, but instead
+        //  delegates them to the consensus protocol.
+        //  When this behavior is fixed, this delay must be removed.
+        delay(5000)
 
         // then - transaction should not be executed
         askForChanges("http://${peers[0][2]}")
@@ -171,7 +175,7 @@ class MultiplePeersetSpec {
     fun `transaction should not pass when more than half peers of any peerset aren't responding`(): Unit = runBlocking {
 
         val appsToExclude = listOf(3, 6, 7, 8)
-        val apps = TestApplicationSet(2, listOf(3, 5), appsToExclude = appsToExclude)
+        val apps = TestApplicationSet(listOf(3, 5), appsToExclude = appsToExclude)
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
 
@@ -213,7 +217,7 @@ class MultiplePeersetSpec {
         )
 
         val apps = TestApplicationSet(
-            2, listOf(3, 5),
+            listOf(3, 5),
             appsToExclude = listOf(3, 7, 8),
             signalListeners = (1..8).associateWith { signalListenersForCohort })
         val peers = apps.getPeers()
@@ -255,7 +259,7 @@ class MultiplePeersetSpec {
                 throw RuntimeException("Every peer from one peerset fails")
             }
             val apps = TestApplicationSet(
-                2, listOf(3, 5),
+                listOf(3, 5),
                 signalListeners = (4..8).zip(List(5) { mapOf(Signal.OnHandlingAgreeEnd to failAction) }).toMap()
             )
             val peers = apps.getPeers()
@@ -302,7 +306,7 @@ class MultiplePeersetSpec {
         )
 
         val apps = TestApplicationSet(
-            2, listOf(3, 5),
+            listOf(3, 5),
             signalListeners = mapOf(
                 1 to signalListenersForLeaders,
                 2 to signalListenersForCohort,
@@ -325,6 +329,11 @@ class MultiplePeersetSpec {
         withContext(Dispatchers.IO) {
             applyCommittedPhaser.awaitAdvanceInterruptibly(applyCommittedPhaser.arrive(), 60, TimeUnit.SECONDS)
         }
+
+        // TODO Currently GPAC does not apply changes, but instead
+        //  delegates them to the consensus protocol.
+        //  When this behavior is fixed, this delay must be removed.
+        delay(5000)
 
         peers.flatten().forEach { address ->
             askForChanges("http://$address").let {
@@ -388,7 +397,7 @@ class MultiplePeersetSpec {
             ) + signalListenersForCohort
 
             val apps = TestApplicationSet(
-                2, listOf(3, 5),
+                listOf(3, 5),
                 signalListeners = mapOf(
                     1 to signalListenersForLeader,
                     2 to signalListenersForCohort,
@@ -411,6 +420,11 @@ class MultiplePeersetSpec {
             withContext(Dispatchers.IO) {
                 phaser.awaitAdvanceInterruptibly(phaser.arrive(), 120, TimeUnit.SECONDS)
             }
+
+            // TODO Currently GPAC does not apply changes, but instead
+            //  delegates them to the consensus protocol.
+            //  When this behavior is fixed, this delay must be removed.
+            delay(5000)
 
             // waiting for consensus to propagate change is waste of time and fails CI
             peers.flatten().forEach { address ->

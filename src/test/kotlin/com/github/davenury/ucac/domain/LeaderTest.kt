@@ -7,7 +7,7 @@ import com.github.davenury.ucac.common.AddUserChange
 import com.github.davenury.ucac.common.InMemoryHistoryManagement
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.common.TooFewResponsesException
-import com.github.davenury.ucac.consensus.raft.infrastructure.DummyConsensusProtocol
+import com.github.davenury.ucac.utils.DummyConsensusProtocol2
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
@@ -81,7 +81,7 @@ class LeaderTest {
 
     private val allPeers = listOf(listOf("localhost:9091", "localhost:9092", "localhost:9093"))
     private val otherPeers = listOf(listOf("localhost:9092", "localhost:9093"))
-    private val consensusProtocol = DummyConsensusProtocol()
+    private val consensusProtocol = DummyConsensusProtocol2()
     private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
     private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)
     private val client = GPACProtocolClientImpl()

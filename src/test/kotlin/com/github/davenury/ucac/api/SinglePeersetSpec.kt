@@ -59,7 +59,7 @@ class SinglePeersetSpec {
         }
 
         val apps = TestApplicationSet(
-            1, listOf(3),
+            listOf(3),
             signalListeners = mapOf(1 to mapOf(Signal.BeforeSendingAgree to signalListener))
         )
         val peers = apps.getPeers()
@@ -95,7 +95,7 @@ class SinglePeersetSpec {
             )
 
             val apps = TestApplicationSet(
-                1, listOf(3),
+                listOf(3),
                 signalListeners = mapOf(
                     1 to mapOf(Signal.BeforeSendingApply to signalListener),
                     2 to signalListenersForCohort,
@@ -141,7 +141,7 @@ class SinglePeersetSpec {
             )
 
             val apps = TestApplicationSet(
-                1, listOf(3),
+                listOf(3),
                 signalListeners = mapOf(
                     1 to firstLeaderCallbacks,
                     2 to peer2Callbacks
@@ -228,7 +228,7 @@ class SinglePeersetSpec {
         )
 
         val apps = TestApplicationSet(
-            1, listOf(5),
+            listOf(5),
             signalListeners = mapOf(
                 1 to firstLeaderCallbacks + consensusPeerCallback,
                 2 to consensusPeerCallback,
