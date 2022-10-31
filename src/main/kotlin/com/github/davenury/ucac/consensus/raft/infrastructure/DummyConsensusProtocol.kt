@@ -12,9 +12,9 @@ class DummyConsensusProtocol : ConsensusProtocol {
     private val historyStorage: History = History()
 
     @Deprecated("use proposeChangeAsync")
-    override suspend fun proposeChange(change: Change): ConsensusResult {
+    override suspend fun proposeChange(change: Change): ChangeResult {
         historyStorage.addEntry(change.toHistoryEntry())
-        return ConsensusSuccess
+        return ChangeResult(ChangeResult.Status.SUCCESS)
     }
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {

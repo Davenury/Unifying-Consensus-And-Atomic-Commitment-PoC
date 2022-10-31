@@ -10,6 +10,7 @@ import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import kotlinx.coroutines.future.await
 
 fun Application.commonRoutingOld(
     gpacProtocol: GPACProtocol,
@@ -36,14 +37,14 @@ fun Application.commonRoutingOld(
 
         post("/consensus/create_change/sync") {
             val change = call.receive<Change>()
-            consensusProtocol.syncProposeChange(change)
+            consensusProtocol.proposeChangeAsync(change).await()
             call.respond(HttpStatusCode.OK)
         }
 
         post("/consensus/create_change/async") {
             val change = call.receive<Change>()
-            val id = consensusProtocol.asyncProposeChange(change)
-            call.respond(HttpStatusCode.Created, id)
+            consensusProtocol.proposeChangeAsync(change)
+            call.respond(HttpStatusCode.Created, change.toHistoryEntry().getId())
         }
 
         get("/consensus/changes") {

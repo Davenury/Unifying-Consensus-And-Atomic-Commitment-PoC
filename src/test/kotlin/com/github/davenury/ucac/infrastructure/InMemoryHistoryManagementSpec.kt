@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.infrastructure
 
 import com.github.davenury.ucac.common.AddRelationChange
+import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.common.InMemoryHistoryManagement
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
 import com.github.davenury.ucac.history.InitialHistoryEntry
@@ -25,7 +26,7 @@ class InMemoryHistoryManagementSpec {
         val change = AddRelationChange(InitialHistoryEntry.getId(), "from", "to", listOf(), 1)
         // and - consensus protocol that's ok with changes
         consensusProtocol.change = change
-        consensusProtocol.setResponse(ConsensusSuccess)
+        consensusProtocol.setResponse(ChangeResult(ChangeResult.Status.SUCCESS))
         // when - change is proposed
         runBlocking {
             subject.change(change)
@@ -39,7 +40,7 @@ class InMemoryHistoryManagementSpec {
         val change = AddRelationChange(InitialHistoryEntry.getId(), "from", "to", listOf(), 1)
         // and - consensus protocol that isn't ok with changes
         consensusProtocol.change = null
-        consensusProtocol.setResponse(ConsensusFailure)
+        consensusProtocol.setResponse(ChangeResult(ChangeResult.Status.CONFLICT))
 
         // when - change is proposed
         runBlocking {

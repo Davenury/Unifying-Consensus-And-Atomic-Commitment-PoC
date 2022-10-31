@@ -13,25 +13,12 @@ class InMemoryHistoryManagement(
     // TODO: think about what's better - if change asks consensus protocol if it
     // can be done or if something higher asks and then calls change
     override suspend fun change(change: Change): HistoryChangeResult =
-        consensusProtocol.syncProposeChange(change)
+        consensusProtocol.proposeChange(change)
             .let {
-                when (it) {
-                    ConsensusFailure -> {
-                        HistoryChangeResult.HistoryChangeFailure
-                    }
-
-                    ConsensusSuccess -> {
-                        HistoryChangeResult.HistoryChangeSuccess
-                    }
-
-                    ConsensusResultUnknown -> {
-                        HistoryChangeResult.HistoryChangeSuccess
-                    }
-
-                    ConsensusChangeAlreadyProposed -> {
-                        HistoryChangeResult.HistoryChangeUnknown
-                    }
-
+                when (it.status) {
+                    ChangeResult.Status.CONFLICT -> HistoryChangeResult.HistoryChangeFailure
+                    ChangeResult.Status.SUCCESS -> HistoryChangeResult.HistoryChangeSuccess
+                    ChangeResult.Status.TIMEOUT -> HistoryChangeResult.HistoryChangeUnknown
                 }
             }
 

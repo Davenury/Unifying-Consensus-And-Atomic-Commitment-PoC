@@ -29,14 +29,14 @@ class HistoryRatisNode(
     ConsensusProtocol {
 
     @Deprecated("use proposeChangeAsync")
-    override suspend fun proposeChange(change: Change): ConsensusResult {
+    override suspend fun proposeChange(change: Change): ChangeResult {
         val result = applyTransaction(change.toHistoryEntry().serialize())
-        return if (result == "ERROR") ConsensusFailure else ConsensusSuccess
+        return if (result == "ERROR") ChangeResult(ChangeResult.Status.CONFLICT) else ChangeResult(ChangeResult.Status.SUCCESS)
     }
 
     private suspend fun asyncProposeChange(change: Change): String {
         val result = applyTransaction(change.toHistoryEntry().serialize())
-        return  change.toHistoryEntry().getId()
+        return change.toHistoryEntry().getId()
     }
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {

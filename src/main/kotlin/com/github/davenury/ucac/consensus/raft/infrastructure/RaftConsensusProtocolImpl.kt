@@ -7,19 +7,22 @@ import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.raft.domain.*
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.*
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusFailure
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusSuccess
 import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
-import java.time.Duration
-import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import org.slf4j.LoggerFactory
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.future.future
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.*
+import org.slf4j.LoggerFactory
+import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
+
 
 /** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
@@ -211,8 +214,9 @@ class RaftConsensusProtocolImpl(
         return ConsensusHeartbeatResponse(true, currentTerm)
     }
 
-    override suspend fun handleSyncProposeChange(change: Change) = syncProposeChange(change)
-    override suspend fun handleAsyncProposeChange(change: Change): String = asyncProposeChange(change)
+    override suspend fun handleSyncProposeChange(change: Change): ChangeResult = proposeChange(change)
+    override suspend fun handleAsyncProposeChange(change: Change): CompletableFuture<ChangeResult> =
+        proposeChangeAsync(change)
 
     override fun setPeerAddress(address: String) {
         this.peerAddress = address
@@ -364,27 +368,27 @@ class RaftConsensusProtocolImpl(
     }
 
 
-    private suspend fun syncProposeChangeToLedger(change: Change): ConsensusResult {
+    private suspend fun syncProposeChangeToLedger(change: Change): ChangeResult {
         asyncProposeChangeToLedger(change)
 
         while (!state.isChangeAccepted(change) && state.changeAlreadyProposed(change))
             channel.receive()
 
 
-        if (!state.changeAlreadyProposed(change) && !state.isChangeAccepted(change)) return ConsensusFailure
+        if (!state.changeAlreadyProposed(change) && !state.isChangeAccepted(change)) return ChangeResult(ChangeResult.Status.CONFLICT)
 
-        return ConsensusSuccess
+        return ChangeResult(ChangeResult.Status.SUCCESS)
     }
 
     //  TODO: sync change will have to use Condition/wait/notifyAll
-    private suspend fun asyncProposeChangeToLedger(change: Change): String {
+    private suspend fun asyncProposeChangeToLedger(change: Change) {
 
 //      TODO: it will be changed
         val id: Int
 
         mutex.withLock {
             if (state.changeAlreadyProposed(change)) {
-                return change.toHistoryEntry().getId()
+                return
             }
 
             timer.cancelCounting()
@@ -392,7 +396,6 @@ class RaftConsensusProtocolImpl(
             id = state.proposeChange(change, currentTerm)
         }
         voteContainer.initializeChange(id)
-        return change.toHistoryEntry().getId()
     }
 
     private suspend inline fun <reified K> sendRequestToLeader(change: Change, suffix: String): K? = try {
@@ -409,23 +412,23 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun asyncSendRequestToLeader(change: Change): String? = sendRequestToLeader<String>(change, "async")
-    private suspend fun syncSendRequestToLeader(change: Change): ConsensusResult =
-        sendRequestToLeader<ConsensusResult>(change, "sync") ?: ConsensusFailure
+    private suspend fun syncSendRequestToLeader(change: Change): ChangeResult =
+        sendRequestToLeader<ChangeResult>(change, "sync") ?: ChangeResult(ChangeResult.Status.CONFLICT)
 
 
-    private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: Change): ConsensusResult {
+    private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: Change): ChangeResult {
         val id = state.proposeChange(changeWithAcceptNum, currentTerm)
         voteContainer.initializeChange(id)
         timer.startCounting {
             logger.info("$peerId - change was proposed a no leader is elected")
             sendLeaderRequest()
         }
-        return ConsensusSuccess
+        return ChangeResult(ChangeResult.Status.SUCCESS)
     }
 
     //   TODO: only one change can be proposed at the same time
     @Deprecated("use proposeChangeAsync")
-    override suspend fun proposeChange(change: Change): ConsensusResult {
+    override suspend fun proposeChange(change: Change): ChangeResult {
         logger.info("$peerId received change: $change")
 
         return when {
@@ -437,17 +440,20 @@ class RaftConsensusProtocolImpl(
     }
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
-        TODO("Not yet implemented")
         logger.info("$peerId received change: $change")
 
-        return when {
-            amILeader() -> asyncProposeChangeToLedger(change)
-            votedFor != null ->
-                asyncSendRequestToLeader(change) ?: throw Exception("Error during processing change")
+        return coroutineScope {
+            this.future {
+                when {
+                    amILeader() -> syncProposeChangeToLedger(change)
+                    votedFor != null ->
+                        syncSendRequestToLeader(change) ?: throw Exception("Error during processing change")
 //
 //              TODO: Change after queue
-            else ->
-                throw Exception("There should be always a leader")
+                    else ->
+                        throw Exception("There should be always a leader")
+                }
+            }
         }
     }
 
