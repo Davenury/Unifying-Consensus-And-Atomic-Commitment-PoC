@@ -496,7 +496,7 @@ class ConsensusSpec {
 
 //      Start processing
         expectCatching {
-            executeChange("${runningPeers.first()}/consensus/create_change/sync", createChange(null))
+            executeChange("${runningPeers.first()}/consensus/create_change/async", createChange(null))
         }.isSuccess()
 
         awaitAdvanceInterruptiblyPhaser(changePhaser)
@@ -594,7 +594,7 @@ class ConsensusSpec {
 
 //      Run change in both halfs
         expectCatching {
-            executeChange("${firstHalf.first()}/consensus/create_change/sync", createChange(1))
+            executeChange("${firstHalf.first()}/consensus/create_change/async", createChange(1))
         }.isSuccess()
 
         expectCatching {

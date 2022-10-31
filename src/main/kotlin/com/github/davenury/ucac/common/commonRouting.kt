@@ -44,7 +44,7 @@ fun Application.commonRoutingOld(
         post("/consensus/create_change/async") {
             val change = call.receive<Change>()
             consensusProtocol.proposeChangeAsync(change)
-            call.respond(HttpStatusCode.Created, change.toHistoryEntry().getId())
+            call.respond(HttpStatusCode.Accepted)
         }
 
         get("/consensus/changes") {

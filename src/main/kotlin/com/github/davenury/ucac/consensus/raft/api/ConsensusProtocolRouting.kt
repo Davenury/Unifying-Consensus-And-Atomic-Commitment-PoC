@@ -3,6 +3,7 @@ package com.github.davenury.ucac.consensus.raft.api
 import com.github.davenury.ucac.common.Changes
 import com.github.davenury.ucac.consensus.raft.domain.*
 import io.ktor.application.*
+import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
@@ -39,7 +40,7 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         post("/consensus/request_apply_change/async") {
             val message: ConsensusProposeChange = call.receive()
             val result = protocol.handleAsyncProposeChange(message)
-            call.respond(result)
+            call.respond(HttpStatusCode.Accepted)
         }
 //      Endpoints for tests
         get("/consensus/proposed_changes") {

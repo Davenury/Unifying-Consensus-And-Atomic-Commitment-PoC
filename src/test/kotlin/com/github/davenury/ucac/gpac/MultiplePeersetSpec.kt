@@ -49,9 +49,22 @@ class MultiplePeersetSpec {
 
     @Test
     fun `should execute transaction in every peer from every of two peersets`(): Unit = runBlocking {
-        val apps = TestApplicationSet(2, listOf(3, 3))
+        val electionPhaser = Phaser(4)
+        electionPhaser.register()
+        val leaderElected = SignalListener {
+            electionPhaser.arrive()
+        }
+
+        val apps = TestApplicationSet(
+            2,
+            listOf(3, 3),
+            signalListeners = (0..6).associateWith { mapOf(Signal.ConsensusLeaderElected to leaderElected) })
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
+
+        withContext(Dispatchers.IO) {
+            electionPhaser.awaitAdvanceInterruptibly(electionPhaser.arrive(), 10, TimeUnit.SECONDS)
+        }
 
         // when - executing transaction
         executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
@@ -197,8 +210,16 @@ class MultiplePeersetSpec {
             phaser.arrive()
         }
 
+
+        val electionPhaser = Phaser(3)
+        electionPhaser.register()
+        val leaderElected = SignalListener {
+            electionPhaser.arrive()
+        }
+
         val signalListenersForCohort = mapOf(
             Signal.OnHandlingApplyCommitted to peerApplyCommitted,
+            Signal.ConsensusLeaderElected to leaderElected
         )
 
         val appsToExclude = listOf(3, 7, 8)
@@ -206,6 +227,10 @@ class MultiplePeersetSpec {
             signalListeners = (0..8).associateWith { signalListenersForCohort })
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
+
+        withContext(Dispatchers.IO) {
+            electionPhaser.awaitAdvanceInterruptibly(electionPhaser.arrive(), 10, TimeUnit.SECONDS)
+        }
 
         // when - executing transaction
         executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))

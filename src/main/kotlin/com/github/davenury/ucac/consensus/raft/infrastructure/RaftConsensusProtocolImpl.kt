@@ -15,6 +15,8 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.future.asCompletableFuture
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.future.future
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -115,7 +117,6 @@ class RaftConsensusProtocolImpl(
             votedFor = votedFor!!.copy(elected = true)
             assert(executorService == null)
             executorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-
         }
 
         logger.info("$peerId/-/$peerAddress - I'm the leader in iteration $currentTerm")
@@ -428,33 +429,22 @@ class RaftConsensusProtocolImpl(
 
     //   TODO: only one change can be proposed at the same time
     @Deprecated("use proposeChangeAsync")
-    override suspend fun proposeChange(change: Change): ChangeResult {
-        logger.info("$peerId received change: $change")
-
-        return when {
-            amILeader() -> syncProposeChangeToLedger(change)
-            votedFor != null -> syncSendRequestToLeader(change)
-//              TODO: Change after queue
-            else -> tryToProposeChangeMyself(change)
-        }
-    }
+    override suspend fun proposeChange(change: Change): ChangeResult = proposeChangeAsync(change).await()
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
         logger.info("$peerId received change: $change")
 
-        return coroutineScope {
-            this.future {
-                when {
-                    amILeader() -> syncProposeChangeToLedger(change)
-                    votedFor != null ->
-                        syncSendRequestToLeader(change) ?: throw Exception("Error during processing change")
+        return GlobalScope.async {
+            when {
+                amILeader() -> syncProposeChangeToLedger(change)
+                votedFor != null ->
+                    syncSendRequestToLeader(change) ?: throw Exception("Error during processing change")
 //
 //              TODO: Change after queue
-                    else ->
-                        throw Exception("There should be always a leader")
-                }
+                else ->
+                    throw Exception("There should be always a leader")
             }
-        }
+        }.asCompletableFuture()
     }
 
 
