@@ -9,6 +9,7 @@ import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProto
 import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
+import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
@@ -21,7 +22,6 @@ import strikt.api.expectThat
 import strikt.assertions.*
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
-import java.util.concurrent.TimeUnit
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -51,7 +51,6 @@ class ConsensusSpec {
 
         val peersWithoutLeader = 4
 
-//      TODO: Change to one phaser with use of advance -> will be done in next PR
         val phaser = Phaser(peersWithoutLeader)
         phaser.register()
 
@@ -77,7 +76,7 @@ class ConsensusSpec {
         )
         val peerAddresses = peerset.getPeers()[0]
 
-        awaitAdvanceInterruptiblyPhaser(phaser)
+        phaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when: peer1 executed change
         val change1 = createChange(null)
@@ -86,17 +85,16 @@ class ConsensusSpec {
             executeChange("${peerAddresses[0]}/consensus/create_change", change1)
         }.isSuccess()
 
-        awaitAdvanceInterruptiblyPhaser(phaser)
+        phaser.arriveAndAwaitAdvanceWithTimeout()
 
-        val changes = askForChanges(peerAddresses[2])
-
-        // then: there's one change and it's change we've requested
-        expectThat(changes.size).isEqualTo(1)
-        expect {
-            that(changes[0]).isEqualTo(change1)
-            that(changes[0].acceptNum).isEqualTo(null)
+        askAllForChanges(peerAddresses).forEach { changes ->
+            // then: there's one change, and it's change we've requested
+            expectThat(changes.size).isEqualTo(1)
+            expect {
+                that(changes[0]).isEqualTo(change1)
+                that(changes[0].acceptNum).isEqualTo(null)
+            }
         }
-
 
         // when: peer2 executes change
         val change2 = createChange(1, userName = "userName2", parentId = change1Id)
@@ -104,16 +102,16 @@ class ConsensusSpec {
             executeChange("${peerAddresses[1]}/consensus/create_change", change2)
         }.isSuccess()
 
-        awaitAdvanceInterruptiblyPhaser(phaser)
+        phaser.arriveAndAwaitAdvanceWithTimeout()
 
-        val changes2 = askForChanges(peerAddresses[2])
-
-        // then: there are two changes
-        expectThat(changes2.size).isEqualTo(2)
-        expect {
-            that(changes2[1]).isEqualTo(change2)
-            that(changes2[0]).isEqualTo(change1)
-            that(changes2[1].acceptNum).isEqualTo(1)
+        askAllForChanges(peerAddresses).forEach { changes ->
+            // then: there are two changes
+            expectThat(changes.size).isEqualTo(2)
+            expect {
+                that(changes[1]).isEqualTo(change2)
+                that(changes[0]).isEqualTo(change1)
+                that(changes[1].acceptNum).isEqualTo(1)
+            }
         }
 
         peerset.stopApps()
@@ -136,7 +134,7 @@ class ConsensusSpec {
         val peerset =
             TestApplicationSet(listOf(5), appsToExclude = listOf(3, 4, 5), signalListeners = signalListeners)
 
-        awaitAdvanceInterruptiblyPhaser(phaser)
+        phaser.arriveAndAwaitAdvanceWithTimeout()
 
         peerset.getRunningApps().forEach {
             expect {
@@ -167,7 +165,7 @@ class ConsensusSpec {
 
         val peerset = TestApplicationSet(listOf(5), appsToExclude = listOf(4, 5), signalListeners = signalListeners)
 
-        awaitAdvanceInterruptiblyPhaser(phaser)
+        phaser.arriveAndAwaitAdvanceWithTimeout()
         isLeaderElected = true
 
         peerset.getRunningApps().forEach {
@@ -199,18 +197,17 @@ class ConsensusSpec {
         val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
         var apps = peerset.getRunningApps()
 
-        awaitAdvanceInterruptiblyPhaser(election1Phaser)
+        election1Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
-        val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
 
         firstLeaderApplication.stop(0, 0)
 
         apps = apps.filter { it != firstLeaderApplication }
 
-        awaitAdvanceInterruptiblyPhaser(election2Phaser)
+        election2Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         expect {
             val secondLeaderAddress =
@@ -241,18 +238,17 @@ class ConsensusSpec {
         val peerset = TestApplicationSet(listOf(5), appsToExclude = listOf(5), signalListeners = signalListeners)
         var apps = peerset.getRunningApps()
 
-        awaitAdvanceInterruptiblyPhaser(election1Phaser)
+        election1Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
-        val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
 
         firstLeaderApplication.stop(0, 0)
 
         apps = apps.filter { it != firstLeaderApplication }
 
-        awaitAdvanceInterruptiblyPhaser(election2Phaser)
+        election2Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         expect {
             val secondLeaderAddress =
@@ -292,19 +288,17 @@ class ConsensusSpec {
         val peerset = TestApplicationSet(listOf(6), appsToExclude = listOf(5, 6), signalListeners = signalListeners)
         var apps = peerset.getRunningApps()
 
-        awaitAdvanceInterruptiblyPhaser(electionPhaser)
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
-        val firstLeaderPort = triple.second
-        val firstLeaderAddress = triple.first
 
         firstLeaderApplication.stop(0, 0)
 
         apps = apps.filter { it != firstLeaderApplication }
 
-        awaitAdvanceInterruptiblyPhaser(leaderFailedPhaser)
-        awaitAdvanceInterruptiblyPhaser(tryToBecomeLeaderPhaser, 20)
+        leaderFailedPhaser.arriveAndAwaitAdvanceWithTimeout()
+        tryToBecomeLeaderPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         expect {
             val secondLeaderAddress = askForLeaderAddress(apps.first())
@@ -351,7 +345,7 @@ class ConsensusSpec {
         val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
         val apps = peerset.getRunningApps()
 
-        awaitAdvanceInterruptiblyPhaser(election1Phaser)
+        election1Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
@@ -377,8 +371,8 @@ class ConsensusSpec {
             that(acceptedChanges.size).isEqualTo(0)
         }
 
-        awaitAdvanceInterruptiblyPhaser(election2Phaser)
-        awaitAdvanceInterruptiblyPhaser(changePhaser)
+        election2Phaser.arriveAndAwaitAdvanceWithTimeout()
+        changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
         expect {
             val proposedChanges = askForProposedChanges(runningPeers.first())
@@ -415,12 +409,10 @@ class ConsensusSpec {
 
         val peerAddresses = peerset.getRunningPeers()[0]
 
-        awaitAdvanceInterruptiblyPhaser(electionPhaser)
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
-        val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
-        val firstLeaderAddress = triple.first
 
         val peersToStop = peerAddresses.zip(apps).filterNot { it.first.contains(firstLeaderPort) }.take(2)
         peersToStop.forEach { it.second.stop(0, 0) }
@@ -436,7 +428,7 @@ class ConsensusSpec {
             executeChange("${runningPeers.first()}/consensus/create_change", createChange(null))
         }.isSuccess()
 
-        awaitAdvanceInterruptiblyPhaser(changePhaser)
+        changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
         runningPeers.forEach {
             expect {
@@ -476,12 +468,10 @@ class ConsensusSpec {
 
         val peerAddresses = peerset.getRunningPeers()[0]
 
-        awaitAdvanceInterruptiblyPhaser(electionPhaser)
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
-        val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
-        val firstLeaderAddress = triple.first
 
         val peersToStop = peerAddresses.zip(apps).filterNot { it.first.contains(firstLeaderPort) }.take(3)
         peersToStop.forEach { it.second.stop(0, 0) }
@@ -497,7 +487,7 @@ class ConsensusSpec {
             executeChange("${runningPeers.first()}/consensus/create_change", createChange(null))
         }.isSuccess()
 
-        awaitAdvanceInterruptiblyPhaser(changePhaser)
+        changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      As only one peer confirm changes it should be still proposedChange
         runningPeers.forEach {
@@ -551,10 +541,9 @@ class ConsensusSpec {
 
         val peerAddresses = peerset.getRunningPeers()[0]
 
-        awaitAdvanceInterruptiblyPhaser(election1Phaser)
+        election1Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
-        val firstLeaderApplication = triple.third
         val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
 
@@ -583,7 +572,7 @@ class ConsensusSpec {
             modifyPeers(application!!, peers)
         }
 
-        awaitAdvanceInterruptiblyPhaser(election2Phaser)
+        election2Phaser.arriveAndAwaitAdvanceWithTimeout()
 //      Check if second half chose new leader
         secondHalf.forEach {
             val app = addressToApplication[it]
@@ -601,7 +590,7 @@ class ConsensusSpec {
             executeChange("${secondHalf.first()}/consensus/create_change", createChange(2))
         }.isSuccess()
 
-        awaitAdvanceInterruptiblyPhaser(change1Phaser)
+        change1Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         firstHalf.forEach {
             expect {
@@ -625,14 +614,13 @@ class ConsensusSpec {
             }
         }
 
-
 //      Merge network
         peerAddresses.forEach { address ->
             val application = addressToApplication[address]
             modifyPeers(application!!, peerAddresses.filter { it != address })
         }
 
-        awaitAdvanceInterruptiblyPhaser(change2Phaser)
+        change2Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         peerAddresses.forEach {
             expect {
@@ -713,7 +701,7 @@ class ConsensusSpec {
             body = change
         }
 
-    private suspend fun genericAskForChange(suffix: String, peer: String): List<Change> =
+    private suspend fun genericAskForChange(suffix: String, peer: String): Changes =
         testHttpClient.get<Changes>("http://$peer/consensus/$suffix") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
@@ -721,6 +709,9 @@ class ConsensusSpec {
 
 
     private suspend fun askForChanges(peer: String) = genericAskForChange("changes", peer)
+    private suspend fun askAllForChanges(peerAddresses: List<String>) =
+        peerAddresses.map { askForChanges(it) }
+
     private suspend fun askForProposedChanges(peer: String) = genericAskForChange("proposed_changes", peer)
     private suspend fun askForAcceptedChanges(peer: String) = genericAskForChange("accepted_changes", peer)
 
@@ -765,11 +756,4 @@ class ConsensusSpec {
         val newPeers = peers.map { it.replace("http://", "") }
         app.setPeers(mapOf(1 to newPeers), "127.0.0.1")
     }
-
-    private suspend fun awaitAdvanceInterruptiblyPhaser(phaser: Phaser, secondsTimeout: Long = 15) =
-        withContext(Dispatchers.IO) {
-            phaser.awaitAdvanceInterruptibly(phaser.arrive(), secondsTimeout, TimeUnit.SECONDS)
-        }
-
-
 }

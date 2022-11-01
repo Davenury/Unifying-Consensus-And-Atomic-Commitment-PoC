@@ -15,6 +15,7 @@ import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
+import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
@@ -41,9 +42,7 @@ class LeaderTest {
 
 
         runBlocking {
-            withContext(Dispatchers.IO) {
-                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
-            }
+            phaser.arriveAndAwaitAdvanceWithTimeout()
         }
 
         // assert that we're actually asking 3 times

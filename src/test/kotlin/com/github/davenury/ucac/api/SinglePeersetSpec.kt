@@ -5,14 +5,12 @@ import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.gpac.domain.*
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
+import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -27,13 +25,11 @@ import strikt.assertions.*
 import java.io.File
 import java.time.Duration
 import java.util.concurrent.Phaser
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 
 @Suppress("HttpUrlsUsage")
 class SinglePeersetSpec {
-
 
     companion object {
         private val logger = LoggerFactory.getLogger(SinglePeersetSpec::class.java)!!
@@ -108,9 +104,7 @@ class SinglePeersetSpec {
                 executeChange("http://${peers[0][0]}/create_change", change(listOf()))
             }.isSuccess()
 
-            withContext(Dispatchers.IO) {
-                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
-            }
+            phaser.arriveAndAwaitAdvanceWithTimeout()
 
             apps.stopApps()
         }
@@ -119,6 +113,7 @@ class SinglePeersetSpec {
     fun `should be able to execute transaction even if leader fails after first ft-agree`() {
         runBlocking {
             val phaser = Phaser(2)
+            phaser.register()
 
             val firstLeaderAction = SignalListener {
                 runBlocking {
@@ -131,20 +126,23 @@ class SinglePeersetSpec {
                 }
             }
             val firstLeaderCallbacks: Map<Signal, SignalListener> = mapOf(
-                Signal.BeforeSendingAgree to firstLeaderAction
+                Signal.BeforeSendingAgree to firstLeaderAction,
             )
             val afterHandlingApply = SignalListener {
-                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+                runBlocking {
+                    phaser.arriveAndAwaitAdvanceWithTimeout()
+                }
             }
-            val peer2Callbacks: Map<Signal, SignalListener> = mapOf(
-                Signal.OnHandlingApplyEnd to afterHandlingApply
+            val otherPeersCallbacks: Map<Signal, SignalListener> = mapOf(
+                Signal.OnHandlingApplyCommitted to afterHandlingApply,
             )
 
             val apps = TestApplicationSet(
                 listOf(3),
                 signalListeners = mapOf(
                     1 to firstLeaderCallbacks,
-                    2 to peer2Callbacks
+                    2 to otherPeersCallbacks,
+                    3 to otherPeersCallbacks,
                 ),
                 configOverrides = mapOf(2 to mapOf("gpac.leaderFailTimeout" to Duration.ZERO))
             )
@@ -158,14 +156,7 @@ class SinglePeersetSpec {
                 logger.info("Leader 1 fails: $e")
             }
 
-            withContext(Dispatchers.IO) {
-                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
-            }
-
-            // TODO Currently GPAC does not apply changes, but instead
-            //  delegates them to the consensus protocol.
-            //  When this behavior is fixed, this delay must be removed.
-            delay(5000)
+            phaser.arriveAndAwaitAdvanceWithTimeout()
 
             val response = testHttpClient.get<Change>("http://${peers[0][1]}/change") {
                 contentType(ContentType.Application.Json)
@@ -181,18 +172,6 @@ class SinglePeersetSpec {
     @Test
     fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
         val phaser = Phaser(2)
-        // since leader applies the change not in heartbeat
-        val consensusPhaser = Phaser(5)
-
-        val consensusPeersAction = SignalListener {
-            val expectedChange = it.change
-            if (expectedChange is AddGroupChange && expectedChange.groupName == "name") {
-                consensusPhaser.arriveAndAwaitAdvance()
-            }
-        }
-        val consensusPeerCallback = mapOf(
-            Signal.ConsensusFollowerChangeAccepted to consensusPeersAction
-        )
 
         val firstLeaderAction = SignalListener { signalData ->
             val url = "http://${signalData.peers[0][1]}/apply"
@@ -221,7 +200,9 @@ class SinglePeersetSpec {
         )
 
         val peer3Action = SignalListener {
-            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 60, TimeUnit.SECONDS)
+            runBlocking {
+                phaser.arriveAndAwaitAdvanceWithTimeout()
+            }
         }
         val peer3Callbacks: Map<Signal, SignalListener> = mapOf(
             Signal.OnHandlingApplyEnd to peer3Action
@@ -230,11 +211,8 @@ class SinglePeersetSpec {
         val apps = TestApplicationSet(
             listOf(5),
             signalListeners = mapOf(
-                1 to firstLeaderCallbacks + consensusPeerCallback,
-                2 to consensusPeerCallback,
-                3 to peer3Callbacks + consensusPeerCallback,
-                4 to consensusPeerCallback,
-                5 to consensusPeerCallback
+                1 to firstLeaderCallbacks,
+                3 to peer3Callbacks,
             )
         )
         val peers = apps.getPeers()
@@ -254,10 +232,9 @@ class SinglePeersetSpec {
         }
 
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
-        phaser.arriveAndAwaitAdvance()
-        consensusPhaser.arriveAndAwaitAdvance()
+        phaser.arriveAndAwaitAdvanceWithTimeout()
 
-        val change = testHttpClient.get<Change>("http://${peers[0][3]}/change") {
+        val change = testHttpClient.get<Change>("http://${peers[0][2]}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }

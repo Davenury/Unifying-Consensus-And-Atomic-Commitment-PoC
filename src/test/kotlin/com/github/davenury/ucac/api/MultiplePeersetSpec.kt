@@ -7,22 +7,17 @@ import com.github.davenury.ucac.gpac.domain.Apply
 import com.github.davenury.ucac.gpac.domain.TransactionResult
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
+import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
+import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import org.apache.commons.io.FileUtils
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
-import org.junit.jupiter.api.fail
+import org.junit.jupiter.api.*
 import org.slf4j.LoggerFactory
-import strikt.api.expect
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.contains
@@ -31,7 +26,6 @@ import strikt.assertions.isEqualTo
 import strikt.assertions.isGreaterThanOrEqualTo
 import java.io.File
 import java.util.concurrent.Phaser
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 @Suppress("HttpUrlsUsage")
@@ -69,44 +63,12 @@ class MultiplePeersetSpec {
         // when - executing transaction
         executeChange("http://${peers[0][0]}/create_change", change)
 
-        withContext(Dispatchers.IO) {
-            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
+        phaser.arriveAndAwaitAdvanceWithTimeout()
+
+        askAllForChanges(peers.flatten()).forEach { changes ->
+            expectThat(changes.size).isGreaterThanOrEqualTo(1)
+            expectThat(changes[0]).isEqualTo(change)
         }
-
-        // TODO Currently GPAC does not apply changes, but instead
-        //  delegates them to the consensus protocol.
-        //  When this behavior is fixed, this delay must be removed.
-        delay(5000)
-
-        // then - transaction is executed in same peerset
-        val peer2Change = testHttpClient.get<Change>("http://${peers[0][1]}/change") {
-            contentType(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
-        }
-
-        // and - transaction is executed in other peerset
-        val peer4Change = testHttpClient.get<Change>("http://${peers[1][0]}/change") {
-            contentType(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
-        }
-
-        expect {
-            that(peer2Change).isEqualTo(change)
-            that(peer4Change).isEqualTo(change)
-        }
-
-        // and - there's only one change in history of both peersets
-        askForChanges("http://${peers[0][1]}")
-            .let {
-                expectThat(it.size).isGreaterThanOrEqualTo(1)
-                expectThat(it[0]).isEqualTo(change)
-            }
-
-        askForChanges("http://${peers[1][0]}")
-            .let {
-                expectThat(it.size).isGreaterThanOrEqualTo(1)
-                expectThat(it[0]).isEqualTo(change)
-            }
 
         apps.stopApps()
     }
@@ -129,31 +91,22 @@ class MultiplePeersetSpec {
         val apps = TestApplicationSet(
             listOf(3, 3),
             appsToExclude = listOf(4, 5, 6),
-            signalListeners = (0..6).associateWith { signalListenersForCohort })
+            signalListeners = (0..6).associateWith { signalListenersForCohort },
+        )
         val peers = apps.getPeers()
-        val otherPeer = apps.getPeers()[1][0]
-
+        val otherPeer = peers[1][0]
         val change = change(otherPeer)
 
         val result = executeChange("http://${peers[0][0]}/create_change", change)
 
         expectThat(result.status).isEqualTo(HttpStatusCode.Created)
 
-        withContext(Dispatchers.IO) {
-            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 30, TimeUnit.SECONDS)
-        }
-
-        // TODO Currently GPAC does not apply changes, but instead
-        //  delegates them to the consensus protocol.
-        //  When this behavior is fixed, this delay must be removed.
-        delay(5000)
+        phaser.arriveAndAwaitAdvanceWithTimeout()
 
         // then - transaction should not be executed
-        askForChanges("http://${peers[0][2]}")
-            .let {
-                expectThat(it.size).isEqualTo(0)
-            }
-
+        askAllForChanges(peers[0]).forEach { changes ->
+            expectThat(changes.size).isEqualTo(0)
+        }
 
         val transactionResult = testHttpClient.get<TransactionResult>(
             "http://${peers[0][0]}/change_status/${
@@ -165,7 +118,6 @@ class MultiplePeersetSpec {
         }
 
         expectThat(transactionResult).isEqualTo(TransactionResult.FAILED)
-
 
         apps.stopApps()
     }
@@ -194,10 +146,9 @@ class MultiplePeersetSpec {
         delay(10000)
 
         // then - transaction should not be executed
-        askForChanges("http://${peers[0][1]}")
-            .let {
-                expectThat(it.size).isEqualTo(0)
-            }
+        askAllForChanges(peers[0]).forEach { changes ->
+            expectThat(changes.size).isEqualTo(0)
+        }
 
         apps.stopApps()
     }
@@ -226,26 +177,13 @@ class MultiplePeersetSpec {
         // when - executing transaction
         executeChange("http://${peers[0][0]}/create_change", change)
 
-        withContext(Dispatchers.IO) {
-            phaser.awaitAdvanceInterruptibly(phaser.arrive(), 10, TimeUnit.SECONDS)
-        }
-
-        // TODO Currently GPAC does not apply changes, but instead
-        //  delegates them to the consensus protocol.
-        //  When this behavior is fixed, this delay must be removed.
-        delay(5000)
+        phaser.arriveAndAwaitAdvanceWithTimeout()
 
         // then - transaction should be executed in every peerset
-        askForChanges("http://${peers[0][1]}")
-            .let {
-                expectThat(it.size).isGreaterThanOrEqualTo(1)
-                expectThat(it[0]).isEqualTo(change)
-            }
-
-        askForChanges("http://${peers[1][0]}")
-            .let {
-                expectThat(it.size).isGreaterThanOrEqualTo(1)
-                expectThat(it[0]).isEqualTo(change)
+        askAllForChanges(peers.flatten() subtract setOf(NON_RUNNING_PEER))
+            .forEach { changes ->
+                expectThat(changes.size).isGreaterThanOrEqualTo(1)
+                expectThat(changes[0]).isEqualTo(change)
             }
 
         apps.stopApps()
@@ -274,11 +212,8 @@ class MultiplePeersetSpec {
                 expectThat(e.message!!).contains("Transaction failed due to too few responses of ft phase.")
             }
 
-            peers.flatten().forEach {
-                askForChanges("http://${it}")
-                    .let {
-                        expectThat(it.size).isEqualTo(0)
-                    }
+            askAllForChanges(peers.flatten()).forEach { changes ->
+                expectThat(changes.size).isEqualTo(0)
             }
 
             apps.stopApps()
@@ -326,20 +261,11 @@ class MultiplePeersetSpec {
             executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
         }
 
-        withContext(Dispatchers.IO) {
-            applyCommittedPhaser.awaitAdvanceInterruptibly(applyCommittedPhaser.arrive(), 60, TimeUnit.SECONDS)
-        }
+        applyCommittedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        // TODO Currently GPAC does not apply changes, but instead
-        //  delegates them to the consensus protocol.
-        //  When this behavior is fixed, this delay must be removed.
-        delay(5000)
-
-        peers.flatten().forEach { address ->
-            askForChanges("http://$address").let {
-                expectThat(it.size).isGreaterThanOrEqualTo(1)
-                expectThat(it[0]).isEqualTo(change(otherPeer))
-            }
+        askAllForChanges(peers.flatten()).forEach { changes ->
+            expectThat(changes.size).isGreaterThanOrEqualTo(1)
+            expectThat(changes[0]).isEqualTo(change(otherPeer))
         }
 
         apps.stopApps()
@@ -417,21 +343,12 @@ class MultiplePeersetSpec {
                 executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
             }
 
-            withContext(Dispatchers.IO) {
-                phaser.awaitAdvanceInterruptibly(phaser.arrive(), 120, TimeUnit.SECONDS)
-            }
-
-            // TODO Currently GPAC does not apply changes, but instead
-            //  delegates them to the consensus protocol.
-            //  When this behavior is fixed, this delay must be removed.
-            delay(5000)
+            phaser.arriveAndAwaitAdvanceWithTimeout()
 
             // waiting for consensus to propagate change is waste of time and fails CI
-            peers.flatten().forEach { address ->
-                askForChanges("http://$address").let {
-                    expectThat(it.size).isGreaterThanOrEqualTo(1)
-                    expectThat(it[0]).isEqualTo(change(otherPeer) as Change)
-                }
+            askAllForChanges(peers.flatten()).forEach { changes ->
+                expectThat(changes.size).isGreaterThanOrEqualTo(1)
+                expectThat(changes[0]).isEqualTo(change(otherPeer) as Change)
             }
 
             apps.stopApps()
@@ -446,10 +363,13 @@ class MultiplePeersetSpec {
         }
 
     private suspend fun askForChanges(peer: String) =
-        testHttpClient.get<Changes>("$peer/changes") {
+        testHttpClient.get<Changes>("http://$peer/changes") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
+
+    private suspend fun askAllForChanges(peerAddresses: Collection<String>) =
+        peerAddresses.map { askForChanges(it) }
 
     private fun change(otherPeersetPeer: String) = AddUserChange(
         InitialHistoryEntry.getId(),
