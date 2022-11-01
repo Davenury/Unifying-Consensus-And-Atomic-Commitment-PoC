@@ -266,15 +266,22 @@ class ConsensusSpec {
     fun `exactly half of peers is failed`(): Unit = runBlocking {
         val peersWithoutLeader = 3
         val activePeers = 3
-        val triesToBecomeLeader = 3
+        val peersTried: MutableSet<String> = mutableSetOf()
+        var leaderElect = false
 
         val leaderFailedPhaser = Phaser(peersWithoutLeader)
         val electionPhaser = Phaser(peersWithoutLeader)
-        val tryToBecomeLeaderPhaser = Phaser(activePeers * triesToBecomeLeader)
+        val tryToBecomeLeaderPhaser = Phaser(activePeers)
 
         listOf(leaderFailedPhaser, electionPhaser, tryToBecomeLeaderPhaser).forEach { it.register() }
 
-        val peerTryToBecomeLeader = SignalListener { tryToBecomeLeaderPhaser.arrive() }
+        val peerTryToBecomeLeader = SignalListener {
+            val name = it.subject.getPeerName()
+            if(!peersTried.contains(name) && leaderElect) {
+                peersTried.add(name)
+                tryToBecomeLeaderPhaser.arrive()
+            }
+        }
 
         val peerLeaderFailed = SignalListener { leaderFailedPhaser.arrive() }
         val peerLeaderElected = SignalListener { electionPhaser.arrive() }
@@ -293,10 +300,9 @@ class ConsensusSpec {
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
         val firstLeaderApplication = triple.third
-        val firstLeaderPort = triple.second
-        val firstLeaderAddress = triple.first
 
         firstLeaderApplication.stop(0, 0)
+        leaderElect = true
 
         apps = apps.filter { it != firstLeaderApplication }
 
