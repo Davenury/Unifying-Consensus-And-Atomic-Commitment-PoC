@@ -7,8 +7,6 @@ import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.raft.domain.*
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusFailure
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusSuccess
 import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
@@ -17,7 +15,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.asCompletableFuture
 import kotlinx.coroutines.future.await
-import kotlinx.coroutines.future.future
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
@@ -399,22 +396,25 @@ class RaftConsensusProtocolImpl(
         voteContainer.initializeChange(id)
     }
 
-    private suspend inline fun <reified K> sendRequestToLeader(change: Change, suffix: String): K? = try {
-        val response = httpClient.post<K>("http://${votedFor!!.address}/consensus/request_apply_change/${suffix}") {
-            contentType(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
-            body = change
-        }
-        logger.info("Response from leader: $response")
-        response
-    } catch (e: Exception) {
-        logger.info("$peerId - request to leader (${votedFor!!.address}) failed with exception: $e", e)
-        null
-    }
 
-    private suspend fun asyncSendRequestToLeader(change: Change): String? = sendRequestToLeader<String>(change, "async")
-    private suspend fun syncSendRequestToLeader(change: Change): ChangeResult =
-        sendRequestToLeader<ChangeResult>(change, "sync") ?: ChangeResult(ChangeResult.Status.CONFLICT)
+    private suspend fun sendRequestToLeader(change: Change): CompletableFuture<ChangeResult> =
+        coroutineScope {
+            async {
+                try {
+                    val response =
+                        httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
+                            contentType(ContentType.Application.Json)
+                            accept(ContentType.Application.Json)
+                            body = change
+                        }
+                    logger.info("Response from leader: $response")
+                    response
+                } catch (e: Exception) {
+                    logger.info("$peerId - request to leader (${votedFor!!.address}) failed with exception: $e", e)
+                    null
+                } ?: ChangeResult(ChangeResult.Status.CONFLICT)
+            }.asCompletableFuture()
+        }
 
 
     private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: Change): ChangeResult {
@@ -437,8 +437,7 @@ class RaftConsensusProtocolImpl(
         return GlobalScope.async {
             when {
                 amILeader() -> syncProposeChangeToLedger(change)
-                votedFor != null ->
-                    syncSendRequestToLeader(change) ?: throw Exception("Error during processing change")
+                votedFor != null -> sendRequestToLeader(change).await()
 //
 //              TODO: Change after queue
                 else ->

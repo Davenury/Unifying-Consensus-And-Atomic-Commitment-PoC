@@ -31,16 +31,10 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         }
 
         // kiedy nie jesteś leaderem to prosisz leadera o zmianę
-        post("/consensus/request_apply_change/sync") {
+        post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
             val result = protocol.handleSyncProposeChange(message)
             call.respond(result)
-        }
-
-        post("/consensus/request_apply_change/async") {
-            val message: ConsensusProposeChange = call.receive()
-            val result = protocol.handleAsyncProposeChange(message)
-            call.respond(HttpStatusCode.Accepted)
         }
 //      Endpoints for tests
         get("/consensus/proposed_changes") {
