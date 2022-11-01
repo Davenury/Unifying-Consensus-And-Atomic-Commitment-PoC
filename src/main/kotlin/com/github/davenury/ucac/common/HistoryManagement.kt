@@ -11,7 +11,7 @@ abstract class HistoryManagement(private val consensusProtocol: ConsensusProtoco
                 when (it.status) {
                     ChangeResult.Status.CONFLICT -> HistoryChangeResult.HistoryChangeFailure
                     ChangeResult.Status.SUCCESS -> HistoryChangeResult.HistoryChangeSuccess
-                    ChangeResult.Status.TIMEOUT -> HistoryChangeResult.HistoryChangeUnknown
+                    ChangeResult.Status.TIMEOUT -> HistoryChangeResult.HistoryChangeFailure
                 }
             }
 

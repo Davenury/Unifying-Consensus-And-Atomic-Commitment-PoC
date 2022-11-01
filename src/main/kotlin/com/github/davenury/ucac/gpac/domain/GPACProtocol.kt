@@ -12,6 +12,7 @@ interface GPACProtocol : SignalSubject {
     suspend fun handleElect(message: ElectMe): ElectedYou
     suspend fun handleAgree(message: Agree): Agreed
     suspend fun handleApply(message: Apply)
+
     @Deprecated("use proposeChangeAsync")
     suspend fun performProtocolAsLeader(change: Change, iteration: Int = 1): TransactionResult
     suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int = 1)
@@ -303,7 +304,7 @@ class GPACProtocolImpl(
         if (superFunction(electResponses)) {
             return ElectMeResult(electResponses, true)
         }
-        myBallotNumber = max(maxBallotNumber, myBallotNumber)
+        myBallotNumber = max(maxBallotNumber ?: 0, myBallotNumber)
         logger.info("${getPeerName()} Bumped ballot number to: $myBallotNumber")
 
         return ElectMeResult(electResponses, false)
