@@ -212,9 +212,7 @@ class RaftConsensusProtocolImpl(
         return ConsensusHeartbeatResponse(true, currentTerm)
     }
 
-    override suspend fun handleSyncProposeChange(change: Change): ChangeResult = proposeChange(change)
-    override suspend fun handleAsyncProposeChange(change: Change): CompletableFuture<ChangeResult> =
-        proposeChangeAsync(change)
+    override suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult> = proposeChangeAsync(change)
 
     override fun setPeerAddress(address: String) {
         this.peerAddress = address

@@ -10,8 +10,7 @@ interface RaftConsensusProtocol {
     suspend fun handleRequestVote(peerId: Int, iteration: Int, lastLogIndex: Int): ConsensusElectedYou
     suspend fun handleLeaderElected(peerId: Int, peerAddress: String, term: Int)
     suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse
-    suspend fun handleAsyncProposeChange(change: Change): CompletableFuture<ChangeResult>
-    suspend fun handleSyncProposeChange(change: Change): ChangeResult
+    suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult>
     fun setPeerAddress(address: String)
     suspend fun getLeaderAddress(): String?
     suspend fun getProposedChanges(): List<Change>
