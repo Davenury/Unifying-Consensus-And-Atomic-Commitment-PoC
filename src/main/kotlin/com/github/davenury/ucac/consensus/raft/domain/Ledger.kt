@@ -4,6 +4,7 @@ import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.history.History
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.CompletableFuture
 
 
 data class Ledger(
@@ -12,7 +13,7 @@ data class Ledger(
     private val mutex: Mutex = Mutex(),
 ) {
 
-    private var commitIndex: Int = 0
+    var commitIndex: Int = 0
     var lastApplied = -1
 
     suspend fun updateLedger(acceptedItems: List<LedgerItem>, proposedItems: List<LedgerItem>): LedgerUpdateResult {

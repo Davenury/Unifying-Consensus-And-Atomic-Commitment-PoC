@@ -50,7 +50,7 @@ class RaftConsensusProtocolImpl(
     //    DONE: Use only one mutex
     private val mutex = Mutex()
     private var executorService: ExecutorCoroutineDispatcher? = null
-    private val channel = Channel<Unit>()
+    private val ledgerIdToCompletableFuture: MutableMap<Int, CompletableFuture<ChangeResult>> = mutableMapOf()
 
     private fun otherConsensusPeers(): List<String> {
         return allPeers.filter { it != peerAddress }
@@ -86,7 +86,7 @@ class RaftConsensusProtocolImpl(
 
         val responses = protocolClient.sendConsensusElectMe(
             otherConsensusPeers(),
-            ConsensusElectMe(peerId, currentTerm, state.lastApplied)
+            ConsensusElectMe(peerId, currentTerm, state.commitIndex)
         ).map { it.message }
 
         logger.info("Responses from leader request for $peerId: $responses in iteration $currentTerm")
@@ -138,7 +138,7 @@ class RaftConsensusProtocolImpl(
     override suspend fun handleRequestVote(peerId: Int, iteration: Int, lastLogIndex: Int): ConsensusElectedYou {
         mutex.withLock {
             logger.info("${this.peerId}/-/${this.peerAddress} - handleRequestVote - ($peerId,$iteration,$lastLogIndex) ($currentTerm,${state.lastApplied})")
-            if (amILeader() || iteration <= currentTerm || lastLogIndex < state.lastApplied) {
+            if (amILeader() || iteration <= currentTerm || lastLogIndex < state.commitIndex) {
                 return ConsensusElectedYou(this.peerId, currentTerm, false)
             }
             currentTerm = iteration
@@ -212,7 +212,8 @@ class RaftConsensusProtocolImpl(
         return ConsensusHeartbeatResponse(true, currentTerm)
     }
 
-    override suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult> = proposeChangeAsync(change)
+    override suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult> =
+        proposeChangeAsync(change)
 
     override fun setPeerAddress(address: String) {
         this.peerAddress = address
@@ -281,7 +282,11 @@ class RaftConsensusProtocolImpl(
 
         state.acceptItems(acceptedIndexes)
         voteContainer.removeChanges(acceptedIndexes)
-        channel.trySend(Unit)
+
+        acceptedIndexes
+            .map { ledgerIdToCompletableFuture[it] }
+            .forEach { it!!.complete(ChangeResult(ChangeResult.Status.SUCCESS)) }
+
     }
 
     private suspend fun stopBeingLeader(newTerm: Int) {
@@ -364,27 +369,18 @@ class RaftConsensusProtocolImpl(
     }
 
 
-    private suspend fun syncProposeChangeToLedger(change: Change): ChangeResult {
-        asyncProposeChangeToLedger(change)
-
-        while (!state.isChangeAccepted(change) && state.changeAlreadyProposed(change))
-            channel.receive()
-
-
-        if (!state.changeAlreadyProposed(change) && !state.isChangeAccepted(change)) return ChangeResult(ChangeResult.Status.CONFLICT)
-
-        return ChangeResult(ChangeResult.Status.SUCCESS)
-    }
+    private suspend fun syncProposeChangeToLedger(change: Change): ChangeResult =
+        asyncProposeChangeToLedger(change).await()
 
     //  TODO: sync change will have to use Condition/wait/notifyAll
-    private suspend fun asyncProposeChangeToLedger(change: Change) {
+    private suspend fun asyncProposeChangeToLedger(change: Change): CompletableFuture<ChangeResult> {
 
 //      TODO: it will be changed
         val id: Int
 
         mutex.withLock {
             if (state.changeAlreadyProposed(change)) {
-                return
+                return ledgerIdToCompletableFuture[state.getLedgerIdByChange(change)]!!
             }
 
             timer.cancelCounting()
@@ -392,13 +388,17 @@ class RaftConsensusProtocolImpl(
             id = state.proposeChange(change, currentTerm)
         }
         voteContainer.initializeChange(id)
+        val cf = CompletableFuture<ChangeResult>()
+        ledgerIdToCompletableFuture[id] = cf
+        return cf
     }
 
 
-    private suspend fun sendRequestToLeader(change: Change): CompletableFuture<ChangeResult> =
+    private suspend fun sendRequestToLeader(change: Change): CompletableFuture<ChangeResult> {
+        val cf = CompletableFuture<ChangeResult>()
         coroutineScope {
-            async {
-                try {
+            launch {
+                val result: ChangeResult = try {
                     val response =
                         httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
                             contentType(ContentType.Application.Json)
@@ -411,8 +411,11 @@ class RaftConsensusProtocolImpl(
                     logger.info("$peerId - request to leader (${votedFor!!.address}) failed with exception: $e", e)
                     null
                 } ?: ChangeResult(ChangeResult.Status.CONFLICT)
-            }.asCompletableFuture()
+                cf.complete(result)
+            }
         }
+        return cf
+    }
 
 
     private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: Change): ChangeResult {
@@ -432,18 +435,14 @@ class RaftConsensusProtocolImpl(
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
         logger.info("$peerId received change: $change")
 
-        return GlobalScope.async {
-            when {
-                amILeader() -> syncProposeChangeToLedger(change)
-                votedFor != null -> sendRequestToLeader(change).await()
-//
+        return when {
+            amILeader() -> asyncProposeChangeToLedger(change)
+            votedFor != null -> sendRequestToLeader(change)
 //              TODO: Change after queue
-                else ->
-                    throw Exception("There should be always a leader")
-            }
-        }.asCompletableFuture()
+            else ->
+                throw Exception("There should be always a leader")
+        }
     }
-
 
     private fun scheduleHeartbeatToPeers() {
         otherConsensusPeers().forEach {
