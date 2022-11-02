@@ -24,7 +24,7 @@ jobs:
         uses: pmorelli92/github-container-registry-build-push@2.0.0
         with:
           github-push-secret: ${{ secrets.DOCKER_DEPLOYMENT_TOKEN }}
-          docker-image-name: davenury/ucac
+          docker-image-name: ucac
           docker-image-tag: "${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}"
           dockerfile-path: ./Dockerfile # TODO - change after two separate dockerfiles
           build-context: .
