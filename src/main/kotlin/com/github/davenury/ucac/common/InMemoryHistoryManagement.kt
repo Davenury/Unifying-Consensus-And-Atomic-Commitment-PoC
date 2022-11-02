@@ -15,23 +15,10 @@ class InMemoryHistoryManagement(
     override suspend fun change(change: Change): HistoryChangeResult =
         consensusProtocol.proposeChange(change)
             .let {
-                when (it) {
-                    ConsensusFailure -> {
-                        HistoryChangeResult.HistoryChangeFailure
-                    }
-
-                    ConsensusSuccess -> {
-                        HistoryChangeResult.HistoryChangeSuccess
-                    }
-
-                    ConsensusResultUnknown -> {
-                        HistoryChangeResult.HistoryChangeSuccess
-                    }
-
-                    ConsensusChangeAlreadyProposed -> {
-                        HistoryChangeResult.HistoryChangeUnknown
-                    }
-
+                when (it.status) {
+                    ChangeResult.Status.CONFLICT -> HistoryChangeResult.HistoryChangeFailure
+                    ChangeResult.Status.SUCCESS -> HistoryChangeResult.HistoryChangeSuccess
+                    ChangeResult.Status.TIMEOUT -> HistoryChangeResult.HistoryChangeUnknown
                 }
             }
 

@@ -7,7 +7,7 @@ import java.util.concurrent.CompletableFuture
 
 interface ConsensusProtocol {
     @Deprecated("use proposeChangeAsync")
-    suspend fun proposeChange(change: Change): ConsensusResult
+    suspend fun proposeChange(change: Change): ChangeResult
 
     suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult>
 

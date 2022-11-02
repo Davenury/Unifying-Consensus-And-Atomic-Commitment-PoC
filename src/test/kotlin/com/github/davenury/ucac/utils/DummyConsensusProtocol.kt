@@ -10,17 +10,17 @@ import java.util.concurrent.CompletableFuture
 
 
 object DummyConsensusProtocol : ConsensusProtocol {
-    private var response: ConsensusResult = ConsensusSuccess
+    private var response: ChangeResult = ChangeResult(ChangeResult.Status.SUCCESS)
     private var responseAsync: ChangeResult = ChangeResult(ChangeResult.Status.SUCCESS)
     var change: Change? = null
 
     @Deprecated("use proposeChangeAsync")
-    override suspend fun proposeChange(change: Change): ConsensusResult = response
+    override suspend fun proposeChange(change: Change): ChangeResult = response
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> =
         CompletableFuture.completedFuture(responseAsync)
 
-    fun setResponse(response: ConsensusResult) {
+    fun setResponse(response: ChangeResult) {
         this.response = response
     }
 

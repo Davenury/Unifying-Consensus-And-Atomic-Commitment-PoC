@@ -82,6 +82,12 @@ class SinglePeersetSpec {
                 phaser.arrive()
             }
 
+            val electionPhaser = Phaser(2)
+            electionPhaser.register()
+            val leaderElected = SignalListener {
+                electionPhaser.arrive()
+            }
+
 
             val signalListener = SignalListener {
                 expectCatching {
@@ -91,17 +97,22 @@ class SinglePeersetSpec {
 
             val signalListenersForCohort = mapOf(
                 Signal.OnSendingElectBuildFail to changeAborted,
+                Signal.ConsensusLeaderElected to leaderElected
             )
 
             val apps = TestApplicationSet(
                 1, listOf(3),
                 signalListeners = mapOf(
-                    1 to mapOf(Signal.BeforeSendingApply to signalListener),
+                    1 to mapOf(Signal.BeforeSendingApply to signalListener, Signal.ConsensusLeaderElected to leaderElected),
                     2 to signalListenersForCohort,
                     3 to signalListenersForCohort
                 ),
             )
             val peers = apps.getPeers()
+
+            withContext(Dispatchers.IO) {
+                electionPhaser.awaitAdvanceInterruptibly(electionPhaser.arrive(), 10, TimeUnit.SECONDS)
+            }
 
             expectCatching {
                 executeChange("http://${peers[0][0]}/gpac/create_change", change(listOf()))

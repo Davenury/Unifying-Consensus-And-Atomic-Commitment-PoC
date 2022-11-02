@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory
 
 data class ResponsesWithErrorAggregation<K>(
     val responses: List<List<K>>,
-    val aggregatedValue: Int
+    val aggregatedValue: Int?
 )
 
 interface GPACProtocolClient {
@@ -33,7 +33,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
             message,
             "elect",
             { singlePeer, e -> "Peer $singlePeer responded with exception: $e - election" },
-            { accs: List<Int> -> accs.maxOf { it } }
+            { accs: List<Int> -> accs.maxOfOrNull { it } }
         )
 
     override suspend fun sendFTAgree(otherPeers: List<List<String>>, message: Agree): List<List<Agreed>> =
@@ -55,7 +55,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         requestBody: T,
         urlPath: String,
         crossinline errorMessage: (String, Throwable) -> String,
-        crossinline aggregateErrors: (accs: List<Int>) -> Int = { _: List<Int> -> 0 }
+        crossinline aggregateErrors: (accs: List<Int>) -> Int? = { _: List<Int> -> 0 }
     ): ResponsesWithErrorAggregation<K> {
         val acc = mutableListOf<Int?>()
         val responses: List<List<K>> = otherPeers.map { peersets ->
