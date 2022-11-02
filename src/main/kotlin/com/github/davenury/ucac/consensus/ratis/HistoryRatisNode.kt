@@ -7,7 +7,6 @@ import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusFailure
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusSuccess
 import com.github.davenury.ucac.history.History
-import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.*
 

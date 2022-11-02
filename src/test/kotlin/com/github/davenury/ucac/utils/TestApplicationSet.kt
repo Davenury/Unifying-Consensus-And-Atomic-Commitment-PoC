@@ -81,7 +81,6 @@ class TestApplicationSet(
 
     fun getRunningPeers() = peers.map { it.filter { it != NON_RUNNING_PEER } }
 
-    fun getApps() = apps
     fun getRunningApps(): List<Application> = apps
         .flatten()
         .zip(peers.flatten())

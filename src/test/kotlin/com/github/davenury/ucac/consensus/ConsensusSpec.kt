@@ -464,7 +464,7 @@ class ConsensusSpec {
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
         val peerset = TestApplicationSet(listOf(5), signalListeners = signalListeners)
-        var apps = peerset.getRunningApps()
+        val apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
 
@@ -537,7 +537,7 @@ class ConsensusSpec {
         val signalListeners: Map<Int, Map<Signal, SignalListener>> = (0..5).associateWith { signalListener }
 
         val peerset = TestApplicationSet(listOf(5), signalListeners)
-        var apps = peerset.getRunningApps()
+        val apps = peerset.getRunningApps()
 
         val peerAddresses = peerset.getRunningPeers()[0]
 

@@ -1,9 +1,8 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.historyManagementRouting
+import com.github.davenury.ucac.consensus.historyRouting
 import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -31,7 +30,6 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -52,7 +50,7 @@ fun main(args: Array<String>) {
         try {
             Thread.sleep(1000)
         } catch (e: InterruptedException) {
-            break;
+            break
         }
     }
 
@@ -102,15 +100,13 @@ class Application constructor(
                 heartbeatDelay = config.raft.leaderTimeout,
             )
 
-            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol<Change, History>)
-
             val timer = ProtocolTimerImpl(config.gpac.leaderFailTimeout, config.gpac.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
             val myAddress = "${config.host}:${config.port}"
             gpacProtocol =
                 GPACProtocolImpl(
-                    historyManagement,
+                    history,
                     config.gpac.maxLeaderElectionTries,
                     timer,
                     protocolClient,
@@ -218,7 +214,7 @@ class Application constructor(
             metaRouting()
 
             commonRouting(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
-            historyManagementRouting(historyManagement)
+            historyRouting(history)
             gpacProtocolRouting(gpacProtocol)
             consensusProtocolRouting(consensusProtocol!!)
 
