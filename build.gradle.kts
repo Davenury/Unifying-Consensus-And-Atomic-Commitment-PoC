@@ -69,9 +69,6 @@ dependencies {
 
     // wiremock
     testImplementation("com.github.tomakehurst:wiremock-jre8:2.33.2")
-
-    // future
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.6.4")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
