@@ -25,6 +25,7 @@ import java.util.concurrent.Executors
 
 /** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
+    history: History,
     private val peerId: Int,
     private val peersetId: Int,
     private var peerAddress: String,
@@ -41,7 +42,7 @@ class RaftConsensusProtocolImpl(
     private val peerUrlToNextIndex: MutableMap<String, PeerIndices> = mutableMapOf()
     private val voteContainer: VoteContainer = VoteContainer()
     private var votedFor: VotedFor? = null
-    private var state: Ledger = Ledger()
+    private var state: Ledger = Ledger(history)
 
     @Volatile
     private var role: RaftRole = RaftRole.Candidate
@@ -418,8 +419,8 @@ class RaftConsensusProtocolImpl(
     }
 
 
-    private suspend fun tryToProposeChangeMyself(changeWithAcceptNum: Change): ChangeResult {
-        val id = state.proposeChange(changeWithAcceptNum, currentTerm)
+    private suspend fun tryToProposeChangeMyself(change: Change): ChangeResult {
+        val id = state.proposeChange(change, currentTerm)
         voteContainer.initializeChange(id)
         timer.startCounting {
             logger.info("$peerId - change was proposed a no leader is elected")
@@ -463,13 +464,6 @@ class RaftConsensusProtocolImpl(
         val history: History
         runBlocking {
             mutex.withLock {
-                val changes = state.getAcceptedChanges() + state.getProposedChanges()
-                changes.map {
-                    "${it.acceptNum}/-/${
-                        it.toHistoryEntry().getId()
-                    }"
-                }
-
                 history = state.getHistory()
                 logger.info("$peerId - request for state: $history")
             }
@@ -490,7 +484,6 @@ class RaftConsensusProtocolImpl(
 
     private fun amILeader(): Boolean = role == RaftRole.Leader
 
-    private fun getLeaderTimer(backoff: Duration = Duration.ZERO) = ProtocolTimerImpl(heartbeatDelay, backoff, ctx)
     private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout.dividedBy(2), ctx)
 
     companion object {
@@ -501,7 +494,7 @@ class RaftConsensusProtocolImpl(
 }
 
 data class PeerIndices(val acceptedIndex: Int = -1, val acknowledgedIndex: Int = -1) {
-    public fun decrement(): PeerIndices = PeerIndices(acceptedIndex - 1, acceptedIndex - 1)
+    fun decrement(): PeerIndices = PeerIndices(acceptedIndex - 1, acceptedIndex - 1)
 }
 
 data class VotedFor(val id: Int, val address: String, val elected: Boolean = false)

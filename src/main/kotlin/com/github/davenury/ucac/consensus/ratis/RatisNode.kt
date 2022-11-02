@@ -87,18 +87,10 @@ abstract class RatisNode(
         return builder.build()
     }
 
-    fun queryData(msg: String): String = msg
-        .let { Message.valueOf(it) }
-        .let { client.io().sendReadOnly(it) }
-        .message
-        .content
-        .toString(Charset.defaultCharset());
-
     fun applyTransaction(msg: String): String = msg
         .let { Message.valueOf(it) }
         .let { client.io().send(it) }
         .message
         .content
-        .toString(Charset.defaultCharset());
-
+        .toString(Charset.defaultCharset())
 }

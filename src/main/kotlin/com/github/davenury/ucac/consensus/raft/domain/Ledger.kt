@@ -8,6 +8,7 @@ import java.util.concurrent.CompletableFuture
 
 
 data class Ledger(
+    private val history: History,
     val acceptedItems: MutableList<LedgerItem> = mutableListOf(),
     val proposedItems: MutableList<LedgerItem> = mutableListOf(),
     private val mutex: Mutex = Mutex(),
@@ -28,6 +29,7 @@ data class Ledger(
             this.proposedItems.addAll(newProposedItems)
             commitIndex = newProposedItems.maxOrDefault(commitIndex)
 
+            newAcceptedItems.forEach { history.addEntry(it.change.toHistoryEntry()) }
             return LedgerUpdateResult(
                 anyAcceptedChange = newAcceptedItems.isNotEmpty(),
                 anyProposedChange = newProposedItems.isNotEmpty()
@@ -49,6 +51,7 @@ data class Ledger(
         mutex.withLock {
             val newAcceptedItems = proposedItems.filter { acceptedIndexes.contains(it.ledgerIndex) }
             acceptedItems.addAll(newAcceptedItems)
+            newAcceptedItems.forEach { history.addEntry(it.change.toHistoryEntry()) }
             proposedItems.removeAll(newAcceptedItems)
             lastApplied = newAcceptedItems.maxOrDefault(lastApplied)
         }
@@ -62,14 +65,8 @@ data class Ledger(
         }
     }
 
-    suspend fun getHistory(): History {
-        mutex.withLock {
-            // TODO why proposed??
-            val h = History()
-            acceptedItems.forEach { h.addEntry(it.change.toHistoryEntry()) }
-            proposedItems.forEach { h.addEntry(it.change.toHistoryEntry()) }
-            return h
-        }
+    fun getHistory(): History {
+        return history
     }
 
     suspend fun getAcceptedChanges(): List<Change> =

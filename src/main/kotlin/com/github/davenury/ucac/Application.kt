@@ -3,9 +3,8 @@ package com.github.davenury.ucac
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.historyManagementRouting
+import com.github.davenury.ucac.consensus.historyRouting
 import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -15,6 +14,7 @@ import com.github.davenury.ucac.gpac.domain.GPACProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocolClientImpl
 import com.github.davenury.ucac.gpac.domain.GPACProtocolImpl
 import com.github.davenury.ucac.gpac.domain.TransactionBlockerImpl
+import com.github.davenury.ucac.history.History
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -52,14 +52,14 @@ fun main(args: Array<String>) {
         try {
             Thread.sleep(1000)
         } catch (e: InterruptedException) {
-            break;
+            break
         }
     }
 
     application.stop(5000, 5000)
 }
 
-fun createApplication(
+public fun createApplication(
     signalListeners: Map<Signal, SignalListener> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
 ): Application {
@@ -67,7 +67,7 @@ fun createApplication(
     return Application(signalListeners, config)
 }
 
-class Application constructor(
+public class Application constructor(
     private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
     private val config: Config,
 ) {
@@ -84,11 +84,13 @@ class Application constructor(
     init {
         logger.info("Starting application with config: $config")
         engine = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
+            val history = History()
             val signalPublisher = SignalPublisher(signalListeners)
 
             val raftProtocolClientImpl = RaftProtocolClientImpl(config.peerId)
 
             consensusProtocol = RaftConsensusProtocolImpl(
+                history,
                 config.peerId,
                 config.peersetId,
                 config.host + ":" + config.port,
@@ -100,15 +102,13 @@ class Application constructor(
                 heartbeatDelay = config.raft.leaderTimeout,
             )
 
-            val historyManagement = InMemoryHistoryManagement(consensusProtocol as ConsensusProtocol)
-
             val timer = ProtocolTimerImpl(config.gpac.leaderFailTimeout, config.gpac.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
             val myAddress = "${config.host}:${config.port}"
             gpacProtocol =
                 GPACProtocolImpl(
-                    historyManagement,
+                    history,
                     config.gpac.maxLeaderElectionTries,
                     timer,
                     protocolClient,
@@ -215,16 +215,16 @@ class Application constructor(
 
             metaRouting()
 
+            historyRouting(history)
             apiV2Routing(
                 ApiV2Service(
                     gpacProtocol,
                     consensusProtocol as RaftConsensusProtocolImpl,
-                    historyManagement,
+                    history,
                     config,
                 )
             )
             commonRoutingOld(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
-            historyManagementRouting(historyManagement)
             gpacProtocolRouting(gpacProtocol)
             consensusProtocolRouting(consensusProtocol!!)
 

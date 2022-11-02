@@ -8,7 +8,6 @@ import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusFailure
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusResult.ConsensusSuccess
 import com.github.davenury.ucac.history.History
-import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.*
 import java.util.concurrent.CompletableFuture
@@ -17,7 +16,7 @@ class HistoryRatisNode(
     peerId: Int,
     peersetId: Int,
     config: RatisConfig,
-    private val history: History = History(),
+    private val history: History,
 ) :
     RatisNode(
         peerId,
@@ -45,9 +44,5 @@ class HistoryRatisNode(
 
     override fun getState(): History {
         return history
-    }
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(RatisHistoryManagement::class.java)
     }
 }

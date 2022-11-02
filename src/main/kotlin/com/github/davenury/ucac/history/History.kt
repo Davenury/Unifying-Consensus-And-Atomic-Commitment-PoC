@@ -81,4 +81,12 @@ class History {
             entry = getEntryFromHistory(parentId)!!
         }
     }
+
+    fun containsEntry(entryId: String): Boolean {
+        return getEntryFromHistory(entryId) != null
+    }
+
+    fun isEntryCompatible(entry: HistoryEntry): Boolean {
+        return containsEntry(entry.getId()) || getCurrentEntry().getId() == entry.getParentId()
+    }
 }

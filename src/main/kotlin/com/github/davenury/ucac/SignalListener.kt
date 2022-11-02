@@ -32,7 +32,13 @@ interface SignalSubject {
 class SignalPublisher(
     private val listeners: Map<Signal, SignalListener>
 ) {
-    fun signal(signal: Signal, subject: SignalSubject, otherPeers: List<List<String>>, transaction: Transaction?, change: Change? = null) {
+    fun signal(
+        signal: Signal,
+        subject: SignalSubject,
+        otherPeers: List<List<String>>,
+        transaction: Transaction?,
+        change: Change? = null,
+    ) {
         listeners[signal]?.onSignal(SignalData(
             signal,
             subject,

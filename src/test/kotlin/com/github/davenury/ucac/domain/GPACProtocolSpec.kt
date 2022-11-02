@@ -1,8 +1,8 @@
 package com.github.davenury.ucac.domain
 
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.raft.infrastructure.DummyConsensusProtocol
 import com.github.davenury.ucac.gpac.domain.*
+import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import io.mockk.*
 import kotlinx.coroutines.runBlocking
@@ -14,13 +14,12 @@ import strikt.assertions.isEqualTo
 
 class GPACProtocolSpec {
 
-    private val consensusProtocol = DummyConsensusProtocol()
-    private val historyManagement = InMemoryHistoryManagement(consensusProtocol)
+    private val history = History()
     private val timerMock = mockk<ProtocolTimer>()
     private val protocolClientMock = mockk<GPACProtocolClient>()
     private val transactionBlockerMock = mockk<TransactionBlocker>()
     private var subject = GPACProtocolImpl(
-        historyManagement,
+        history,
         3,
         timerMock,
         protocolClientMock,
@@ -120,7 +119,7 @@ class GPACProtocolSpec {
         val message = Apply(10, true, Accept.COMMIT, change)
 
         subject.handleApply(message)
-        expectThat(historyManagement.getLastChange()).isEqualTo(change)
+        expectThat(history.getCurrentEntry()).isEqualTo(change.toHistoryEntry())
     }
 
     @Test
@@ -137,7 +136,7 @@ class GPACProtocolSpec {
         val message = Apply(10, true, Accept.ABORT, change)
 
         subject.handleApply(message)
-        expectThat(historyManagement.getLastChange()).isEqualTo(null)
+        expectThat(history.getCurrentEntry()).isEqualTo(InitialHistoryEntry)
     }
 
     private val change = AddUserChange(

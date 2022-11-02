@@ -4,7 +4,6 @@ import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.common.Changes
-import com.github.davenury.ucac.common.HistoryManagement
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProtocol
 import com.github.davenury.ucac.gpac.domain.GPACProtocol
 import com.github.davenury.ucac.history.History
@@ -17,10 +16,9 @@ import java.util.concurrent.CompletableFuture
 class ApiV2Service(
     private val gpacProtocol: GPACProtocol,
     private val consensusProtocol: ConsensusProtocol,
-    historyManagement: HistoryManagement,
+    private val history: History,
     private val config: Config,
 ) {
-    private val history: History = historyManagement.getState()
 
     fun getChanges(): Changes {
         return Changes.fromHistory(history)
