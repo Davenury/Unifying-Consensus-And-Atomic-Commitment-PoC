@@ -10,21 +10,22 @@ import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import kotlinx.coroutines.future.await
 
-fun Application.commonRouting(
+fun Application.commonRoutingOld(
     gpacProtocol: GPACProtocol,
-    consensusProtocol: ConsensusProtocol<Change, History>,
+    consensusProtocol: ConsensusProtocol,
 ) {
 
     routing {
 
-        get("/change_status/{transaction_id}"){
+        get("/gpac/change_status/{transaction_id}"){
             val transactionId: String = call.parameters["transaction_id"]!!
             val transactionResult = gpacProtocol.getChangeStatus(transactionId)
             call.respond(transactionResult)
         }
 
-        post("/create_change") {
+        post("/gpac/create_change") {
             val change = call.receive<Change>()
             val statusCode = when (gpacProtocol.performProtocolAsLeader(change)) {
                 TransactionResult.DONE -> HttpStatusCode.OK
@@ -34,10 +35,16 @@ fun Application.commonRouting(
             call.respond(statusCode)
         }
 
-        post("/consensus/create_change") {
+        post("/consensus/create_change/sync") {
             val change = call.receive<Change>()
-            consensusProtocol.proposeChange(change)
+            consensusProtocol.proposeChangeAsync(change).await()
             call.respond(HttpStatusCode.OK)
+        }
+
+        post("/consensus/create_change/async") {
+            val change = call.receive<Change>()
+            consensusProtocol.proposeChangeAsync(change)
+            call.respond(HttpStatusCode.Accepted)
         }
 
         get("/consensus/changes") {

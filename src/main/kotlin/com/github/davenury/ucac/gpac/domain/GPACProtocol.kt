@@ -4,12 +4,17 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.history.History
 import org.slf4j.LoggerFactory
+import java.util.concurrent.CompletableFuture
 import kotlin.math.max
 
 interface GPACProtocol : SignalSubject {
+    suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult>
+
     suspend fun handleElect(message: ElectMe): ElectedYou
     suspend fun handleAgree(message: Agree): Agreed
     suspend fun handleApply(message: Apply)
+
+    @Deprecated("use proposeChangeAsync")
     suspend fun performProtocolAsLeader(change: Change, iteration: Int = 1): TransactionResult
     suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int = 1)
     fun getTransaction(): Transaction
@@ -48,6 +53,10 @@ class GPACProtocolImpl(
     override fun getTransaction(): Transaction = this.transaction
 
     override fun getBallotNumber(): Int = myBallotNumber
+
+    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
+        TODO("Not yet implemented")
+    }
 
     override suspend fun handleElect(message: ElectMe): ElectedYou {
         val decision = message.acceptNum?.let { acceptNum ->
@@ -161,6 +170,7 @@ class GPACProtocolImpl(
         timer.cancelCounting()
     }
 
+    @Deprecated("use proposeChangeAsync")
     override suspend fun performProtocolAsLeader(
         change: Change,
         iteration: Int
@@ -294,7 +304,7 @@ class GPACProtocolImpl(
         if (superFunction(electResponses)) {
             return ElectMeResult(electResponses, true)
         }
-        myBallotNumber = max(maxBallotNumber, myBallotNumber)
+        myBallotNumber = max(maxBallotNumber ?: 0, myBallotNumber)
         logger.info("${getPeerName()} Bumped ballot number to: $myBallotNumber")
 
         return ElectMeResult(electResponses, false)

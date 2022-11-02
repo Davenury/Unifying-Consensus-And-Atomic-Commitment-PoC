@@ -18,11 +18,13 @@ data class Config(
     // peer1,peer2;peer3,peer4
     val peers: String,
 
-    val raft: RaftConfig,
-    val ratis: RatisConfig,
-    val gpac: GpacConfig,
+    val raft: RaftConfig = RaftConfig(),
+    val ratis: RatisConfig = RatisConfig(),
+    val gpac: GpacConfig = GpacConfig(),
+    val rest: RestConfig = RestConfig(),
 ) {
     fun peerAddresses(): List<List<String>> = parsePeers(peers)
+    fun peerAddresses(peersetId: Int): List<String> = peerAddresses()[peersetId - 1]
 }
 
 data class RatisConfig(
@@ -40,6 +42,10 @@ data class GpacConfig(
 data class RaftConfig(
     val heartbeatTimeout: Duration = Duration.ofSeconds(2),
     val leaderTimeout: Duration = Duration.ofSeconds(1),
+)
+
+data class RestConfig(
+    val defaultSyncTimeout: Duration = Duration.ofMinutes(1),
 )
 
 fun loadConfig(overrides: Map<String, Any> = emptyMap()): Config {

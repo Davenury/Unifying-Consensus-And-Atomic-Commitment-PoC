@@ -13,6 +13,7 @@ import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.io.FileUtils
@@ -45,23 +46,32 @@ class MultiplePeersetSpec {
     fun `should execute transaction in every peer from every of two peersets`(): Unit = runBlocking {
         val phaser = Phaser(6)
         phaser.register()
+        val electionPhaser = Phaser(4)
+        electionPhaser.register()
+        val leaderElected = SignalListener {
+            electionPhaser.arrive()
+        }
 
         val signalListenersForCohort = mapOf(
             Signal.OnHandlingApplyEnd to SignalListener {
                 logger.info("Arrived: ${it.subject.getPeerName()}")
                 phaser.arrive()
-            }
+            },
+            Signal.ConsensusLeaderElected to leaderElected
         )
 
         val apps = TestApplicationSet(
             listOf(3, 3),
             signalListeners = (0..6).associateWith { signalListenersForCohort }
         )
+
         val peers = apps.getPeers()
         val change = change(peers[1][0])
 
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
+
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/create_change", change)
+        executeChange("http://${peers[0][0]}/gpac/create_change", change)
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -97,7 +107,7 @@ class MultiplePeersetSpec {
         val otherPeer = peers[1][0]
         val change = change(otherPeer)
 
-        val result = executeChange("http://${peers[0][0]}/create_change", change)
+        val result = executeChange("http://${peers[0][0]}/gpac/create_change", change)
 
         expectThat(result.status).isEqualTo(HttpStatusCode.Created)
 
@@ -109,7 +119,7 @@ class MultiplePeersetSpec {
         }
 
         val transactionResult = testHttpClient.get<TransactionResult>(
-            "http://${peers[0][0]}/change_status/${
+            "http://${peers[0][0]}/gpac/change_status/${
                 change.toHistoryEntry().getId()
             }"
         ) {
@@ -135,7 +145,7 @@ class MultiplePeersetSpec {
 
         // when - executing transaction
         try {
-            executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+            executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
             fail("Exception not thrown")
         } catch (e: Exception) {
             expectThat(e).isA<ServerResponseException>()
@@ -163,8 +173,16 @@ class MultiplePeersetSpec {
             phaser.arrive()
         }
 
+
+        val electionPhaser = Phaser(3)
+        electionPhaser.register()
+        val leaderElected = SignalListener {
+            electionPhaser.arrive()
+        }
+
         val signalListenersForCohort = mapOf(
             Signal.OnHandlingApplyCommitted to peerApplyCommitted,
+            Signal.ConsensusLeaderElected to leaderElected
         )
 
         val apps = TestApplicationSet(
@@ -174,8 +192,11 @@ class MultiplePeersetSpec {
         val peers = apps.getPeers()
         val change = change(apps.getPeers()[1][0])
 
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
+
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/create_change", change)
+        executeChange("http://${peers[0][0]}/gpac/create_change", change)
+
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -205,7 +226,7 @@ class MultiplePeersetSpec {
 
             // when - executing transaction - should throw too few responses exception
             try {
-                executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+                executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
                 fail("executing change didn't fail")
             } catch (e: Exception) {
                 expectThat(e).isA<ServerResponseException>()
@@ -258,7 +279,7 @@ class MultiplePeersetSpec {
 
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+            executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
         }
 
         applyCommittedPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -340,7 +361,7 @@ class MultiplePeersetSpec {
 
             // when - executing transaction something should go wrong after ft-agree
             expectThrows<ServerResponseException> {
-                executeChange("http://${peers[0][0]}/create_change", change(otherPeer))
+                executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
             }
 
             phaser.arriveAndAwaitAdvanceWithTimeout()

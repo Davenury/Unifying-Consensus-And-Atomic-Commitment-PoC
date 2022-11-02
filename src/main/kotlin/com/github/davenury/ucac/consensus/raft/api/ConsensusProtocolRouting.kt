@@ -3,9 +3,11 @@ package com.github.davenury.ucac.consensus.raft.api
 import com.github.davenury.ucac.common.Changes
 import com.github.davenury.ucac.consensus.raft.domain.*
 import io.ktor.application.*
+import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import kotlinx.coroutines.future.await
 
 fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
     routing {
@@ -32,7 +34,7 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         // kiedy nie jesteś leaderem to prosisz leadera o zmianę
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
-            val result = protocol.handleProposeChange(message)
+            val result = protocol.handleProposeChange(message).await()
             call.respond(result)
         }
 //      Endpoints for tests

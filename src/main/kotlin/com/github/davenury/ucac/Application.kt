@@ -1,5 +1,7 @@
 package com.github.davenury.ucac
 
+import com.github.davenury.ucac.api.ApiV2Service
+import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.historyRouting
 import com.github.davenury.ucac.consensus.raft.api.consensusProtocolRouting
@@ -57,7 +59,7 @@ fun main(args: Array<String>) {
     application.stop(5000, 5000)
 }
 
-fun createApplication(
+public fun createApplication(
     signalListeners: Map<Signal, SignalListener> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
 ): Application {
@@ -65,7 +67,7 @@ fun createApplication(
     return Application(signalListeners, config)
 }
 
-class Application constructor(
+public class Application constructor(
     private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
     private val config: Config,
 ) {
@@ -213,8 +215,16 @@ class Application constructor(
 
             metaRouting()
 
-            commonRouting(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
             historyRouting(history)
+            apiV2Routing(
+                ApiV2Service(
+                    gpacProtocol,
+                    consensusProtocol as RaftConsensusProtocolImpl,
+                    history,
+                    config,
+                )
+            )
+            commonRoutingOld(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
             gpacProtocolRouting(gpacProtocol)
             consensusProtocolRouting(consensusProtocol!!)
 

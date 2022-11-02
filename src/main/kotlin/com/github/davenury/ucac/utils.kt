@@ -36,6 +36,7 @@ val testHttpClient = HttpClient(OkHttp) {
     }
     install(HttpTimeout) {
         requestTimeoutMillis = 15000
+        socketTimeoutMillis = 120000
     }
 }
 

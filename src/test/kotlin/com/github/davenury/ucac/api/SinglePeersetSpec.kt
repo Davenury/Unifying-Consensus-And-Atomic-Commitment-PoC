@@ -48,7 +48,7 @@ class SinglePeersetSpec {
 
         val signalListener = SignalListener {
             expectCatching {
-                executeChange("http://${it.peers[0][1]}/create_change", change(listOf()))
+                executeChange("http://${it.peers[0][1]}/gpac/create_change", change(listOf()))
             }.isSuccess()
             signalExecuted.set(true)
             throw RuntimeException("Stop")
@@ -62,7 +62,7 @@ class SinglePeersetSpec {
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/create_change", change(listOf()))
+            executeChange("http://${peers[0][0]}/gpac/create_change", change(listOf()))
         }
 
         apps.stopApps()
@@ -82,7 +82,7 @@ class SinglePeersetSpec {
 
             val signalListener = SignalListener {
                 expectCatching {
-                    executeChange("http://${it.peers[0][1]}/create_change", change(listOf()))
+                    executeChange("http://${it.peers[0][1]}/gpac/create_change", change(listOf()))
                 }
             }
 
@@ -101,7 +101,7 @@ class SinglePeersetSpec {
             val peers = apps.getPeers()
 
             expectCatching {
-                executeChange("http://${peers[0][0]}/create_change", change(listOf()))
+                executeChange("http://${peers[0][0]}/gpac/create_change", change(listOf()))
             }.isSuccess()
 
             phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -150,7 +150,7 @@ class SinglePeersetSpec {
 
             // change that will cause leader to fall according to action
             try {
-                executeChange("http://${peers[0][0]}/create_change", change(listOf()))
+                executeChange("http://${peers[0][0]}/gpac/create_change", change(listOf()))
                 fail("Change passed")
             } catch (e: Exception) {
                 logger.info("Leader 1 fails: $e")
@@ -220,7 +220,7 @@ class SinglePeersetSpec {
         // change that will cause leader to fall according to action
         try {
             executeChange(
-                "http://${peers[0][0]}/create_change", AddGroupChange(
+                "http://${peers[0][0]}/gpac/create_change", AddGroupChange(
                     InitialHistoryEntry.getId(),
                     "name",
                     listOf(),
