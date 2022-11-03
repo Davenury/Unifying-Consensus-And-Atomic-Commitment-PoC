@@ -5,6 +5,8 @@ import com.github.davenury.ucac.commitment.AtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.history.History
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
@@ -17,7 +19,6 @@ interface GPACProtocol : SignalSubject, AtomicCommitmentProtocol {
     suspend fun handleAgree(message: Agree): Agreed
     suspend fun handleApply(message: Apply)
 
-    @Deprecated("use proposeChangeAsync")
     suspend fun performProtocolAsLeader(change: Change, iteration: Int = 1): TransactionResult
     suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int = 1)
     fun getTransaction(): Transaction
@@ -54,6 +55,8 @@ class GPACProtocolImpl(
 
     private var transaction: Transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
+    private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
+
     private fun checkBallotNumber(ballotNumber: Int): Boolean =
         ballotNumber > myBallotNumber
 
@@ -62,7 +65,18 @@ class GPACProtocolImpl(
     override fun getBallotNumber(): Int = myBallotNumber
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
-        TODO("Not yet implemented")
+
+        val cf = CompletableFuture<ChangeResult>()
+
+        changeIdToCompletableFuture[change.toHistoryEntry().getId()] = cf
+
+        coroutineScope {
+            launch {
+                performProtocolAsLeader(change)
+            }
+        }
+
+        return cf
     }
 
     override suspend fun handleElect(message: ElectMe): ElectedYou {
@@ -138,6 +152,7 @@ class GPACProtocolImpl(
         if (isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
 
+        val changeId = message.change.toHistoryEntry().getId()
         try {
             if (isCurrentTransaction) {
                 this.transaction =
@@ -150,14 +165,18 @@ class GPACProtocolImpl(
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
                 history.addEntry(message.change.toHistoryEntry())
             }
+            changeIdToCompletableFuture[changeId]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = message.change)
 
             logger.info("${getPeerName()} Releasing semaphore as cohort")
             transactionBlocker.releaseBlock()
 
+            changeIdToCompletableFuture[changeId]?.complete(ChangeResult(ChangeResult.Status.CONFLICT))
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
         }
+
+
     }
 
     private fun transactionWasAppliedBefore() =
@@ -177,7 +196,6 @@ class GPACProtocolImpl(
         leaderTimer.cancelCounting()
     }
 
-    @Deprecated("use proposeChangeAsync")
     override suspend fun performProtocolAsLeader(
         change: Change,
         iteration: Int
@@ -221,7 +239,6 @@ class GPACProtocolImpl(
         signal(Signal.BeforeSendingApply, this.transaction, enrichedChange)
 
         val applyResponses = applyPhase(enrichedChange, acceptVal)
-
 
         return TransactionResult.DONE
     }
@@ -295,11 +312,12 @@ class GPACProtocolImpl(
 
         if (!history.isEntryCompatible(change.toHistoryEntry())) {
             signal(Signal.OnSendingElectBuildFail, this.transaction, change)
+            changeIdToCompletableFuture[change.toHistoryEntry()
+                .getId()]?.complete(ChangeResult(ChangeResult.Status.CONFLICT))
             throw HistoryCannotBeBuildException()
         }
 
         myBallotNumber++
-        if (!history.isEntryCompatible(change.toHistoryEntry())) throw HistoryCannotBeBuildException()
         this.transaction =
             transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT, change = change)
 
@@ -315,8 +333,6 @@ class GPACProtocolImpl(
         logger.info("${getPeerName()} Bumped ballot number to: $myBallotNumber")
 
         return ElectMeResult(electResponses, false)
-//        transactionBlocker.releaseBlock()
-//        throw MaxTriesExceededException()
     }
 
     private suspend fun ftAgreePhase(

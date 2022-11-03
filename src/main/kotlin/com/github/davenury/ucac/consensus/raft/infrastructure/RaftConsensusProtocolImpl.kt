@@ -368,12 +368,8 @@ class RaftConsensusProtocolImpl(
         }
     }
 
-
-    private suspend fun syncProposeChangeToLedger(change: Change): ChangeResult =
-        asyncProposeChangeToLedger(change).await()
-
     //  TODO: sync change will have to use Condition/wait/notifyAll
-    private suspend fun asyncProposeChangeToLedger(change: Change): CompletableFuture<ChangeResult> {
+    private suspend fun proposeChangeToLedger(change: Change): CompletableFuture<ChangeResult> {
 
 //      TODO: it will be changed
         val id: Int
@@ -436,7 +432,7 @@ class RaftConsensusProtocolImpl(
         logger.info("$peerId received change: $change")
 
         return when {
-            amILeader() -> asyncProposeChangeToLedger(change)
+            amILeader() -> proposeChangeToLedger(change)
             votedFor != null -> sendRequestToLeader(change)
 //              TODO: Change after queue
             else ->
