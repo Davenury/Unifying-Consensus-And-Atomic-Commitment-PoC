@@ -74,11 +74,11 @@ class SinglePeersetSpec {
     fun `first leader is already in ft-agree phase and second leader tries to execute its transaction - second should be rejected`(): Unit =
         runBlocking {
 
-            val phaser = Phaser(1)
-            phaser.register()
+            val changeAbortedPhaser = Phaser(1)
+            changeAbortedPhaser.register()
 
             val changeAborted = SignalListener {
-                phaser.arrive()
+                changeAbortedPhaser.arrive()
             }
 
             val signalListener = SignalListener {
@@ -105,7 +105,7 @@ class SinglePeersetSpec {
                 executeChange("http://${peers[0][0]}/v2/change/sync?enforce_gpac=true", change(listOf()))
             }.isSuccess()
 
-            phaser.arriveAndAwaitAdvanceWithTimeout()
+            changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             try {
                 val response: HttpResponse = testHttpClient.get(

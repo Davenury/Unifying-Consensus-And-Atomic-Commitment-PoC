@@ -62,6 +62,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
             peersets.map {
                 CoroutineScope(Dispatchers.IO).async {
                     val (httpResult, value) = gpacHttpCall<K, T>("http://$it/$urlPath", requestBody, errorMessage)
+                    println("Acc: $acc, value: $value")
                     acc.add(value)
                     httpResult
                 }

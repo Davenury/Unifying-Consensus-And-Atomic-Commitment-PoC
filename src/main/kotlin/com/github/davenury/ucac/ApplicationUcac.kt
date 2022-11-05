@@ -221,7 +221,6 @@ public class ApplicationUcac constructor(
             metaRouting()
             historyRouting(history)
             apiV2Routing(service!!)
-            commonRoutingOld(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
             gpacProtocolRouting(gpacProtocol)
             consensusProtocolRouting(consensusProtocol!!)
 
