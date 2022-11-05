@@ -7,6 +7,7 @@ import com.github.davenury.ucac.common.Changes
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.commitment.gpac.GPACProtocol
 import com.github.davenury.ucac.history.History
+import io.ktor.features.*
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.time.withTimeout
@@ -17,8 +18,10 @@ class ApiV2Service(
     private val gpacProtocol: GPACProtocol,
     private val consensusProtocol: ConsensusProtocol,
     private val history: History,
-    private val config: Config,
+    private var config: Config,
 ) {
+
+    private val changeIdToCompletableFuture: Map<String, CompletableFuture<ChangeResult>> = mapOf()
 
     fun getChanges(): Changes {
         return Changes.fromHistory(history)
@@ -29,26 +32,40 @@ class ApiV2Service(
             ?.let { Change.fromHistoryEntry(it) }
     }
 
-    suspend fun addChange(change: Change): CompletableFuture<ChangeResult> {
-        val peers = change.peers
-        return if (allPeersFromMyPeerset(peers)) {
+    fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> = consensusProtocol.getChangeResult(changeId)
+        ?: gpacProtocol.getChangeResult(changeId)
+        ?: throw RuntimeException("Change doesn't exist")
+
+    suspend fun addChange(change: Change, enforceGpac: Boolean = false): CompletableFuture<ChangeResult> =
+        if (allPeersFromMyPeerset(change.peers) && !enforceGpac) {
             consensusProtocol.proposeChangeAsync(change)
         } else {
             gpacProtocol.proposeChangeAsync(change)
         }
-    }
+
 
     suspend fun addChangeSync(
         change: Change,
+        enforceGpac: Boolean,
         timeout: Duration?,
     ): ChangeResult? {
         return try {
             withTimeout(timeout ?: config.rest.defaultSyncTimeout) {
-                addChange(change).await()
+                addChange(change, enforceGpac).await()
             }
         } catch (e: TimeoutCancellationException) {
             null
         }
+    }
+
+    fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
+
+        val myPeerset = peers[config.peersetId]!!.plus(myAddress)
+        val newPeersString = peers
+            .plus(config.peersetId to myPeerset)
+            .map { it.value.joinToString(",") }
+            .joinToString(";")
+        config = config.copy(peers = newPeersString)
     }
 
     private fun allPeersFromMyPeerset(peers: List<String>) =

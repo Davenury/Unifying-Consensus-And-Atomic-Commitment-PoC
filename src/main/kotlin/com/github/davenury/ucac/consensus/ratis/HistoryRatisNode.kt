@@ -37,4 +37,8 @@ class HistoryRatisNode(
     override fun getState(): History {
         return history
     }
+
+    override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult> {
+        TODO("Not yet implemented")
+    }
 }

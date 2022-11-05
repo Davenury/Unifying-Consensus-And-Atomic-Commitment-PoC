@@ -5,6 +5,8 @@ import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.commitment.gpac.TransactionResult
+import com.github.davenury.ucac.gpac.domain.Accept
+import com.github.davenury.ucac.gpac.domain.Apply
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
@@ -70,7 +72,7 @@ class MultiplePeersetSpec {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/gpac/create_change", change)
+        executeChange("http://${peers[0][0]}/v2/change/sync", change)
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -85,16 +87,22 @@ class MultiplePeersetSpec {
     @Test
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
 
-        val phaser = Phaser(1)
-        phaser.register()
-
+        val maxRetriesPhaser = Phaser(1)
+        maxRetriesPhaser.register()
         val peerReachedMaxRetries = SignalListener {
             logger.info("Arrived: ${it.subject.getPeerName()}")
-            phaser.arrive()
+            maxRetriesPhaser.arrive()
+        }
+
+        val electionPhaser = Phaser(2)
+        electionPhaser.register()
+        val leaderElected = SignalListener {
+            electionPhaser.arrive()
         }
 
         val signalListenersForCohort = mapOf(
-            Signal.ReachedMaxRetries to peerReachedMaxRetries
+            Signal.ReachedMaxRetries to peerReachedMaxRetries,
+            Signal.ConsensusLeaderElected to leaderElected
         )
 
         val apps = TestApplicationSet(
@@ -102,32 +110,40 @@ class MultiplePeersetSpec {
             appsToExclude = listOf(4, 5, 6),
             signalListeners = (0..6).associateWith { signalListenersForCohort },
         )
+
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
+
         val peers = apps.getPeers()
         val otherPeer = peers[1][0]
-        val change = change(otherPeer)
+        var change: Change = change(otherPeer)
 
-        val result = executeChange("http://${peers[0][0]}/gpac/create_change", change)
+        val result = executeChange("http://${peers[0][0]}/v2/change/async", change)
+        change = change.withAddress(peers[0][0])
 
         expectThat(result.status).isEqualTo(HttpStatusCode.Created)
 
-        phaser.arriveAndAwaitAdvanceWithTimeout()
+        maxRetriesPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // then - transaction should not be executed
         askAllForChanges(peers[0]).forEach { changes ->
             expectThat(changes.size).isEqualTo(0)
         }
 
-        val transactionResult = testHttpClient.get<TransactionResult>(
-            "http://${peers[0][0]}/gpac/change_status/${
-                change.toHistoryEntry().getId()
-            }"
-        ) {
-            contentType(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
+
+        try {
+            val response: HttpResponse = testHttpClient.get(
+                "http://${peers[0][0]}/v2/change_status/${
+                    change.toHistoryEntry().getId()
+                }"
+            ) {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+            }
+            fail("executing change didn't fail")
+        } catch (e: ClientRequestException) {
+            expectThat(e).isA<ClientRequestException>()
+            expectThat(e.response.status).isEqualTo(HttpStatusCode.Conflict)
         }
-
-        expectThat(transactionResult).isEqualTo(TransactionResult.FAILED)
-
         apps.stopApps()
     }
 
@@ -144,7 +160,7 @@ class MultiplePeersetSpec {
 
         // when - executing transaction
         try {
-            executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
+            executeChange("http://${peers[0][0]}/v2/change/sync", change(otherPeer))
             fail("Exception not thrown")
         } catch (e: Exception) {
             expectThat(e).isA<ServerResponseException>()
@@ -194,7 +210,7 @@ class MultiplePeersetSpec {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/gpac/create_change", change)
+        executeChange("http://${peers[0][0]}/v2/change/sync", change)
 
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -225,7 +241,7 @@ class MultiplePeersetSpec {
 
             // when - executing transaction - should throw too few responses exception
             try {
-                executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
+                executeChange("http://${peers[0][0]}/v2/change/sync", change(otherPeer))
                 fail("executing change didn't fail")
             } catch (e: Exception) {
                 expectThat(e).isA<ServerResponseException>()
@@ -278,7 +294,7 @@ class MultiplePeersetSpec {
 
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
+            executeChange("http://${peers[0][0]}/v2/change/sync", change(otherPeer))
         }
 
         applyCommittedPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -360,7 +376,7 @@ class MultiplePeersetSpec {
 
             // when - executing transaction something should go wrong after ft-agree
             expectThrows<ServerResponseException> {
-                executeChange("http://${peers[0][0]}/gpac/create_change", change(otherPeer))
+                executeChange("http://${peers[0][0]}/v2/change/sync", change(otherPeer))
             }
 
             phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -397,6 +413,9 @@ class MultiplePeersetSpec {
         // leader should enrich himself
         listOf(otherPeersetPeer)
     )
+
+    private fun enrichChange(change: Change, peer: String) =
+        change.withAddress(peer)
 
     private fun deleteRaftHistories() {
         File(System.getProperty("user.dir")).listFiles { pathname -> pathname?.name?.startsWith("history") == true }

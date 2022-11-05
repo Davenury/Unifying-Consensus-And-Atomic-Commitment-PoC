@@ -33,7 +33,7 @@ import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
-fun main(args: Array<String>) {
+public fun main(args: Array<String>) {
     val configPrefix = "config_"
     val configOverrides = HashMap<String, String>()
     configOverrides.putAll(System.getenv()
@@ -41,7 +41,7 @@ fun main(args: Array<String>) {
         .mapKeys { it.key.replaceFirst(configPrefix, "") }
         .mapKeys { it.key.replace("_", ".") })
 
-    Application.logger.info("Using overrides: $configOverrides")
+    ApplicationUcac.logger.info("Using overrides: $configOverrides")
 
     val application = createApplication(configOverrides = configOverrides)
     application.startNonblocking()
@@ -60,17 +60,17 @@ fun main(args: Array<String>) {
 public fun createApplication(
     signalListeners: Map<Signal, SignalListener> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
-): Application {
+): ApplicationUcac {
     val config = loadConfig(configOverrides)
-    return Application(signalListeners, config)
+    return ApplicationUcac(signalListeners, config)
 }
 
-public class Application constructor(
+public class ApplicationUcac constructor(
     private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
     private val config: Config,
 ) {
     companion object {
-        val logger = LoggerFactory.getLogger(Application::class.java)
+        val logger = LoggerFactory.getLogger(ApplicationUcac::class.java)
     }
 
     private val engine: NettyApplicationEngine
@@ -78,6 +78,7 @@ public class Application constructor(
     private var consensusProtocol: RaftConsensusProtocol? = null
     private val ctx: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
     private lateinit var gpacProtocol: GPACProtocol
+    private var service: ApiV2Service? = null
 
     init {
         logger.info("Starting application with config: $config")
@@ -116,6 +117,13 @@ public class Application constructor(
                     myNodeId = config.peerId,
                     myAddress = myAddress
                 )
+
+            service = ApiV2Service(
+                gpacProtocol,
+                consensusProtocol as RaftConsensusProtocolImpl,
+                history,
+                config,
+            )
 
             install(ContentNegotiation) {
                 register(ContentType.Application.Json, JacksonConverter(objectMapper))
@@ -211,16 +219,8 @@ public class Application constructor(
             }
 
             metaRouting()
-
             historyRouting(history)
-            apiV2Routing(
-                ApiV2Service(
-                    gpacProtocol,
-                    consensusProtocol as RaftConsensusProtocolImpl,
-                    history,
-                    config,
-                )
-            )
+            apiV2Routing(service!!)
             commonRoutingOld(gpacProtocol, consensusProtocol as RaftConsensusProtocolImpl)
             gpacProtocolRouting(gpacProtocol)
             consensusProtocolRouting(consensusProtocol!!)
@@ -235,6 +235,7 @@ public class Application constructor(
         gpacProtocol.setPeers(peers)
         gpacProtocol.setMyAddress(myAddress)
         consensusProtocol?.setOtherPeers(peers[config.peersetId]!!)
+        service?.setPeers(peers, myAddress)
     }
 
     suspend fun startConsensusProtocol() {

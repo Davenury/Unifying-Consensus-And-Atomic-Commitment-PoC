@@ -10,8 +10,6 @@ import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
-import io.ktor.client.request.*
-import io.ktor.http.*
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -24,8 +22,11 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
+import com.github.davenury.ucac.ApplicationUcac
+import io.ktor.client.request.*
+import io.ktor.http.*
 
-typealias LeaderAddressPortAndApplication = Triple<String, String, Application>
+typealias LeaderAddressPortAndApplication = Triple<String, String, ApplicationUcac>
 
 
 class ConsensusSpec {
@@ -77,15 +78,17 @@ class ConsensusSpec {
         val peerAddresses = peerset.getPeers()[0]
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
+        println("Phaser: ${phaser.phase}")
 
         // when: peer1 executed change
         val change1 = createChange(null)
         val change1Id = change1.toHistoryEntry().getId()
         expectCatching {
-            executeChange("${peerAddresses[0]}/consensus/create_change/sync", change1)
+            executeChange("${peerAddresses[0]}/v2/change/sync", change1)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
+        println("Phaser: ${phaser.phase}")
 
         askAllForChanges(peerAddresses).forEach { changes ->
             // then: there's one change, and it's change we've requested
@@ -99,10 +102,11 @@ class ConsensusSpec {
         // when: peer2 executes change
         val change2 = createChange(1, userName = "userName2", parentId = change1Id)
         expectCatching {
-            executeChange("${peerAddresses[1]}/consensus/create_change/sync", change2)
+            executeChange("${peerAddresses[1]}/v2/change/sync", change2)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
+        println("Phaser: ${phaser.phase}")
 
         askAllForChanges(peerAddresses).forEach { changes ->
             // then: there are two changes
@@ -362,7 +366,7 @@ class ConsensusSpec {
 
 //      Start processing
         expectCatching {
-            executeChange("$firstLeaderAddress/consensus/create_change/sync", createChange(null))
+            executeChange("$firstLeaderAddress/v2/change/sync", createChange(null))
         }.isFailure()
         firstLeader = false
 
@@ -434,7 +438,7 @@ class ConsensusSpec {
 
 //      Start processing
         expectCatching {
-            executeChange("${runningPeers.first()}/consensus/create_change/sync", createChange(null))
+            executeChange("${runningPeers.first()}/v2/change/sync", createChange(null))
         }.isSuccess()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -496,7 +500,7 @@ class ConsensusSpec {
 
 //      Start processing
         expectCatching {
-            executeChange("${runningPeers.first()}/consensus/create_change/async", createChange(null))
+            executeChange("${runningPeers.first()}/v2/change/async", createChange(null))
         }.isSuccess()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -564,7 +568,7 @@ class ConsensusSpec {
         val firstHalf = listOf(firstLeaderAddress, notLeaderPeers.first())
         val secondHalf = notLeaderPeers.drop(1)
 
-        val addressToApplication: Map<String, Application> = peerAddresses.zip(apps).toMap()
+        val addressToApplication: Map<String, ApplicationUcac> = peerAddresses.zip(apps).toMap()
 
 
 //      Divide network
@@ -595,11 +599,11 @@ class ConsensusSpec {
 
 //      Run change in both halfs
         expectCatching {
-            executeChange("${firstHalf.first()}/consensus/create_change/async", createChange(1))
+            executeChange("${firstHalf.first()}/v2/change/async", createChange(1))
         }.isSuccess()
 
         expectCatching {
-            executeChange("${secondHalf.first()}/consensus/create_change/sync", createChange(2))
+            executeChange("${secondHalf.first()}/v2/change/sync", createChange(2))
         }.isSuccess()
 
         change1Phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -720,16 +724,20 @@ class ConsensusSpec {
         }
 
 
-    private suspend fun askForChanges(peer: String) = genericAskForChange("changes", peer)
+    private suspend fun askForChanges(peer: String) =
+        testHttpClient.get<Changes>("http://$peer/v2/change") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }
     private suspend fun askAllForChanges(peerAddresses: List<String>) =
         peerAddresses.map { askForChanges(it) }
 
     private suspend fun askForProposedChanges(peer: String) = genericAskForChange("proposed_changes", peer)
     private suspend fun askForAcceptedChanges(peer: String) = genericAskForChange("accepted_changes", peer)
 
-    private suspend fun askForLeaderAddress(app: Application): String? {
+    private suspend fun askForLeaderAddress(app: ApplicationUcac): String? {
         val consensusProperty =
-            Application::class.declaredMemberProperties.single { it.name == "consensusProtocol" }
+            ApplicationUcac::class.declaredMemberProperties.single { it.name == "consensusProtocol" }
         val consensusOldAccessible = consensusProperty.isAccessible
         try {
             consensusProperty.isAccessible = true
@@ -740,7 +748,7 @@ class ConsensusSpec {
         }
     }
 
-    private suspend fun getLeaderAddressPortAndApplication(peers: List<Application>): LeaderAddressPortAndApplication {
+    private suspend fun getLeaderAddressPortAndApplication(peers: List<ApplicationUcac>): LeaderAddressPortAndApplication {
         val peerAddresses = getPeerAddresses(peers)
         val address =
             askForLeaderAddress(peers[0])!!
@@ -759,12 +767,12 @@ class ConsensusSpec {
         return Triple(leaderAddress, port, application)
     }
 
-    private fun getPeerAddresses(apps: List<Application>): List<String> =
+    private fun getPeerAddresses(apps: List<ApplicationUcac>): List<String> =
         apps.map { "127.0.0.1:${it.getBoundPort()}" }
 
     private fun getPortFromAddress(address: String) = address.split(":")[1]
 
-    private fun modifyPeers(app: Application, peers: List<String>) {
+    private fun modifyPeers(app: ApplicationUcac, peers: List<String>) {
         val newPeers = peers.map { it.replace("http://", "") }
         app.setPeers(mapOf(1 to newPeers), "127.0.0.1")
     }

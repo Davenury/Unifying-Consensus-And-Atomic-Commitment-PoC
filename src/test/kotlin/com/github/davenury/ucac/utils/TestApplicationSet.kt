@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.utils
 
-import com.github.davenury.ucac.Application
+import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.createApplication
@@ -13,7 +13,7 @@ class TestApplicationSet(
     val appsToExclude: List<Int> = emptyList()
 ) {
 
-    private var apps: MutableList<MutableList<Application>> = mutableListOf()
+    private var apps: MutableList<MutableList<ApplicationUcac>> = mutableListOf()
     private val peers: List<List<String>>
 
     init {
@@ -81,7 +81,7 @@ class TestApplicationSet(
 
     fun getRunningPeers() = peers.map { it.filter { it != NON_RUNNING_PEER } }
 
-    fun getRunningApps(): List<Application> = apps
+    fun getRunningApps(): List<ApplicationUcac> = apps
         .flatten()
         .zip(peers.flatten())
         .filterIndexed { index, _ -> !appsToExclude.contains(index + 1) }

@@ -25,6 +25,8 @@ data class Config(
 ) {
     fun peerAddresses(): List<List<String>> = parsePeers(peers)
     fun peerAddresses(peersetId: Int): List<String> = peerAddresses()[peersetId - 1]
+
+
 }
 
 data class RatisConfig(
@@ -46,7 +48,7 @@ data class RaftConfig(
 )
 
 data class RestConfig(
-    val defaultSyncTimeout: Duration = Duration.ofMinutes(1),
+    val defaultSyncTimeout: Duration = Duration.ofMinutes(1)
 )
 
 fun loadConfig(overrides: Map<String, Any> = emptyMap()): Config {

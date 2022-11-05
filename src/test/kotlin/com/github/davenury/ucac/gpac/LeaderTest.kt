@@ -18,11 +18,13 @@ import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.isEqualTo
+import strikt.assertions.isNotNull
 import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
@@ -40,7 +42,7 @@ class LeaderTest {
 
 
         runBlocking {
-            phaser.arriveAndAwaitAdvanceWithTimeout()
+            phaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(15))
         }
 
         // assert that we're actually asking 3 times
@@ -55,8 +57,11 @@ class LeaderTest {
         PeerTwo.stubForNotAgree()
         PeerThree.stubForNotAgree()
 
-        expectThrows<TooFewResponsesException> { subject.performProtocolAsLeader(change) }
-
+        expectThrows<TooFewResponsesException> {
+            val result = subject.proposeChangeAsync(change).await()
+            expectThat(result.exception).isNotNull()
+            throw result.exception!!
+        }
         PeerTwo.verifyAgreeStub(1)
         PeerThree.verifyAgreeStub(1)
     }
@@ -94,7 +99,13 @@ class LeaderTest {
             transactionBlocker,
             myPeersetId = 1,
             myNodeId = 0,
-            allPeers = mapOf(1 to listOf("localhost:${PeerTwo.getPort()}", "localhost:${PeerThree.getPort()}")),
+            allPeers = mapOf(
+                1 to listOf(
+                    "localhost:8081",
+                    "localhost:${PeerTwo.getPort()}",
+                    "localhost:${PeerThree.getPort()}"
+                )
+            ),
             myAddress = "localhost:8081",
             signalPublisher = SignalPublisher(
                 mapOf(
@@ -105,5 +116,5 @@ class LeaderTest {
             it.leaderTimer = timer
             it.retriesTimer = timer
         }
-    private val change = AddUserChange(InitialHistoryEntry.getId(), "userName", listOf())
+    private val change = AddUserChange(InitialHistoryEntry.getId(), "userName", listOf("localhost:8081"))
 }
