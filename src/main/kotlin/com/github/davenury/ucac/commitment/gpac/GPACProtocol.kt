@@ -1,12 +1,12 @@
 package com.github.davenury.ucac.commitment.gpac
 
+import com.github.davenury.common.*
+import com.github.davenury.common.history.History
+import com.github.davenury.common.history.IntermediateHistoryEntry
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.history.History
-import com.github.davenury.ucac.history.IntermediateHistoryEntry
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory

@@ -1,13 +1,13 @@
 package com.github.davenury.ucac.api
 
+import com.github.davenury.common.Change
+import com.github.davenury.common.ChangeDoesntExist
+import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.Changes
+import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.ChangeResult
-import com.github.davenury.ucac.common.Changes
-import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.commitment.gpac.GPACProtocol
-import com.github.davenury.ucac.common.ChangeDoesntExist
-import com.github.davenury.ucac.history.History
+import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await

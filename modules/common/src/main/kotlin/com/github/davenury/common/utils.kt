@@ -1,4 +1,4 @@
-package com.github.davenury.ucac
+package com.github.davenury.common
 
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper

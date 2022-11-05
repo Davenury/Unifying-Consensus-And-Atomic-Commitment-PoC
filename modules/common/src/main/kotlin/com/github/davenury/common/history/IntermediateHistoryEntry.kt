@@ -1,7 +1,7 @@
-package com.github.davenury.ucac.history
+package com.github.davenury.common.history
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.github.davenury.ucac.sha512
+import com.github.davenury.common.sha512
 
 /**
  * Intermediate history entry represents a history entry that has a parent.

@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.history
+package com.github.davenury.common.history
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
@@ -8,11 +8,11 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class History {
     private val initialEntry: InitialHistoryEntry = InitialHistoryEntry
-    private val currentEntryId: AtomicReference<String> = AtomicReference(initialEntry.getId())
+    private val currentEntryId: AtomicReference<String> = AtomicReference(InitialHistoryEntry.getId())
     private val entries: ConcurrentHashMap<String, HistoryEntry> = ConcurrentHashMap()
 
     init {
-        entries[initialEntry.getId()] = initialEntry
+        entries[InitialHistoryEntry.getId()] = initialEntry
     }
 
     fun getCurrentEntry(): HistoryEntry {

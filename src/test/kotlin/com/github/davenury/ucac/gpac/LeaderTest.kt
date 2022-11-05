@@ -1,5 +1,10 @@
 package com.github.davenury.ucac.gpac
 
+import com.github.davenury.common.AddUserChange
+import com.github.davenury.common.Change
+import com.github.davenury.common.TooFewResponsesException
+import com.github.davenury.common.history.History
+import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
@@ -8,12 +13,7 @@ import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
 import com.github.davenury.ucac.commitment.gpac.TransactionBlockerImpl
-import com.github.davenury.ucac.common.AddUserChange
-import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ProtocolTimerImpl
-import com.github.davenury.ucac.common.TooFewResponsesException
-import com.github.davenury.ucac.history.History
-import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout

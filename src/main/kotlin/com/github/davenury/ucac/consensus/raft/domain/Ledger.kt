@@ -1,10 +1,9 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.history.History
+import com.github.davenury.common.Change
+import com.github.davenury.common.history.History
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.CompletableFuture
 
 
 data class Ledger(

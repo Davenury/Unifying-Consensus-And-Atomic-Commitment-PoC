@@ -1,9 +1,8 @@
 package com.github.davenury.ucac.routing
 
-import com.github.davenury.ucac.common.Changes
+import com.github.davenury.common.Changes
 import com.github.davenury.ucac.consensus.raft.domain.*
 import io.ktor.application.*
-import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*

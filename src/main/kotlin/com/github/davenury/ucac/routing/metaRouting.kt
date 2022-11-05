@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.routing
 
-import com.github.davenury.ucac.meterRegistry
+import com.github.davenury.common.meterRegistry
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.response.*

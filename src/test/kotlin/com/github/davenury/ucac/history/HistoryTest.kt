@@ -1,9 +1,9 @@
 package com.github.davenury.ucac.history
 
+import com.github.davenury.common.history.*
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import strikt.api.expectThrows
-import java.lang.IllegalArgumentException
 
 /**
  * @author Kamil Jarosz

@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.commitment.gpac
 
-import com.github.davenury.ucac.common.Change
+import com.github.davenury.common.Change
+
 
 data class Transaction(
     val ballotNumber: Int,

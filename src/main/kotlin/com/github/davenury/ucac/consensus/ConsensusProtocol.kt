@@ -1,8 +1,8 @@
 package com.github.davenury.ucac.consensus
 
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.ChangeResult
-import com.github.davenury.ucac.history.History
+import com.github.davenury.common.Change
+import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.history.History
 import java.util.concurrent.CompletableFuture
 
 interface ConsensusProtocol {

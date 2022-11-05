@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.commitment.gpac
 
-import com.github.davenury.ucac.httpClient
+import com.github.davenury.common.httpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*

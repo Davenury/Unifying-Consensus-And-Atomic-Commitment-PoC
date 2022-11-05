@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.history
+package com.github.davenury.common.history
 
 /**
  * @author Kamil Jarosz

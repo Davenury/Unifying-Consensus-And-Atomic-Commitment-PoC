@@ -1,10 +1,10 @@
 package com.github.davenury.ucac.consensus.ratis
 
+import com.github.davenury.common.Change
+import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.history.History
 import com.github.davenury.ucac.RatisConfig
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.consensus.ConsensusProtocol
-import com.github.davenury.ucac.history.History
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.io.File

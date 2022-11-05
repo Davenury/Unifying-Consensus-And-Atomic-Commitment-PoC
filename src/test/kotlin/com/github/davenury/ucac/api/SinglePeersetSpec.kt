@@ -1,12 +1,13 @@
 package com.github.davenury.ucac.api
 
+import com.github.davenury.common.*
+import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Agree
 import com.github.davenury.ucac.commitment.gpac.Agreed
 import com.github.davenury.ucac.commitment.gpac.Apply
-import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.features.*

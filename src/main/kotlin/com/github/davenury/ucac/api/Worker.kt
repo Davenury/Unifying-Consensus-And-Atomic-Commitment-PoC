@@ -1,8 +1,8 @@
 package com.github.davenury.ucac.api
 
+import com.github.davenury.common.Change
+import com.github.davenury.common.ChangeResult
 import com.github.davenury.ucac.commitment.gpac.GPACProtocol
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import kotlinx.coroutines.channels.Channel

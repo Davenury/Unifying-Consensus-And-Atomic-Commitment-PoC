@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.common
+package com.github.davenury.common
 
 class MissingParameterException(message: String?) : Exception(message)
 class UnknownOperationException(val desiredOperationName: String) : Exception()
