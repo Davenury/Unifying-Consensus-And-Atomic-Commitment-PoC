@@ -7,6 +7,8 @@ import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.commitment.gpac.TransactionResult
 import com.github.davenury.ucac.gpac.domain.Accept
 import com.github.davenury.ucac.gpac.domain.Apply
+import com.github.davenury.ucac.gpac.Accept
+import com.github.davenury.ucac.gpac.Apply
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER

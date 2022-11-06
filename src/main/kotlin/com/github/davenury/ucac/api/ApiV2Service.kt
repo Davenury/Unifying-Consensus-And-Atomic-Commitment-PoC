@@ -9,10 +9,13 @@ import com.github.davenury.ucac.commitment.gpac.GPACProtocol
 import com.github.davenury.ucac.history.History
 import io.ktor.features.*
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.time.withTimeout
 import java.time.Duration
+import java.util.*
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentLinkedDeque
 
 class ApiV2Service(
     private val gpacProtocol: GPACProtocol,
@@ -21,7 +24,13 @@ class ApiV2Service(
     private var config: Config,
 ) {
 
-    private val changeIdToCompletableFuture: Map<String, CompletableFuture<ChangeResult>> = mapOf()
+    private val channel: Channel<Unit> = Channel()
+    private val queue: Deque<ProcessorJob> = ConcurrentLinkedDeque<ProcessorJob>()
+    private val worker: Thread = Thread(Worker(queue, channel, gpacProtocol, consensusProtocol))
+
+    init {
+        worker.start()
+    }
 
     fun getChanges(): Changes {
         return Changes.fromHistory(history)
@@ -36,30 +45,29 @@ class ApiV2Service(
         ?: gpacProtocol.getChangeResult(changeId)
         ?: throw RuntimeException("Change doesn't exist")
 
-    suspend fun addChange(change: Change, enforceGpac: Boolean = false): CompletableFuture<ChangeResult> =
-        if (allPeersFromMyPeerset(change.peers) && !enforceGpac) {
-            consensusProtocol.proposeChangeAsync(change)
-        } else {
-            gpacProtocol.proposeChangeAsync(change)
-        }
+    suspend fun addChange(change: Change, enforceGpac: Boolean = false): CompletableFuture<ChangeResult> {
+        val consensusChange: Boolean = allPeersFromMyPeerset(change.peers) && !enforceGpac
+        val cf = CompletableFuture<ChangeResult>()
+        queue.addLast(ProcessorJob(change, cf, !consensusChange))
+        channel.send(Unit)
+        return cf
+    }
 
 
     suspend fun addChangeSync(
         change: Change,
         enforceGpac: Boolean,
         timeout: Duration?,
-    ): ChangeResult? {
-        return try {
-            withTimeout(timeout ?: config.rest.defaultSyncTimeout) {
-                addChange(change, enforceGpac).await()
-            }
-        } catch (e: TimeoutCancellationException) {
-            null
+    ): ChangeResult? = try {
+        withTimeout(timeout ?: config.rest.defaultSyncTimeout) {
+            addChange(change, enforceGpac).await()
         }
+    } catch (e: TimeoutCancellationException) {
+        null
     }
 
-    fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
 
+    fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
         val myPeerset = peers[config.peersetId]!!.plus(myAddress)
         val newPeersString = peers
             .plus(config.peersetId to myPeerset)
