@@ -1,9 +1,9 @@
-package com.github.davenury.ucac.gpac.api
+package com.github.davenury.ucac.routing
 
-import com.github.davenury.ucac.gpac.domain.Agree
-import com.github.davenury.ucac.gpac.domain.Apply
-import com.github.davenury.ucac.gpac.domain.ElectMe
-import com.github.davenury.ucac.gpac.domain.GPACProtocol
+import com.github.davenury.ucac.gpac.Agree
+import com.github.davenury.ucac.gpac.Apply
+import com.github.davenury.ucac.gpac.ElectMe
+import com.github.davenury.ucac.gpac.GPACProtocol
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*

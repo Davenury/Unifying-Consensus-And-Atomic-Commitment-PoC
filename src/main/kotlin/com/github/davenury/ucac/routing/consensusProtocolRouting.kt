@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.consensus.raft.api
+package com.github.davenury.ucac.routing
 
 import com.github.davenury.ucac.common.Changes
 import com.github.davenury.ucac.consensus.raft.domain.*

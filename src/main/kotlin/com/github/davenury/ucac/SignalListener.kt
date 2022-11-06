@@ -1,7 +1,7 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.gpac.domain.Transaction
+import com.github.davenury.ucac.gpac.Transaction
 
 enum class Signal {
     BeforeSendingElect,

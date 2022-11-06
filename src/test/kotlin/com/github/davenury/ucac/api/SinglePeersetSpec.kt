@@ -2,7 +2,10 @@ package com.github.davenury.ucac.api
 
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.gpac.domain.*
+import com.github.davenury.ucac.gpac.Accept
+import com.github.davenury.ucac.gpac.Agree
+import com.github.davenury.ucac.gpac.Agreed
+import com.github.davenury.ucac.gpac.Apply
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout

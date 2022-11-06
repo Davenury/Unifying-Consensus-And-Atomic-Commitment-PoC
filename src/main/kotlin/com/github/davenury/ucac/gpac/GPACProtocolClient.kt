@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.gpac.domain
+package com.github.davenury.ucac.gpac
 
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.features.*
