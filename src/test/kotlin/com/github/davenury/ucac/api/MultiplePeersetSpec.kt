@@ -2,9 +2,9 @@ package com.github.davenury.ucac.api
 
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.gpac.Accept
-import com.github.davenury.ucac.gpac.Apply
-import com.github.davenury.ucac.gpac.TransactionResult
+import com.github.davenury.ucac.commitment.gpac.Accept
+import com.github.davenury.ucac.commitment.gpac.Apply
+import com.github.davenury.ucac.commitment.gpac.TransactionResult
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
@@ -13,7 +13,6 @@ import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.io.FileUtils

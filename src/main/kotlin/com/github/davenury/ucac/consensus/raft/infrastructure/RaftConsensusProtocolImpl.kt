@@ -7,16 +7,12 @@ import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.ConsensusProtocol
-import com.github.davenury.ucac.consensus.ConsensusResult
 import com.github.davenury.ucac.consensus.raft.domain.*
-import com.github.davenury.ucac.consensus.ConsensusResult.*
 import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.future.asCompletableFuture
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

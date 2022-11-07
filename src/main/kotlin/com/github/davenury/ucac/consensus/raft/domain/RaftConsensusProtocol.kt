@@ -1,7 +1,6 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
 import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.consensus.ConsensusResult
 import com.github.davenury.ucac.common.ChangeResult
 import java.util.concurrent.CompletableFuture
 

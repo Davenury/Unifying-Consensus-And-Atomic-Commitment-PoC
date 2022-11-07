@@ -4,6 +4,10 @@ import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.commitment.gpac.Accept
+import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
+import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
+import com.github.davenury.ucac.commitment.gpac.TransactionBlockerImpl
 import com.github.davenury.ucac.common.AddUserChange
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ProtocolTimerImpl

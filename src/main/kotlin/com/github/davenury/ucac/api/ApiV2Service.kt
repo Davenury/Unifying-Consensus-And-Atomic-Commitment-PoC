@@ -5,7 +5,7 @@ import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.common.Changes
 import com.github.davenury.ucac.consensus.ConsensusProtocol
-import com.github.davenury.ucac.gpac.GPACProtocol
+import com.github.davenury.ucac.commitment.gpac.GPACProtocol
 import com.github.davenury.ucac.history.History
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.future.await
