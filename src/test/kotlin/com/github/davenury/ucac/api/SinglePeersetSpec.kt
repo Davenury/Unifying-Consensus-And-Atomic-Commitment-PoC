@@ -84,11 +84,11 @@ class SinglePeersetSpec {
             val signalListener = SignalListener {
                 expectCatching {
                     executeChange("http://${it.peers[0][1]}/v2/change/sync?enforce_gpac=true", change(listOf()))
-                }.isFailure()
+                }
             }
 
             val signalListenersForCohort = mapOf(
-                Signal.OnSendingElectBuildFail to changeAborted,
+                Signal.ReachedMaxRetries to changeAborted,
             )
 
             val apps = TestApplicationSet(
@@ -98,7 +98,10 @@ class SinglePeersetSpec {
                     2 to signalListenersForCohort,
                     3 to signalListenersForCohort
                 ),
-                configOverrides = mapOf(2 to mapOf("gpac.backoffBound" to Duration.ZERO))
+                configOverrides = mapOf(
+                    2 to mapOf("gpac.retriesBackoffTimeout" to Duration.ZERO),
+                    3 to mapOf("gpac.retriesBackoffTimeout" to Duration.ZERO)
+                )
             )
             val peers = apps.getPeers()
 
@@ -106,7 +109,7 @@ class SinglePeersetSpec {
                 executeChange("http://${peers[0][0]}/v2/change/sync?enforce_gpac=true", change(listOf()))
             }.isSuccess()
 
-            changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout()
+            changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
             try {
                 val response: HttpResponse = testHttpClient.get(
@@ -118,9 +121,9 @@ class SinglePeersetSpec {
                     accept(ContentType.Application.Json)
                 }
                 fail("executing change didn't fail")
-            } catch (e: ClientRequestException) {
-                expectThat(e).isA<ClientRequestException>()
-                expectThat(e.response.status).isEqualTo(HttpStatusCode.Conflict)
+            } catch (e: Exception) {
+                expectThat(e).isA<ServerResponseException>()
+                expectThat(e.message!!).contains("Transaction failed due to too many retries of becoming a leader.")
             }
 
             apps.stopApps()

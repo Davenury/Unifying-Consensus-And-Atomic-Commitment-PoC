@@ -4,11 +4,6 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
-import com.github.davenury.ucac.commitment.gpac.TransactionResult
-import com.github.davenury.ucac.gpac.domain.Accept
-import com.github.davenury.ucac.gpac.domain.Apply
-import com.github.davenury.ucac.gpac.Accept
-import com.github.davenury.ucac.gpac.Apply
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
@@ -142,9 +137,9 @@ class MultiplePeersetSpec {
                 accept(ContentType.Application.Json)
             }
             fail("executing change didn't fail")
-        } catch (e: ClientRequestException) {
-            expectThat(e).isA<ClientRequestException>()
-            expectThat(e.response.status).isEqualTo(HttpStatusCode.Conflict)
+        } catch (e: ServerResponseException) {
+            expectThat(e).isA<ServerResponseException>()
+            expectThat(e.message!!).contains("Transaction failed due to too many retries of becoming a leader.")
         }
         apps.stopApps()
     }

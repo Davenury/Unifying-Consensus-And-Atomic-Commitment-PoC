@@ -69,7 +69,7 @@ func test() {
 			return err
 		}
 
-		resp, err := http.Post(fmt.Sprintf("http://localhost:%d/gpac/create_change", int(localPort)), "application/json", bytes.NewBuffer(requestData))
+		resp, err := http.Post(fmt.Sprintf("http://localhost:%d/v2/change", int(localPort)), "application/json", bytes.NewBuffer(requestData))
 		if err != nil {
 			return err
 		}
@@ -84,7 +84,7 @@ func test() {
 
 			time.Sleep(1 * time.Second)
 
-			resp, err = http.Get(fmt.Sprintf("http://localhost:%d/consensus/change", int(localPort)))
+			resp, err = http.Get(fmt.Sprintf("http://localhost:%d/v2/change", int(localPort)))
 			if err != nil {
 				panic(err)
 			}

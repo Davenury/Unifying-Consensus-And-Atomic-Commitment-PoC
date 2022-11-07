@@ -47,7 +47,8 @@ class GPACProtocolImpl(
 ) : GPACProtocol {
 
     var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, Duration.ZERO, ctx)
-    var retriesTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
+    var retriesTimer: ProtocolTimer =
+        ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
     private val maxLeaderElectionTries = gpacConfig.maxLeaderElectionTries
 
     private var myBallotNumber: Int = 0
@@ -290,7 +291,11 @@ class GPACProtocolImpl(
         signal(Signal.BeforeSendingAgree, this.transaction, change)
 
         logger.info("${getPeerName()} Recovery leader transaction state: ${this.transaction}")
-        val agreedResponses = ftAgreePhase(change, this.transaction.acceptVal!!, acceptNum = this.transaction.acceptNum)
+        val agreedResponses = ftAgreePhase(
+            change,
+            this.transaction.acceptVal!!,
+            acceptNum = this.transaction.acceptNum
+        )
 
         signal(Signal.BeforeSendingApply, this.transaction, change)
 
