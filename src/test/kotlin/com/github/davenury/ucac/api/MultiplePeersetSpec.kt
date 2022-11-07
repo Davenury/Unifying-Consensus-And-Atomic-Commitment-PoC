@@ -3,9 +3,9 @@ package com.github.davenury.ucac.api
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.gpac.Accept
-import com.github.davenury.ucac.gpac.Apply
-import com.github.davenury.ucac.gpac.TransactionResult
+import com.github.davenury.ucac.commitment.gpac.Accept
+import com.github.davenury.ucac.commitment.gpac.Apply
+import com.github.davenury.ucac.commitment.gpac.TransactionResult
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.httpClient
 import com.github.davenury.ucac.testHttpClient

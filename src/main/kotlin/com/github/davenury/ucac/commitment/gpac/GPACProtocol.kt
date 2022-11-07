@@ -1,6 +1,7 @@
-package com.github.davenury.ucac.gpac
+package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.ucac.*
+import com.github.davenury.ucac.commitment.AtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.history.History
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -9,8 +10,8 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import kotlin.math.max
 
-interface GPACProtocol : SignalSubject {
-    suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult>
+interface GPACProtocol : SignalSubject, AtomicCommitmentProtocol {
+    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult>
 
     suspend fun handleElect(message: ElectMe): ElectedYou
     suspend fun handleAgree(message: Agree): Agreed
@@ -148,7 +149,7 @@ class GPACProtocolImpl(
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
             }
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
-                history.addEntry(message.change.toHistoryEntry(), !shouldCheckForCompatibility(message.change.peers))
+                history.addEntry(message.change.toHistoryEntry())
             }
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = message.change)

@@ -7,10 +7,10 @@ import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.consensus.ratis.HistoryRatisNode
-import com.github.davenury.ucac.gpac.GPACProtocol
-import com.github.davenury.ucac.gpac.GPACProtocolClientImpl
-import com.github.davenury.ucac.gpac.GPACProtocolImpl
-import com.github.davenury.ucac.gpac.TransactionBlockerImpl
+import com.github.davenury.ucac.commitment.gpac.GPACProtocol
+import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
+import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
+import com.github.davenury.ucac.commitment.gpac.TransactionBlockerImpl
 import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.routing.*
 import io.ktor.application.*
@@ -29,7 +29,6 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import java.time.Duration
 import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
