@@ -1,15 +1,18 @@
 package com.github.davenury.ucac.gpac
 
+import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.history.InitialHistoryEntry
 import io.mockk.*
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import strikt.api.expect
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.isEqualTo
+import java.util.concurrent.Executors
 
 class GPACProtocolSpec {
 
@@ -19,15 +22,18 @@ class GPACProtocolSpec {
     private val transactionBlockerMock = mockk<TransactionBlocker>()
     private var subject = GPACProtocolImpl(
         history,
-        3,
-        timerMock,
+        GpacConfig(3),
+        ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
         protocolClientMock,
         transactionBlockerMock,
         myPeersetId = 0,
         myNodeId = 0,
         allPeers = mapOf(0 to listOf("peer2", "peer3")),
         myAddress = "peer1"
-    )
+    ).also {
+        it.leaderTimer = timerMock
+        it.retriesTimer = timerMock
+    }
 
     @Test
     fun `should return elected you, when ballot number is lower than proposed`(): Unit = runBlocking {

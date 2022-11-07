@@ -29,6 +29,7 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
+import java.time.Duration
 import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
@@ -100,15 +101,14 @@ public class Application constructor(
                 heartbeatDelay = config.raft.leaderTimeout,
             )
 
-            val timer = ProtocolTimerImpl(config.gpac.leaderFailTimeout, config.gpac.backoffBound, ctx)
             val protocolClient = GPACProtocolClientImpl()
             val transactionBlocker = TransactionBlockerImpl()
             val myAddress = "${config.host}:${config.port}"
             gpacProtocol =
                 GPACProtocolImpl(
                     history,
-                    config.gpac.maxLeaderElectionTries,
-                    timer,
+                    config.gpac,
+                    ctx,
                     protocolClient,
                     transactionBlocker,
                     signalPublisher,
