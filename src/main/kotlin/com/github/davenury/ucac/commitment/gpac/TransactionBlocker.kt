@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.gpac
+package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.ucac.common.AlreadyLockedException
 import kotlinx.coroutines.sync.Semaphore

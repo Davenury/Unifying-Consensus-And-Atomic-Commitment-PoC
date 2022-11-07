@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.gpac
 
 import com.github.davenury.ucac.GpacConfig
+import com.github.davenury.ucac.commitment.gpac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.history.History
 import com.github.davenury.ucac.history.InitialHistoryEntry

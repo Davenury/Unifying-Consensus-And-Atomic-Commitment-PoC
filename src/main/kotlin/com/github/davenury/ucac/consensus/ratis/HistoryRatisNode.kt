@@ -4,9 +4,6 @@ import com.github.davenury.ucac.RatisConfig
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.consensus.ConsensusProtocol
-import com.github.davenury.ucac.consensus.ConsensusResult
-import com.github.davenury.ucac.consensus.ConsensusResult.ConsensusFailure
-import com.github.davenury.ucac.consensus.ConsensusResult.ConsensusSuccess
 import com.github.davenury.ucac.history.History
 import java.io.File
 import java.util.*
@@ -31,11 +28,6 @@ class HistoryRatisNode(
     override suspend fun proposeChange(change: Change): ChangeResult {
         val result = applyTransaction(change.toHistoryEntry().serialize())
         return if (result == "ERROR") ChangeResult(ChangeResult.Status.CONFLICT) else ChangeResult(ChangeResult.Status.SUCCESS)
-    }
-
-    private suspend fun asyncProposeChange(change: Change): String {
-        val result = applyTransaction(change.toHistoryEntry().serialize())
-        return change.toHistoryEntry().getId()
     }
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
