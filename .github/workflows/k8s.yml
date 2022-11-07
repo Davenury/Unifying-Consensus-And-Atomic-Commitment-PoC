@@ -1,6 +1,6 @@
 name: K8s
 
-on: [push, pull_request]
+on: [ push, pull_request ]
 
 jobs:
   build:
@@ -8,6 +8,16 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v2
+
+      - name: Build and publish image
+        uses: pmorelli92/github-container-registry-build-push@2.0.0
+        with:
+          github-push-secret: ${{ secrets.DOCKER_DEPLOYMENT_TOKEN }}
+          docker-image-name: ucac
+          docker-image-tag: "${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}"
+          dockerfile-path: ./Dockerfile.builder
+          build-context: .
+
       - name: start minikube
         id: minikube
         uses: medyagh/setup-minikube@v0.0.8
@@ -20,7 +30,7 @@ jobs:
         run: go get && go build -o cmd
       - name: deploy pods
         working-directory: ./cmd
-        run: ./cmd deploy -n test --create-namespace --peers=3,1 --wait-for-readiness
+        run: ./cmd deploy -n test --create-namespace --peers=3,1 --wait-for-readiness --image ghcr.io/davenury/ucac:${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}
       - name: test command
         working-directory: ./cmd
         run: ./cmd test -n test

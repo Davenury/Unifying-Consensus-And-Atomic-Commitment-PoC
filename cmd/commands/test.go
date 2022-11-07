@@ -69,7 +69,7 @@ func test() {
 			return err
 		}
 
-		resp, err := http.Post(fmt.Sprintf("http://localhost:%d/create_change", int(localPort)), "application/json", bytes.NewBuffer(requestData))
+		resp, err := http.Post(fmt.Sprintf("http://localhost:%d/gpac/create_change", int(localPort)), "application/json", bytes.NewBuffer(requestData))
 		if err != nil {
 			return err
 		}
