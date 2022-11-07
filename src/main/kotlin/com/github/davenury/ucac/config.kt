@@ -35,8 +35,9 @@ data class RatisConfig(
 
 data class GpacConfig(
     val maxLeaderElectionTries: Int = 5,
-    val leaderFailTimeout: Duration = Duration.ofSeconds(60),
-    val backoffBound: Duration = Duration.ofSeconds(120),
+    val leaderFailDelay: Duration = Duration.ofSeconds(60),
+    val retriesBackoffTimeout: Duration = Duration.ofSeconds(120),
+    val initialRetriesDelay: Duration = Duration.ofSeconds(0)
 )
 
 data class RaftConfig(

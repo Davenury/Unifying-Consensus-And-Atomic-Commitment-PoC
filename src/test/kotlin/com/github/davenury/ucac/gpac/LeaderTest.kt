@@ -1,5 +1,6 @@
 package com.github.davenury.ucac.gpac
 
+import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.SignalPublisher
@@ -83,8 +84,8 @@ class LeaderTest {
     private var subject =
         GPACProtocolImpl(
             history,
-            3,
-            timer,
+            GpacConfig(3),
+            ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
             client,
             transactionBlocker,
             myPeersetId = 1,
@@ -96,6 +97,9 @@ class LeaderTest {
                     Signal.ReachedMaxRetries to peerReachedMaxRetries
                 )
             )
-        )
+        ).also {
+            it.leaderTimer = timer
+            it.retriesTimer = timer
+        }
     private val change = AddUserChange(InitialHistoryEntry.getId(), "userName", listOf())
 }

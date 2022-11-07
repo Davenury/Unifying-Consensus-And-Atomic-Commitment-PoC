@@ -3,7 +3,9 @@ package com.github.davenury.ucac.gpac
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.history.History
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import org.slf4j.LoggerFactory
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import kotlin.math.max
 
@@ -32,8 +34,8 @@ enum class TransactionResult {
 
 class GPACProtocolImpl(
     private val history: History,
-    private val maxLeaderElectionTries: Int,
-    private val timer: ProtocolTimer,
+    private val gpacConfig: GpacConfig,
+    private val ctx: ExecutorCoroutineDispatcher,
     private val protocolClient: GPACProtocolClient,
     private val transactionBlocker: TransactionBlocker,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
@@ -42,6 +44,10 @@ class GPACProtocolImpl(
     private var allPeers: Map<Int, List<String>>,
     private var myAddress: String
 ) : GPACProtocol {
+
+    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, Duration.ZERO, ctx)
+    var retriesTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
+    private val maxLeaderElectionTries = gpacConfig.maxLeaderElectionTries
 
     private var myBallotNumber: Int = 0
 
@@ -158,7 +164,7 @@ class GPACProtocolImpl(
 
     private suspend fun leaderFailTimeoutStart(change: Change) {
         logger.info("${getPeerName()} Start counting")
-        timer.startCounting {
+        leaderTimer.startCounting {
             logger.info("${getPeerName()} Recovery leader starts")
             transactionBlocker.releaseBlock()
             performProtocolAsRecoveryLeader(change)
@@ -167,7 +173,7 @@ class GPACProtocolImpl(
 
     private fun leaderFailTimeoutStop() {
         logger.info("${getPeerName()} Stop counter")
-        timer.cancelCounting()
+        leaderTimer.cancelCounting()
     }
 
     @Deprecated("use proposeChangeAsync")
@@ -194,7 +200,7 @@ class GPACProtocolImpl(
         }
 
         if (!electMeResult.success) {
-            timer.startCounting(iteration) {
+            retriesTimer.startCounting(iteration) {
                 performProtocolAsLeader(change, iteration + 1)
             }
             return TransactionResult.PROCESSED
@@ -235,7 +241,7 @@ class GPACProtocolImpl(
         }
 
         if (!electMeResult.success) {
-            timer.startCounting(iteration) {
+            retriesTimer.startCounting(iteration) {
                 performProtocolAsRecoveryLeader(change, iteration + 1)
             }
             return
