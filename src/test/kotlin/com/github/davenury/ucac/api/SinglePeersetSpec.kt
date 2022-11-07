@@ -83,8 +83,8 @@ class SinglePeersetSpec {
 
             val signalListener = SignalListener {
                 expectCatching {
-                    executeChange("http://${it.peers.also { println("Peers: $it") }[0][1]}/v2/change/async?enforce_gpac=true", change(listOf()))
-                }
+                    executeChange("http://${it.peers[0][1]}/v2/change/sync?enforce_gpac=true", change(listOf()))
+                }.isFailure()
             }
 
             val signalListenersForCohort = mapOf(
@@ -98,6 +98,7 @@ class SinglePeersetSpec {
                     2 to signalListenersForCohort,
                     3 to signalListenersForCohort
                 ),
+                configOverrides = mapOf(2 to mapOf("gpac.backoffBound" to Duration.ZERO))
             )
             val peers = apps.getPeers()
 

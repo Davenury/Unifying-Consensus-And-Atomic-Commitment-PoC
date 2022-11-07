@@ -212,8 +212,8 @@ class GPACProtocolImpl(
         if (iteration == maxLeaderElectionTries) {
             logger.error("Transaction failed due to too many retries of becoming a leader.")
             signal(Signal.ReachedMaxRetries, transaction, change)
-            changeConflicts(change)
             transaction = transaction.copy(change = null)
+            changeConflicts(change, MaxTriesExceededException())
             throw MaxTriesExceededException()
         }
 
@@ -433,12 +433,12 @@ class GPACProtocolImpl(
 
     private fun changeConflicts(change: Change, exception: Exception) {
         val changeId = change.toHistoryEntry().getId()
-        changeIdToCompletableFuture[changeId]!!.complete(ChangeResult(ChangeResult.Status.EXCEPTION, exception))
+        changeIdToCompletableFuture[changeId]?.complete(ChangeResult(ChangeResult.Status.EXCEPTION, exception))
     }
 
     private fun getPeersFromChange(change: Change): List<List<String>> {
-        if(change.peers.isEmpty()) throw RuntimeException("Change without peers")
-            return change.peers.map { peer ->
+        if (change.peers.isEmpty()) throw RuntimeException("Change without peers")
+        return change.peers.map { peer ->
             if (peer == myAddress) return@map allPeers[myPeersetId]!!
             allPeers.values.find { it.contains(peer) }
                 ?: throw PeerNotInPeersetException(peer).also { changeConflicts(change, it) }

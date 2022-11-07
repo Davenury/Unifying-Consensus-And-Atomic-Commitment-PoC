@@ -21,7 +21,7 @@ class Worker(
 ) : Runnable {
 
 
-    override fun run() = runBlocking {
+    private suspend fun processingQueue() {
         try {
             while (!Thread.interrupted()) {
                 while (queue.isEmpty()) channel.receive()
@@ -31,9 +31,20 @@ class Worker(
                     else consensusProtocol.proposeChangeAsync(job.change)
                 job.completableFuture.complete(result.await())
             }
-        } catch (e: InterruptedException) {
-            println("Worker interrupted")
+        } catch (e: Exception) {
+            when (e) {
+                is InterruptedException -> {
+                    println("Worker interrupted")
+                    processingQueue()
+                }
+
+                else -> processingQueue()
+            }
         }
+    }
+
+    override fun run() = runBlocking {
+        processingQueue()
     }
 
 }
