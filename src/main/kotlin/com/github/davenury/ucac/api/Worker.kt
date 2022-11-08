@@ -4,13 +4,13 @@ import com.github.davenury.ucac.commitment.gpac.GPACProtocol
 import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentLinkedDeque
-import java.util.concurrent.locks.ReentrantLock
 
 
 class Worker(
@@ -27,19 +27,17 @@ class Worker(
                 while (queue.isEmpty()) channel.receive()
                 val job = queue.pop()
                 val result =
-                    if (job.gpacChange) gpacProtocol.proposeChangeAsync(job.change)
-                    else consensusProtocol.proposeChangeAsync(job.change)
+                    if (job.isConsensusOnly) consensusProtocol.proposeChangeAsync(job.change)
+                    else gpacProtocol.proposeChangeAsync(job.change)
                 job.completableFuture.complete(result.await())
             }
         } catch (e: Exception) {
             when (e) {
                 is InterruptedException -> {
-                    println("Worker interrupted")
-                    processingQueue()
+                    logger.debug("Worker interrupted")
                 }
-
-                else -> processingQueue()
             }
+            processingQueue()
         }
     }
 
@@ -47,10 +45,14 @@ class Worker(
         processingQueue()
     }
 
+    companion object {
+        private val logger = LoggerFactory.getLogger(RaftConsensusProtocolImpl::class.java)
+    }
+
 }
 
 data class ProcessorJob(
     val change: Change,
     val completableFuture: CompletableFuture<ChangeResult>,
-    val gpacChange: Boolean = true
+    val isConsensusOnly: Boolean = false
 )

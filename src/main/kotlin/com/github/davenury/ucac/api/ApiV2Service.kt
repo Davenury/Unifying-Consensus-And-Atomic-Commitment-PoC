@@ -6,8 +6,8 @@ import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.common.Changes
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.commitment.gpac.GPACProtocol
+import com.github.davenury.ucac.common.ChangeDoesntExist
 import com.github.davenury.ucac.history.History
-import io.ktor.features.*
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
@@ -37,22 +37,19 @@ class ApiV2Service(
     }
 
     fun getChangeById(id: String): Change? {
-        return history.getEntryFromHistory(id)
-            ?.let { Change.fromHistoryEntry(it) }
+        return history.getEntryFromHistory(id)?.let { Change.fromHistoryEntry(it) }
     }
 
     fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> = consensusProtocol.getChangeResult(changeId)
         ?: gpacProtocol.getChangeResult(changeId)
-        ?: throw RuntimeException("Change doesn't exist")
+        ?: throw ChangeDoesntExist()
 
-    suspend fun addChange(change: Change, enforceGpac: Boolean = false): CompletableFuture<ChangeResult> {
-        val consensusChange: Boolean = allPeersFromMyPeerset(change.peers) && !enforceGpac
-        val cf = CompletableFuture<ChangeResult>()
-        queue.addLast(ProcessorJob(change, cf, !consensusChange))
-        channel.send(Unit)
-        return cf
-    }
-
+    suspend fun addChange(change: Change, enforceGpac: Boolean = false): CompletableFuture<ChangeResult> =
+        CompletableFuture<ChangeResult>().also {
+            val isConsensusChange: Boolean = allPeersFromMyPeerset(change.peers) && !enforceGpac
+            queue.addLast(ProcessorJob(change, it, isConsensusChange))
+            channel.send(Unit)
+        }
 
     suspend fun addChangeSync(
         change: Change,
@@ -66,9 +63,8 @@ class ApiV2Service(
         null
     }
 
-
     fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
-        val myPeerset = peers[config.peersetId]!!.plus(myAddress)
+        val myPeerset = peers[config.peersetId]!!.plus(myAddress).distinct()
         val newPeersString = peers
             .plus(config.peersetId to myPeerset)
             .map { it.value.joinToString(",") }

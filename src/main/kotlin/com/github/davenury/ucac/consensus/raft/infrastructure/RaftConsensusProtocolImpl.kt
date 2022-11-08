@@ -371,11 +371,8 @@ class RaftConsensusProtocolImpl(
     //  TODO: sync change will have to use Condition/wait/notifyAll
     private suspend fun proposeChangeToLedger(change: Change): CompletableFuture<ChangeResult> {
 
-//      TODO: it will be changed
         val id: Int
-
         val cf = CompletableFuture<ChangeResult>()
-
         mutex.withLock {
 
             if (state.changeAlreadyProposed(change)) {

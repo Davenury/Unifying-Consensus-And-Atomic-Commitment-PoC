@@ -209,6 +209,15 @@ public class ApplicationUcac constructor(
                     )
                 }
 
+                exception<ChangeDoesntExist> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.BadRequest,
+                        ErrorMessage(
+                            "Change doesn't exist"
+                        )
+                    )
+                }
+
                 exception<Throwable> { cause ->
                     log.error("Throwable has been thrown in Application: ", cause)
                     call.respond(

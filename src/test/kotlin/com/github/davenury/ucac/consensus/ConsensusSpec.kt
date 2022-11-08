@@ -61,7 +61,6 @@ class ConsensusSpec {
         }
 
         val peerApplyChange = SignalListener {
-            println("Change phaser: ${it.subject.getPeerName()}")
             expectThat(phaser.phase).isContainedIn(listOf(1, 2))
             phaser.arrive()
         }
@@ -78,7 +77,6 @@ class ConsensusSpec {
         val peerAddresses = peerset.getPeers()[0]
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
-        println("Phaser: ${phaser.phase}")
 
         // when: peer1 executed change
         val change1 = createChange(null)
@@ -88,7 +86,6 @@ class ConsensusSpec {
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
-        println("Phaser: ${phaser.phase}")
 
         askAllForChanges(peerAddresses).forEach { changes ->
             // then: there's one change, and it's change we've requested
@@ -106,7 +103,6 @@ class ConsensusSpec {
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
-        println("Phaser: ${phaser.phase}")
 
         askAllForChanges(peerAddresses).forEach { changes ->
             // then: there are two changes
@@ -174,7 +170,6 @@ class ConsensusSpec {
         peerset.getRunningApps().forEach {
             expect {
                 val leaderAddress = askForLeaderAddress(it)
-                println("For ${it.getBoundPort()} leader is $leaderAddress")
                 that(leaderAddress).isNotEqualTo(noneLeader)
             }
         }
@@ -469,7 +464,6 @@ class ConsensusSpec {
 
         val peerLeaderElected = SignalListener { electionPhaser.arrive() }
         val peerApplyChange = SignalListener {
-            println("Arrived $it")
             changePhaser.arrive()
         }
 
@@ -572,7 +566,6 @@ class ConsensusSpec {
 
 
 //      Divide network
-        println("${firstLeaderPort}-${firstLeaderAddress} -> old leader")
         isNetworkDivided = true
 
 
@@ -593,7 +586,6 @@ class ConsensusSpec {
         secondHalf.forEach {
             val app = addressToApplication[it]
             val newLeaderAddress = askForLeaderAddress(app!!)
-            println("$it -> $newLeaderAddress oldLeaderAddress: $firstLeaderAddress")
             expectThat(newLeaderAddress).isNotEqualTo(firstLeaderAddress)
         }
 

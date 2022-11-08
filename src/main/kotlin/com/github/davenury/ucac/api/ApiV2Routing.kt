@@ -61,14 +61,14 @@ fun Application.apiV2Routing(
 
     routing {
         post("/v2/change/async") {
-            val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"] != null
+            val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
             val change = call.receive<Change>()
             service.addChange(change, enforceGpac)
             call.respond(HttpStatusCode.Created)
         }
 
         post("/v2/change/sync") {
-            val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"] != null
+            val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
             val change = call.receive<Change>()
             val timeout = call.request.queryParameters["timeout"]
                 ?.let { Duration.parse(it) }
@@ -86,8 +86,11 @@ fun Application.apiV2Routing(
         get("/v2/change_status/{id}") {
             val id = call.parameters["id"]!!
 
-            val result = service.getChangeStatus(id).get()
-            respondChangeResult(result, call)
+            val result = service.getChangeStatus(id)
+
+            if (result.isDone) respondChangeResult(result.get(), call)
+            else call.respond("Change is processed")
+
         }
 
         get("/v2/change") {
