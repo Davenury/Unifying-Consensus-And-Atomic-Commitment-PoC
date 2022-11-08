@@ -25,18 +25,24 @@ class History {
         )
     }
 
-    fun addEntry(entry: HistoryEntry) {
+    fun addEntry(entry: HistoryEntry, swapParent: Boolean = false) {
         val newId = entry.getId()
         val expectedParentId = currentEntryId.get()
 
-        if (entry.getParentId() != expectedParentId) {
+        val newEntry: HistoryEntry = if (swapParent) {
+            IntermediateHistoryEntry(entry.getContent(), expectedParentId)
+        } else {
+            entry
+        }
+
+        if (newEntry.getParentId() != expectedParentId) {
             throw HistoryException(
                 "Wrong parent ID, expected ${expectedParentId}, " +
-                        "got ${entry.getParentId()}, entryId=${newId}"
+                        "got ${newEntry.getParentId()}, entryId=${newId}"
             )
         }
 
-        val existing = entries.put(newId, entry) != null
+        val existing = entries.put(newId, newEntry) != null
         var successful = false
         try {
             successful = currentEntryId.compareAndSet(expectedParentId, newId)

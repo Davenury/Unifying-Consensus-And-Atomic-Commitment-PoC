@@ -1,11 +1,14 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.ucac.*
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.gpac.Accept
 import com.github.davenury.ucac.gpac.Apply
 import com.github.davenury.ucac.gpac.TransactionResult
 import com.github.davenury.ucac.history.InitialHistoryEntry
+import com.github.davenury.ucac.httpClient
+import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
@@ -13,18 +16,15 @@ import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.*
 import org.slf4j.LoggerFactory
+import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.api.expectThrows
-import strikt.assertions.contains
-import strikt.assertions.isA
-import strikt.assertions.isEqualTo
-import strikt.assertions.isGreaterThanOrEqualTo
+import strikt.assertions.*
 import java.io.File
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicInteger
@@ -375,6 +375,82 @@ class MultiplePeersetSpec {
             apps.stopApps()
         }
 
+    @Test
+    fun `should be able to execute change in two different peersets even if changes in peersets are different`() =
+        runBlocking {
+            val firstChangePhaser = Phaser(3)
+            firstChangePhaser.register()
+            val secondChangePhaser = Phaser(5)
+            secondChangePhaser.register()
+            val finalChangePhaser = Phaser(8)
+            finalChangePhaser.register()
+
+            val firstPeersetListener = SignalListener {
+                if (it.change!! is AddUserChange) {
+                    firstChangePhaser.arrive()
+                } else if (it.change is AddRelationChange) {
+                    finalChangePhaser.arrive()
+                }
+            }
+
+            val secondPeersetListener = SignalListener {
+                if (it.change!! is AddGroupChange) {
+                    secondChangePhaser.arrive()
+                } else if (it.change is AddRelationChange) {
+                    finalChangePhaser.arrive()
+                }
+            }
+
+            val apps = TestApplicationSet(
+                listOf(3, 5),
+                signalListeners = List(3) { it + 1 to mapOf(Signal.OnHandlingApplyEnd to firstPeersetListener) }.toMap()
+                        + List(5) { it + 4 to mapOf(Signal.OnHandlingApplyEnd to secondPeersetListener) }.toMap()
+            )
+            val peers = apps.getPeers()
+
+            // given - change in first peerset
+            val someChange = AddUserChange(InitialHistoryEntry.getId(), "firstUserName", listOf())
+            expectCatching {
+                executeChange("http://${peers[0][0]}/gpac/create_change", someChange)
+            }.isSuccess()
+
+            firstChangePhaser.arriveAndAwaitAdvance()
+
+            // and - change in second peerset
+            expectCatching {
+                executeChange(
+                    "http://${peers[1][0]}/gpac/create_change",
+                    AddGroupChange(InitialHistoryEntry.getId(), "firstGroup", listOf())
+                )
+            }.isSuccess()
+
+            secondChangePhaser.arriveAndAwaitAdvance()
+
+            val lastChange = askForChanges(peers[0][0]).last()
+
+            // when - executing change between two peersets
+            val addRelationChange = AddRelationChange(
+                lastChange.toHistoryEntry().getId(),
+                "firstUserName",
+                "firstGroup",
+                listOf(peers[1][0])
+            )
+
+            expectCatching {
+                executeChange("http://${peers[0][0]}/gpac/create_change", addRelationChange)
+            }.isSuccess()
+
+            finalChangePhaser.arriveAndAwaitAdvance()
+
+            askAllForChanges(peers.flatten()).let {
+                it.forEach {
+                    (it.last() as AddRelationChange).let {
+                        expectThat(it.from).isEqualTo(addRelationChange.from)
+                        expectThat(it.to).isEqualTo(addRelationChange.to)
+                    }
+                }
+            }
+        }
 
     private suspend fun executeChange(uri: String, change: Change): HttpResponse =
         testHttpClient.post(uri) {

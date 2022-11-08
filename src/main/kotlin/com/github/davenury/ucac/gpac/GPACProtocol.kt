@@ -84,7 +84,8 @@ class GPACProtocolImpl(
         transactionBlocker.assertICanSendElectedYou()
 
         if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber, message.ballotNumber)
-        val initVal = if (history.isEntryCompatible(message.change.toHistoryEntry())) Accept.COMMIT else Accept.ABORT
+
+        val initVal = if (!shouldCheckForCompatibility(message.change.peers) || history.isEntryCompatible(message.change.toHistoryEntry())) Accept.COMMIT else Accept.ABORT
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal, change = message.change)
 
@@ -147,7 +148,7 @@ class GPACProtocolImpl(
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
             }
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
-                history.addEntry(message.change.toHistoryEntry())
+                history.addEntry(message.change.toHistoryEntry(), !shouldCheckForCompatibility(message.change.peers))
             }
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = message.change)
@@ -157,6 +158,10 @@ class GPACProtocolImpl(
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
         }
+    }
+
+    private fun shouldCheckForCompatibility(peers: List<String>): Boolean {
+        return peers.size == 1
     }
 
     private fun transactionWasAppliedBefore() =
