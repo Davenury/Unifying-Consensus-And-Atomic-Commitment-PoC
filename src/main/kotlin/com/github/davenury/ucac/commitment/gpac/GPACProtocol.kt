@@ -85,7 +85,6 @@ class GPACProtocolImpl(
         transactionBlocker.assertICanSendElectedYou()
 
         if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber, message.ballotNumber)
-
         val initVal = if (!shouldCheckForCompatibility(message.change.peers) || history.isEntryCompatible(message.change.toHistoryEntry())) Accept.COMMIT else Accept.ABORT
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal, change = message.change)
