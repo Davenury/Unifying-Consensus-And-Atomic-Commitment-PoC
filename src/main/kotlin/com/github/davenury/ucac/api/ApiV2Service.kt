@@ -42,7 +42,7 @@ class ApiV2Service(
 
     fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> = consensusProtocol.getChangeResult(changeId)
         ?: gpacProtocol.getChangeResult(changeId)
-        ?: throw ChangeDoesntExist()
+        ?: throw ChangeDoesntExist(changeId)
 
     suspend fun addChange(change: Change, enforceGpac: Boolean = false): CompletableFuture<ChangeResult> =
         CompletableFuture<ChangeResult>().also {

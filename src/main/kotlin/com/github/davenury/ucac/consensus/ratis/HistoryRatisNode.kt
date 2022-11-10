@@ -5,6 +5,8 @@ import com.github.davenury.ucac.common.Change
 import com.github.davenury.ucac.common.ChangeResult
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.history.History
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.*
 import java.util.concurrent.CompletableFuture
@@ -24,6 +26,8 @@ class HistoryRatisNode(
     ),
     ConsensusProtocol {
 
+    private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
+
     @Deprecated("use proposeChangeAsync")
     override suspend fun proposeChange(change: Change): ChangeResult {
         val result = applyTransaction(change.toHistoryEntry().serialize())
@@ -31,14 +35,22 @@ class HistoryRatisNode(
     }
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
-        TODO("Not yet implemented")
+
+        val cf = CompletableFuture<ChangeResult>()
+        val changeId = change.toHistoryEntry().getId()
+        changeIdToCompletableFuture[changeId] = cf
+
+        GlobalScope.launch {
+            val result = applyTransaction(change.toHistoryEntry().serialize())
+            val changeResult = if (result == "ERROR") ChangeResult(ChangeResult.Status.CONFLICT) else ChangeResult(ChangeResult.Status.SUCCESS)
+            changeIdToCompletableFuture[changeId]!!.complete(changeResult)
+        }
+        return cf
     }
 
     override fun getState(): History {
         return history
     }
 
-    override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult> {
-        TODO("Not yet implemented")
-    }
+    override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? = changeIdToCompletableFuture[changeId]
 }

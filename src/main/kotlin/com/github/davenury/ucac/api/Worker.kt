@@ -32,10 +32,8 @@ class Worker(
                 job.completableFuture.complete(result.await())
             }
         } catch (e: Exception) {
-            when (e) {
-                is InterruptedException -> {
-                    logger.debug("Worker interrupted")
-                }
+            if (e is InterruptedException) {
+                logger.debug("Worker interrupted")
             }
             processingQueue()
         }

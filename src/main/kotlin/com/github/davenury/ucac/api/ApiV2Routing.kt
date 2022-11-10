@@ -89,7 +89,7 @@ fun Application.apiV2Routing(
             val result = service.getChangeStatus(id)
 
             if (result.isDone) respondChangeResult(result.get(), call)
-            else call.respond("Change is processed")
+            else call.respond("Change is being processed")
 
         }
 
