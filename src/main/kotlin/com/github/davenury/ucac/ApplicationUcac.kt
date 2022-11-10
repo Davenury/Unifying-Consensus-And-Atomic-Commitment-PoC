@@ -213,7 +213,7 @@ public class ApplicationUcac constructor(
                     call.respond(
                         status = HttpStatusCode.BadRequest,
                         ErrorMessage(
-                            "Change doesn't exist"
+                            cause.message!!
                         )
                     )
                 }
