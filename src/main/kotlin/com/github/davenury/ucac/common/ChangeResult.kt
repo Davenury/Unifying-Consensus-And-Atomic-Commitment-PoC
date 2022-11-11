@@ -1,7 +1,10 @@
 package com.github.davenury.ucac.common
 
+import java.lang.Exception
+
 data class ChangeResult(
     val status: Status,
+    val exception: Exception? = null
 ) {
     enum class Status {
         /**
@@ -20,5 +23,10 @@ data class ChangeResult(
          * within the time limit.
          */
         TIMEOUT,
+
+        /**
+         * Processing change failed with exception.
+         */
+        EXCEPTION,
     }
 }

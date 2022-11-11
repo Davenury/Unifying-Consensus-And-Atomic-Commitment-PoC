@@ -75,8 +75,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
                     null
                 }
             }
-        }
-            .also { logger.info("Got responses: $it") }
+        }.also { logger.info("Got responses: $it") }
 
         return ResponsesWithErrorAggregation(
             responses,

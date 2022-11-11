@@ -12,4 +12,6 @@ interface ConsensusProtocol {
     suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult>
 
     fun getState(): History
+
+    fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>?
 }

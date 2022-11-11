@@ -24,7 +24,7 @@ import java.util.concurrent.Executors
 
 /** @author Kamil Jarosz */
 class RaftConsensusProtocolImpl(
-    history: History,
+    private val history: History,
     private val peerId: Int,
     private val peersetId: Int,
     private var peerAddress: String,
@@ -50,7 +50,7 @@ class RaftConsensusProtocolImpl(
     //    DONE: Use only one mutex
     private val mutex = Mutex()
     private var executorService: ExecutorCoroutineDispatcher? = null
-    private val ledgerIdToCompletableFuture: MutableMap<Int, CompletableFuture<ChangeResult>> = mutableMapOf()
+    private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
     private fun otherConsensusPeers(): List<String> {
         return allPeers.filter { it != peerAddress }
@@ -180,14 +180,12 @@ class RaftConsensusProtocolImpl(
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
-
         if (prevLogIndex != null && prevLogTerm != null && !state.checkIfItemExist(prevLogIndex, prevLogTerm)) {
             logger.info("${this.peerId} - HandleHeartbeat from $peerId - I don't have some changes need update")
             state.removeNotAcceptedItems(prevLogIndex, prevLogTerm)
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
         val anyChanges: LedgerUpdateResult
-
 
         mutex.withLock {
             anyChanges = state.updateLedger(acceptedChanges, proposedChanges)
@@ -270,7 +268,10 @@ class RaftConsensusProtocolImpl(
         val acceptedIndexes: List<Int> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
 
         logger.info("$peerId accept indexes: $acceptedIndexes")
-        state.getProposedChanges(acceptedIndexes).forEach {
+
+        val acceptedChanges = state.getProposedChanges(acceptedIndexes)
+
+        acceptedChanges.forEach {
             signalPublisher.signal(
                 Signal.ConsensusAfterProposingChange,
                 this,
@@ -282,9 +283,8 @@ class RaftConsensusProtocolImpl(
 
         state.acceptItems(acceptedIndexes)
         voteContainer.removeChanges(acceptedIndexes)
-
-        acceptedIndexes
-            .map { ledgerIdToCompletableFuture[it] }
+        acceptedChanges
+            .map { changeIdToCompletableFuture[it.toHistoryEntry().getId()] }
             .forEach { it!!.complete(ChangeResult(ChangeResult.Status.SUCCESS)) }
 
     }
@@ -368,19 +368,21 @@ class RaftConsensusProtocolImpl(
         }
     }
 
-
-    private suspend fun syncProposeChangeToLedger(change: Change): ChangeResult =
-        asyncProposeChangeToLedger(change).await()
-
     //  TODO: sync change will have to use Condition/wait/notifyAll
-    private suspend fun asyncProposeChangeToLedger(change: Change): CompletableFuture<ChangeResult> {
+    private suspend fun proposeChangeToLedger(change: Change): CompletableFuture<ChangeResult> {
 
-//      TODO: it will be changed
         val id: Int
-
+        val cf = CompletableFuture<ChangeResult>()
         mutex.withLock {
+
             if (state.changeAlreadyProposed(change)) {
-                return ledgerIdToCompletableFuture[state.getLedgerIdByChange(change)]!!
+                return changeIdToCompletableFuture[change.toHistoryEntry().getId()]!!
+            }
+
+            if (!history.isEntryCompatible(change.toHistoryEntry())) {
+                changeIdToCompletableFuture[change.toHistoryEntry().getId()] = cf
+                cf.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                return cf
             }
 
             timer.cancelCounting()
@@ -388,8 +390,7 @@ class RaftConsensusProtocolImpl(
             id = state.proposeChange(change, currentTerm)
         }
         voteContainer.initializeChange(id)
-        val cf = CompletableFuture<ChangeResult>()
-        ledgerIdToCompletableFuture[id] = cf
+        changeIdToCompletableFuture[change.toHistoryEntry().getId()] = cf
         return cf
     }
 
@@ -436,7 +437,7 @@ class RaftConsensusProtocolImpl(
         logger.info("$peerId received change: $change")
 
         return when {
-            amILeader() -> asyncProposeChangeToLedger(change)
+            amILeader() -> proposeChangeToLedger(change)
             votedFor != null -> sendRequestToLeader(change)
 //              TODO: Change after queue
             else ->
@@ -469,6 +470,9 @@ class RaftConsensusProtocolImpl(
         }
         return history
     }
+
+    override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
+        changeIdToCompletableFuture[changeId]
 
 
     override fun stop() {
