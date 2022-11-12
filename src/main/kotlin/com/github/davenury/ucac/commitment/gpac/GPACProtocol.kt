@@ -1,9 +1,13 @@
 package com.github.davenury.ucac.commitment.gpac
 
-import com.github.davenury.ucac.*
+import com.github.davenury.ucac.GpacConfig
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.AtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.history.History
+import com.github.davenury.ucac.history.IntermediateHistoryEntry
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import org.slf4j.LoggerFactory
 import java.time.Duration
@@ -47,7 +51,8 @@ class GPACProtocolImpl(
 ) : GPACProtocol {
 
     var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, Duration.ZERO, ctx)
-    var retriesTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
+    var retriesTimer: ProtocolTimer =
+        ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
     private val maxLeaderElectionTries = gpacConfig.maxLeaderElectionTries
 
     private var myBallotNumber: Int = 0
@@ -85,7 +90,8 @@ class GPACProtocolImpl(
         transactionBlocker.assertICanSendElectedYou()
 
         if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber, message.ballotNumber)
-        val initVal = if (!shouldCheckForCompatibility(message.change.peers) || history.isEntryCompatible(message.change.toHistoryEntry())) Accept.COMMIT else Accept.ABORT
+        val initVal =
+            if (!shouldCheckForCompatibility(message.change.peers) || history.isEntryCompatible(message.change.toHistoryEntry())) Accept.COMMIT else Accept.ABORT
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal, change = message.change)
 
@@ -148,7 +154,7 @@ class GPACProtocolImpl(
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
             }
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
-                history.addEntry(message.change.toHistoryEntry())
+                addChangeToHistory(message.change)
             }
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = message.change)
@@ -160,6 +166,20 @@ class GPACProtocolImpl(
         }
     }
 
+    private fun addChangeToHistory(change: Change) {
+        change.toHistoryEntry().let {
+                if (shouldCheckForCompatibility(change.peers)) {
+                    it
+                } else {
+                    IntermediateHistoryEntry(it.getContent(), history.getCurrentEntry().getId())
+                }
+            }.let {
+                history.addEntry(it)
+            }
+    }
+
+    // This function determines if we should check for HistoryEntry compability
+    // TODO - change its implementation to one based on peersetsIds when change has peersetId
     private fun shouldCheckForCompatibility(peers: List<String>): Boolean {
         return peers.size == 1
     }
