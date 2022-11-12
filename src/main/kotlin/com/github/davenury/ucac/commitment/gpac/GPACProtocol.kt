@@ -4,6 +4,7 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.history.History
+import com.github.davenury.ucac.history.IntermediateHistoryEntry
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.GlobalScope
@@ -103,7 +104,8 @@ class GPACProtocolImpl(
         transactionBlocker.assertICanSendElectedYou()
 
         if (!this.checkBallotNumber(message.ballotNumber)) throw NotElectingYou(myBallotNumber, message.ballotNumber)
-        val initVal = if (history.isEntryCompatible(message.change.toHistoryEntry())) Accept.COMMIT else Accept.ABORT
+        val initVal =
+            if (!shouldCheckForCompatibility(message.change.peers) || history.isEntryCompatible(message.change.toHistoryEntry())) Accept.COMMIT else Accept.ABORT
 
         transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal, change = message.change)
 
@@ -167,7 +169,7 @@ class GPACProtocolImpl(
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
             }
             if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
-                history.addEntry(message.change.toHistoryEntry())
+                addChangeToHistory(message.change)
             }
             changeIdToCompletableFuture[changeId]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
         } finally {
@@ -179,9 +181,24 @@ class GPACProtocolImpl(
             changeConflicts(message.change)
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
         }
-
-
     }
+
+    private fun addChangeToHistory(change: Change) {
+        change.toHistoryEntry().let {
+            if (shouldCheckForCompatibility(change.peers)) {
+                it
+            } else {
+                IntermediateHistoryEntry(it.getContent(), history.getCurrentEntry().getId())
+            }
+        }.let {
+            history.addEntry(it)
+        }
+    }
+
+    // This function determines if we should check for HistoryEntry compability
+    // TODO - change its implementation to one based on peersetsIds when change has peersetId
+    private fun shouldCheckForCompatibility(peers: List<String>): Boolean
+        = peers.size == 1
 
     private fun transactionWasAppliedBefore() =
         Changes.fromHistory(history).any { it.acceptNum == this.transaction.acceptNum }
