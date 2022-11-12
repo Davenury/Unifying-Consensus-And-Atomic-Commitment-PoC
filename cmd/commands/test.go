@@ -45,13 +45,14 @@ func test() {
 	}
 
 	pods, err := client.CoreV1().Pods(testNamespace).List(context.Background(), metav1.ListOptions{
-		LabelSelector: "app.name=peer1-peerset1-app",
+		LabelSelector: "app.name=peer0-peerset0-app",
 	})
 
-	var podName string
-	for _, pod := range pods.Items {
-		podName = pod.Name
-	}
+    if len(pods.Items) != 1 {
+        panic(fmt.Sprintf("Expected one pod for application, got %n", len(pods.Items)))
+    }
+
+	var podName = pods.Items[0].Name
 
 	kpow := kpoward.New(config, podName, 8080)
 	kpow.SetNamespace(testNamespace)
@@ -66,15 +67,19 @@ func test() {
 		}
 		requestData, err := json.Marshal(request)
 		if err != nil {
-			return err
+			panic(err)
 		}
 
 		resp, err := http.Post(fmt.Sprintf("http://localhost:%d/v2/change", int(localPort)), "application/json", bytes.NewBuffer(requestData))
 		if err != nil {
-			return err
+			panic(err)
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+        }
+
 		fmt.Printf("Response from post - Status Code: %d, Response body: %s\n", resp.StatusCode, string(body))
 		resp.Body.Close()
 
@@ -105,12 +110,10 @@ func test() {
 			}
 
 			iteration++
-	
 		}
 
 		return errors.New("Change wasn't applied")
 	}); err != nil {
 		panic(err)
 	}
-
 }

@@ -6,8 +6,8 @@ metadata:
 spec:
   selector:
     #app.kubernetes.io/name: "peer1-from-peerset1"
-    peerId: "1"
-    peersetId: "1"
+    peerId: "0"
+    peersetId: "0"
   ports:
     - port: 8080
       targetPort: 8080

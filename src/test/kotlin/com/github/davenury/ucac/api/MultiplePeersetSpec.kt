@@ -58,7 +58,7 @@ class MultiplePeersetSpec {
 
         val apps = TestApplicationSet(
             listOf(3, 3),
-            signalListeners = (0..6).associateWith { signalListenersForCohort }
+            signalListeners = (0..5).associateWith { signalListenersForCohort }
         )
 
         val peers = apps.getPeers()
@@ -81,7 +81,6 @@ class MultiplePeersetSpec {
 
     @Test
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
-
         val maxRetriesPhaser = Phaser(1)
         maxRetriesPhaser.register()
         val peerReachedMaxRetries = SignalListener {
@@ -102,8 +101,8 @@ class MultiplePeersetSpec {
 
         val apps = TestApplicationSet(
             listOf(3, 3),
-            appsToExclude = listOf(4, 5, 6),
-            signalListeners = (0..6).associateWith { signalListenersForCohort },
+            appsToExclude = listOf(3, 4, 5),
+            signalListeners = (0..5).associateWith { signalListenersForCohort },
         )
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -145,9 +144,10 @@ class MultiplePeersetSpec {
     @Disabled("Servers are not able to stop here")
     @Test
     fun `transaction should not pass when more than half peers of any peerset aren't responding`(): Unit = runBlocking {
-
-        val appsToExclude = listOf(3, 6, 7, 8)
-        val apps = TestApplicationSet(listOf(3, 5), appsToExclude = appsToExclude)
+        val apps = TestApplicationSet(
+             listOf(3, 5),
+            appsToExclude = listOf(2, 5, 6, 7),
+        )
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
 
@@ -197,8 +197,9 @@ class MultiplePeersetSpec {
 
         val apps = TestApplicationSet(
             listOf(3, 5),
-            appsToExclude = listOf(3, 7, 8),
-            signalListeners = (1..8).associateWith { signalListenersForCohort })
+            appsToExclude = listOf(2, 6, 7),
+            signalListeners = (0..7).associateWith { signalListenersForCohort },
+        )
         val peers = apps.getPeers()
         val change = change(apps.getPeers()[1][0])
 
@@ -229,7 +230,7 @@ class MultiplePeersetSpec {
             }
             val apps = TestApplicationSet(
                 listOf(3, 5),
-                signalListeners = (4..8).zip(List(5) { mapOf(Signal.OnHandlingAgreeEnd to failAction) }).toMap()
+                signalListeners = (3..7).associateWith { mapOf(Signal.OnHandlingAgreeEnd to failAction) },
             )
             val peers = apps.getPeers()
             val otherPeer = apps.getPeers()[1][0]
@@ -274,14 +275,14 @@ class MultiplePeersetSpec {
         val apps = TestApplicationSet(
             listOf(3, 5),
             signalListeners = mapOf(
-                1 to signalListenersForLeaders,
+                0 to signalListenersForLeaders,
+                1 to signalListenersForCohort,
                 2 to signalListenersForCohort,
                 3 to signalListenersForCohort,
                 4 to signalListenersForCohort,
                 5 to signalListenersForCohort,
                 6 to signalListenersForCohort,
                 7 to signalListenersForCohort,
-                8 to signalListenersForCohort,
             )
         )
         val peers = apps.getPeers()
@@ -356,14 +357,14 @@ class MultiplePeersetSpec {
             val apps = TestApplicationSet(
                 listOf(3, 5),
                 signalListeners = mapOf(
-                    1 to signalListenersForLeader,
+                    0 to signalListenersForLeader,
+                    1 to signalListenersForCohort,
                     2 to signalListenersForCohort,
                     3 to signalListenersForCohort,
                     4 to signalListenersForCohort,
                     5 to signalListenersForCohort,
                     6 to signalListenersForCohort,
                     7 to signalListenersForCohort,
-                    8 to signalListenersForCohort,
                 )
             )
             val peers = apps.getPeers()

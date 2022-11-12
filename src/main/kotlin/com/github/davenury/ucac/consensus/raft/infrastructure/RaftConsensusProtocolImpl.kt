@@ -69,7 +69,7 @@ class RaftConsensusProtocolImpl(
         if (role == RaftRole.Leader) filteredOtherPeers.filter { !otherConsensusPeers().contains(it) }
             .forEach { launchHeartBeatToPeer(it) }
         allPeers = otherPeers.plus(peerAddress)
-        peerIdToAddress = (1..(otherPeers.size + 1))
+        peerIdToAddress = (0..otherPeers.size)
             .filter { it != peerId }
             .zip(otherPeers)
             .associate { it.first to it.second }
