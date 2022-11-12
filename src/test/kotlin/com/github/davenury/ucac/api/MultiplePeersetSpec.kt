@@ -1,11 +1,13 @@
 package com.github.davenury.ucac.api
 
+import com.github.davenury.ucac.*
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
+import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.httpClient
 import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.TestApplicationSet
@@ -22,11 +24,13 @@ import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
+import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
+import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -119,7 +123,7 @@ class MultiplePeersetSpec {
         val result = executeChange("http://${peers[0][0]}/v2/change/async", change)
         change = change.withAddress(peers[0][0])
 
-        expectThat(result.status).isEqualTo(HttpStatusCode.Created)
+        expectThat(result.status).isEqualTo(HttpStatusCode.Accepted)
 
         maxRetriesPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -128,9 +132,8 @@ class MultiplePeersetSpec {
             expectThat(changes.size).isEqualTo(0)
         }
 
-
         try {
-            val response: HttpResponse = testHttpClient.get(
+            testHttpClient.get<HttpResponse>(
                 "http://${peers[0][0]}/v2/change_status/${
                     change.toHistoryEntry().getId()
                 }"
@@ -150,7 +153,7 @@ class MultiplePeersetSpec {
     @Test
     fun `transaction should not pass when more than half peers of any peerset aren't responding`(): Unit = runBlocking {
         val apps = TestApplicationSet(
-             listOf(3, 5),
+            listOf(3, 5),
             appsToExclude = listOf(2, 5, 6, 7),
         )
         val peers = apps.getPeers()
@@ -288,7 +291,13 @@ class MultiplePeersetSpec {
                 5 to signalListenersForCohort,
                 6 to signalListenersForCohort,
                 7 to signalListenersForCohort,
-            )
+            ),
+            configOverrides = (0..5).associateWith {
+                mapOf(
+                    "gpac.leaderFailDelay" to Duration.ofSeconds(0).toString(),
+                    "gpac.initialRetriesDelay" to Duration.ofSeconds(if (it == 1) 0 else 100).toString(),
+                )
+            }
         )
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
@@ -296,6 +305,13 @@ class MultiplePeersetSpec {
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
             executeChange("http://${peers[0][0]}/v2/change/sync", change(otherPeer))
+        }.subject.let { e ->
+            // TODO rewrite — we cannot model leader failure as part of API
+            expect {
+                that(e.response.status).isEqualTo(HttpStatusCode.InternalServerError)
+                that(e.response.readText()).contains("Change not applied due to timeout")
+                that(e.response.readText()).contains("Leader failed after ft-agree")
+            }
         }
 
         applyCommittedPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -322,7 +338,7 @@ class MultiplePeersetSpec {
                         accept(ContentType.Application.Json)
                         body = Apply(
                             it.transaction!!.ballotNumber, true, Accept.COMMIT,
-                            change(it.peers[1][0]),
+                            change(it.peers[1][0].address),
                         )
                     }.also {
                         logger.info("Got response test apply ${it.status.value}")
@@ -336,7 +352,7 @@ class MultiplePeersetSpec {
                         accept(ContentType.Application.Json)
                         body = Apply(
                             it.transaction!!.ballotNumber, true, Accept.COMMIT,
-                            change(it.peers[1][0]),
+                            change(it.peers[1][0].address),
                         )
                     }.also {
                         logger.info("Got response test apply ${it.status.value}")
@@ -490,9 +506,6 @@ class MultiplePeersetSpec {
         // leader should enrich himself
         listOf(otherPeersetPeer)
     )
-
-    private fun enrichChange(change: Change, peer: String) =
-        change.withAddress(peer)
 
     private fun deleteRaftHistories() {
         File(System.getProperty("user.dir")).listFiles { pathname -> pathname?.name?.startsWith("history") == true }

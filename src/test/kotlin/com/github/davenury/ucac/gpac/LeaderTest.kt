@@ -2,7 +2,6 @@ package com.github.davenury.ucac.gpac
 
 import com.github.davenury.common.AddUserChange
 import com.github.davenury.common.Change
-import com.github.davenury.common.TooFewResponsesException
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.GpacConfig
@@ -13,6 +12,8 @@ import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
 import com.github.davenury.ucac.commitment.gpac.TransactionBlockerImpl
+import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
@@ -24,7 +25,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import strikt.api.expectThat
-import strikt.api.expectThrows
 import strikt.assertions.isEqualTo
 import strikt.assertions.isNotNull
 import java.time.Duration
@@ -54,17 +54,16 @@ class LeaderTest {
     }
 
     @Test
-    fun `should throw TooFewResponsesException when not enough responses for agree message`() {
+    fun `should throw TooFewResponsesException when not enough responses for agree message`() = runBlocking {
         PeerTwo.stubForElectMe(10, Accept.COMMIT, 10, null, false)
         PeerThree.stubForElectMe(10, Accept.COMMIT, 10, null, false)
         PeerTwo.stubForNotAgree()
         PeerThree.stubForNotAgree()
 
-        expectThrows<TooFewResponsesException> {
-            val result = subject.proposeChangeAsync(change).await()
-            expectThat(result.exception).isNotNull()
-            throw result.exception!!
-        }
+        val result = subject.proposeChangeAsync(change).await()
+        expectThat(result.detailedMessage).isNotNull()
+        expectThat(result.detailedMessage).isEqualTo("Transaction failed due to too few responses of ft phase.")
+
         PeerTwo.verifyAgreeStub(1)
         PeerThree.verifyAgreeStub(1)
     }
@@ -100,16 +99,17 @@ class LeaderTest {
             ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
             client,
             transactionBlocker,
-            myPeersetId = 1,
-            myNodeId = 0,
-            allPeers = mapOf(
-                1 to listOf(
-                    "localhost:8081",
-                    "localhost:${PeerTwo.getPort()}",
-                    "localhost:${PeerThree.getPort()}"
+            peerResolver = PeerResolver(
+                GlobalPeerId(1, 0),
+                listOf(
+                    listOf(),
+                    listOf(
+                        "localhost:8081",
+                        "localhost:${PeerTwo.getPort()}",
+                        "localhost:${PeerThree.getPort()}"
+                    )
                 )
             ),
-            myAddress = "localhost:8081",
             signalPublisher = SignalPublisher(
                 mapOf(
                     Signal.ReachedMaxRetries to peerReachedMaxRetries

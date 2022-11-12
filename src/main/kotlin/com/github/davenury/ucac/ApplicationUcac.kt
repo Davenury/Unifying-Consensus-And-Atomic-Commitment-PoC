@@ -9,7 +9,6 @@ import com.github.davenury.ucac.commitment.gpac.GPACProtocol
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
 import com.github.davenury.ucac.commitment.gpac.TransactionBlockerImpl
-import com.github.davenury.ucac.common.GlobalPeerId
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -35,7 +34,7 @@ import kotlinx.coroutines.runBlocking
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
-import java.io.Closeable
+import org.slf4j.event.Level
 import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
@@ -84,6 +83,7 @@ class ApplicationUcac constructor(
     private val ctx: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
     private lateinit var gpacProtocol: GPACProtocol
     private var service: ApiV2Service? = null
+    private val peerResolver = config.newPeerResolver()
 
     init {
         if (inheritMdc) {
@@ -116,43 +116,40 @@ class ApplicationUcac constructor(
 
         val raftProtocolClientImpl = RaftProtocolClientImpl()
 
-        consensusProtocol = RaftConsensusProtocolImpl(
-            history,
-            config.globalPeerId(),
-            config.host + ":" + config.port,
-            ctx,
-            config.peerAddresses()[config.peersetId],
+            consensusProtocol = RaftConsensusProtocolImpl(
+                history,
+                config.host + ":" + config.port,
+                ctx,
+                peerResolver,
             signalPublisher,
             raftProtocolClientImpl,
             heartbeatTimeout = config.raft.heartbeatTimeout,
             heartbeatDelay = config.raft.leaderTimeout,
         )
 
-        val protocolClient = GPACProtocolClientImpl()
-        val transactionBlocker = TransactionBlockerImpl()
-        val myAddress = "${config.host}:${config.port}"
-        gpacProtocol =
-            GPACProtocolImpl(
+            val protocolClient = GPACProtocolClientImpl()
+            val transactionBlocker = TransactionBlockerImpl()
+            gpacProtocol =
+                GPACProtocolImpl(
+                    history,
+                    config.gpac,
+                    ctx,
+                    protocolClient,
+                    transactionBlocker,
+                    signalPublisher,
+                    peerResolver,
+                )
+
+            service = ApiV2Service(
+                gpacProtocol,
+                consensusProtocol as RaftConsensusProtocolImpl,
                 history,
-                config.gpac,
-                ctx,
-                protocolClient,
-                transactionBlocker,
-                signalPublisher,
-                allPeers = config.peerAddresses().withIndex().associate { it.index to it.value },
-                myPeersetId = config.peersetId,
-                myNodeId = config.peerId,
-                myAddress = myAddress
+                config,
+                peerResolver,
             )
 
-        service = ApiV2Service(
-            gpacProtocol,
-            consensusProtocol as RaftConsensusProtocolImpl,
-            history,
-            config,
-        )
-
         install(CallLogging) {
+            level = Level.DEBUG
             mdc.forEach { mdcEntry ->
                 mdc(mdcEntry.key) { mdcEntry.value }
             }
@@ -171,80 +168,57 @@ class ApplicationUcac constructor(
             )
         }
 
-        install(StatusPages) {
-            exception<MissingParameterException> { cause ->
-                call.respond(
-                    status = HttpStatusCode.UnprocessableEntity,
-                    ErrorMessage("Missing parameter: ${cause.message}")
-                )
-            }
-            exception<UnknownOperationException> { cause ->
-                call.respond(
-                    status = HttpStatusCode.UnprocessableEntity,
-                    ErrorMessage(
-                        "Unknown operation to perform: ${cause.desiredOperationName}"
+            install(StatusPages) {
+                exception<MissingParameterException> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.UnprocessableEntity,
+                        ErrorMessage("Missing parameter: ${cause.message}")
                     )
-                )
-            }
-            exception<NotElectingYou> { cause ->
-                call.respond(
-                    status = HttpStatusCode.UnprocessableEntity,
-                    ErrorMessage(
-                        "You're not valid leader-to-be. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
+                }
+                exception<UnknownOperationException> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.UnprocessableEntity,
+                        ErrorMessage(
+                            "Unknown operation to perform: ${cause.desiredOperationName}"
+                        )
                     )
-                )
-            }
-            exception<NotValidLeader> { cause ->
-                call.respond(
-                    status = HttpStatusCode.UnprocessableEntity,
-                    ErrorMessage(
-                        "You're not valid leader. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
+                }
+                exception<NotElectingYou> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.UnprocessableEntity,
+                        ErrorMessage(
+                            "You're not valid leader-to-be. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
+                        )
                     )
-                )
-            }
-            exception<MaxTriesExceededException> {
-                call.respond(
-                    HttpStatusCode.ServiceUnavailable,
-                    ErrorMessage(
-                        "Transaction failed due to too many retries of becoming a leader."
+                }
+                exception<NotValidLeader> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.UnprocessableEntity,
+                        ErrorMessage(
+                            "You're not valid leader. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
+                        )
                     )
-                )
-            }
-            exception<TooFewResponsesException> {
-                call.respond(
-                    HttpStatusCode.ServiceUnavailable,
-                    ErrorMessage(
-                        "Transaction failed due to too few responses of ft phase."
+                }
+                exception<HistoryCannotBeBuildException> {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorMessage(
+                            "Change you're trying to perform is not applicable with current state"
+                        )
                     )
-                )
-            }
-            exception<HistoryCannotBeBuildException> {
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    ErrorMessage(
-                        "Change you're trying to perform is not applicable with current state"
+                }
+                exception<AlreadyLockedException> {
+                    call.respond(
+                        HttpStatusCode.Conflict,
+                        ErrorMessage(
+                            "We cannot perform your transaction, as another transaction is currently running"
+                        )
                     )
-                )
-            }
-            exception<AlreadyLockedException> {
-                call.respond(
-                    HttpStatusCode.Conflict,
-                    ErrorMessage(
-                        "We cannot perform your transaction, as another transaction is currently running"
-                    )
-                )
-            }
+                }
 
-            exception<PeerNotInPeersetException> { cause ->
-                call.respond(
-                    status = HttpStatusCode.BadRequest,
-                    ErrorMessage(cause.message!!)
-                )
-            }
-
-            exception<ChangeDoesntExist> { cause ->
-                call.respond(
-                    status = HttpStatusCode.BadRequest,
+                exception<ChangeDoesntExist> { cause ->
+                    call.respond(
+                        status = HttpStatusCode.NotFound,
                     ErrorMessage(
                         cause.message!!
                     )
@@ -267,15 +241,15 @@ class ApplicationUcac constructor(
         consensusProtocolRouting(consensusProtocol!!)
 
         runBlocking {
-            consensusProtocol?.begin()
+            consensusProtocol!!.begin()
         }
     }
 
-    fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
-        gpacProtocol.setPeers(peers)
-        gpacProtocol.setMyAddress(myAddress)
-        consensusProtocol?.setOtherPeers(peers[config.peersetId]!!)
-        service?.setPeers(peers, myAddress)
+    fun setPeers(peers: List<List<String>>) {
+        withMdc {
+            logger.info("Setting peers ${peerResolver.getPeers()} -> $peers")
+            peerResolver.setPeers(peers)
+        }
     }
 
     fun startNonblocking() {

@@ -3,7 +3,9 @@ package com.github.davenury.ucac.utils
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.consensus.ConsensusSpec
 import com.github.davenury.ucac.createApplication
+import org.slf4j.LoggerFactory
 import java.util.*
 import kotlin.random.Random
 
@@ -64,17 +66,12 @@ class TestApplicationSet(
 
         apps
             .flatten()
-            .zip(peers.flatten())
             .filterIndexed { index, _ -> !appsToExclude.contains(index) }
-            .forEach { (app, peer) ->
-                peers
-                    .map { it.filterNot { it == peer } }
-                    .withIndex()
-                    .associate { it.index to it.value }
-                    .let {
-                        app.setPeers(it, peer)
-                    }
+            .forEach { app ->
+                app.setPeers(peers)
             }
+
+        logger.info("Apps ready")
     }
 
     private fun validateAppIds(
@@ -90,6 +87,7 @@ class TestApplicationSet(
     }
 
     fun stopApps(gracePeriodMillis: Long = 200, timeoutPeriodMillis: Long = 1000) {
+        logger.info("Stopping apps")
         apps.flatten().forEach { it.stop(gracePeriodMillis, timeoutPeriodMillis) }
     }
 
@@ -105,5 +103,6 @@ class TestApplicationSet(
 
     companion object {
         const val NON_RUNNING_PEER: String = "localhost:0"
+        private val logger = LoggerFactory.getLogger(TestApplicationSet::class.java)
     }
 }

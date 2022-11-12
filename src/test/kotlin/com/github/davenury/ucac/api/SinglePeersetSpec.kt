@@ -53,7 +53,7 @@ class SinglePeersetSpec {
 
         val signalListener = SignalListener {
             expectCatching {
-                executeChange("http://${it.peers[0][1]}/v2/change/sync?enforce_gpac=true", change(listOf()))
+                executeChange("http://${it.peers[0][1].address}/v2/change/sync?enforce_gpac=true", change(listOf()))
             }.isSuccess()
             signalExecuted.set(true)
             throw RuntimeException("Stop")
@@ -81,24 +81,24 @@ class SinglePeersetSpec {
             val changeAbortedPhaser = Phaser(1)
             changeAbortedPhaser.register()
 
-            val changeAborted = SignalListener {
-                changeAbortedPhaser.arrive()
-            }
-
-            val signalListener = SignalListener {
-                expectCatching {
-                    executeChange("http://${it.peers[0][1]}/v2/change/sync?enforce_gpac=true", change(listOf()))
-                }
-            }
+            val signalListenersForLeader = mapOf(
+                Signal.BeforeSendingApply to SignalListener {
+                    expectCatching {
+                        executeChange("http://${it.peers[0][1].address}/v2/change/sync?enforce_gpac=true", change(listOf()))
+                    }
+                },
+            )
 
             val signalListenersForCohort = mapOf(
-                Signal.ReachedMaxRetries to changeAborted,
+                Signal.ReachedMaxRetries to SignalListener {
+                    changeAbortedPhaser.arrive()
+                },
             )
 
             val apps = TestApplicationSet(
                 listOf(3),
                 signalListeners = mapOf(
-                    0 to mapOf(Signal.BeforeSendingApply to signalListener),
+                    0 to signalListenersForLeader,
                     1 to signalListenersForCohort,
                     2 to signalListenersForCohort,
                 ),
@@ -116,7 +116,7 @@ class SinglePeersetSpec {
             changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
             try {
-                val response: HttpResponse = testHttpClient.get(
+                testHttpClient.get<HttpResponse>(
                     "http://${peers[0][2]}/v2/change_status/${
                         change(listOf(peers[0][2])).toHistoryEntry().getId()
                     }"
@@ -126,8 +126,10 @@ class SinglePeersetSpec {
                 }
                 fail("executing change didn't fail")
             } catch (e: Exception) {
-                expectThat(e).isA<ServerResponseException>()
-                expectThat(e.message!!).contains("Transaction failed due to too many retries of becoming a leader.")
+                expect {
+                    that(e).isA<ServerResponseException>()
+                    that(e.message).isNotNull().contains("Transaction failed due to too many retries of becoming a leader.")
+                }
             }
 
             apps.stopApps()
@@ -141,7 +143,7 @@ class SinglePeersetSpec {
 
             val firstLeaderAction = SignalListener {
                 runBlocking {
-                    testHttpClient.post<Agreed>("http://${it.peers[0][1]}/ft-agree") {
+                    testHttpClient.post<Agreed>("http://${it.peers[0][1].address}/ft-agree") {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
                         body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, it.change!!)
@@ -265,8 +267,10 @@ class SinglePeersetSpec {
             accept(ContentType.Application.Json)
         }
 
-        expectThat(change).isA<AddGroupChange>()
-        expectThat((change as AddGroupChange).groupName).isEqualTo("name")
+        expect {
+            that(change).isA<AddGroupChange>()
+            that((change as AddGroupChange).groupName).isEqualTo("name")
+        }
 
         // and should not execute this change couple of times
         val changes = testHttpClient.get<Changes>("http://${peers[0][1]}/changes") {
@@ -274,9 +278,9 @@ class SinglePeersetSpec {
             accept(ContentType.Application.Json)
         }
 
-        // only one change and this change shouldn't be applied for 8082 two times
+        // only one change and this change shouldn't be applied two times
+        expectThat(changes.size).isGreaterThanOrEqualTo(1)
         expect {
-            that(changes.size).isGreaterThanOrEqualTo(1)
             that(changes[0]).isA<AddGroupChange>()
             that((changes[0] as AddGroupChange).groupName).isEqualTo("name")
         }

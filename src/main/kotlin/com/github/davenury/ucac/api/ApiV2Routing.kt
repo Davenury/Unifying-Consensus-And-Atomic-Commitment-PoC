@@ -1,7 +1,8 @@
 package com.github.davenury.ucac.api
 
 import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeCreationErrorMessage
+import com.github.davenury.common.ChangeCreationResponse
+import com.github.davenury.common.ChangeCreationStatus
 import com.github.davenury.common.ChangeResult
 import io.ktor.application.*
 import io.ktor.http.*
@@ -17,10 +18,11 @@ fun Application.apiV2Routing(
         when (result?.status) {
             ChangeResult.Status.SUCCESS -> {
                 call.respond(
-                    HttpStatusCode.Accepted,
-                    ChangeCreationErrorMessage(
+                    HttpStatusCode.Created,
+                    ChangeCreationResponse(
                         "Change applied",
-                        changeApplied = "true",
+                        detailedMessage = result.detailedMessage,
+                        changeStatus = ChangeCreationStatus.APPLIED,
                     ),
                 )
             }
@@ -28,31 +30,32 @@ fun Application.apiV2Routing(
             ChangeResult.Status.CONFLICT -> {
                 call.respond(
                     HttpStatusCode.Conflict,
-                    ChangeCreationErrorMessage(
+                    ChangeCreationResponse(
                         "Change conflicted",
-                        changeApplied = "false",
+                        detailedMessage = result.detailedMessage,
+                        changeStatus = ChangeCreationStatus.NOT_APPLIED,
                     ),
                 )
             }
 
             ChangeResult.Status.TIMEOUT -> {
                 call.respond(
-                    HttpStatusCode.RequestTimeout,
-                    ChangeCreationErrorMessage(
+                    HttpStatusCode.InternalServerError,
+                    ChangeCreationResponse(
                         "Change not applied due to timeout",
-                        changeApplied = "false",
+                        detailedMessage = result.detailedMessage,
+                        changeStatus = ChangeCreationStatus.NOT_APPLIED,
                     ),
                 )
             }
 
-            ChangeResult.Status.EXCEPTION -> throw result.exception!!
-
             else -> {
                 call.respond(
-                    HttpStatusCode.RequestTimeout,
-                    ChangeCreationErrorMessage(
-                        "Change conflicted",
-                        changeApplied = "unknown",
+                    HttpStatusCode.InternalServerError,
+                    ChangeCreationResponse(
+                        "Timed out while waiting for change",
+                        detailedMessage = null,
+                        changeStatus = ChangeCreationStatus.UNKNOWN,
                     ),
                 )
             }
@@ -64,7 +67,7 @@ fun Application.apiV2Routing(
             val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
             val change = call.receive<Change>()
             service.addChange(change, enforceGpac)
-            call.respond(HttpStatusCode.Created)
+            call.respond(HttpStatusCode.Accepted)
         }
 
         post("/v2/change/sync") {
@@ -85,12 +88,8 @@ fun Application.apiV2Routing(
 
         get("/v2/change_status/{id}") {
             val id = call.parameters["id"]!!
-
-            val result = service.getChangeStatus(id)
-
-            if (result.isDone) respondChangeResult(result.get(), call)
-            else call.respond("Change is being processed")
-
+            val result: ChangeResult? = service.getChangeStatus(id).getNow(null)
+            respondChangeResult(result, call)
         }
 
         get("/v2/change") {
