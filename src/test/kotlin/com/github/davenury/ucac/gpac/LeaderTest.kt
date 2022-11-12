@@ -11,7 +11,7 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
-import com.github.davenury.ucac.commitment.gpac.TransactionBlockerImpl
+import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
 import com.github.davenury.ucac.common.GlobalPeerId
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
@@ -86,7 +86,7 @@ class LeaderTest {
     private val history = History()
     private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)
     private val client = GPACProtocolClientImpl()
-    private val transactionBlocker = TransactionBlockerImpl()
+    private val transactionBlocker = TransactionBlocker()
     private val phaser: Phaser = Phaser(1).also { it.register() }
     private val peerReachedMaxRetries = SignalListener {
         phaser.arrive()
