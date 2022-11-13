@@ -414,8 +414,8 @@ class MultiplePeersetSpec {
 
             val apps = TestApplicationSet(
                 listOf(3, 5),
-                signalListeners = List(3) { it + 1 to mapOf(Signal.OnHandlingApplyEnd to firstPeersetListener) }.toMap()
-                        + List(5) { it + 4 to mapOf(Signal.OnHandlingApplyEnd to secondPeersetListener) }.toMap()
+                signalListeners = List(3) { it to mapOf(Signal.OnHandlingApplyEnd to firstPeersetListener) }.toMap()
+                        + List(5) { it + 3 to mapOf(Signal.OnHandlingApplyEnd to secondPeersetListener) }.toMap()
             )
             val peers = apps.getPeers()
 
