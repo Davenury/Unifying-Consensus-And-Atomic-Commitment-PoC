@@ -1,6 +1,5 @@
 package com.github.davenury.ucac.utils
 
-import org.slf4j.LoggerFactory
 import org.testcontainers.containers.output.OutputFrame
 import java.nio.charset.StandardCharsets
 import java.util.function.Consumer

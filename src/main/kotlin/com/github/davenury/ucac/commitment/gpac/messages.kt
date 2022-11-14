@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.commitment.gpac
 
-import com.github.davenury.ucac.common.Change
+import com.github.davenury.common.Change
+
 
 enum class Accept {
     COMMIT,

@@ -1,6 +1,6 @@
-package com.github.davenury.ucac.history
+package com.github.davenury.common.history
 
-import com.github.davenury.ucac.sha512
+import com.github.davenury.common.sha512
 
 object InitialHistoryEntry : HistoryEntry {
     override fun getId(): String = sha512(serialize())

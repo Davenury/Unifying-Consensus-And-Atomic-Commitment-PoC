@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.common
+package com.github.davenury.common
 
 import java.lang.Exception
 

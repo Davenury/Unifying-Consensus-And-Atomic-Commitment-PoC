@@ -1,10 +1,13 @@
 package com.github.davenury.ucac.gpac
 
+import com.github.davenury.common.AddUserChange
+import com.github.davenury.common.NotElectingYou
+import com.github.davenury.common.NotValidLeader
+import com.github.davenury.common.history.History
+import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.commitment.gpac.*
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.history.History
-import com.github.davenury.ucac.history.InitialHistoryEntry
 import io.mockk.*
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking

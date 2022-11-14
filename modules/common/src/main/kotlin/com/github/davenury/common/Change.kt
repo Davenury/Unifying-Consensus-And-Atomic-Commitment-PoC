@@ -1,15 +1,13 @@
-package com.github.davenury.ucac.common
+package com.github.davenury.common
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
-import com.github.davenury.ucac.history.History
-import com.github.davenury.ucac.history.HistoryEntry
-import com.github.davenury.ucac.history.InitialHistoryEntry
-import com.github.davenury.ucac.history.IntermediateHistoryEntry
-import com.github.davenury.ucac.objectMapper
+import com.github.davenury.common.history.History
+import com.github.davenury.common.history.HistoryEntry
+import com.github.davenury.common.history.InitialHistoryEntry
+import com.github.davenury.common.history.IntermediateHistoryEntry
 import java.util.*
-import kotlin.collections.ArrayList
 
 
 // see https://github.com/FasterXML/jackson-databind/issues/2742#issuecomment-637708397

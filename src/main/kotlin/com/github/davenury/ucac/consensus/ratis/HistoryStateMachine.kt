@@ -1,7 +1,7 @@
 package com.github.davenury.ucac.consensus.ratis
 
-import com.github.davenury.ucac.history.History
-import com.github.davenury.ucac.history.HistoryEntry
+import com.github.davenury.common.history.History
+import com.github.davenury.common.history.HistoryEntry
 import org.slf4j.LoggerFactory
 
 class HistoryStateMachine(override var state: History) :

@@ -1,8 +1,9 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.ucac.common.AddUserChange
-import com.github.davenury.ucac.history.InitialHistoryEntry
-import com.github.davenury.ucac.objectMapper
+
+import com.github.davenury.common.AddUserChange
+import com.github.davenury.common.history.InitialHistoryEntry
+import com.github.davenury.common.objectMapper
 import com.github.davenury.ucac.utils.ApplicationTestcontainersEnvironment
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*

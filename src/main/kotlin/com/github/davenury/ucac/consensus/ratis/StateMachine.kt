@@ -1,8 +1,5 @@
 package com.github.davenury.ucac.consensus.ratis
 
-import java.io.*
-import java.nio.charset.Charset
-import java.util.concurrent.CompletableFuture
 import org.apache.ratis.proto.RaftProtos
 import org.apache.ratis.protocol.Message
 import org.apache.ratis.protocol.RaftGroupId
@@ -15,6 +12,9 @@ import org.apache.ratis.statemachine.impl.BaseStateMachine
 import org.apache.ratis.statemachine.impl.SimpleStateMachineStorage
 import org.apache.ratis.statemachine.impl.SingleFileSnapshotInfo
 import org.apache.ratis.util.JavaUtils
+import java.io.*
+import java.nio.charset.Charset
+import java.util.concurrent.CompletableFuture
 
 abstract class StateMachine<A>(open var state: A) : BaseStateMachine() {
     private val storage: SimpleStateMachineStorage = SimpleStateMachineStorage()

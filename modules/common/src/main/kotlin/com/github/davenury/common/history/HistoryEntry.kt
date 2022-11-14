@@ -1,7 +1,6 @@
-package com.github.davenury.ucac.history
+package com.github.davenury.common.history
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import java.lang.IllegalArgumentException
 
 interface HistoryEntry {
     fun getId(): String

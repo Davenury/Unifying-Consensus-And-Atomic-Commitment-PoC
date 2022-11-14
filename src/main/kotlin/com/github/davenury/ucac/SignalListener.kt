@@ -1,6 +1,6 @@
 package com.github.davenury.ucac
 
-import com.github.davenury.ucac.common.Change
+import com.github.davenury.common.Change
 import com.github.davenury.ucac.commitment.gpac.Transaction
 
 enum class Signal {

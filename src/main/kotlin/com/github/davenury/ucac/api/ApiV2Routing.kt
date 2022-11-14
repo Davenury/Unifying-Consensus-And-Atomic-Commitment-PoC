@@ -1,8 +1,8 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.ChangeCreationErrorMessage
-import com.github.davenury.ucac.common.ChangeResult
+import com.github.davenury.common.Change
+import com.github.davenury.common.ChangeCreationErrorMessage
+import com.github.davenury.common.ChangeResult
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*

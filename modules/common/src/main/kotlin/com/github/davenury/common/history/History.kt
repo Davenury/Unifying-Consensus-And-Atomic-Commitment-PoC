@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.history
+package com.github.davenury.common.history
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference

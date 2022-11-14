@@ -1,16 +1,21 @@
 package com.github.davenury.ucac.consensus
 
-import com.github.davenury.ucac.*
-import com.github.davenury.ucac.common.AddUserChange
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.Changes
+import com.github.davenury.common.AddUserChange
+import com.github.davenury.common.Change
+import com.github.davenury.common.Changes
+import com.github.davenury.common.history.History
+import com.github.davenury.common.history.InitialHistoryEntry
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
-import com.github.davenury.ucac.history.History
-import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import kotlinx.coroutines.*
+import io.ktor.client.request.*
+import io.ktor.http.*
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInfo
@@ -23,6 +28,7 @@ import java.util.concurrent.Phaser
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 import com.github.davenury.ucac.ApplicationUcac
+import com.github.davenury.ucac.testHttpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
 

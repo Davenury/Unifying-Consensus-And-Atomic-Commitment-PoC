@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.commitment.gpac
 
-import com.github.davenury.ucac.common.AlreadyLockedException
+import com.github.davenury.common.AlreadyLockedException
 import kotlinx.coroutines.sync.Semaphore
 import org.slf4j.LoggerFactory
 
