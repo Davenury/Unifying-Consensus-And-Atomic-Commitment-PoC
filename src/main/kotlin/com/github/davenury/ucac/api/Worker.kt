@@ -2,6 +2,7 @@ package com.github.davenury.ucac.api
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
+import com.github.davenury.ucac.commitment.TwoPC.TwoPC
 import com.github.davenury.ucac.commitment.gpac.GPACProtocol
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -20,6 +21,8 @@ class Worker(
     private val gpacProtocol: GPACProtocol,
     private val consensusProtocol: ConsensusProtocol,
     passMdc: Boolean = true,
+    private val twoPC: TwoPC,
+    private val is2PCEnforced: Boolean = false
 ) : Runnable {
     private var mdc: MutableMap<String, String>? = if (passMdc) {
         MDC.getCopyOfContextMap()
@@ -31,11 +34,12 @@ class Worker(
         try {
             while (!Thread.interrupted()) {
                 val job = queue.receive()
-                val result = if (job.isConsensusOnly) {
-                    consensusProtocol.proposeChangeAsync(job.change)
-                } else {
-                    gpacProtocol.proposeChangeAsync(job.change)
-                }
+                val result =
+                    when (job.processorJobType) {
+                        ProcessorJobType.CONSENSUS -> consensusProtocol.proposeChangeAsync(job.change)
+                        ProcessorJobType.TWO_PC -> twoPC.proposeChangeAsync(job.change)
+                        ProcessorJobType.GPAC -> gpacProtocol.proposeChangeAsync(job.change)
+                    }
                 result.thenAccept { job.completableFuture.complete(it) }
             }
         } catch (e: Exception) {
@@ -56,8 +60,33 @@ class Worker(
     }
 }
 
+enum class ProcessorJobType {
+    CONSENSUS, GPAC, TWO_PC;
+
+
+    companion object {
+        public fun getJobType(isOnePeersetChange: Boolean, enforceGpac: Boolean, useTwoPC: Boolean): ProcessorJobType =
+            when {
+                isOnePeersetChange && !enforceGpac -> CONSENSUS
+                useTwoPC -> TWO_PC
+                else -> GPAC
+            }
+    }
+}
+
 data class ProcessorJob(
     val change: Change,
     val completableFuture: CompletableFuture<ChangeResult>,
-    val isConsensusOnly: Boolean = false
-)
+    val processorJobType: ProcessorJobType
+) {
+
+    constructor(
+        change: Change,
+        cf: CompletableFuture<ChangeResult>,
+        isOnePeersetChange: Boolean,
+        enforceGpac: Boolean,
+        useTwoPC: Boolean
+    ) : this(change, cf, ProcessorJobType.getJobType(isOnePeersetChange, enforceGpac, useTwoPC))
+
+
+}

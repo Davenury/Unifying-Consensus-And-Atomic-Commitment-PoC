@@ -5,6 +5,8 @@ import com.github.davenury.common.history.History
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
+import com.github.davenury.ucac.commitment.TwoPC.TwoPC
+import com.github.davenury.ucac.commitment.TwoPC.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocol
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
@@ -81,6 +83,7 @@ class ApplicationUcac constructor(
     private val engine: NettyApplicationEngine
     private var raftNode: HistoryRatisNode? = null
     private var consensusProtocol: RaftConsensusProtocol? = null
+    private var twoPC: TwoPC? = null
     private val ctx: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
     private lateinit var gpacProtocol: GPACProtocol
     private var service: ApiV2Service? = null
@@ -141,9 +144,22 @@ class ApplicationUcac constructor(
                     peerResolver,
                 )
 
+            twoPC = TwoPC(
+                history,
+                config.gpac,
+                TwoPCProtocolClientImpl(config.peerId),
+                consensusProtocol as RaftConsensusProtocolImpl,
+                signalPublisher,
+                config.peersetId,
+                config.peerId,
+                config.peerAddresses().withIndex().associate { it.index to it.value },
+                myAddress
+            )
+
             service = ApiV2Service(
                 gpacProtocol,
                 consensusProtocol as RaftConsensusProtocolImpl,
+                twoPC!!,
                 history,
                 config,
                 peerResolver,

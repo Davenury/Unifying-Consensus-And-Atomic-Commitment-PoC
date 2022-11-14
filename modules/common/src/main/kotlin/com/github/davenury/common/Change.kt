@@ -3,6 +3,7 @@ package com.github.davenury.common
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
+import com.github.davenury.ucac.commitment.TwoPC.TwoPCStatus
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
@@ -34,6 +35,7 @@ class Changes : ArrayList<Change> {
         JsonSubTypes.Type(value = DeleteRelationChange::class, name = "DELETE_RELATION"),
         JsonSubTypes.Type(value = AddUserChange::class, name = "ADD_USER"),
         JsonSubTypes.Type(value = AddGroupChange::class, name = "ADD_GROUP"),
+        JsonSubTypes.Type(value = TwoPCChange::class, name = "TWO_PC_STATUS"),
     )
 )
 sealed class Change {
@@ -65,6 +67,8 @@ sealed class Change {
     }
 
     abstract fun withAddress(myAddress: String): Change
+
+    abstract fun copyWithNewParentId(parentId: String): Change
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -84,6 +88,9 @@ data class AddRelationChange(
             acceptNum,
         )
     }
+
+    override fun copyWithNewParentId(parentId: String): Change =
+        this.copy(parentId = parentId)
 
     override fun equals(other: Any?): Boolean {
         if (other !is AddRelationChange) {
@@ -129,6 +136,10 @@ data class DeleteRelationChange(
     override fun hashCode(): Int {
         return Objects.hash(parentId, from, to)
     }
+
+
+    override fun copyWithNewParentId(parentId: String): Change =
+        this.copy(parentId = parentId)
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -158,6 +169,10 @@ data class AddUserChange(
     override fun hashCode(): Int {
         return Objects.hash(parentId, userName)
     }
+
+    override fun copyWithNewParentId(parentId: String): Change =
+        this.copy(parentId = parentId)
+
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -187,4 +202,42 @@ data class AddGroupChange(
     override fun hashCode(): Int {
         return Objects.hash(parentId, groupName)
     }
+
+    override fun copyWithNewParentId(parentId: String): Change =
+        this.copy(parentId = parentId)
+
+}
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class TwoPCChange(
+    override val parentId: String,
+    val twoPCStatus: TwoPCStatus,
+    override val peers: List<String>,
+    override val acceptNum: Int? = null
+) : Change() {
+    override fun withAddress(myAddress: String): Change {
+        return this.copy(peers = peers.toMutableList().also { it.add(myAddress) })
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (other !is TwoPCChange) {
+            return false
+        }
+        return Objects.equals(parentId, other.parentId) &&
+                Objects.equals(twoPCStatus, other.twoPCStatus)
+    }
+
+    override fun hashCode(): Int {
+        return Objects.hash(parentId, twoPCStatus)
+    }
+
+    companion object {
+
+        fun fromChange(change: Change, twoPCStatus: TwoPCStatus): TwoPCChange =
+            TwoPCChange(change.parentId, twoPCStatus, change.peers, change.acceptNum)
+
+    }
+
+    override fun copyWithNewParentId(parentId: String): Change =
+        this.copy(parentId = parentId)
 }

@@ -6,6 +6,7 @@ import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.Changes
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
+import com.github.davenury.ucac.commitment.TwoPC.TwoPC
 import com.github.davenury.ucac.commitment.gpac.GPACProtocol
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
@@ -19,12 +20,13 @@ import java.util.concurrent.CompletableFuture
 class ApiV2Service(
     private val gpacProtocol: GPACProtocol,
     private val consensusProtocol: ConsensusProtocol,
+    private val twoPC: TwoPC,
     private val history: History,
     private var config: Config,
     private var peerResolver: PeerResolver,
 ) {
     private val queue: Channel<ProcessorJob> = Channel(Channel.Factory.UNLIMITED)
-    private val worker: Thread = Thread(Worker(queue, gpacProtocol, consensusProtocol))
+    private val worker: Thread = Thread(Worker(queue, gpacProtocol, consensusProtocol, twoPC))
 
     init {
         worker.start()
@@ -42,19 +44,20 @@ class ApiV2Service(
         ?: gpacProtocol.getChangeResult(changeId)
         ?: throw ChangeDoesntExist(changeId)
 
-    suspend fun addChange(change: Change, enforceGpac: Boolean = false): CompletableFuture<ChangeResult> =
+    suspend fun addChange(change: Change, enforceGpac: Boolean, useTwoPC: Boolean): CompletableFuture<ChangeResult> =
         CompletableFuture<ChangeResult>().also {
-            val isConsensusChange: Boolean = allPeersFromMyPeerset(change.peers) && !enforceGpac
-            queue.send(ProcessorJob(change, it, isConsensusChange))
+            val isOnePeersetChange: Boolean = allPeersFromMyPeerset(change.peers)
+            queue.send(ProcessorJob(change, it, isOnePeersetChange, enforceGpac, useTwoPC))
         }
 
     suspend fun addChangeSync(
         change: Change,
         enforceGpac: Boolean,
+        useTwoPC: Boolean,
         timeout: Duration?,
     ): ChangeResult? = try {
         withTimeout(timeout ?: config.rest.defaultSyncTimeout) {
-            addChange(change, enforceGpac).await()
+            addChange(change, enforceGpac, useTwoPC).await()
         }
     } catch (e: TimeoutCancellationException) {
         null

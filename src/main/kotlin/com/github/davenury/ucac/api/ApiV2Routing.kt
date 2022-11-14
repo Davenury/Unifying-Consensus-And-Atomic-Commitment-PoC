@@ -62,21 +62,26 @@ fun Application.apiV2Routing(
         }
     }
 
+    suspend fun getParamsFromCall(call: ApplicationCall): Triple<Boolean, Boolean, Change> {
+        val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
+        val useTwoPC: Boolean = call.request.queryParameters["use_2pc"]?.toBoolean() ?: false
+        val change = call.receive<Change>()
+        return Triple(enforceGpac, useTwoPC, change)
+    }
+
     routing {
         post("/v2/change/async") {
-            val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
-            val change = call.receive<Change>()
-            service.addChange(change, enforceGpac)
+            val (enforceGpac, useTwoPC, change) = getParamsFromCall(call)
+            service.addChange(change, enforceGpac, useTwoPC)
             call.respond(HttpStatusCode.Accepted)
         }
 
         post("/v2/change/sync") {
-            val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
-            val change = call.receive<Change>()
+            val (enforceGpac, useTwoPC, change) = getParamsFromCall(call)
             val timeout = call.request.queryParameters["timeout"]
                 ?.let { Duration.parse(it) }
 
-            val result: ChangeResult? = service.addChangeSync(change, enforceGpac, timeout)
+            val result: ChangeResult? = service.addChangeSync(change, enforceGpac,useTwoPC, timeout)
             respondChangeResult(result, call)
         }
 
