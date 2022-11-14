@@ -5,7 +5,6 @@ import com.github.davenury.common.Change
 import com.github.davenury.common.Changes
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.InitialHistoryEntry
-import com.github.davenury.common.testHttpClient
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
@@ -29,6 +28,7 @@ import java.util.concurrent.Phaser
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 import com.github.davenury.ucac.ApplicationUcac
+import com.github.davenury.ucac.testHttpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
 

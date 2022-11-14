@@ -6,6 +6,8 @@ import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
+import com.github.davenury.ucac.httpClient
+import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout

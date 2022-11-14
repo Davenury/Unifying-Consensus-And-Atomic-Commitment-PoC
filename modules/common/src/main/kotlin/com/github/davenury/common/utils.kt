@@ -14,31 +14,6 @@ import java.security.MessageDigest
 
 val objectMapper: ObjectMapper =
     jacksonObjectMapper().configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
-val httpClient = HttpClient(OkHttp) {
-    install(JsonFeature) {
-        serializer = JacksonSerializer(objectMapper)
-    }
-    install(HttpTimeout) {
-        requestTimeoutMillis = 2_000
-    }
-}
-val raftHttpClient = HttpClient(OkHttp) {
-    install(JsonFeature) {
-        serializer = JacksonSerializer(objectMapper)
-    }
-    install(HttpTimeout) {
-        requestTimeoutMillis = 500
-    }
-}
-val testHttpClient = HttpClient(OkHttp) {
-    install(JsonFeature) {
-        serializer = JacksonSerializer(objectMapper)
-    }
-    install(HttpTimeout) {
-        requestTimeoutMillis = 15000
-        socketTimeoutMillis = 120000
-    }
-}
 
 fun sha512(string: String): String {
     val md = MessageDigest.getInstance("SHA-512")

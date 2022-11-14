@@ -8,11 +8,11 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class History {
     private val initialEntry: InitialHistoryEntry = InitialHistoryEntry
-    private val currentEntryId: AtomicReference<String> = AtomicReference(InitialHistoryEntry.getId())
+    private val currentEntryId: AtomicReference<String> = AtomicReference(initialEntry.getId())
     private val entries: ConcurrentHashMap<String, HistoryEntry> = ConcurrentHashMap()
 
     init {
-        entries[InitialHistoryEntry.getId()] = initialEntry
+        entries[initialEntry.getId()] = initialEntry
     }
 
     fun getCurrentEntry(): HistoryEntry {
