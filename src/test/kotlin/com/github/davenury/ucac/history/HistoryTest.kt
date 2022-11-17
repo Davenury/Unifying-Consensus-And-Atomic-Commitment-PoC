@@ -1,13 +1,16 @@
 package com.github.davenury.ucac.history
 
 import com.github.davenury.common.history.*
+import com.github.davenury.ucac.utils.TestLogExtension
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import strikt.api.expectThrows
 
 /**
  * @author Kamil Jarosz
  */
+@ExtendWith(TestLogExtension::class)
 internal class HistoryTest {
     @Test
     fun `initial entry`(): Unit = runBlocking {

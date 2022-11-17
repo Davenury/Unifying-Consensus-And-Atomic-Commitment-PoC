@@ -1,0 +1,24 @@
+<configuration>
+    <timestamp key="timestamp" datePattern="yyyyMMdd-HHmmss.SSS"/>
+    <variable name="pattern" value="%d{YYYY-MM-dd HH:mm:ss.SSS} %-5level [%-16logger{36}] \\(%mdc{test:-?}, %mdc{peer:-?}\\) %msg   \\(%thread\\)%n" />
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <append>false</append>
+        <file>build/test-results/logs/test-run-${timestamp}.log</file>
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>${pattern}</pattern>
+        </layout>
+    </appender>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+        <encoder>
+            <pattern>${pattern}</pattern>
+        </encoder>
+    </appender>
+
+    <root level="DEBUG">
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

@@ -36,6 +36,6 @@ class TransactionBlockerImpl : TransactionBlocker {
     }
 
     companion object {
-        private val logger = LoggerFactory.getLogger(TransactionBlocker::class.java)
+        private val logger = LoggerFactory.getLogger("transaction-blocker")
     }
 }

@@ -23,7 +23,6 @@ class ApiV2Service(
     private val history: History,
     private var config: Config,
 ) {
-
     private val channel: Channel<Unit> = Channel()
     private val queue: Deque<ProcessorJob> = ConcurrentLinkedDeque<ProcessorJob>()
     private val worker: Thread = Thread(Worker(queue, channel, gpacProtocol, consensusProtocol))

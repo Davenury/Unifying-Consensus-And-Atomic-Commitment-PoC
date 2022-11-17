@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.common
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.slf4j.MDCContext
 import java.time.Duration
 import java.util.*
 import kotlin.math.absoluteValue
@@ -26,9 +27,7 @@ class ProtocolTimerImpl(
     override suspend fun startCounting(iteration: Int, action: suspend () -> Unit) {
         cancelCounting()
         with(CoroutineScope(ctx)) {
-
-            task = launch {
-
+            task = launch(MDCContext()) {
                 val exponent = 1.5.pow(iteration)
 
                 val backoff = (
@@ -40,12 +39,10 @@ class ProtocolTimerImpl(
                 delay(timeout.toMillis())
                 action()
             }
-
         }
     }
 
     override fun cancelCounting() {
         this.task?.cancel()
     }
-
 }

@@ -6,6 +6,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
 
@@ -25,15 +26,17 @@ interface RaftProtocolClient {
     suspend fun sendConsensusHeartbeat(peerWithMessage: Pair<String, ConsensusHeartbeat>): RaftResponse<ConsensusHeartbeatResponse?>
 }
 
-class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
+class RaftProtocolClientImpl : RaftProtocolClient {
 
     override suspend fun sendConsensusElectMe(
         otherPeers: List<String>,
         message: ConsensusElectMe
-    ): List<RaftResponse<ConsensusElectedYou?>> =
-        otherPeers
+    ): List<RaftResponse<ConsensusElectedYou?>> {
+        logger.info("Sending elect me requests to $otherPeers")
+        return otherPeers
             .map { Pair(it, message) }
             .let { sendRequests(it, "consensus/request_vote") }
+    }
 
     override suspend fun sendConsensusImTheLeader(
         otherPeers: List<String>,
@@ -51,7 +54,7 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
     override suspend fun sendConsensusHeartbeat(
         peerWithMessage: Pair<String, ConsensusHeartbeat>
     ): RaftResponse<ConsensusHeartbeatResponse?> =
-        CoroutineScope(Dispatchers.IO).async {
+        CoroutineScope(Dispatchers.IO).async(MDCContext()) {
             sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(
                 "http://${peerWithMessage.first}/consensus/heartbeat",
                 peerWithMessage.second
@@ -62,7 +65,7 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
             val result = try {
                 it.second.await()
             } catch (e: Exception) {
-                logger.error("$id - Error while evaluating response from ${it.first}: $e", e)
+                logger.error("Error while evaluating response from ${it.first}", e)
                 null
             }
             RaftResponse(it.first, result)
@@ -73,7 +76,7 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
         urlPath: String
     ): List<RaftResponse<K?>> =
         peersWithBody.map {
-            CoroutineScope(Dispatchers.IO).async {
+            CoroutineScope(Dispatchers.IO).async(MDCContext()) {
                 sendConsensusMessage<T, K>("http://${it.first}/$urlPath", it.second)
             }.let { coroutine ->
                 Pair(it.first, coroutine)
@@ -82,19 +85,18 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
             val result = try {
                 it.second.await()
             } catch (e: Exception) {
-                logger.error("$id - Error while evaluating response from ${it.first}: $e", e)
+                logger.error("Error while evaluating response from ${it.first}", e)
                 null
             }
 
             RaftResponse(it.first, result)
         }
 
-
     private suspend inline fun <Message, reified Response> sendConsensusMessage(
         url: String,
         message: Message
     ): Response? {
-        logger.info("$id - Sending to: $url")
+        logger.debug("Sending request to: $url, message: $message")
         return raftHttpClient.post<Response>(url) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
@@ -102,9 +104,8 @@ class RaftProtocolClientImpl(private val id: Int) : RaftProtocolClient {
         }
     }
 
-
     companion object {
-        private val logger = LoggerFactory.getLogger(RaftProtocolClientImpl::class.java)
+        private val logger = LoggerFactory.getLogger("raft-client")
     }
 }
 

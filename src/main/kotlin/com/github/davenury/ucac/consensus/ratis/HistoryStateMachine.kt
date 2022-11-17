@@ -14,7 +14,7 @@ class HistoryStateMachine(override var state: History) :
             state.addEntry(HistoryEntry.deserialize(operation))
             null
         } catch (e: Exception) {
-            logger.error(e.message, e)
+            logger.error("Error while adding entry to history", e)
             "ERROR"
         }
     }
@@ -22,6 +22,6 @@ class HistoryStateMachine(override var state: History) :
     override fun queryOperation(operation: String): String = ""
 
     companion object {
-        private val logger = LoggerFactory.getLogger(HistoryStateMachine::class.java)
+        private val logger = LoggerFactory.getLogger("ratis")
     }
 }

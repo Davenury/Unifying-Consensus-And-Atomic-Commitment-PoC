@@ -16,11 +16,13 @@ import com.github.davenury.ucac.commitment.gpac.TransactionBlockerImpl
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
+import com.github.davenury.ucac.utils.TestLogExtension
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.isEqualTo
@@ -29,6 +31,7 @@ import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 
+@ExtendWith(TestLogExtension::class)
 class LeaderTest {
 
     val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
