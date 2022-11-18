@@ -1,5 +1,6 @@
 package com.github.davenury.ucac
 
+import com.github.davenury.ucac.common.GlobalPeerId
 import com.sksamuel.hoplite.ConfigLoaderBuilder
 import com.sksamuel.hoplite.MapPropertySource
 import com.sksamuel.hoplite.addResourceSource
@@ -23,10 +24,9 @@ data class Config(
     val gpac: GpacConfig = GpacConfig(),
     val rest: RestConfig = RestConfig(),
 ) {
+    fun globalPeerId() = GlobalPeerId(peersetId, peerId)
     fun peerAddresses(): List<List<String>> = parsePeers(peers)
     fun peerAddresses(peersetId: Int): List<String> = peerAddresses()[peersetId]
-
-
 }
 
 data class RatisConfig(

@@ -1,17 +1,20 @@
 package com.github.davenury.ucac.infrastructure
 
 import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.utils.TestLogExtension
 import com.github.davenury.ucac.utils.atLeast
 import com.github.davenury.ucac.utils.eventually
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import strikt.api.expectThat
 import strikt.assertions.isEqualTo
 import java.time.Duration
 import java.util.concurrent.Executors
 
+@ExtendWith(TestLogExtension::class)
 class ProtocolTimerSpec {
 
     val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()

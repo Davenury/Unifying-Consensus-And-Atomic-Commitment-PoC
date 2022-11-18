@@ -5,20 +5,22 @@ import com.github.davenury.common.Change
 import com.github.davenury.common.Changes
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.InitialHistoryEntry
+import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.common.GlobalPeerId
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.TestApplicationSet
+import com.github.davenury.ucac.utils.TestLogExtension
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
-import kotlinx.coroutines.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
+import org.junit.jupiter.api.extension.ExtendWith
 import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
@@ -27,14 +29,10 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
-import com.github.davenury.ucac.ApplicationUcac
-import com.github.davenury.ucac.testHttpClient
-import io.ktor.client.request.*
-import io.ktor.http.*
 
 typealias LeaderAddressPortAndApplication = Triple<String, String, ApplicationUcac>
 
-
+@ExtendWith(TestLogExtension::class)
 class ConsensusSpec {
 
     private val knownPeerIp = "localhost"
@@ -42,9 +40,8 @@ class ConsensusSpec {
     private val noneLeader = null
 
     @BeforeEach
-    fun setUp(testInfo: TestInfo) {
+    fun setUp() {
         System.setProperty("configFile", "consensus_application.conf")
-        println("\n\n${testInfo.displayName}")
     }
 
     @Test
@@ -580,7 +577,6 @@ class ConsensusSpec {
         election1Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         val triple: LeaderAddressPortAndApplication = getLeaderAddressPortAndApplication(apps)
-        val firstLeaderPort = triple.second
         val firstLeaderAddress = triple.first
 
         val notLeaderPeers = peerAddresses.filter { it != firstLeaderAddress }
@@ -680,12 +676,11 @@ class ConsensusSpec {
         val initializeConsensusProtocol = { otherPeers: List<String> ->
             RaftConsensusProtocolImpl(
                 History(),
-                0,
-                0,
+                GlobalPeerId(0, 0),
                 "1",
                 Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
                 otherPeers,
-                protocolClient = RaftProtocolClientImpl(0)
+                protocolClient = RaftProtocolClientImpl(),
             )
         }
 

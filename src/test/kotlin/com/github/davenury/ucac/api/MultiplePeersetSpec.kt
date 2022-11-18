@@ -10,6 +10,7 @@ import com.github.davenury.ucac.httpClient
 import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
+import com.github.davenury.ucac.utils.TestLogExtension
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -19,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.*
+import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 import strikt.api.expectCatching
 import strikt.api.expectThat
@@ -29,16 +31,16 @@ import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicInteger
 
 @Suppress("HttpUrlsUsage")
+@ExtendWith(TestLogExtension::class)
 class MultiplePeersetSpec {
     companion object {
         private val logger = LoggerFactory.getLogger(MultiplePeersetSpec::class.java)
     }
 
     @BeforeEach
-    fun setup(testInfo: TestInfo) {
+    fun setup() {
         System.setProperty("configFile", "application-integration.conf")
         deleteRaftHistories()
-        println("\n\n${testInfo.displayName}")
     }
 
     @Test

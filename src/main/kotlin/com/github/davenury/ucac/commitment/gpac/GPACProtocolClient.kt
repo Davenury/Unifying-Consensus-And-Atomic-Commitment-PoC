@@ -71,7 +71,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
                 try {
                     job.await()
                 } catch (e: Exception) {
-                    logger.error("Error while evaluating responses: $e", e)
+                    logger.error("Error while evaluating responses", e)
                     null
                 }
             }
@@ -118,6 +118,6 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         }
 
     companion object {
-        private val logger = LoggerFactory.getLogger(GPACProtocolClientImpl::class.java)
+        private val logger = LoggerFactory.getLogger("gpac-client")
     }
 }

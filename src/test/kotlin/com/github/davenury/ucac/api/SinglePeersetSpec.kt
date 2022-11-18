@@ -9,6 +9,7 @@ import com.github.davenury.ucac.commitment.gpac.Agree
 import com.github.davenury.ucac.commitment.gpac.Agreed
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.utils.TestApplicationSet
+import com.github.davenury.ucac.utils.TestLogExtension
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -18,7 +19,7 @@ import kotlinx.coroutines.runBlocking
 import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
+import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.fail
 import org.slf4j.LoggerFactory
 import strikt.api.expect
@@ -33,6 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 
 @Suppress("HttpUrlsUsage")
+@ExtendWith(TestLogExtension::class)
 class SinglePeersetSpec {
 
     companion object {
@@ -40,7 +42,7 @@ class SinglePeersetSpec {
     }
 
     @BeforeEach
-    fun setup(testInfo: TestInfo) {
+    fun setup() {
         System.setProperty("configFile", "single_peerset_application.conf")
         deleteRaftHistories()
     }
@@ -177,7 +179,7 @@ class SinglePeersetSpec {
                 executeChange("http://${peers[0][0]}/v2/change/sync?enforce_gpac=true", change(listOf()))
                 fail("Change passed")
             } catch (e: Exception) {
-                logger.info("Leader 1 fails: $e")
+                logger.info("Leader 1 fails", e)
             }
 
             phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -252,7 +254,7 @@ class SinglePeersetSpec {
             )
             fail("Change passed")
         } catch (e: Exception) {
-            logger.info("Leader 1 fails: $e")
+            logger.info("Leader 1 fails", e)
         }
 
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction

@@ -1,13 +1,12 @@
 package com.github.davenury.ucac.utils
 
+import com.github.davenury.ucac.common.GlobalPeerId
 import org.testcontainers.containers.FailureDetectingExternalResource
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.Network
 import org.testcontainers.containers.wait.strategy.Wait
 import org.testcontainers.images.builder.ImageFromDockerfile
 import org.testcontainers.lifecycle.Startable
-
-private data class PeerId(val peersetId: Int, val peerId: Int)
 
 /**
  * @author Kamil Jarosz
@@ -16,7 +15,7 @@ class ApplicationTestcontainersEnvironment(
     peersets: List<Int>,
     private val containerPort: Int = 8080,
 ) : FailureDetectingExternalResource(), Startable {
-    private val peers: MutableMap<PeerId, GenericContainer<*>> = HashMap()
+    private val peers: MutableMap<GlobalPeerId, GenericContainer<*>> = HashMap()
     private val network = Network.newNetwork()
 
     init {
@@ -41,7 +40,7 @@ class ApplicationTestcontainersEnvironment(
                     .withEnv("config_peers", peersAddressList)
                     .withLogConsumer(DockerLogConsumer(networkAlias))
                     .waitingFor(Wait.forHttp("/_meta/health"))
-                peers[PeerId(peersetId, peerId)] = container
+                peers[GlobalPeerId(peersetId, peerId)] = container
             }
         }
     }
@@ -62,8 +61,8 @@ class ApplicationTestcontainersEnvironment(
         return if (host == null || mappedPort == null) null else "$host:$mappedPort"
     }
 
-    fun getHost(peersetId: Int, peerId: Int): String? = peers[PeerId(peersetId, peerId)]?.host
+    fun getHost(peersetId: Int, peerId: Int): String? = peers[GlobalPeerId(peersetId, peerId)]?.host
 
     fun getMappedPort(peersetId: Int, peerId: Int, port: Int = containerPort): Int? =
-        peers[PeerId(peersetId, peerId)]?.getMappedPort(port)
+        peers[GlobalPeerId(peersetId, peerId)]?.getMappedPort(port)
 }

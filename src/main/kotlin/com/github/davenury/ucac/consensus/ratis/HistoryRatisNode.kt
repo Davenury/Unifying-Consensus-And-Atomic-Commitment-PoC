@@ -7,6 +7,7 @@ import com.github.davenury.ucac.RatisConfig
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.slf4j.MDCContext
 import java.io.File
 import java.util.*
 import java.util.concurrent.CompletableFuture
@@ -40,7 +41,7 @@ class HistoryRatisNode(
         val changeId = change.toHistoryEntry().getId()
         changeIdToCompletableFuture[changeId] = cf
 
-        GlobalScope.launch {
+        GlobalScope.launch(MDCContext()) {
             val result = applyTransaction(change.toHistoryEntry().serialize())
             val changeResult = if (result == "ERROR") ChangeResult(ChangeResult.Status.CONFLICT) else ChangeResult(ChangeResult.Status.SUCCESS)
             changeIdToCompletableFuture[changeId]!!.complete(changeResult)

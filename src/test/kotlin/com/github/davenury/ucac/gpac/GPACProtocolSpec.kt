@@ -8,16 +8,19 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.commitment.gpac.*
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.utils.TestLogExtension
 import io.mockk.*
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import strikt.api.expect
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.isEqualTo
 import java.util.concurrent.Executors
 
+@ExtendWith(TestLogExtension::class)
 class GPACProtocolSpec {
 
     private val history = History()

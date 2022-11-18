@@ -9,6 +9,7 @@ import com.github.davenury.ucac.common.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 import java.lang.Exception
 import java.time.Duration
@@ -46,7 +47,6 @@ class GPACProtocolImpl(
     private var allPeers: Map<Int, List<String>>,
     private var myAddress: String
 ) : GPACProtocol {
-
     var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, Duration.ZERO, ctx)
     var retriesTimer: ProtocolTimer =
         ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
@@ -77,7 +77,7 @@ class GPACProtocolImpl(
             }
         changeIdToCompletableFuture[enrichedChange.toHistoryEntry().getId()] = cf
 
-        GlobalScope.launch {
+        GlobalScope.launch(MDCContext()) {
             performProtocolAsLeader(enrichedChange)
         }
 
@@ -127,7 +127,7 @@ class GPACProtocolImpl(
         if (!checkBallotNumber(message.ballotNumber)) {
             throw NotValidLeader(myBallotNumber, message.ballotNumber)
         }
-        logger.info(message.toString())
+        logger.info("Handling agree $message")
         this.transaction =
             this.transaction.copy(
                 ballotNumber = message.ballotNumber,
@@ -135,13 +135,13 @@ class GPACProtocolImpl(
                 acceptNum = message.acceptNum ?: message.ballotNumber
             )
 
-        logger.info("${getPeerName()} state transaction state: ${this.transaction}")
+        logger.info("State transaction state: ${this.transaction}")
 
         myBallotNumber = message.ballotNumber
 
         if (!message.decision) {
             transactionBlocker.tryToBlock()
-            logger.info("${getPeerName()} Lock aquired: ${message.ballotNumber}")
+            logger.info("Lock aquired: ${message.ballotNumber}")
         }
 
         signal(Signal.OnHandlingAgreeEnd, transaction, message.change)
@@ -152,7 +152,7 @@ class GPACProtocolImpl(
     }
 
     override suspend fun handleApply(message: Apply) {
-        logger.info("${getPeerName()} - HandleApply message: $message")
+        logger.info("HandleApply message: $message")
         val isCurrentTransaction = message.ballotNumber == this.myBallotNumber
 
         if (isCurrentTransaction) leaderFailTimeoutStop()
@@ -175,7 +175,7 @@ class GPACProtocolImpl(
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = message.change)
 
-            logger.info("${getPeerName()} Releasing semaphore as cohort")
+            logger.info("Releasing semaphore as cohort")
             transactionBlocker.releaseBlock()
 
             changeConflicts(message.change)
@@ -204,16 +204,16 @@ class GPACProtocolImpl(
         Changes.fromHistory(history).any { it.acceptNum == this.transaction.acceptNum }
 
     private suspend fun leaderFailTimeoutStart(change: Change) {
-        logger.info("${getPeerName()} Start counting")
+        logger.info("Start counting")
         leaderTimer.startCounting {
-            logger.info("${getPeerName()} Recovery leader starts")
+            logger.info("Recovery leader starts")
             transactionBlocker.releaseBlock()
             performProtocolAsRecoveryLeader(change)
         }
     }
 
     private fun leaderFailTimeoutStop() {
-        logger.info("${getPeerName()} Stop counter")
+        logger.info("Stop counter")
         leaderTimer.cancelCounting()
     }
 
@@ -221,7 +221,7 @@ class GPACProtocolImpl(
         change: Change,
         iteration: Int
     ) {
-        logger.info("Peer ${getPeerName()} starts performing GPAC iteration: $iteration")
+        logger.info("Starting performing GPAC iteration: $iteration")
         println("Start protocol")
 
         val electMeResult =
@@ -285,7 +285,7 @@ class GPACProtocolImpl(
 
         val messageWithDecision = electResponses.flatten().find { it.decision }
         if (messageWithDecision != null) {
-            logger.info("${getPeerName()} Got hit with message with decision true")
+            logger.info("Got hit with message with decision true")
             // someone got to ft-agree phase
             this.transaction = this.transaction.copy(acceptVal = messageWithDecision.acceptVal)
             signal(Signal.BeforeSendingAgree, this.transaction, change)
@@ -307,7 +307,7 @@ class GPACProtocolImpl(
         // I got to ft-agree phase, so my voice of this is crucial
         signal(Signal.BeforeSendingAgree, this.transaction, change)
 
-        logger.info("${getPeerName()} Recovery leader transaction state: ${this.transaction}")
+        logger.info("Recovery leader transaction state: ${this.transaction}")
         val agreedResponses = ftAgreePhase(
             change,
             this.transaction.acceptVal!!,
@@ -341,7 +341,7 @@ class GPACProtocolImpl(
             transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT, change = change)
 
         signal(Signal.BeforeSendingElect, this.transaction, change)
-        logger.info("${getPeerName()} - sending ballot number: $myBallotNumber")
+        logger.info("Sending ballot number: $myBallotNumber")
         val (responses, maxBallotNumber) = getElectedYouResponses(change, getPeersFromChange(change), acceptNum)
 
         val electResponses: List<List<ElectedYou>> = responses
@@ -349,7 +349,7 @@ class GPACProtocolImpl(
             return ElectMeResult(electResponses, true)
         }
         myBallotNumber = max(maxBallotNumber ?: 0, myBallotNumber)
-        logger.info("${getPeerName()} Bumped ballot number to: $myBallotNumber")
+        logger.info("Bumped ballot number to: $myBallotNumber")
 
         return ElectMeResult(electResponses, false)
     }
@@ -478,10 +478,9 @@ class GPACProtocolImpl(
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
 
+    override fun getPeerName() = "peerset${myPeersetId}/peer${myNodeId}"
 
     companion object {
-        private val logger = LoggerFactory.getLogger(GPACProtocolImpl::class.java)
+        private val logger = LoggerFactory.getLogger("gpac")
     }
-
-    override fun getPeerName() = "peerset${myPeersetId}/peer${myNodeId}"
 }
