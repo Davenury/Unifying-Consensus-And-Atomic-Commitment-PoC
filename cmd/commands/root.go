@@ -25,4 +25,5 @@ func init() {
 	rootCommand.AddCommand(CreateCleanupCommand())
 	rootCommand.AddCommand(CreateInitCommand())
 	rootCommand.AddCommand(CreateTestCommand())
+	rootCommand.AddCommand(CreatePerformanceCommand())
 }

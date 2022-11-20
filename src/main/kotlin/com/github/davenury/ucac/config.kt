@@ -3,9 +3,6 @@ package com.github.davenury.ucac
 import com.github.davenury.ucac.common.GlobalPeerId
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
-import com.sksamuel.hoplite.ConfigLoaderBuilder
-import com.sksamuel.hoplite.MapPropertySource
-import com.sksamuel.hoplite.addResourceSource
 import java.time.Duration
 
 fun parsePeers(peers: String): Map<GlobalPeerId, PeerAddress> {
@@ -62,18 +59,3 @@ data class RaftConfig(
 data class RestConfig(
     val defaultSyncTimeout: Duration = Duration.ofMinutes(1)
 )
-
-fun loadConfig(overrides: Map<String, Any> = emptyMap()): Config {
-    val configFile = System.getProperty("configFile")
-        ?: System.getenv("CONFIG_FILE")
-        ?: "application.conf"
-    return loadConfig(configFile, overrides)
-}
-
-fun loadConfig(configFileName: String, overrides: Map<String, Any> = emptyMap()): Config =
-    ConfigLoaderBuilder
-        .default()
-        .addSource(MapPropertySource(overrides))
-        .addResourceSource("/$configFileName")
-        .build()
-        .loadConfigOrThrow()

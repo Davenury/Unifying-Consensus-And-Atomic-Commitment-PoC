@@ -73,7 +73,7 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVarP(&deployCreateNamespace, "create-namespace", "", false, "Include if should create namespace")
 	deployCommand.Flags().StringVarP(&deployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
 	deployCommand.Flags().BoolVarP(&waitForReadiness, "wait-for-readiness", "", false, "Wait for deployment to be ready")
-	deployCommand.Flags().StringVarP(&imageName, "image", "", "davenury/ucac", "A Docker image to be used in the deployment")
+	deployCommand.Flags().StringVarP(&imageName, "image", "", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
 
 	return deployCommand
 
