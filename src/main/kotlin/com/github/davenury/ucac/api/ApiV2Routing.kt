@@ -1,17 +1,18 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeCreationResponse
-import com.github.davenury.common.ChangeCreationStatus
-import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.*
 import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.httpClient
 import io.ktor.application.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 import org.slf4j.LoggerFactory
-import java.lang.IllegalArgumentException
+import java.net.URLDecoder
+import java.nio.charset.Charset
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
@@ -95,10 +96,28 @@ fun Application.apiV2Routing(
         return ProcessorJob(change, CompletableFuture(), processorJobType)
     }
 
+    suspend fun notify(notificationUrl: String?, change: Change, changeResult: ChangeResult) {
+        val decodedUrl = URLDecoder.decode(notificationUrl, Charset.defaultCharset())
+        try {
+            httpClient.post<HttpStatement>(decodedUrl) {
+                contentType(ContentType.Application.Json)
+                body = Notification(change, changeResult)
+            }
+        } catch (e: Exception) {
+            println("Couldn't send notification to $decodedUrl, ${e.message}")
+        }
+    }
+
     routing {
         post("/v2/change/async") {
             val processorJob = createProcessorJob(call)
             service.addChange(processorJob)
+//                .thenAccept {
+//                    if (notificationUrl != null) {
+//                        runBlocking { notify(notificationUrl, change, it) }
+//                    }
+//                }
+
             call.respond(HttpStatusCode.Accepted)
         }
 

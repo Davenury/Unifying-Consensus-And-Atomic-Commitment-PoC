@@ -139,8 +139,8 @@ class ApplicationUcac constructor(
                 config.gpac,
                 ctx,
                 GPACProtocolClientImpl(),
-         TransactionBlocker(),
-        signalPublisher,
+                TransactionBlocker(),
+                signalPublisher,
                 peerResolver,
             )
             twoPC = TwoPC(
@@ -156,7 +156,8 @@ class ApplicationUcac constructor(
         service = ApiV2Service(
             gpacProtocol,
             consensusProtocol as RaftConsensusProtocolImpl,
-            twoPC!!,history,
+            twoPC!!,
+            history,
             config,
         )
 
