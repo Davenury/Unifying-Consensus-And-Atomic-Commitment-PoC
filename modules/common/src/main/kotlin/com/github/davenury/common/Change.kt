@@ -208,12 +208,16 @@ data class AddGroupChange(
 
 }
 
+// TwoPC should always contain two changes:
+// If accepted: 2PCChange-Accept -> Change
+// Else: 2PCChange-Accept -> 2PCChange-Abort
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class TwoPCChange(
     override val parentId: String,
     val twoPCStatus: TwoPCStatus,
     override val peers: List<String>,
-    override val acceptNum: Int? = null
+    override val acceptNum: Int? = null,
+    private val change: Change
 ) : Change() {
     override fun withAddress(myAddress: String): Change {
         return this.copy(peers = peers.toMutableList().also { it.add(myAddress) })
@@ -233,8 +237,8 @@ data class TwoPCChange(
 
     companion object {
 
-        fun fromChange(change: Change, twoPCStatus: TwoPCStatus): TwoPCChange =
-            TwoPCChange(change.parentId, twoPCStatus, change.peers, change.acceptNum)
+        fun fromChange(change: Change, twoPCStatus: TwoPCStatus, parentId: String = change.parentId): TwoPCChange =
+            TwoPCChange(parentId, twoPCStatus, change.peers, change.acceptNum, change = change)
 
     }
 

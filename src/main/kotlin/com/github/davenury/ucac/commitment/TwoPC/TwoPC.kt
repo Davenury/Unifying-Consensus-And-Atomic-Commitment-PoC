@@ -53,7 +53,7 @@ class TwoPC(
 
         val mainChangeId = change.toHistoryEntry().getId()
 
-        val acceptChange = TwoPCChange(change.parentId, TwoPCStatus.ACCEPTED, change.peers)
+        val acceptChange = TwoPCChange(change.parentId, TwoPCStatus.ACCEPTED, change.peers, change = change)
 
         val acceptResult = checkChangeAndProposeToConsensus(acceptChange)
 
@@ -66,39 +66,23 @@ class TwoPC(
         val decision = protocolClient
             .sendAccept(otherPeersets, acceptChange)
             .all { it }
-            .let { if (it) TwoPCStatus.COMMITTED else TwoPCStatus.ABORTED }
 
         val acceptChangeId = acceptChange.toHistoryEntry().getId()
 
-        val decisionParentId =
-            if (TwoPCStatus.COMMITTED == decision) commitChange(acceptChangeId, change, otherPeersets)
-            else acceptChangeId
+        val commitChange = if(decision) change.copyWithNewParentId(acceptChangeId)
+        else TwoPCChange.fromChange(change, TwoPCStatus.ABORTED, acceptChangeId)
 
-        val updatedDecision =
-            if (TwoPCStatus.COMMITTED == decision && decisionParentId == acceptChangeId) TwoPCStatus.ABORTED
-            else decision
-
-        val decisionChange = TwoPCChange(decisionParentId, updatedDecision, change.peers)
-
-        val localDecisionResult = consensusProtocol.proposeChangeAsync(decisionChange).await()
-        if (localDecisionResult.status != ChangeResult.Status.SUCCESS) throw Exception("2PC failed during processing decisionChange")
-        val decisionResult = protocolClient.sendDecision(otherPeersets, decisionChange)
-        if (decisionResult.any { it.not() }) throw Exception("Some peer doesn't applied decisionChange we are wasted")
+        commitChange(commitChange, otherPeersets)
 
         changeIdToCompletableFuture[change.toHistoryEntry()
             .getId()]!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
     }
 
-    private suspend fun commitChange(acceptChangeId: String, change: Change, otherPeersets: List<String>): String {
-        val committedChange = change.copyWithNewParentId(acceptChangeId)
-        val localCommitResult = consensusProtocol.proposeChangeAsync(committedChange).await()
-        if (localCommitResult.status != ChangeResult.Status.SUCCESS) {
-            logger.info("2PC failed during processing commitChange -> abort this change")
-            return acceptChangeId
-        }
-        val commitResult = protocolClient.sendCommitChange(otherPeersets, committedChange)
+    private suspend fun commitChange(change: Change, otherPeersets: List<String>) {
+//      We are in critical section
+        consensusProtocol.proposeChangeAsync(change)
+        val commitResult = protocolClient.sendCommitChange(otherPeersets, change)
         if (commitResult.any { it.not() }) throw Exception("Some peer doesn't applied commitChange we are wasted")
-        return committedChange.toHistoryEntry().getId()
     }
 
     public suspend fun handleAccept(change: Change) {

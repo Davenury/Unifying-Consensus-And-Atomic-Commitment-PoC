@@ -1,18 +1,12 @@
 package com.github.davenury.ucac.api
 
 import com.github.davenury.ucac.*
-import com.github.davenury.common.*
-import com.github.davenury.common.history.InitialHistoryEntry
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
-import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.httpClient
-import com.github.davenury.ucac.testHttpClient
+import com.github.davenury.ucac.history.InitialHistoryEntry
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
-import com.github.davenury.ucac.utils.TestLogExtension
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -22,29 +16,26 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.*
-import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
-import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
-import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicInteger
 
 @Suppress("HttpUrlsUsage")
-@ExtendWith(TestLogExtension::class)
-class MultiplePeersetSpec {
+class TwoPCSpec {
     companion object {
-        private val logger = LoggerFactory.getLogger(MultiplePeersetSpec::class.java)
+        private val logger = LoggerFactory.getLogger(TwoPCSpec::class.java)
     }
 
     @BeforeEach
-    fun setup() {
+    fun setup(testInfo: TestInfo) {
         System.setProperty("configFile", "application-integration.conf")
         deleteRaftHistories()
+        println("\n\n${testInfo.displayName}")
     }
 
     @Test
@@ -76,7 +67,7 @@ class MultiplePeersetSpec {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/v2/change/sync", change)
+        executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change)
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -123,7 +114,7 @@ class MultiplePeersetSpec {
         val result = executeChange("http://${peers[0][0]}/v2/change/async", change)
         change = change.withAddress(peers[0][0])
 
-        expectThat(result.status).isEqualTo(HttpStatusCode.Accepted)
+        expectThat(result.status).isEqualTo(HttpStatusCode.Created)
 
         maxRetriesPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -132,8 +123,9 @@ class MultiplePeersetSpec {
             expectThat(changes.size).isEqualTo(0)
         }
 
+
         try {
-            testHttpClient.get<HttpResponse>(
+            val response: HttpResponse = testHttpClient.get(
                 "http://${peers[0][0]}/v2/change_status/${
                     change.toHistoryEntry().getId()
                 }"
@@ -153,7 +145,7 @@ class MultiplePeersetSpec {
     @Test
     fun `transaction should not pass when more than half peers of any peerset aren't responding`(): Unit = runBlocking {
         val apps = TestApplicationSet(
-            listOf(3, 5),
+             listOf(3, 5),
             appsToExclude = listOf(2, 5, 6, 7),
         )
         val peers = apps.getPeers()
@@ -163,7 +155,7 @@ class MultiplePeersetSpec {
 
         // when - executing transaction
         try {
-            executeChange("http://${peers[0][0]}/v2/change/sync", change(otherPeer))
+            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change(otherPeer))
             fail("Exception not thrown")
         } catch (e: Exception) {
             expectThat(e).isA<ServerResponseException>()
@@ -214,7 +206,7 @@ class MultiplePeersetSpec {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/v2/change/sync", change)
+        executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change)
 
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -245,7 +237,7 @@ class MultiplePeersetSpec {
 
             // when - executing transaction - should throw too few responses exception
             try {
-                executeChange("http://${peers[0][0]}/v2/change/sync", change(otherPeer))
+                executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change(otherPeer))
                 fail("executing change didn't fail")
             } catch (e: Exception) {
                 expectThat(e).isA<ServerResponseException>()
@@ -291,27 +283,14 @@ class MultiplePeersetSpec {
                 5 to signalListenersForCohort,
                 6 to signalListenersForCohort,
                 7 to signalListenersForCohort,
-            ),
-            configOverrides = (0..5).associateWith {
-                mapOf(
-                    "gpac.leaderFailDelay" to Duration.ofSeconds(0).toString(),
-                    "gpac.initialRetriesDelay" to Duration.ofSeconds(if (it == 1) 0 else 100).toString(),
-                )
-            }
+            )
         )
         val peers = apps.getPeers()
         val otherPeer = apps.getPeers()[1][0]
 
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/v2/change/sync", change(otherPeer))
-        }.subject.let { e ->
-            // TODO rewrite — we cannot model leader failure as part of API
-            expect {
-                that(e.response.status).isEqualTo(HttpStatusCode.InternalServerError)
-                that(e.response.readText()).contains("Change not applied due to timeout")
-                that(e.response.readText()).contains("Leader failed after ft-agree")
-            }
+            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change(otherPeer))
         }
 
         applyCommittedPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -338,7 +317,7 @@ class MultiplePeersetSpec {
                         accept(ContentType.Application.Json)
                         body = Apply(
                             it.transaction!!.ballotNumber, true, Accept.COMMIT,
-                            change(it.peers[1][0].address),
+                            change(it.peers[1][0]),
                         )
                     }.also {
                         logger.info("Got response test apply ${it.status.value}")
@@ -352,7 +331,7 @@ class MultiplePeersetSpec {
                         accept(ContentType.Application.Json)
                         body = Apply(
                             it.transaction!!.ballotNumber, true, Accept.COMMIT,
-                            change(it.peers[1][0].address),
+                            change(it.peers[1][0]),
                         )
                     }.also {
                         logger.info("Got response test apply ${it.status.value}")
@@ -393,7 +372,7 @@ class MultiplePeersetSpec {
 
             // when - executing transaction something should go wrong after ft-agree
             expectThrows<ServerResponseException> {
-                executeChange("http://${peers[0][0]}/v2/change/sync", change(otherPeer))
+                executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change(otherPeer))
             }
 
             phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -410,60 +389,35 @@ class MultiplePeersetSpec {
     @Test
     fun `should be able to execute change in two different peersets even if changes in peersets are different`() =
         runBlocking {
-
-            val consensusLeaderElectedPhaser = Phaser(6)
-            val firstChangePhaser = Phaser(2)
-            val secondChangePhaser = Phaser(4)
+            val firstChangePhaser = Phaser(3)
+            firstChangePhaser.register()
+            val secondChangePhaser = Phaser(5)
+            secondChangePhaser.register()
             val finalChangePhaser = Phaser(8)
+            finalChangePhaser.register()
 
-            listOf(firstChangePhaser, secondChangePhaser, finalChangePhaser, consensusLeaderElectedPhaser)
-                .forEach { it.register() }
-
-            val firstChangeListener = SignalListener {
+            val firstPeersetListener = SignalListener {
                 if (it.change!! is AddUserChange) {
                     firstChangePhaser.arrive()
-                }
-            }
-
-            val secondChangeListener = SignalListener {
-                if (it.change!! is AddGroupChange) {
-                    secondChangePhaser.arrive()
-                }
-            }
-
-            val finalChangeListener = SignalListener {
-                if (it.change is AddRelationChange) {
+                } else if (it.change is AddRelationChange) {
                     finalChangePhaser.arrive()
                 }
             }
 
-            val leaderElectedListener = SignalListener {
-                consensusLeaderElectedPhaser.arrive()
+            val secondPeersetListener = SignalListener {
+                if (it.change!! is AddGroupChange) {
+                    secondChangePhaser.arrive()
+                } else if (it.change is AddRelationChange) {
+                    finalChangePhaser.arrive()
+                }
             }
-
-
-//          Await to elect leader in consensus
 
             val apps = TestApplicationSet(
                 listOf(3, 5),
-                signalListeners = List(3) {
-                    it to mapOf(
-                        Signal.ConsensusFollowerChangeAccepted to firstChangeListener,
-                        Signal.OnHandlingApplyEnd to finalChangeListener,
-                        Signal.ConsensusLeaderElected to leaderElectedListener,
-                    )
-                }.toMap()
-                        + List(5) {
-                    it + 3 to mapOf(
-                        Signal.ConsensusFollowerChangeAccepted to secondChangeListener,
-                        Signal.ConsensusLeaderElected to leaderElectedListener,
-                        Signal.OnHandlingApplyEnd to finalChangeListener
-                    )
-                }.toMap()
+                signalListeners = List(3) { it to mapOf(Signal.OnHandlingApplyEnd to firstPeersetListener) }.toMap()
+                        + List(5) { it + 3 to mapOf(Signal.OnHandlingApplyEnd to secondPeersetListener) }.toMap()
             )
             val peers = apps.getPeers()
-
-            consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(15))
 
             // given - change in first peerset
             val someChange = AddUserChange(InitialHistoryEntry.getId(), "firstUserName", listOf())
@@ -471,7 +425,7 @@ class MultiplePeersetSpec {
                 executeChange("http://${peers[0][0]}/v2/change/sync", someChange)
             }.isSuccess()
 
-            firstChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            firstChangePhaser.arriveAndAwaitAdvance()
 
             // and - change in second peerset
             expectCatching {
@@ -481,7 +435,7 @@ class MultiplePeersetSpec {
                 )
             }.isSuccess()
 
-            secondChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            secondChangePhaser.arriveAndAwaitAdvance()
 
             val lastChange = askForChanges(peers[0][0]).last()
 
@@ -497,7 +451,7 @@ class MultiplePeersetSpec {
                 executeChange("http://${peers[0][0]}/v2/change/sync", addRelationChange)
             }.isSuccess()
 
-            finalChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            finalChangePhaser.arriveAndAwaitAdvance()
 
             askAllForChanges(peers.flatten()).let {
                 it.forEach {
@@ -531,6 +485,9 @@ class MultiplePeersetSpec {
         // leader should enrich himself
         listOf(otherPeersetPeer)
     )
+
+    private fun enrichChange(change: Change, peer: String) =
+        change.withAddress(peer)
 
     private fun deleteRaftHistories() {
         File(System.getProperty("user.dir")).listFiles { pathname -> pathname?.name?.startsWith("history") == true }
