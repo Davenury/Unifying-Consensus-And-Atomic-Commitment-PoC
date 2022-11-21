@@ -30,8 +30,8 @@ data class Ledger(
 
             newAcceptedItems.forEach { history.addEntry(it.change.toHistoryEntry()) }
             return LedgerUpdateResult(
-                anyAcceptedChange = newAcceptedItems.isNotEmpty(),
-                anyProposedChange = newProposedItems.isNotEmpty()
+                acceptedItems = newAcceptedItems,
+                proposedItems = newProposedItems,
             )
         }
     }
@@ -85,12 +85,6 @@ data class Ledger(
                 .map { it.change }.toMutableList()
         }
 
-
-    suspend fun isChangeAccepted(change: Change): Boolean =
-        mutex.withLock {
-            acceptedItems.any { it.change == change }
-        }
-
     suspend fun checkIfItemExist(logIndex: Int, logTerm: Int): Boolean =
         mutex.withLock {
             acceptedItems
@@ -119,19 +113,11 @@ data class Ledger(
                 .any { it.change.toHistoryEntry() == change.toHistoryEntry() }
         }
 
-    suspend fun getLedgerIdByChange(change: Change): Int =
-        mutex.withLock {
-            (acceptedItems + proposedItems)
-                .find { it.change.toHistoryEntry() == change.toHistoryEntry() }!!.ledgerIndex
-        }
-
-
     private fun List<LedgerItem>.maxOrDefault(defaultValue: Int): Int =
         this.maxOfOrNull { it.ledgerIndex } ?: defaultValue
 
     @JvmName("maxOrDefaultInt")
     private fun List<Int>.maxOrDefault(defaultValue: Int): Int = this.maxOfOrNull { it } ?: defaultValue
-
 }
 
 data class LedgerItemDto(val ledgerIndex: Int, val term: Int, val change: Change) {
@@ -142,4 +128,4 @@ data class LedgerItem(val ledgerIndex: Int, val term: Int, val change: Change) {
     fun toDto(): LedgerItemDto = LedgerItemDto(ledgerIndex, term, change)
 }
 
-data class LedgerUpdateResult(val anyAcceptedChange: Boolean, val anyProposedChange: Boolean)
+data class LedgerUpdateResult(val acceptedItems: List<LedgerItem>, val proposedItems: List<LedgerItem>)

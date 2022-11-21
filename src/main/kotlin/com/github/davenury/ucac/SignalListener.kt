@@ -2,6 +2,7 @@ package com.github.davenury.ucac
 
 import com.github.davenury.common.Change
 import com.github.davenury.ucac.commitment.gpac.Transaction
+import com.github.davenury.ucac.common.PeerAddress
 
 enum class Signal {
     BeforeSendingElect,
@@ -35,14 +36,14 @@ class SignalPublisher(
     fun signal(
         signal: Signal,
         subject: SignalSubject,
-        otherPeers: List<List<String>>,
+        peers: List<List<PeerAddress>>,
         transaction: Transaction?,
         change: Change? = null,
     ) {
         listeners[signal]?.onSignal(SignalData(
             signal,
             subject,
-            otherPeers,
+            peers,
             transaction,
             change
         ))
@@ -52,7 +53,7 @@ class SignalPublisher(
 data class SignalData(
     val signal: Signal,
     val subject: SignalSubject,
-    val peers: List<List<String>>,
+    val peers: List<List<PeerAddress>>,
     val transaction: Transaction?,
     val change: Change? = null
 )

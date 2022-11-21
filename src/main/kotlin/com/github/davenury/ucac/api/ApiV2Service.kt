@@ -7,25 +7,24 @@ import com.github.davenury.common.Changes
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.commitment.gpac.GPACProtocol
+import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.time.withTimeout
 import java.time.Duration
-import java.util.*
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentLinkedDeque
 
 class ApiV2Service(
     private val gpacProtocol: GPACProtocol,
     private val consensusProtocol: ConsensusProtocol,
     private val history: History,
     private var config: Config,
+    private var peerResolver: PeerResolver,
 ) {
-    private val channel: Channel<Unit> = Channel()
-    private val queue: Deque<ProcessorJob> = ConcurrentLinkedDeque<ProcessorJob>()
-    private val worker: Thread = Thread(Worker(queue, channel, gpacProtocol, consensusProtocol))
+    private val queue: Channel<ProcessorJob> = Channel(Channel.Factory.UNLIMITED)
+    private val worker: Thread = Thread(Worker(queue, gpacProtocol, consensusProtocol))
 
     init {
         worker.start()
@@ -46,8 +45,7 @@ class ApiV2Service(
     suspend fun addChange(change: Change, enforceGpac: Boolean = false): CompletableFuture<ChangeResult> =
         CompletableFuture<ChangeResult>().also {
             val isConsensusChange: Boolean = allPeersFromMyPeerset(change.peers) && !enforceGpac
-            queue.addLast(ProcessorJob(change, it, isConsensusChange))
-            channel.send(Unit)
+            queue.send(ProcessorJob(change, it, isConsensusChange))
         }
 
     suspend fun addChangeSync(
@@ -62,15 +60,6 @@ class ApiV2Service(
         null
     }
 
-    fun setPeers(peers: Map<Int, List<String>>, myAddress: String) {
-        val myPeerset = peers[config.peersetId]!!.plus(myAddress).distinct()
-        val newPeersString = peers
-            .plus(config.peersetId to myPeerset)
-            .map { it.value.joinToString(",") }
-            .joinToString(";")
-        config = config.copy(peers = newPeersString)
-    }
-
     private fun allPeersFromMyPeerset(peers: List<String>) =
-        config.peerAddresses(config.peersetId).containsAll(peers)
+        peerResolver.getPeersFromCurrentPeerset().map { it.address }.containsAll(peers)
 }

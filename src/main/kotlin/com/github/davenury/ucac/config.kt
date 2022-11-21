@@ -1,6 +1,7 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.common.PeerResolver
 import com.sksamuel.hoplite.ConfigLoaderBuilder
 import com.sksamuel.hoplite.MapPropertySource
 import com.sksamuel.hoplite.addResourceSource
@@ -25,8 +26,7 @@ data class Config(
     val rest: RestConfig = RestConfig(),
 ) {
     fun globalPeerId() = GlobalPeerId(peersetId, peerId)
-    fun peerAddresses(): List<List<String>> = parsePeers(peers)
-    fun peerAddresses(peersetId: Int): List<String> = peerAddresses()[peersetId]
+    fun newPeerResolver() = PeerResolver(globalPeerId(), ArrayList(parsePeers(peers)))
 }
 
 data class RatisConfig(

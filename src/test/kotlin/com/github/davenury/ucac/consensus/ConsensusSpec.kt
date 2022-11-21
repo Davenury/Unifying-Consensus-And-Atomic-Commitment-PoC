@@ -9,6 +9,7 @@ import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.testHttpClient
@@ -21,6 +22,7 @@ import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.slf4j.LoggerFactory
 import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
@@ -46,13 +48,6 @@ class ConsensusSpec {
 
     @Test
     fun `happy path`(): Unit = runBlocking {
-        //1. happy-path, wszyscy żyją i jeden zostaje wybrany jako leader
-        //* peer 1 wysyła prośbę o głosowanie na niego
-        //* peer 1 dostaje większość głosów
-        //* peer 1 informuje że jest leaderem
-        //* peer 1 proponuje zmianę (akceptowana)
-        //* peer 2 proponuje zmianę (akceptowana)
-
         val peersWithoutLeader = 4
 
         val phaser = Phaser(peersWithoutLeader)
@@ -134,7 +129,7 @@ class ConsensusSpec {
             Signal.ConsensusTryToBecomeLeader to peerTryToBecomeLeader,
         )
         val peerset = TestApplicationSet(
-             listOf(5),
+            listOf(5),
             appsToExclude = listOf(2, 3, 4),
             signalListeners = (0..4).associateWith { signalListener },
         )
@@ -167,7 +162,7 @@ class ConsensusSpec {
         )
 
         val peerset = TestApplicationSet(
-             listOf(5),
+            listOf(5),
             appsToExclude = listOf(3, 4),
             signalListeners = (0..4).associateWith { signalListener },
         )
@@ -200,7 +195,7 @@ class ConsensusSpec {
         val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
 
         val peerset = TestApplicationSet(
-             listOf(5),
+            listOf(5),
             signalListeners = (0..4).associateWith { signalListener },
         )
         var apps = peerset.getRunningApps()
@@ -243,7 +238,7 @@ class ConsensusSpec {
         val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
 
         val peerset = TestApplicationSet(
-             listOf(5),
+            listOf(5),
             signalListeners = (0..4).associateWith { signalListener },
             appsToExclude = listOf(4),
         )
@@ -287,7 +282,7 @@ class ConsensusSpec {
 
         val peerTryToBecomeLeader = SignalListener {
             val name = it.subject.getPeerName()
-            if(!peersTried.contains(name) && leaderElect) {
+            if (!peersTried.contains(name) && leaderElect) {
                 peersTried.add(name)
                 tryToBecomeLeaderPhaser.arrive()
             }
@@ -303,7 +298,7 @@ class ConsensusSpec {
         )
 
         val peerset = TestApplicationSet(
-             listOf(6),
+            listOf(6),
             appsToExclude = listOf(4, 5),
             signalListeners = (0..5).associateWith { signalListener },
         )
@@ -334,6 +329,7 @@ class ConsensusSpec {
     fun `leader fails during processing change`(): Unit = runBlocking {
         var peersWithoutLeader = 4
 
+        val failurePhaser = Phaser(2)
         val election1Phaser = Phaser(peersWithoutLeader)
         peersWithoutLeader -= 1
         val election2Phaser = Phaser(peersWithoutLeader)
@@ -343,7 +339,10 @@ class ConsensusSpec {
         var firstLeader = true
 
         val leaderAction = SignalListener {
-            if(firstLeader) throw RuntimeException("Failed after proposing change")
+            if (firstLeader) {
+                failurePhaser.arrive()
+                throw RuntimeException("Failed after proposing change")
+            }
         }
 
         val peerLeaderElected =
@@ -363,7 +362,7 @@ class ConsensusSpec {
         )
 
         val peerset = TestApplicationSet(
-             listOf(5),
+            listOf(5),
             signalListeners = (0..4).associateWith { signalListener },
         )
         val apps = peerset.getRunningApps()
@@ -376,9 +375,12 @@ class ConsensusSpec {
         val firstLeaderAddress = triple.first
 
 //      Start processing
+        val change = createChange(null)
         expectCatching {
-            executeChange("$firstLeaderAddress/v2/change/sync", createChange(null))
+            executeChange("$firstLeaderAddress/v2/change/sync?timeout=PT0.1S", change)
         }.isFailure()
+
+        failurePhaser.arriveAndAwaitAdvanceWithTimeout()
         firstLeader = false
 
         firstLeaderApplication.stop(0, 0)
@@ -386,27 +388,29 @@ class ConsensusSpec {
 
         val runningPeers = peerset.getRunningPeers()[0].filterNot { it.contains(firstLeaderPort) }
 
+        val proposedChanges1 = askForProposedChanges(runningPeers.first())
+        val acceptedChanges1 = askForAcceptedChanges(runningPeers.first())
+        expect{
+            that(proposedChanges1.size).isEqualTo(1)
+            that(acceptedChanges1.size).isEqualTo(0)
+        }
         expect {
-            val proposedChanges = askForProposedChanges(runningPeers.first())
-            val acceptedChanges = askForAcceptedChanges(runningPeers.first())
-            that(proposedChanges.size).isEqualTo(1)
-            that(proposedChanges.first()).isEqualTo(createChange(null))
-            that(proposedChanges.first().acceptNum).isEqualTo(null)
-            that(acceptedChanges.size).isEqualTo(0)
+            that(proposedChanges1.first()).isEqualTo(change)
+            that(proposedChanges1.first().acceptNum).isEqualTo(null)
         }
 
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        val proposedChanges = askForProposedChanges(runningPeers.first())
-        val acceptedChanges = askForAcceptedChanges(runningPeers.first())
+        val proposedChanges2 = askForProposedChanges(runningPeers.first())
+        val acceptedChanges2 = askForAcceptedChanges(runningPeers.first())
         expect {
-            that(proposedChanges.size).isEqualTo(0)
-            that(acceptedChanges.size).isEqualTo(1)
+            that(proposedChanges2.size).isEqualTo(0)
+            that(acceptedChanges2.size).isEqualTo(1)
         }
         expect {
-            that(acceptedChanges.first()).isEqualTo(createChange(null))
-            that(acceptedChanges.first().acceptNum).isEqualTo(null)
+            that(acceptedChanges2.first()).isEqualTo(change)
+            that(acceptedChanges2.first().acceptNum).isEqualTo(null)
         }
 
         peerset.stopApps()
@@ -429,7 +433,7 @@ class ConsensusSpec {
         )
 
         val peerset = TestApplicationSet(
-             listOf(5),
+            listOf(5),
             signalListeners = (0..4).associateWith { signalListener },
         )
         val apps = peerset.getRunningApps()
@@ -493,7 +497,7 @@ class ConsensusSpec {
         )
 
         val peerset = TestApplicationSet(
-             listOf(5),
+            listOf(5),
             signalListeners = (0..4).associateWith { signalListener },
         )
         val apps = peerset.getRunningApps()
@@ -567,7 +571,7 @@ class ConsensusSpec {
         )
 
         val peerset = TestApplicationSet(
-             listOf(5),
+            listOf(5),
             signalListeners = (0..4).associateWith { signalListener },
         )
         val apps = peerset.getRunningApps()
@@ -589,16 +593,28 @@ class ConsensusSpec {
         isNetworkDivided = true
 
         firstHalf.forEach { address ->
-            val application = addressToApplication[address]
-            val peers = firstHalf.filter { it != address } + secondHalf.map { it.replace(knownPeerIp, unknownPeerIp) }
-            modifyPeers(application!!, peers)
+            val peers = peerAddresses.map { peer ->
+                if (secondHalf.contains(peer)) {
+                    peer.replace(knownPeerIp, unknownPeerIp)
+                } else {
+                    peer
+                }
+            }
+            addressToApplication[address]!!.setPeers(listOf(peers))
         }
 
         secondHalf.forEach { address ->
-            val application = addressToApplication[address]
-            val peers = secondHalf.filter { it != address } + firstHalf.map { it.replace(knownPeerIp, unknownPeerIp) }
-            modifyPeers(application!!, peers)
+            val peers = peerAddresses.map { peer ->
+                if (firstHalf.contains(peer)) {
+                    peer.replace(knownPeerIp, unknownPeerIp)
+                } else {
+                    peer
+                }
+            }
+            addressToApplication[address]!!.setPeers(listOf(peers))
         }
+
+        logger.info("Network divided")
 
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
 //      Check if second half chose new leader
@@ -618,6 +634,8 @@ class ConsensusSpec {
         }.isSuccess()
 
         change1Phaser.arriveAndAwaitAdvanceWithTimeout()
+
+        logger.info("After change 1")
 
         firstHalf.forEach {
             val proposedChanges = askForProposedChanges(it)
@@ -647,11 +665,14 @@ class ConsensusSpec {
 
 //      Merge network
         peerAddresses.forEach { address ->
-            val application = addressToApplication[address]
-            modifyPeers(application!!, peerAddresses.filter { it != address })
+            addressToApplication[address]!!.setPeers(listOf(peerAddresses))
         }
 
+        logger.info("Network merged")
+
         change2Phaser.arriveAndAwaitAdvanceWithTimeout()
+
+        logger.info("After change 2")
 
         peerAddresses.forEach {
             val proposedChanges = askForProposedChanges(it)
@@ -671,47 +692,51 @@ class ConsensusSpec {
 
     @Test
     fun `unit tests of isMoreThanHalf() function`(): Unit = runBlocking {
-        val listOfPeers = mutableListOf("2", "3")
+        val listOfPeers = mutableListOf("1", "2", "3")
 
-        val initializeConsensusProtocol = { otherPeers: List<String> ->
-            RaftConsensusProtocolImpl(
-                History(),
-                GlobalPeerId(0, 0),
-                "1",
-                Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
-                otherPeers,
-                protocolClient = RaftProtocolClientImpl(),
-            )
+        val peerResolver = PeerResolver(GlobalPeerId(0, 0), listOf<List<String>>(listOfPeers))
+        val consensus = RaftConsensusProtocolImpl(
+            History(),
+            "1",
+            Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
+            peerResolver,
+            protocolClient = RaftProtocolClientImpl(),
+        )
+        expect {
+            that(consensus.isMoreThanHalf(0)).isFalse()
+            that(consensus.isMoreThanHalf(1)).isTrue()
+            that(consensus.isMoreThanHalf(2)).isTrue()
         }
 
-        val consensus = initializeConsensusProtocol(listOfPeers)
-        expectThat(consensus.isMoreThanHalf(0)).isFalse()
-        expectThat(consensus.isMoreThanHalf(1)).isTrue()
-        expectThat(consensus.isMoreThanHalf(2)).isTrue()
-
         listOfPeers.add("4")
-        consensus.setOtherPeers(listOfPeers)
-        expectThat(consensus.isMoreThanHalf(0)).isFalse()
-        expectThat(consensus.isMoreThanHalf(1)).isFalse()
-        expectThat(consensus.isMoreThanHalf(2)).isTrue()
-        expectThat(consensus.isMoreThanHalf(3)).isTrue()
+        peerResolver.setPeers(listOf(listOfPeers))
+        expect {
+            that(consensus.isMoreThanHalf(0)).isFalse()
+            that(consensus.isMoreThanHalf(1)).isFalse()
+            that(consensus.isMoreThanHalf(2)).isTrue()
+            that(consensus.isMoreThanHalf(3)).isTrue()
+        }
 
         listOfPeers.add("5")
-        consensus.setOtherPeers(listOfPeers)
-        expectThat(consensus.isMoreThanHalf(0)).isFalse()
-        expectThat(consensus.isMoreThanHalf(1)).isFalse()
-        expectThat(consensus.isMoreThanHalf(2)).isTrue()
-        expectThat(consensus.isMoreThanHalf(3)).isTrue()
-        expectThat(consensus.isMoreThanHalf(4)).isTrue()
+        peerResolver.setPeers(listOf(listOfPeers))
+        expect {
+            that(consensus.isMoreThanHalf(0)).isFalse()
+            that(consensus.isMoreThanHalf(1)).isFalse()
+            that(consensus.isMoreThanHalf(2)).isTrue()
+            that(consensus.isMoreThanHalf(3)).isTrue()
+            that(consensus.isMoreThanHalf(4)).isTrue()
+        }
 
         listOfPeers.add("6")
-        consensus.setOtherPeers(listOfPeers)
-        expectThat(consensus.isMoreThanHalf(0)).isFalse()
-        expectThat(consensus.isMoreThanHalf(1)).isFalse()
-        expectThat(consensus.isMoreThanHalf(2)).isFalse()
-        expectThat(consensus.isMoreThanHalf(3)).isTrue()
-        expectThat(consensus.isMoreThanHalf(4)).isTrue()
-        expectThat(consensus.isMoreThanHalf(5)).isTrue()
+        peerResolver.setPeers(listOf(listOfPeers))
+        expect {
+            that(consensus.isMoreThanHalf(0)).isFalse()
+            that(consensus.isMoreThanHalf(1)).isFalse()
+            that(consensus.isMoreThanHalf(2)).isFalse()
+            that(consensus.isMoreThanHalf(3)).isTrue()
+            that(consensus.isMoreThanHalf(4)).isTrue()
+            that(consensus.isMoreThanHalf(5)).isTrue()
+        }
     }
 
     private fun createChange(
@@ -733,7 +758,7 @@ class ConsensusSpec {
             body = change
         }
 
-    private suspend fun genericAskForChange(suffix: String, peer: String): Changes =
+    private suspend fun genericAskForChange(suffix: String, peer: String) =
         testHttpClient.get<Changes>("http://$peer/consensus/$suffix") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
@@ -745,6 +770,7 @@ class ConsensusSpec {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
+
     private suspend fun askAllForChanges(peerAddresses: List<String>) =
         peerAddresses.map { askForChanges(it) }
 
@@ -786,8 +812,7 @@ class ConsensusSpec {
 
     private fun getPortFromAddress(address: String) = address.split(":")[1]
 
-    private fun modifyPeers(app: ApplicationUcac, peers: List<String>) {
-        val newPeers = peers.map { it.replace("http://", "") }
-        app.setPeers(mapOf(0 to newPeers), "127.0.0.1")
+    companion object {
+        private val logger = LoggerFactory.getLogger(ConsensusSpec::class.java)
     }
 }

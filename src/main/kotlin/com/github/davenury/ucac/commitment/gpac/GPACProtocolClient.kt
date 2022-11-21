@@ -1,5 +1,6 @@
 package com.github.davenury.ucac.commitment.gpac
 
+import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -9,6 +10,7 @@ import io.ktor.utils.io.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
 data class ResponsesWithErrorAggregation<K>(
@@ -17,51 +19,58 @@ data class ResponsesWithErrorAggregation<K>(
 )
 
 interface GPACProtocolClient {
-    suspend fun sendElectMe(otherPeers: List<List<String>>, message: ElectMe): ResponsesWithErrorAggregation<ElectedYou>
-    suspend fun sendFTAgree(otherPeers: List<List<String>>, message: Agree): List<List<Agreed>>
-    suspend fun sendApply(otherPeers: List<List<String>>, message: Apply): List<Int>
+    suspend fun sendElectMe(
+        otherPeers: List<List<PeerAddress>>,
+        message: ElectMe
+    ): ResponsesWithErrorAggregation<ElectedYou>
+
+    suspend fun sendFTAgree(otherPeers: List<List<PeerAddress>>, message: Agree): List<List<Agreed>>
+    suspend fun sendApply(otherPeers: List<List<PeerAddress>>, message: Apply): List<Int>
 }
 
 class GPACProtocolClientImpl : GPACProtocolClient {
 
     override suspend fun sendElectMe(
-        otherPeers: List<List<String>>,
+        otherPeers: List<List<PeerAddress>>,
         message: ElectMe
     ): ResponsesWithErrorAggregation<ElectedYou> =
         sendRequests<ElectMe, ElectedYou>(
             otherPeers,
             message,
             "elect",
-            { singlePeer, e -> "Peer $singlePeer responded with exception: $e - election" },
+            { peer, e -> "Peer ${peer.globalPeerId} responded with exception: $e - election" },
             { accs: List<Int> -> accs.maxOfOrNull { it } }
         )
 
-    override suspend fun sendFTAgree(otherPeers: List<List<String>>, message: Agree): List<List<Agreed>> =
+    override suspend fun sendFTAgree(otherPeers: List<List<PeerAddress>>, message: Agree): List<List<Agreed>> =
         sendRequests<Agree, Agreed>(
             otherPeers,
             message,
             "ft-agree",
-            { singlePeer, e -> "Peer $singlePeer responded with exception: $e - ft agreement" }
+            { peer, e -> "Peer ${peer.globalPeerId} responded with exception: $e - ft agreement" }
         ).responses
 
-    override suspend fun sendApply(otherPeers: List<List<String>>, message: Apply): List<Int> =
+    override suspend fun sendApply(otherPeers: List<List<PeerAddress>>, message: Apply): List<Int> =
         sendRequests<Apply, HttpResponse>(
             otherPeers, message, "apply",
-            { it, e -> "Peer: $it didn't apply transaction: $e" }
+            { peer, e -> "Peer: ${peer.globalPeerId} didn't apply transaction: $e" }
         ).responses.flatten().map { it.status.value }
 
     private suspend inline fun <T, reified K> sendRequests(
-        otherPeers: List<List<String>>,
+        otherPeers: List<List<PeerAddress>>,
         requestBody: T,
         urlPath: String,
-        crossinline errorMessage: (String, Throwable) -> String,
+        crossinline errorMessage: (PeerAddress, Throwable) -> String,
         crossinline aggregateErrors: (accs: List<Int>) -> Int? = { _: List<Int> -> 0 }
     ): ResponsesWithErrorAggregation<K> {
         val acc = mutableListOf<Int?>()
-        val responses: List<List<K>> = otherPeers.map { peersets ->
-            peersets.map {
-                CoroutineScope(Dispatchers.IO).async {
-                    val (httpResult, value) = gpacHttpCall<K, T>("http://$it/$urlPath", requestBody, errorMessage)
+        val responses: List<List<K>> = otherPeers.map { peerset ->
+            peerset.map { peer ->
+                CoroutineScope(Dispatchers.IO).async(MDCContext()) {
+                    val (httpResult, value) = gpacHttpCall<K, T>(
+                        "http://${peer.address}/$urlPath",
+                        requestBody,
+                    ) { throwable -> errorMessage(peer, throwable) }
                     acc.add(value)
                     httpResult
                 }
@@ -86,10 +95,10 @@ class GPACProtocolClientImpl : GPACProtocolClient {
     private suspend inline fun <reified Response, Message> gpacHttpCall(
         url: String,
         requestBody: Message,
-        errorMessage: (String, Throwable) -> String
+        errorMessage: (Throwable) -> String
     ): Pair<Response?, Int> =
         try {
-            logger.info("Sending to: $url")
+            logger.debug("Sending $requestBody to: $url")
             val response = httpClient.post<Response>(url) {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
@@ -100,7 +109,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
             // since we're updating ballot number in electing phase, this mechanism lets us
             // get any aggregation from all responses from "Not electing you" response, so we can get
             // max of all ballotNumbers sent back to the leader
-            logger.error(errorMessage(url, e), e)
+            logger.error(errorMessage(e), e)
             if (e.response.status.value == 422) {
                 val value = e.response.content.readUTF8Line()?.let {
                     return@let Regex("[0-9]+").findAll(it)
@@ -113,7 +122,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
                 Pair(null, 0)
             }
         } catch (e: Exception) {
-            logger.error(errorMessage(url, e), e)
+            logger.error(errorMessage(e), e)
             Pair(null, 0)
         }
 

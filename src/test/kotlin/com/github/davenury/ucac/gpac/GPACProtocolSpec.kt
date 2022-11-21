@@ -33,10 +33,7 @@ class GPACProtocolSpec {
         ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
         protocolClientMock,
         transactionBlockerMock,
-        myPeersetId = 0,
-        myNodeId = 0,
-        allPeers = mapOf(0 to listOf("peer2", "peer3")),
-        myAddress = "peer1"
+        peerResolver = PeerResolver(GlobalPeerId(0, 0), listOf(listOf("peer1", "peer2", "peer3"))),
     ).also {
         it.leaderTimer = timerMock
         it.retriesTimer = timerMock

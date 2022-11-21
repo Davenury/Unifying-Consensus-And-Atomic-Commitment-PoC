@@ -16,8 +16,7 @@ import java.util.concurrent.CompletableFuture
 
 
 class Worker(
-    private val queue: Deque<ProcessorJob>,
-    private val channel: Channel<Unit>,
+    private val queue: Channel<ProcessorJob>,
     private val gpacProtocol: GPACProtocol,
     private val consensusProtocol: ConsensusProtocol,
     passMdc: Boolean = true,
@@ -29,28 +28,26 @@ class Worker(
     }
 
     private suspend fun processingQueue() {
-        val oldMdc = MDC.getCopyOfContextMap()
-        MDC.setContextMap(mdc)
         try {
             while (!Thread.interrupted()) {
-                while (queue.isEmpty()) channel.receive()
-                val job = queue.pop()
-                val result =
-                    if (job.isConsensusOnly) consensusProtocol.proposeChangeAsync(job.change)
-                    else gpacProtocol.proposeChangeAsync(job.change)
-                job.completableFuture.complete(result.await())
+                val job = queue.receive()
+                val result = if (job.isConsensusOnly) {
+                    consensusProtocol.proposeChangeAsync(job.change)
+                } else {
+                    gpacProtocol.proposeChangeAsync(job.change)
+                }
+                result.thenAccept { job.completableFuture.complete(it) }
             }
         } catch (e: Exception) {
             if (e is InterruptedException) {
                 logger.debug("Worker interrupted")
             }
             processingQueue()
-        } finally {
-            MDC.setContextMap(oldMdc)
         }
     }
 
     override fun run() = runBlocking {
+        mdc?.let { MDC.setContextMap(it) }
         processingQueue()
     }
 
