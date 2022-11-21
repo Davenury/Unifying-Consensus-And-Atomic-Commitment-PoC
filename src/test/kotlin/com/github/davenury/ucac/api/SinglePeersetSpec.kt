@@ -202,7 +202,7 @@ class SinglePeersetSpec {
         val phaser = Phaser(2)
 
         val firstLeaderAction = SignalListener { signalData ->
-            val url = "http://${signalData.peers[0][1]}/apply"
+            val url = "http://${signalData.peers[0][1].address}/apply"
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
@@ -214,7 +214,7 @@ class SinglePeersetSpec {
                         AddGroupChange(
                             InitialHistoryEntry.getId(),
                             "groupName",
-                            listOf("http://${signalData.peers[0][1]}"),
+                            listOf("http://${signalData.peers[0][1].address}"),
                         )
                     )
                 }.also {

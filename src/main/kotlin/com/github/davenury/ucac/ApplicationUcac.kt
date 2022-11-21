@@ -8,7 +8,7 @@ import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.commitment.gpac.GPACProtocol
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
-import com.github.davenury.ucac.commitment.gpac.TransactionBlockerImpl
+import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -128,7 +128,7 @@ class ApplicationUcac constructor(
         )
 
             val protocolClient = GPACProtocolClientImpl()
-            val transactionBlocker = TransactionBlockerImpl()
+            val transactionBlocker = TransactionBlocker()
             gpacProtocol =
                 GPACProtocolImpl(
                     history,

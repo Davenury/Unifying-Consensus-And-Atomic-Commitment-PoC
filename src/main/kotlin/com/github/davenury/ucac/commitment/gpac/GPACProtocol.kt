@@ -96,7 +96,10 @@ class GPACProtocolImpl(
 
         signal(Signal.OnHandlingElectBegin, null, message.change)
 
-        transactionBlocker.assertICanSendElectedYou()
+        if (transactionBlocker.isAcquired()) {
+            logger.info("Tried to respond to elect me when semaphore acquired!")
+            throw AlreadyLockedException()
+        }
 
         if (!checkBallotNumber(message.ballotNumber)) {
             throw NotElectingYou(myBallotNumber, message.ballotNumber)
@@ -170,13 +173,10 @@ class GPACProtocolImpl(
             }
             changeSucceeded(message.change)
         } finally {
-            transaction = Transaction(myBallotNumber, Accept.ABORT, change = message.change)
+            transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
-            logger.info("Releasing semaphore as cohort")
             transactionBlocker.releaseBlock()
 
-            // TODO what??
-            changeConflicts(message.change)
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
         }
     }

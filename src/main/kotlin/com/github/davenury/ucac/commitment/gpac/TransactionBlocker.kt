@@ -4,35 +4,25 @@ import com.github.davenury.common.AlreadyLockedException
 import kotlinx.coroutines.sync.Semaphore
 import org.slf4j.LoggerFactory
 
-interface TransactionBlocker {
-    fun assertICanSendElectedYou()
-    fun releaseBlock()
-    fun tryToBlock()
-}
-
-class TransactionBlockerImpl : TransactionBlocker {
+class TransactionBlocker {
     private val semaphore = Semaphore(1)
 
-    override fun assertICanSendElectedYou() =
-        if (!semaphore.tryAcquire()) {
-            logger.info("Tried to respond to elect me when semaphore acquired!")
-            throw AlreadyLockedException()
-        } else {
-            semaphore.release()
-        }
+    fun isAcquired() = semaphore.availablePermits < 1
 
-    override fun releaseBlock() {
+    fun releaseBlock() {
         try {
+            logger.info("Releasing transaction lock")
             semaphore.release()
         } catch (e: Exception) {
             logger.error("Tried to release semaphore, when it was already released")
         }
     }
 
-    override fun tryToBlock() {
+    fun tryToBlock() {
         if (!semaphore.tryAcquire()) {
             throw AlreadyLockedException()
         }
+        logger.info("Transaction lock acquired")
     }
 
     companion object {
