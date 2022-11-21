@@ -152,8 +152,7 @@ class ApplicationUcac constructor(
                 signalPublisher,
                 config.peersetId,
                 config.peerId,
-                config.peerAddresses().withIndex().associate { it.index to it.value },
-                myAddress
+                peerResolver
             )
 
             service = ApiV2Service(

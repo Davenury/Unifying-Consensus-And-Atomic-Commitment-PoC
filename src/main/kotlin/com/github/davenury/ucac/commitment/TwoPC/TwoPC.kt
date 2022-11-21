@@ -1,5 +1,7 @@
 package com.github.davenury.ucac.commitment.TwoPC
 
+import com.github.davenury.common.*
+import com.github.davenury.common.history.History
 import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
@@ -7,7 +9,6 @@ import com.github.davenury.ucac.commitment.AtomicCommitmentProtocol
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
-import com.github.davenury.ucac.history.History
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
@@ -22,8 +23,7 @@ class TwoPC(
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     private val myPeersetId: Int,
     private val myNodeId: Int,
-    private var allPeers: Map<Int, List<String>>,
-    private var myAddress: String
+    private val peerResolver: PeerResolver
 ) : SignalSubject, AtomicCommitmentProtocol {
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
@@ -33,11 +33,12 @@ class TwoPC(
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
         val cf = CompletableFuture<ChangeResult>()
 
+
         val enrichedChange =
-            if (change.peers.contains(myAddress)) {
+            if (change.peers.contains(myAddress())) {
                 change
             } else {
-                change.withAddress(myAddress)
+                change.withAddress(myAddress())
             }
         changeIdToCompletableFuture[enrichedChange.toHistoryEntry().getId()] = cf
 
@@ -62,14 +63,14 @@ class TwoPC(
             "failed during processing acceptChange"
         )
 
-        val otherPeersets = change.peers.filter { it != myAddress }
+        val otherPeersets = change.peers.filter { it != myAddress() }
         val decision = protocolClient
             .sendAccept(otherPeersets, acceptChange)
             .all { it }
 
         val acceptChangeId = acceptChange.toHistoryEntry().getId()
 
-        val commitChange = if(decision) change.copyWithNewParentId(acceptChangeId)
+        val commitChange = if (decision) change.copyWithNewParentId(acceptChangeId)
         else TwoPCChange.fromChange(change, TwoPCStatus.ABORTED, acceptChangeId)
 
         commitChange(commitChange, otherPeersets)
@@ -120,6 +121,8 @@ class TwoPC(
             .complete(ChangeResult(ChangeResult.Status.CONFLICT))
             .also { throw TwoPCConflictException(exceptionText) }
 
+
+    private fun myAddress() = peerResolver.currentPeerAddress().address
 
     companion object {
         private val logger = LoggerFactory.getLogger(TwoPC::class.java)

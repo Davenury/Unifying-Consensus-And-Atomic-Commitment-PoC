@@ -20,8 +20,8 @@ class Worker(
     private val queue: Channel<ProcessorJob>,
     private val gpacProtocol: GPACProtocol,
     private val consensusProtocol: ConsensusProtocol,
-    passMdc: Boolean = true,
     private val twoPC: TwoPC,
+    passMdc: Boolean = true,
     private val is2PCEnforced: Boolean = false
 ) : Runnable {
     private var mdc: MutableMap<String, String>? = if (passMdc) {

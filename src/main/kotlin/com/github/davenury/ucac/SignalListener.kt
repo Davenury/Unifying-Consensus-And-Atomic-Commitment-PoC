@@ -1,9 +1,9 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.common.Change
+import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.ucac.commitment.gpac.Transaction
 import com.github.davenury.ucac.common.PeerAddress
-import com.github.davenury.ucac.history.HistoryEntry
 
 enum class Signal {
     BeforeSendingElect,

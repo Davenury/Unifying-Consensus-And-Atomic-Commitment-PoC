@@ -1,12 +1,8 @@
 package com.github.davenury.ucac.routing
 
+import com.github.davenury.common.Change
 import com.github.davenury.ucac.commitment.TwoPC.TwoPC
 import com.github.davenury.ucac.commitment.gpac.ElectMe
-import com.github.davenury.ucac.common.Change
-import com.github.davenury.ucac.common.Changes
-import com.github.davenury.ucac.common.ErrorMessage
-import com.github.davenury.ucac.history.History
-import com.github.davenury.ucac.history.InitialHistoryEntry
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*

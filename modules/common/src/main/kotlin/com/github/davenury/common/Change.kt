@@ -3,7 +3,6 @@ package com.github.davenury.common
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
-import com.github.davenury.ucac.commitment.TwoPC.TwoPCStatus
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
@@ -206,6 +205,12 @@ data class AddGroupChange(
     override fun copyWithNewParentId(parentId: String): Change =
         this.copy(parentId = parentId)
 
+}
+
+
+enum class TwoPCStatus {
+    ACCEPTED,
+    ABORTED
 }
 
 // TwoPC should always contain two changes:
