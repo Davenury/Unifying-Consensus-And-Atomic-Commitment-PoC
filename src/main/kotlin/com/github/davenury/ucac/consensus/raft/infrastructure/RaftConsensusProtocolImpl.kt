@@ -253,7 +253,8 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendHeartbeatToPeer(peer: GlobalPeerId) {
         val peerAddress = peerResolver.resolve(peer)
-        val response = protocolClient.sendConsensusHeartbeat(peerAddress, getMessageForPeer(peerAddress))
+        val peerMessage = getMessageForPeer(peerAddress)
+        val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
 
         // We should schedule heartbeat even if something failed during handling response
         if (role == RaftRole.Leader
@@ -270,7 +271,7 @@ class RaftConsensusProtocolImpl(
 
             response.message.success -> {
                 logger.debug("Heartbeat sent successfully to ${peerAddress.globalPeerId}")
-                handleSuccessHeartbeatResponseFromPeer(peerAddress)
+                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage)
             }
 
             response.message.term <= currentTerm -> {
@@ -323,12 +324,13 @@ class RaftConsensusProtocolImpl(
     }
 
 
-    private suspend fun handleSuccessHeartbeatResponseFromPeer(peerAddress: PeerAddress) {
+    private suspend fun handleSuccessHeartbeatResponseFromPeer(peerAddress: PeerAddress, peerMessage: ConsensusHeartbeat) {
         val globalPeerId = peerAddress.globalPeerId
 
         val peerIndices = peerUrlToNextIndex.getOrDefault(globalPeerId, PeerIndices())
-        val newAcceptedChanges = state.getNewAcceptedItems(peerIndices.acceptedIndex)
-        val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedIndex)
+
+        val newAcceptedChanges = peerMessage.acceptedChanges
+        val newProposedChanges = peerMessage.proposedChanges
 
         if (newProposedChanges.isNotEmpty()) {
             newProposedChanges.forEach {
