@@ -21,8 +21,7 @@ class Worker(
     private val gpacProtocol: GPACProtocol,
     private val consensusProtocol: ConsensusProtocol,
     private val twoPC: TwoPC,
-    passMdc: Boolean = true,
-    private val is2PCEnforced: Boolean = false
+    passMdc: Boolean = true
 ) : Runnable {
     private var mdc: MutableMap<String, String>? = if (passMdc) {
         MDC.getCopyOfContextMap()
@@ -34,6 +33,7 @@ class Worker(
         try {
             while (!Thread.interrupted()) {
                 val job = queue.receive()
+                logger.info("Worker receive job: $job")
                 val result =
                     when (job.processorJobType) {
                         ProcessorJobType.CONSENSUS -> consensusProtocol.proposeChangeAsync(job.change)

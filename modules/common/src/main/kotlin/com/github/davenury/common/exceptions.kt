@@ -8,6 +8,7 @@ class HistoryCannotBeBuildException : Exception()
 class AlreadyLockedException : Exception()
 class ChangeDoesntExist(changeId: String): Exception("Change with id: $changeId doesn't exists")
 class TwoPCConflictException(msg: String): Exception("During 2PC occurs error: $msg")
+class TwoPCHandleException(msg: String): Exception("In 2PC occurs error: $msg")
 
 data class ErrorMessage(val msg: String)
 enum class ChangeCreationStatus {

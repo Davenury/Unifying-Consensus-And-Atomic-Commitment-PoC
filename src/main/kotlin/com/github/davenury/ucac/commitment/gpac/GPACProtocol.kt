@@ -10,6 +10,7 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.slf4j.MDCContext
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.lang.Exception
 import java.time.Duration
@@ -27,8 +28,6 @@ interface GPACProtocol : SignalSubject, AtomicCommitmentProtocol {
     suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int = 1)
     fun getTransaction(): Transaction
     fun getBallotNumber(): Int
-
-    fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>?
 
 }
 
@@ -474,23 +473,20 @@ class GPACProtocolImpl(
         changeIdToCompletableFuture[changeId]?.complete(ChangeResult(ChangeResult.Status.TIMEOUT, detailedMessage))
     }
 
-    private fun getPeersFromChange(change: Change): List<List<PeerAddress>> {
-        if (change.peers.isEmpty()) throw RuntimeException("Change without peers")
-        return change.peers.map { peer ->
-            val peersetId = peerResolver.findPeersetWithPeer(peer)
-            if (peersetId == null) {
-                logger.error("Peer $peer not found in ${peerResolver.getPeers()}")
-            }
-            return@map peerResolver.getPeersFromPeerset(peersetId!!) // TODO we need to specify peersetIds instead of peers
-        }.map { peerset -> peerset.filter { it.globalPeerId != peerResolver.currentPeerAddress().globalPeerId } }
-    }
-
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
 
     override fun getPeerName() = peerResolver.currentPeerAddress().globalPeerId.toString()
+    override suspend fun performProtocol(change: Change) = performProtocolAsLeader(change)
 
     companion object {
         private val logger = LoggerFactory.getLogger("gpac")
     }
+
+    override fun getLogger(): Logger = logger
+    override fun getPeerResolver(): PeerResolver = peerResolver
+    override fun putChangeToCompletableFutureMap(change: Change, completableFuture: CompletableFuture<ChangeResult>) {
+        changeIdToCompletableFuture[change.toHistoryEntry().getId()] = completableFuture
+    }
+
 }

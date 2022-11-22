@@ -3,6 +3,7 @@ package com.github.davenury.common
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
+import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
@@ -34,7 +35,7 @@ class Changes : ArrayList<Change> {
         JsonSubTypes.Type(value = DeleteRelationChange::class, name = "DELETE_RELATION"),
         JsonSubTypes.Type(value = AddUserChange::class, name = "ADD_USER"),
         JsonSubTypes.Type(value = AddGroupChange::class, name = "ADD_GROUP"),
-        JsonSubTypes.Type(value = TwoPCChange::class, name = "TWO_PC_STATUS"),
+        JsonSubTypes.Type(value = TwoPCChange::class, name = "TWO_PC_Change"),
     )
 )
 sealed class Change {
@@ -222,8 +223,9 @@ data class TwoPCChange(
     val twoPCStatus: TwoPCStatus,
     override val peers: List<String>,
     override val acceptNum: Int? = null,
-    private val change: Change
+    val change: Change
 ) : Change() {
+
     override fun withAddress(myAddress: String): Change {
         return this.copy(peers = peers.toMutableList().also { it.add(myAddress) })
     }
@@ -233,18 +235,12 @@ data class TwoPCChange(
             return false
         }
         return Objects.equals(parentId, other.parentId) &&
-                Objects.equals(twoPCStatus, other.twoPCStatus)
+                Objects.equals(twoPCStatus, other.twoPCStatus) &&
+                Objects.equals(this.change, other.change)
     }
 
     override fun hashCode(): Int {
         return Objects.hash(parentId, twoPCStatus)
-    }
-
-    companion object {
-
-        fun fromChange(change: Change, twoPCStatus: TwoPCStatus, parentId: String = change.parentId): TwoPCChange =
-            TwoPCChange(parentId, twoPCStatus, change.peers, change.acceptNum, change = change)
-
     }
 
     override fun copyWithNewParentId(parentId: String): Change =

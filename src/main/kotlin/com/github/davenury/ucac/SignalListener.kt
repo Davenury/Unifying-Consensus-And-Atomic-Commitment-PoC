@@ -23,7 +23,8 @@ enum class Signal {
     ConsensusAfterProposingChange,
     ConsensusFollowerChangeAccepted,
     ConsensusFollowerChangeProposed,
-    ConsensusTryToBecomeLeader
+    ConsensusTryToBecomeLeader,
+    TwoPCOnChangeApplied
 }
 
 

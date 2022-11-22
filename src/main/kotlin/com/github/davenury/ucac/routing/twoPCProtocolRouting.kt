@@ -18,11 +18,6 @@ fun Application.twoPCRouting(twoPC: TwoPC) {
             twoPC.handleAccept(message)
             call.respond(HttpStatusCode.OK)
         }
-        post("/2pc/commit") {
-            val message = call.receive<Change>()
-            twoPC.handleCommit(message)
-            call.respond(HttpStatusCode.OK)
-        }
         post("/2pc/decision") {
             val message = call.receive<Change>()
             twoPC.handleDecision(message)

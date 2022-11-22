@@ -14,6 +14,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.time.withTimeout
+import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
@@ -42,12 +43,15 @@ class ApiV2Service(
 
     fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> = consensusProtocol.getChangeResult(changeId)
         ?: gpacProtocol.getChangeResult(changeId)
+        ?: twoPC.getChangeResult(changeId)
         ?: throw ChangeDoesntExist(changeId)
 
     suspend fun addChange(change: Change, enforceGpac: Boolean, useTwoPC: Boolean): CompletableFuture<ChangeResult> =
         CompletableFuture<ChangeResult>().also {
             val isOnePeersetChange: Boolean = allPeersFromMyPeerset(change.peers)
-            queue.send(ProcessorJob(change, it, isOnePeersetChange, enforceGpac, useTwoPC))
+            val job = ProcessorJob(change, it, isOnePeersetChange, enforceGpac, useTwoPC)
+            logger.info("Service send job $job to queue")
+            queue.send(job)
         }
 
     suspend fun addChangeSync(
@@ -65,4 +69,8 @@ class ApiV2Service(
 
     private fun allPeersFromMyPeerset(peers: List<String>) =
         peerResolver.getPeersFromCurrentPeerset().map { it.address }.containsAll(peers)
+
+    companion object {
+        private val logger = LoggerFactory.getLogger("service")
+    }
 }

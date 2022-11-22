@@ -216,6 +216,11 @@ class RaftConsensusProtocolImpl(
             proposedChanges.last().change
         )
 
+        anyChanges.acceptedItems.forEach {
+            val changeId = it.change.toHistoryEntry().getId()
+            changeIdToCompletableFuture[changeId]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
+        }
+
         logger.info(
             "Received heartbeat from ${heartbeat.leaderId} with " +
                     "${anyChanges.proposedItems.size} proposed and " +
@@ -419,6 +424,7 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendRequestToLeader(change: Change): CompletableFuture<ChangeResult> {
         val cf = CompletableFuture<ChangeResult>()
+        changeIdToCompletableFuture[change.toHistoryEntry().getId()] = cf
         coroutineScope {
             launch {
                 val result: ChangeResult = try {
@@ -433,8 +439,9 @@ class RaftConsensusProtocolImpl(
                 } catch (e: Exception) {
                     logger.info("Request to leader (${votedFor!!.address}) failed", e)
                     null
-                } ?: ChangeResult(ChangeResult.Status.CONFLICT)
-                cf.complete(result)
+                } ?: ChangeResult(ChangeResult.Status.TIMEOUT)
+
+                if (result.status == ChangeResult.Status.CONFLICT) cf.complete(result)
             }
         }
         return cf

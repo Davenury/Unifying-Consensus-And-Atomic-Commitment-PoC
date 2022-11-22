@@ -16,7 +16,6 @@ data class ResponsesWithErrorAggregation<K>(
 
 interface TwoPCProtocolClient {
     suspend fun sendAccept(peers: List<String>, change: Change): List<Boolean>
-    suspend fun sendCommitChange(peers: List<String>, change: Change): List<Boolean>
     suspend fun sendDecision(peers: List<String>, decisionChange: Change): List<Boolean>
 }
 
@@ -24,17 +23,15 @@ class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
 
 
     override suspend fun sendAccept(peers: List<String>, change: Change): List<Boolean> =
-        sendMessages(peers, change, "/2pc/accept")
+        sendMessages(peers, change, "2pc/accept")
 
-    override suspend fun sendCommitChange(peers: List<String>, change: Change) =
-        sendMessages(peers, change, "/2pc/commit")
 
     override suspend fun sendDecision(peers: List<String>, decisionChange: Change): List<Boolean> =
-        sendMessages(peers, decisionChange, "/2pc/decision")
+        sendMessages(peers, decisionChange, "2pc/decision")
 
 
     private suspend fun <T> sendMessages(peers: List<String>, body: T, path: String) =
-        peers.map { Pair(it, body) }.let { sendRequests(it, path) }.map { it ?: false }
+        sendRequests(peers.map { Pair(it, body) }, path).map { it ?: false }
 
 
     private suspend inline fun <T> sendRequests(

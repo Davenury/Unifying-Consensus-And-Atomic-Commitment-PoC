@@ -18,6 +18,7 @@ import com.github.davenury.ucac.consensus.ratis.HistoryRatisNode
 import com.github.davenury.ucac.routing.consensusProtocolRouting
 import com.github.davenury.ucac.routing.gpacProtocolRouting
 import com.github.davenury.ucac.routing.metaRouting
+import com.github.davenury.ucac.routing.twoPCRouting
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -120,49 +121,49 @@ class ApplicationUcac constructor(
 
         val raftProtocolClientImpl = RaftProtocolClientImpl()
 
-            consensusProtocol = RaftConsensusProtocolImpl(
-                history,
-                config.host + ":" + config.port,
-                ctx,
-                peerResolver,
+        consensusProtocol = RaftConsensusProtocolImpl(
+            history,
+            config.host + ":" + config.port,
+            ctx,
+            peerResolver,
             signalPublisher,
             raftProtocolClientImpl,
             heartbeatTimeout = config.raft.heartbeatTimeout,
             heartbeatDelay = config.raft.leaderTimeout,
         )
 
-            val protocolClient = GPACProtocolClientImpl()
-            val transactionBlocker = TransactionBlocker()
-            gpacProtocol =
-                GPACProtocolImpl(
-                    history,
-                    config.gpac,
-                    ctx,
-                    protocolClient,
-                    transactionBlocker,
-                    signalPublisher,
-                    peerResolver,
-                )
-
-            twoPC = TwoPC(
+        val protocolClient = GPACProtocolClientImpl()
+        val transactionBlocker = TransactionBlocker()
+        gpacProtocol =
+            GPACProtocolImpl(
                 history,
                 config.gpac,
-                TwoPCProtocolClientImpl(config.peerId),
-                consensusProtocol as RaftConsensusProtocolImpl,
+                ctx,
+                protocolClient,
+                transactionBlocker,
                 signalPublisher,
-                config.peersetId,
-                config.peerId,
-                peerResolver
-            )
-
-            service = ApiV2Service(
-                gpacProtocol,
-                consensusProtocol as RaftConsensusProtocolImpl,
-                twoPC!!,
-                history,
-                config,
                 peerResolver,
             )
+
+        twoPC = TwoPC(
+            history,
+            config.gpac,
+            TwoPCProtocolClientImpl(config.peerId),
+            consensusProtocol as RaftConsensusProtocolImpl,
+            signalPublisher,
+            config.peersetId,
+            config.peerId,
+            peerResolver
+        )
+
+        service = ApiV2Service(
+            gpacProtocol,
+            consensusProtocol as RaftConsensusProtocolImpl,
+            twoPC!!,
+            history,
+            config,
+            peerResolver,
+        )
 
         install(CallLogging) {
             level = Level.DEBUG
@@ -184,57 +185,67 @@ class ApplicationUcac constructor(
             )
         }
 
-            install(StatusPages) {
-                exception<MissingParameterException> { cause ->
-                    call.respond(
-                        status = HttpStatusCode.UnprocessableEntity,
-                        ErrorMessage("Missing parameter: ${cause.message}")
+        install(StatusPages) {
+            exception<MissingParameterException> { cause ->
+                call.respond(
+                    status = HttpStatusCode.UnprocessableEntity,
+                    ErrorMessage("Missing parameter: ${cause.message}")
+                )
+            }
+            exception<UnknownOperationException> { cause ->
+                call.respond(
+                    status = HttpStatusCode.UnprocessableEntity,
+                    ErrorMessage(
+                        "Unknown operation to perform: ${cause.desiredOperationName}"
                     )
-                }
-                exception<UnknownOperationException> { cause ->
-                    call.respond(
-                        status = HttpStatusCode.UnprocessableEntity,
-                        ErrorMessage(
-                            "Unknown operation to perform: ${cause.desiredOperationName}"
-                        )
+                )
+            }
+            exception<NotElectingYou> { cause ->
+                call.respond(
+                    status = HttpStatusCode.UnprocessableEntity,
+                    ErrorMessage(
+                        "You're not valid leader-to-be. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
                     )
-                }
-                exception<NotElectingYou> { cause ->
-                    call.respond(
-                        status = HttpStatusCode.UnprocessableEntity,
-                        ErrorMessage(
-                            "You're not valid leader-to-be. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
-                        )
+                )
+            }
+            exception<NotValidLeader> { cause ->
+                call.respond(
+                    status = HttpStatusCode.UnprocessableEntity,
+                    ErrorMessage(
+                        "You're not valid leader. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
                     )
-                }
-                exception<NotValidLeader> { cause ->
-                    call.respond(
-                        status = HttpStatusCode.UnprocessableEntity,
-                        ErrorMessage(
-                            "You're not valid leader. My Ballot Number is: ${cause.ballotNumber}, whereas provided was ${cause.messageBallotNumber}"
-                        )
+                )
+            }
+            exception<HistoryCannotBeBuildException> {
+                it.printStackTrace()
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorMessage(
+                        "Change you're trying to perform is not applicable with current state"
                     )
-                }
-                exception<HistoryCannotBeBuildException> {
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        ErrorMessage(
-                            "Change you're trying to perform is not applicable with current state"
-                        )
+                )
+            }
+            exception<AlreadyLockedException> {
+                call.respond(
+                    HttpStatusCode.Conflict,
+                    ErrorMessage(
+                        "We cannot perform your transaction, as another transaction is currently running"
                     )
-                }
-                exception<AlreadyLockedException> {
-                    call.respond(
-                        HttpStatusCode.Conflict,
-                        ErrorMessage(
-                            "We cannot perform your transaction, as another transaction is currently running"
-                        )
-                    )
-                }
+                )
+            }
 
-                exception<ChangeDoesntExist> { cause ->
-                    call.respond(
-                        status = HttpStatusCode.NotFound,
+            exception<ChangeDoesntExist> { cause ->
+                call.respond(
+                    status = HttpStatusCode.NotFound,
+                    ErrorMessage(
+                        cause.message!!
+                    )
+                )
+            }
+
+            exception<TwoPCHandleException> { cause ->
+                call.respond(
+                    status = HttpStatusCode.BadRequest,
                     ErrorMessage(
                         cause.message!!
                     )
@@ -255,6 +266,7 @@ class ApplicationUcac constructor(
         apiV2Routing(service!!)
         gpacProtocolRouting(gpacProtocol)
         consensusProtocolRouting(consensusProtocol!!)
+        twoPCRouting(twoPC!!)
 
         runBlocking {
             consensusProtocol!!.begin()

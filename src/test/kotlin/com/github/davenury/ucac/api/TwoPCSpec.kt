@@ -3,7 +3,6 @@ package com.github.davenury.ucac.api
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
-import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.utils.TestApplicationSet
@@ -23,11 +22,11 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
+import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicInteger
 
 @Suppress("HttpUrlsUsage")
-@Disabled("")
 class TwoPCSpec {
     companion object {
         private val logger = LoggerFactory.getLogger(TwoPCSpec::class.java)
@@ -42,20 +41,16 @@ class TwoPCSpec {
 
     @Test
     fun `should execute transaction in every peer from every of two peersets`(): Unit = runBlocking {
-        val phaser = Phaser(6)
-        phaser.register()
+        val changeAppliedPhaser = Phaser(8)
         val electionPhaser = Phaser(4)
-        electionPhaser.register()
-        val leaderElected = SignalListener {
-            electionPhaser.arrive()
-        }
+        listOf(changeAppliedPhaser, electionPhaser).forEach { it.register() }
 
         val signalListenersForCohort = mapOf(
-            Signal.OnHandlingApplyEnd to SignalListener {
-                logger.info("Arrived: ${it.subject.getPeerName()}")
-                phaser.arrive()
+            Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                println("Change accepted ${it.subject.getPeerName()} ${it.change}")
+                changeAppliedPhaser.arrive()
             },
-            Signal.ConsensusLeaderElected to leaderElected
+            Signal.ConsensusLeaderElected to SignalListener { electionPhaser.arrive() }
         )
 
         val apps = TestApplicationSet(
@@ -64,24 +59,30 @@ class TwoPCSpec {
         )
 
         val peers = apps.getPeers()
-        val change = change(peers[1][0])
+        var change = change(peers[1][0])
 
-        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(15))
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change)
+        executeChange("http://${peers[0][0]}/v2/change/async?use_2pc=true", change)
 
-        phaser.arriveAndAwaitAdvanceWithTimeout()
+        changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(45))
+
+        change = change.copy(peers = listOf(peers[1][0], peers[0][0]))
+
+        val twoPCChange = TwoPCChange(change.parentId, TwoPCStatus.ACCEPTED, change.peers, change.acceptNum, change)
 
         askAllForChanges(peers.flatten()).forEach { changes ->
-            expectThat(changes.size).isGreaterThanOrEqualTo(1)
-            expectThat(changes[0]).isEqualTo(change)
+            expectThat(changes.size).isEqualTo(2)
+            expectThat(changes[0]).isEqualTo(twoPCChange)
+            expectThat(changes[1]).isEqualTo(change.copyWithNewParentId(twoPCChange.toHistoryEntry().getId()))
         }
 
         apps.stopApps()
     }
 
     @Test
+    @Disabled("Not implemented yet")
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
         val maxRetriesPhaser = Phaser(1)
         maxRetriesPhaser.register()
@@ -147,7 +148,7 @@ class TwoPCSpec {
     @Test
     fun `transaction should not pass when more than half peers of any peerset aren't responding`(): Unit = runBlocking {
         val apps = TestApplicationSet(
-             listOf(3, 5),
+            listOf(3, 5),
             appsToExclude = listOf(2, 5, 6, 7),
         )
         val peers = apps.getPeers()
@@ -175,6 +176,7 @@ class TwoPCSpec {
         apps.stopApps()
     }
 
+    @Disabled("Not implemented yet")
     @Test
     fun `transaction should pass when more than half peers of all peersets are operative`(): Unit = runBlocking {
         val phaser = Phaser(5)
@@ -223,6 +225,7 @@ class TwoPCSpec {
         apps.stopApps()
     }
 
+    @Disabled("Not implemented yet")
     @Test
     fun `transaction should not be processed if every peer from one peerset fails after ft-agree`(): Unit =
         runBlocking {
@@ -253,6 +256,7 @@ class TwoPCSpec {
             apps.stopApps()
         }
 
+    @Disabled("Not implemented yet")
     @Test
     fun `transaction should be processed if leader fails after ft-agree`(): Unit = runBlocking {
         val failAction = SignalListener {
@@ -305,6 +309,7 @@ class TwoPCSpec {
         apps.stopApps()
     }
 
+    @Disabled("Not implemented yet")
     @Test
     fun `transaction should be processed and should be processed only once when one peerset applies its change and the other not`(): Unit =
         runBlocking {
@@ -388,6 +393,7 @@ class TwoPCSpec {
             apps.stopApps()
         }
 
+    @Disabled("Not implemented yet")
     @Test
     fun `should be able to execute change in two different peersets even if changes in peersets are different`() =
         runBlocking {
@@ -487,9 +493,6 @@ class TwoPCSpec {
         // leader should enrich himself
         listOf(otherPeersetPeer)
     )
-
-    private fun enrichChange(change: Change, peer: String) =
-        change.withAddress(peer)
 
     private fun deleteRaftHistories() {
         File(System.getProperty("user.dir")).listFiles { pathname -> pathname?.name?.startsWith("history") == true }
