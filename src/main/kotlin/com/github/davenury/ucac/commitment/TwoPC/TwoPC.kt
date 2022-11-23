@@ -88,7 +88,8 @@ class TwoPC(
             currentProcessedChange = null
         }
 
-        changeIdToCompletableFuture[mainChangeId]!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
+        val result = if(decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
+        changeIdToCompletableFuture[mainChangeId]!!.complete(ChangeResult(result))
     }
 
 
@@ -98,8 +99,13 @@ class TwoPC(
             throw TwoPCHandleException("Received change of not TwoPCChange in handleAccept: $change")
         }
 
-        checkChangeCompatibility(change)
-        val result = consensusProtocol.proposeChangeAsync(change).await()
+        mutex.withLock {
+            if (currentProcessedChange != null) throw TwoPCHandleException("Currently processing other 2PC change")
+        }
+
+
+        val changeWithProperParentId = change.copyWithNewParentId(history.getCurrentEntry().getId())
+        val result = consensusProtocol.proposeChangeAsync(changeWithProperParentId).await()
 
         if (result.status == ChangeResult.Status.SUCCESS) mutex.withLock {
             currentProcessedChange = change as TwoPCChange
@@ -122,8 +128,10 @@ class TwoPC(
                     checkChangeAndProposeToConsensus(change)
 
                 change.parentId == changeId &&
-                        change.copyWithNewParentId(currentProcessedChange!!.parentId) == currentProcessedChange!!.change ->
-                    checkChangeAndProposeToConsensus(change)
+                        change.copyWithNewParentId(currentProcessedChange!!.parentId) == currentProcessedChange!!.change -> {
+                    val updatedChange = change.copyWithNewParentId(history.getCurrentEntry().getId())
+                    checkChangeAndProposeToConsensus(updatedChange)
+                }
 
                 else -> {
 

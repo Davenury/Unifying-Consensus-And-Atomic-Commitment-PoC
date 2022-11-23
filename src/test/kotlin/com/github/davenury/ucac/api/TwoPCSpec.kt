@@ -84,21 +84,21 @@ class TwoPCSpec {
     @Test
     @Disabled("Not implemented yet")
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
-        val maxRetriesPhaser = Phaser(1)
-        maxRetriesPhaser.register()
-        val peerReachedMaxRetries = SignalListener {
+        val changeAppliedPhaser = Phaser(4)
+        val appliedChangesListener = SignalListener {
             logger.info("Arrived: ${it.subject.getPeerName()}")
-            maxRetriesPhaser.arrive()
+            changeAppliedPhaser.arrive()
         }
 
         val electionPhaser = Phaser(2)
-        electionPhaser.register()
         val leaderElected = SignalListener {
             electionPhaser.arrive()
         }
 
+        listOf(electionPhaser,changeAppliedPhaser).forEach { it.register() }
+
         val signalListenersForCohort = mapOf(
-            Signal.ReachedMaxRetries to peerReachedMaxRetries,
+            Signal.ConsensusFollowerChangeAccepted to appliedChangesListener,
             Signal.ConsensusLeaderElected to leaderElected
         )
 
@@ -116,14 +116,18 @@ class TwoPCSpec {
 
         val result = executeChange("http://${peers[0][0]}/v2/change/async", change)
         change = change.withAddress(peers[0][0])
+        val first2PCChange = TwoPCChange(change.parentId,TwoPCStatus.ACCEPTED,change.peers,null, change)
+        val second2PCChange = TwoPCChange(first2PCChange.toHistoryEntry().getId(),TwoPCStatus.ABORTED,change.peers,null, change)
 
         expectThat(result.status).isEqualTo(HttpStatusCode.Created)
 
-        maxRetriesPhaser.arriveAndAwaitAdvanceWithTimeout()
+        changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // then - transaction should not be executed
         askAllForChanges(peers[0]).forEach { changes ->
-            expectThat(changes.size).isEqualTo(0)
+            expectThat(changes.size).isEqualTo(2)
+            expectThat(changes[0]).isEqualTo(first2PCChange)
+            expectThat(changes[1]).isEqualTo(second2PCChange)
         }
 
 
@@ -393,18 +397,19 @@ class TwoPCSpec {
             apps.stopApps()
         }
 
-    @Disabled("Not implemented yet")
     @Test
     fun `should be able to execute change in two different peersets even if changes in peersets are different`() =
         runBlocking {
-            val firstChangePhaser = Phaser(3)
-            firstChangePhaser.register()
-            val secondChangePhaser = Phaser(5)
-            secondChangePhaser.register()
-            val finalChangePhaser = Phaser(8)
-            finalChangePhaser.register()
 
-            val firstPeersetListener = SignalListener {
+            val consensusLeaderElectedPhaser = Phaser(6)
+            val firstChangePhaser = Phaser(2)
+            val secondChangePhaser = Phaser(4)
+            val finalChangePhaser = Phaser(6)
+
+            listOf(firstChangePhaser, secondChangePhaser, finalChangePhaser, consensusLeaderElectedPhaser)
+                .forEach { it.register() }
+
+            val firstChangeListener = SignalListener {
                 if (it.change!! is AddUserChange) {
                     firstChangePhaser.arrive()
                 } else if (it.change is AddRelationChange) {
@@ -412,7 +417,7 @@ class TwoPCSpec {
                 }
             }
 
-            val secondPeersetListener = SignalListener {
+            val secondChangeListener = SignalListener {
                 if (it.change!! is AddGroupChange) {
                     secondChangePhaser.arrive()
                 } else if (it.change is AddRelationChange) {
@@ -420,54 +425,90 @@ class TwoPCSpec {
                 }
             }
 
+            val leaderElectedListener = SignalListener {
+                consensusLeaderElectedPhaser.arrive()
+            }
+
+
+//          Await to elect leader in consensus
+
             val apps = TestApplicationSet(
                 listOf(3, 5),
-                signalListeners = List(3) { it to mapOf(Signal.OnHandlingApplyEnd to firstPeersetListener) }.toMap()
-                        + List(5) { it + 3 to mapOf(Signal.OnHandlingApplyEnd to secondPeersetListener) }.toMap()
+                signalListeners = List(3) {
+                    it to mapOf(
+                        Signal.ConsensusFollowerChangeAccepted to firstChangeListener,
+                        Signal.ConsensusLeaderElected to leaderElectedListener,
+                    )
+                }.toMap()
+                        + List(5) {
+                    it + 3 to mapOf(
+                        Signal.ConsensusFollowerChangeAccepted to secondChangeListener,
+                        Signal.ConsensusLeaderElected to leaderElectedListener,
+                    )
+                }.toMap()
             )
             val peers = apps.getPeers()
 
+            consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(15))
+
             // given - change in first peerset
-            val someChange = AddUserChange(InitialHistoryEntry.getId(), "firstUserName", listOf())
+            val firstChange = AddUserChange(InitialHistoryEntry.getId(), "firstUserName", listOf())
             expectCatching {
-                executeChange("http://${peers[0][0]}/v2/change/sync", someChange)
+                executeChange("http://${peers[0][0]}/v2/change/sync", firstChange)
             }.isSuccess()
 
-            firstChangePhaser.arriveAndAwaitAdvance()
+            firstChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
             // and - change in second peerset
+            val secondChange = AddGroupChange(InitialHistoryEntry.getId(), "firstGroup", listOf())
             expectCatching {
                 executeChange(
                     "http://${peers[1][0]}/v2/change/sync",
-                    AddGroupChange(InitialHistoryEntry.getId(), "firstGroup", listOf())
+                    secondChange
                 )
             }.isSuccess()
 
-            secondChangePhaser.arriveAndAwaitAdvance()
-
-            val lastChange = askForChanges(peers[0][0]).last()
+            secondChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
             // when - executing change between two peersets
-            val addRelationChange = AddRelationChange(
-                lastChange.toHistoryEntry().getId(),
+            var lastChange: Change = AddRelationChange(
+                firstChange.toHistoryEntry().getId(),
                 "firstUserName",
                 "firstGroup",
                 listOf(peers[1][0])
             )
 
             expectCatching {
-                executeChange("http://${peers[0][0]}/v2/change/sync", addRelationChange)
+                executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=True", lastChange)
             }.isSuccess()
 
-            finalChangePhaser.arriveAndAwaitAdvance()
+            finalChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
-            askAllForChanges(peers.flatten()).let {
-                it.forEach {
-                    (it.last() as AddRelationChange).let {
-                        expectThat(it.from).isEqualTo(addRelationChange.from)
-                        expectThat(it.to).isEqualTo(addRelationChange.to)
-                    }
-                }
+            lastChange = lastChange.withAddress(peers[0][0])
+            val twoPCChange =
+                TwoPCChange(
+                    lastChange.parentId,
+                    TwoPCStatus.ACCEPTED,
+                    lastChange.peers,
+                    null,
+                    lastChange
+                )
+
+//          First peerset
+            askAllForChanges(peers[0]).forEach {
+                expectThat(it.size).isEqualTo(3)
+                expectThat(it[0]).isEqualTo(firstChange)
+                expectThat(it[1]).isEqualTo(twoPCChange)
+                expectThat(it[2]).isEqualTo(lastChange.copyWithNewParentId(twoPCChange.toHistoryEntry().getId()))
+            }
+
+            askAllForChanges(peers[1]).forEach {
+                expectThat(it.size).isEqualTo(3)
+                expectThat(it[0]).isEqualTo(secondChange)
+                val updatedTwoPCChange = twoPCChange.copyWithNewParentId(secondChange.toHistoryEntry().getId())
+                expectThat(it[1]).isEqualTo(updatedTwoPCChange)
+                val updatedLastChange = lastChange.copyWithNewParentId(updatedTwoPCChange.toHistoryEntry().getId())
+                expectThat(it[2]).isEqualTo(updatedLastChange)
             }
         }
 
