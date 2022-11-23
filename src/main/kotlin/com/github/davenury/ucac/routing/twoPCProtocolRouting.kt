@@ -23,5 +23,11 @@ fun Application.twoPCRouting(twoPC: TwoPC) {
             twoPC.handleDecision(message)
             call.respond(HttpStatusCode.OK)
         }
+
+        get("/2pc/ask/{changeId}") {
+            val id = call.parameters["changeId"]!!
+            val change = twoPC.handleAskDecision(id)
+            call.respond(HttpStatusCode.OK, change)
+        }
     }
 }

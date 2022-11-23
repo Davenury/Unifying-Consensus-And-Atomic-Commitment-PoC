@@ -2,27 +2,23 @@ package com.github.davenury.ucac.commitment.TwoPC
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.GpacConfig
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalPublisher
-import com.github.davenury.ucac.SignalSubject
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AtomicCommitmentProtocol
-import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
-import com.github.davenury.ucac.commitment.gpac.Transaction
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.future.await
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 class TwoPC(
     private val history: History,
-    private val gpacConfig: GpacConfig,
+    private val twoPCConfig: TwoPCConfig,
+    private val ctx: ExecutorCoroutineDispatcher,
     private val protocolClient: TwoPCProtocolClient,
     private val consensusProtocol: ConsensusProtocol,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
@@ -32,6 +28,7 @@ class TwoPC(
 ) : SignalSubject, AtomicCommitmentProtocol {
 
     private var currentProcessedChange: TwoPCChange? = null
+    private var changeTimer: ProtocolTimer = ProtocolTimerImpl(twoPCConfig.changeDelay, Duration.ZERO, ctx)
 
     private val mutex = Mutex()
 
@@ -88,7 +85,7 @@ class TwoPC(
             currentProcessedChange = null
         }
 
-        val result = if(decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
+        val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
         changeIdToCompletableFuture[mainChangeId]!!.complete(ChangeResult(result))
     }
 
@@ -112,43 +109,52 @@ class TwoPC(
         } else {
             throw TwoPCHandleException("TwoPCChange doesn't applied change")
         }
+
+        changeTimer.startCounting {
+            askForDecisionChange(change)
+        }
     }
 
     public suspend fun handleDecision(change: Change) {
+        signal(Signal.TwoPCOnHandleDecision, change)
 
         val cf: CompletableFuture<ChangeResult>
         mutex.withLock {
             val changeId = currentProcessedChange?.toHistoryEntry()?.getId()
 
             cf = when {
-                currentProcessedChange == null ->
+                currentProcessedChange == null -> {
                     throw TwoPCHandleException("Received change in handleDecision even though we didn't received 2PC-Accept earlier")
-
-                change is TwoPCChange && change.twoPCStatus == TwoPCStatus.ABORTED && change.change == currentProcessedChange ->
+                }
+                change is TwoPCChange && change.twoPCStatus == TwoPCStatus.ABORTED && change.change == currentProcessedChange -> {
+                    changeTimer.cancelCounting()
                     checkChangeAndProposeToConsensus(change)
+                }
 
                 change.parentId == changeId &&
                         change.copyWithNewParentId(currentProcessedChange!!.parentId) == currentProcessedChange!!.change -> {
+                    changeTimer.cancelCounting()
                     val updatedChange = change.copyWithNewParentId(history.getCurrentEntry().getId())
                     checkChangeAndProposeToConsensus(updatedChange)
                 }
 
-                else -> {
+                else -> throw TwoPCHandleException(
+                    "In 2PC handleDecision received change in different type than TwoPCChange: $change \n" +
+                            "currentProcessedChange:$currentProcessedChange"
+                )
 
-                    logger.info("change.parentId == changeId ${change.parentId == changeId}")
-                    logger.info(
-                        "Same change: ${change.copyWithNewParentId(currentProcessedChange!!.parentId) == currentProcessedChange!!.change}"
-                    )
-
-                    throw TwoPCHandleException(
-                        "In 2PC handleDecision received change in different type than TwoPCChange: $change \n" +
-                                "currentProcessedChange:$currentProcessedChange"
-                    )
-                }
             }
         }
         cf.await()
     }
+
+    public suspend fun handleAskDecision(changeId: String): Change =
+        consensusProtocol.getState()
+            .toEntryList()
+            .find { it.getParentId() == changeId }
+            ?.let { Change.fromHistoryEntry(it) }
+            ?: throw ChangeDoesntExist(changeId)
+
 
     companion object {
         private val logger = LoggerFactory.getLogger("2PC")
@@ -173,6 +179,21 @@ class TwoPC(
             null,
             change
         )
+    }
+
+    private suspend fun askForDecisionChange(change: Change, iteration: Int = 0) {
+        val resultChange = protocolClient.askForChangeStatus(
+            change.peers.first { it != myAddress() },
+            change
+        )
+
+        if (resultChange == null && iteration == twoPCConfig.maxChangeRetries)
+            throw TwoPCConflictException("We are blocked, because we didn't received decision change")
+
+        if (resultChange != null) handleDecision(resultChange)
+        else changeTimer.startCounting {
+            askForDecisionChange(change, iteration + 1)
+        }
     }
 
     private fun checkChangeCompatibility(change: Change) =

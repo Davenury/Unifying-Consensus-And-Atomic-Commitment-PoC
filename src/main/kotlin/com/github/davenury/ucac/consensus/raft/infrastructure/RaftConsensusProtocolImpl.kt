@@ -324,7 +324,10 @@ class RaftConsensusProtocolImpl(
     }
 
 
-    private suspend fun handleSuccessHeartbeatResponseFromPeer(peerAddress: PeerAddress, peerMessage: ConsensusHeartbeat) {
+    private suspend fun handleSuccessHeartbeatResponseFromPeer(
+        peerAddress: PeerAddress,
+        peerMessage: ConsensusHeartbeat
+    ) {
         val globalPeerId = peerAddress.globalPeerId
 
         val peerIndices = peerUrlToNextIndex.getOrDefault(globalPeerId, PeerIndices())
@@ -405,6 +408,7 @@ class RaftConsensusProtocolImpl(
         mutex.withLock {
 
             if (state.changeAlreadyProposed(change)) {
+                logger.info("Already proposed that change: $change")
                 return changeIdToCompletableFuture[change.toHistoryEntry().getId()]!!
             }
 
@@ -427,24 +431,22 @@ class RaftConsensusProtocolImpl(
     private suspend fun sendRequestToLeader(change: Change): CompletableFuture<ChangeResult> {
         val cf = CompletableFuture<ChangeResult>()
         changeIdToCompletableFuture[change.toHistoryEntry().getId()] = cf
-        coroutineScope {
-            launch {
-                val result: ChangeResult = try {
-                    val response =
-                        httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
-                            contentType(ContentType.Application.Json)
-                            accept(ContentType.Application.Json)
-                            body = change
-                        }
-                    logger.info("Response from leader: $response")
-                    response
-                } catch (e: Exception) {
-                    logger.info("Request to leader (${votedFor!!.address}) failed", e)
-                    null
-                } ?: ChangeResult(ChangeResult.Status.TIMEOUT)
+        GlobalScope.launch(MDCContext()) {
+            val result: ChangeResult = try {
+                val response =
+                    httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
+                        contentType(ContentType.Application.Json)
+                        accept(ContentType.Application.Json)
+                        body = change
+                    }
+                logger.info("Response from leader: $response")
+                response
+            } catch (e: Exception) {
+                logger.info("Request to leader (${votedFor!!.address}) failed", e)
+                null
+            } ?: ChangeResult(ChangeResult.Status.TIMEOUT)
 
-                if (result.status == ChangeResult.Status.CONFLICT) cf.complete(result)
-            }
+            if (result.status == ChangeResult.Status.CONFLICT) cf.complete(result)
         }
         return cf
     }
@@ -461,7 +463,7 @@ class RaftConsensusProtocolImpl(
             }
 
             votedFor != null -> {
-                logger.info("Forwarding change to the leader: $change")
+                logger.info("Forwarding change to the leader(${votedFor!!}): $change")
                 sendRequestToLeader(change)
             }
 //              TODO: Change after queue

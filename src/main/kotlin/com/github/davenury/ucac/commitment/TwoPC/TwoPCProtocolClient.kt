@@ -17,6 +17,8 @@ data class ResponsesWithErrorAggregation<K>(
 interface TwoPCProtocolClient {
     suspend fun sendAccept(peers: List<String>, change: Change): List<Boolean>
     suspend fun sendDecision(peers: List<String>, decisionChange: Change): List<Boolean>
+
+    suspend fun askForChangeStatus(peer: String, change: Change): Change?
 }
 
 class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
@@ -29,6 +31,20 @@ class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
     override suspend fun sendDecision(peers: List<String>, decisionChange: Change): List<Boolean> =
         sendMessages(peers, decisionChange, "2pc/decision")
 
+    override suspend fun askForChangeStatus(peer: String, change: Change): Change? {
+        val url = "http://${peer}/2pc/ask/${change.toHistoryEntry().getId()}"
+        logger.info("$id - Sending to: $url")
+        return try {
+            httpClient.get<Change?>(url) {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+            }
+        } catch (e: Exception) {
+            logger.error("$id - Error while evaluating response from ${peer}: $e", e)
+            null
+        }
+    }
+
 
     private suspend fun <T> sendMessages(peers: List<String>, body: T, path: String) =
         sendRequests(peers.map { Pair(it, body) }, path).map { it ?: false }
@@ -40,7 +56,7 @@ class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
     ): List<Boolean?> =
         peersWithBody.map {
             CoroutineScope(Dispatchers.IO).async {
-                sendConsensusMessage<T, Unit>("http://${it.first}/$urlPath", it.second)
+                send2PCMessage<T, Unit>("http://${it.first}/$urlPath", it.second)
             }.let { coroutine ->
                 Pair(it.first, coroutine)
             }
@@ -57,7 +73,7 @@ class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
         }
 
 
-    private suspend inline fun <Message, reified Response> sendConsensusMessage(
+    private suspend inline fun <Message, reified Response> send2PCMessage(
         url: String,
         message: Message
     ): Response? {

@@ -82,7 +82,6 @@ class TwoPCSpec {
     }
 
     @Test
-    @Disabled("Not implemented yet")
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
         val changeAppliedPhaser = Phaser(4)
         val appliedChangesListener = SignalListener {
@@ -95,7 +94,7 @@ class TwoPCSpec {
             electionPhaser.arrive()
         }
 
-        listOf(electionPhaser,changeAppliedPhaser).forEach { it.register() }
+        listOf(electionPhaser, changeAppliedPhaser).forEach { it.register() }
 
         val signalListenersForCohort = mapOf(
             Signal.ConsensusFollowerChangeAccepted to appliedChangesListener,
@@ -114,12 +113,13 @@ class TwoPCSpec {
         val otherPeer = peers[1][0]
         var change: Change = change(otherPeer)
 
-        val result = executeChange("http://${peers[0][0]}/v2/change/async", change)
+        val result = executeChange("http://${peers[0][0]}/v2/change/async?use_2pc=True", change)
         change = change.withAddress(peers[0][0])
-        val first2PCChange = TwoPCChange(change.parentId,TwoPCStatus.ACCEPTED,change.peers,null, change)
-        val second2PCChange = TwoPCChange(first2PCChange.toHistoryEntry().getId(),TwoPCStatus.ABORTED,change.peers,null, change)
+        val first2PCChange = TwoPCChange(change.parentId, TwoPCStatus.ACCEPTED, change.peers, null, change)
+        val second2PCChange =
+            TwoPCChange(first2PCChange.toHistoryEntry().getId(), TwoPCStatus.ABORTED, change.peers, null, change)
 
-        expectThat(result.status).isEqualTo(HttpStatusCode.Created)
+        expectThat(result.status).isEqualTo(HttpStatusCode.Accepted)
 
         changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -141,9 +141,8 @@ class TwoPCSpec {
                 accept(ContentType.Application.Json)
             }
             fail("executing change didn't fail")
-        } catch (e: ServerResponseException) {
-            expectThat(e).isA<ServerResponseException>()
-            expectThat(e.message!!).contains("Transaction failed due to too many retries of becoming a leader.")
+        } catch (e: ClientRequestException) {
+            expectThat(e.message!!).contains("Change conflicted")
         }
         apps.stopApps()
     }
@@ -180,17 +179,15 @@ class TwoPCSpec {
         apps.stopApps()
     }
 
-    @Disabled("Not implemented yet")
     @Test
     fun `transaction should pass when more than half peers of all peersets are operative`(): Unit = runBlocking {
-        val phaser = Phaser(5)
-        phaser.register()
+        val changeAppliedPhaser = Phaser(6)
+        changeAppliedPhaser.register()
 
         val peerApplyCommitted = SignalListener {
             logger.info("Arrived: ${it.subject.getPeerName()}")
-            phaser.arrive()
+            changeAppliedPhaser.arrive()
         }
-
 
         val electionPhaser = Phaser(3)
         electionPhaser.register()
@@ -199,7 +196,7 @@ class TwoPCSpec {
         }
 
         val signalListenersForCohort = mapOf(
-            Signal.OnHandlingApplyCommitted to peerApplyCommitted,
+            Signal.ConsensusFollowerChangeAccepted to peerApplyCommitted,
             Signal.ConsensusLeaderElected to leaderElected
         )
 
@@ -209,58 +206,95 @@ class TwoPCSpec {
             signalListeners = (0..7).associateWith { signalListenersForCohort },
         )
         val peers = apps.getPeers()
-        val change = change(apps.getPeers()[1][0])
+        var change: Change = change(apps.getPeers()[1][0])
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change)
+        executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=true", change)
 
+        changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        phaser.arriveAndAwaitAdvanceWithTimeout()
+        change = change.withAddress(peers[0][0])
+        val twoPCChange = TwoPCChange(change.parentId, TwoPCStatus.ACCEPTED, change.peers, null, change)
 
         // then - transaction should be executed in every peerset
-        askAllForChanges(peers.flatten() subtract setOf(NON_RUNNING_PEER))
-            .forEach { changes ->
-                expectThat(changes.size).isGreaterThanOrEqualTo(1)
-                expectThat(changes[0]).isEqualTo(change)
-            }
-
+        askAllForChanges(peers.flatten() subtract setOf(NON_RUNNING_PEER)).forEach { changes ->
+            expectThat(changes.size).isEqualTo(2)
+            expectThat(changes[0]).isEqualTo(twoPCChange)
+            expectThat(changes[1]).isEqualTo(change.copyWithNewParentId(twoPCChange.toHistoryEntry().getId()))
+        }
         apps.stopApps()
     }
 
-    @Disabled("Not implemented yet")
     @Test
-    fun `transaction should not be processed if every peer from one peerset fails after ft-agree`(): Unit =
+    fun `transaction should be processed if peer from second peerset accepted change`(): Unit =
         runBlocking {
-
-            val failAction = SignalListener {
-                throw RuntimeException("Every peer from one peerset fails")
+            val firstPeersetChangeAppliedPhaser = Phaser(4)
+            val secondPeersetChangeAppliedPhaser = Phaser(8)
+            val electionPhaser = Phaser(6)
+            val leaderElected = SignalListener {
+                electionPhaser.arrive()
             }
+            listOf(
+                firstPeersetChangeAppliedPhaser,
+                secondPeersetChangeAppliedPhaser,
+                electionPhaser
+            ).forEach { it.register() }
+
+            var isChangeNotAccepted = true
+
+            val onHandleDecision = SignalListener {
+                if (isChangeNotAccepted) throw Exception("Simulate ignoring 2PC-decision message")
+            }
+
             val apps = TestApplicationSet(
                 listOf(3, 5),
-                signalListeners = (3..7).associateWith { mapOf(Signal.OnHandlingAgreeEnd to failAction) },
+                signalListeners =
+                (0..2).associateWith {
+                    mapOf(
+                        Signal.ConsensusLeaderElected to leaderElected,
+                        Signal.ConsensusFollowerChangeAccepted to
+                                SignalListener { firstPeersetChangeAppliedPhaser.arrive() }
+                    )
+                }.toMap() +
+                        (3..7).associateWith {
+                            mapOf(
+                                Signal.TwoPCOnHandleDecision to onHandleDecision,
+                                Signal.ConsensusLeaderElected to leaderElected,
+                                Signal.ConsensusFollowerChangeAccepted to
+                                        SignalListener { secondPeersetChangeAppliedPhaser.arrive() }
+                            )
+                        }.toMap(),
             )
             val peers = apps.getPeers()
             val otherPeer = apps.getPeers()[1][0]
+            var change: Change = change(otherPeer)
 
-            // when - executing transaction - should throw too few responses exception
-            try {
-                executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change(otherPeer))
-                fail("executing change didn't fail")
-            } catch (e: Exception) {
-                expectThat(e).isA<ServerResponseException>()
-                expectThat(e.message!!).contains("Transaction failed due to too few responses of ft phase.")
-            }
+
+            electionPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=True", change)
+
+            firstPeersetChangeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+            isChangeNotAccepted = false
+
+            secondPeersetChangeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+            change = change.withAddress(peers[0][0])
+            val twoPCChange = TwoPCChange(change.parentId, TwoPCStatus.ACCEPTED, change.peers, null, change)
 
             askAllForChanges(peers.flatten()).forEach { changes ->
-                expectThat(changes.size).isEqualTo(0)
+                expectThat(changes.size).isEqualTo(2)
+                expectThat(changes[0]).isEqualTo(twoPCChange)
+                expectThat(changes[1]).isEqualTo(change.copyWithNewParentId(twoPCChange.toHistoryEntry().getId()))
             }
 
             apps.stopApps()
         }
 
-    @Disabled("Not implemented yet")
+    @Disabled("I am not sure if this is solid case in 2PC")
     @Test
     fun `transaction should be processed if leader fails after ft-agree`(): Unit = runBlocking {
         val failAction = SignalListener {
@@ -300,7 +334,7 @@ class TwoPCSpec {
 
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change(otherPeer))
+            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=True", change(otherPeer))
         }
 
         applyCommittedPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -312,90 +346,6 @@ class TwoPCSpec {
 
         apps.stopApps()
     }
-
-    @Disabled("Not implemented yet")
-    @Test
-    fun `transaction should be processed and should be processed only once when one peerset applies its change and the other not`(): Unit =
-        runBlocking {
-            val phaser = Phaser(8)
-            phaser.register()
-
-            val leaderAction = SignalListener {
-                val url2 = "${it.peers[0][1]}/apply"
-                runBlocking {
-                    httpClient.post<HttpResponse>(url2) {
-                        contentType(ContentType.Application.Json)
-                        accept(ContentType.Application.Json)
-                        body = Apply(
-                            it.transaction!!.ballotNumber, true, Accept.COMMIT,
-                            change(it.peers[1][0].address),
-                        )
-                    }.also {
-                        logger.info("Got response test apply ${it.status.value}")
-                    }
-                }
-                logger.info("${it.peers[0][1]} sent response to apply")
-                val url3 = "${it.peers[0][2]}/apply"
-                runBlocking {
-                    httpClient.post<HttpResponse>(url3) {
-                        contentType(ContentType.Application.Json)
-                        accept(ContentType.Application.Json)
-                        body = Apply(
-                            it.transaction!!.ballotNumber, true, Accept.COMMIT,
-                            change(it.peers[1][0].address),
-                        )
-                    }.also {
-                        logger.info("Got response test apply ${it.status.value}")
-                    }
-                }
-                logger.info("${it.peers[0][2]} sent response to apply")
-                throw RuntimeException("Leader failed after applying change in one peerset")
-            }
-
-            val arrivalCount = AtomicInteger(0)
-            val peerApplyEnd = SignalListener {
-                arrivalCount.incrementAndGet()
-                phaser.arrive()
-            }
-
-            val signalListenersForCohort = mapOf(
-                Signal.OnHandlingApplyCommitted to peerApplyEnd,
-            )
-            val signalListenersForLeader = mapOf(
-                Signal.BeforeSendingApply to leaderAction,
-            ) + signalListenersForCohort
-
-            val apps = TestApplicationSet(
-                listOf(3, 5),
-                signalListeners = mapOf(
-                    0 to signalListenersForLeader,
-                    1 to signalListenersForCohort,
-                    2 to signalListenersForCohort,
-                    3 to signalListenersForCohort,
-                    4 to signalListenersForCohort,
-                    5 to signalListenersForCohort,
-                    6 to signalListenersForCohort,
-                    7 to signalListenersForCohort,
-                )
-            )
-            val peers = apps.getPeers()
-            val otherPeer = apps.getPeers()[1][0]
-
-            // when - executing transaction something should go wrong after ft-agree
-            expectThrows<ServerResponseException> {
-                executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change(otherPeer))
-            }
-
-            phaser.arriveAndAwaitAdvanceWithTimeout()
-
-            // waiting for consensus to propagate change is waste of time and fails CI
-            askAllForChanges(peers.flatten()).forEach { changes ->
-                expectThat(changes.size).isGreaterThanOrEqualTo(1)
-                expectThat(changes[0]).isEqualTo(change(otherPeer) as Change)
-            }
-
-            apps.stopApps()
-        }
 
     @Test
     fun `should be able to execute change in two different peersets even if changes in peersets are different`() =

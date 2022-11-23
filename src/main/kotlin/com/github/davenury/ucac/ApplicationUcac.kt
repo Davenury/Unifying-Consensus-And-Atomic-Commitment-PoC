@@ -147,7 +147,8 @@ class ApplicationUcac constructor(
 
         twoPC = TwoPC(
             history,
-            config.gpac,
+            config.twoPC,
+            ctx,
             TwoPCProtocolClientImpl(config.peerId),
             consensusProtocol as RaftConsensusProtocolImpl,
             signalPublisher,
