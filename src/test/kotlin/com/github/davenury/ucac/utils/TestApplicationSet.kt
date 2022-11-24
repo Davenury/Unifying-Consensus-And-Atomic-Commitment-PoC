@@ -3,10 +3,12 @@ package com.github.davenury.ucac.utils
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
-import com.github.davenury.ucac.consensus.ConsensusSpec
+import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.createApplication
 import org.slf4j.LoggerFactory
 import java.util.*
+import kotlin.collections.HashMap
 import kotlin.random.Random
 
 class TestApplicationSet(
@@ -14,10 +16,10 @@ class TestApplicationSet(
     signalListeners: Map<Int, Map<Signal, SignalListener>> = emptyMap(),
     configOverrides: Map<Int, Map<String, Any>> = emptyMap(),
     val appsToExclude: List<Int> = emptyList()
-) {
+) : AutoCloseable {
 
     private var apps: MutableList<MutableList<ApplicationUcac>> = mutableListOf()
-    private val peers: List<List<String>>
+    private val peers: MutableMap<GlobalPeerId, PeerAddress> = HashMap()
 
     init {
         val numberOfPeersets = numberOfPeersInPeersets.size
@@ -52,21 +54,19 @@ class TestApplicationSet(
             .flatten()
             .filterIndexed { index, _ -> !appsToExclude.contains(index) }
             .forEach { it.startNonblocking() }
-        peers =
-            apps.flatten()
-                .asSequence()
-                .mapIndexed { index, it ->
-                    val address = if (index in appsToExclude) NON_RUNNING_PEER else "localhost:${it.getBoundPort()}"
-                    Pair(it, address)
-                }
-                .groupBy { it.first.getPeersetId() }
-                .values
-                .map { it.map { it.second } }
-                .toList()
 
-        apps
-            .flatten()
-            .filterIndexed { index, _ -> !appsToExclude.contains(index) }
+        apps.flatten().forEachIndexed { appId, app ->
+            val address = if (appId in appsToExclude) {
+                NON_RUNNING_PEER
+            } else {
+                "localhost:${app.getBoundPort()}"
+            }
+            val globalPeerId = app.getGlobalPeerId()
+            peers[globalPeerId] = PeerAddress(globalPeerId, address)
+        }
+
+        apps.flatten()
+            .filterIndexed { index, _ -> index !in appsToExclude }
             .forEach { app ->
                 app.setPeers(peers)
             }
@@ -91,18 +91,27 @@ class TestApplicationSet(
         apps.flatten().forEach { it.stop(gracePeriodMillis, timeoutPeriodMillis) }
     }
 
-    fun getPeers() = peers
+    fun getPeers(): Map<GlobalPeerId, PeerAddress> = Collections.unmodifiableMap(peers)
 
-    fun getRunningPeers() = peers.map { it.filter { it != NON_RUNNING_PEER } }
+    fun getPeers(peersetId: Int) = peers.filter { it.key.peersetId == peersetId }
+
+    fun getPeer(peersetId: Int, peerId: Int): PeerAddress = peers[GlobalPeerId(peersetId, peerId)]!!
+
+    fun getRunningPeers(peersetId: Int) = peers.filter {
+        it.value.address != NON_RUNNING_PEER && it.key.peersetId == peersetId
+    }
 
     fun getRunningApps(): List<ApplicationUcac> = apps
         .flatten()
-        .zip(peers.flatten())
-        .filterIndexed { index, _ -> !appsToExclude.contains(index) }
-        .map { it.first }
+        .filterIndexed { index, _ -> index !in appsToExclude }
+
+    fun getApp(globalPeerId: GlobalPeerId): ApplicationUcac =
+        apps[globalPeerId.peersetId][globalPeerId.peerId]
 
     companion object {
         const val NON_RUNNING_PEER: String = "localhost:0"
         private val logger = LoggerFactory.getLogger(TestApplicationSet::class.java)
     }
+
+    override fun close() = stopApps()
 }

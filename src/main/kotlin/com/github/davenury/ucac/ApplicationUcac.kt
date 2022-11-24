@@ -11,6 +11,8 @@ import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
 import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
+import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -137,26 +139,24 @@ class ApplicationUcac constructor(
                 config.gpac,
                 ctx,
                 GPACProtocolClientImpl(),
-                TransactionBlocker(),
+         TransactionBlocker(),
+        signalPublisher,
+                peerResolver,
+            )
+            twoPC = TwoPC(
+                history,
+                config.twoPC,
+                ctx,
+                TwoPCProtocolClientImpl(config.peerId),
+                consensusProtocol as RaftConsensusProtocolImpl,
                 signalPublisher,
                 peerResolver,
             )
 
-        twoPC = TwoPC(
-            history,
-            config.twoPC,
-            ctx,
-            TwoPCProtocolClientImpl(config.peerId),
-            consensusProtocol as RaftConsensusProtocolImpl,
-            signalPublisher,
-            peerResolver,
-        )
-
         service = ApiV2Service(
             gpacProtocol,
             consensusProtocol as RaftConsensusProtocolImpl,
-            twoPC!!,
-            history,
+            twoPC!!,history,
             config,
             peerResolver,
         )
@@ -213,7 +213,6 @@ class ApplicationUcac constructor(
                 )
             }
             exception<HistoryCannotBeBuildException> {
-                it.printStackTrace()
                 call.respond(
                     HttpStatusCode.BadRequest,
                     ErrorMessage(
@@ -269,10 +268,12 @@ class ApplicationUcac constructor(
         }
     }
 
-    fun setPeers(peers: List<List<String>>) {
+    fun setPeers(peers: Map<GlobalPeerId, PeerAddress>) {
         withMdc {
-            logger.info("Setting peers ${peerResolver.getPeers()} -> $peers")
+            val oldPeers = peerResolver.getPeersPrintable()
             peerResolver.setPeers(peers)
+            val newPeers = peerResolver.getPeersPrintable()
+            logger.info("Set peers $oldPeers -> $newPeers")
         }
     }
 
@@ -307,7 +308,7 @@ class ApplicationUcac constructor(
         }
     }
 
-    fun getPeersetId() = config.peersetId
+    fun getGlobalPeerId() = config.globalPeerId()
 
     companion object {
         val logger: Logger = LoggerFactory.getLogger("ucac")

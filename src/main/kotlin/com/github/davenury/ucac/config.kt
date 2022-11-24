@@ -1,15 +1,24 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
 import com.sksamuel.hoplite.ConfigLoaderBuilder
 import com.sksamuel.hoplite.MapPropertySource
 import com.sksamuel.hoplite.addResourceSource
 import java.time.Duration
 
-fun parsePeers(peers: String): List<List<String>> {
-    return peers.split(";")
-        .map { peerset -> peerset.split(",").map { it.trim() } }
+fun parsePeers(peers: String): Map<GlobalPeerId, PeerAddress> {
+    val parsed: MutableMap<GlobalPeerId, PeerAddress> = HashMap()
+    peers.split(";")
+        .map { peerset: String -> peerset.split(",").map { it.trim() } }
+        .forEachIndexed { peersetId: Int, peerset: List<String> ->
+            peerset.forEachIndexed { peerId, address ->
+                val globalPeerId = GlobalPeerId(peersetId, peerId)
+                parsed[globalPeerId] = PeerAddress(globalPeerId, address)
+            }
+        }
+    return parsed
 }
 
 data class Config(
@@ -27,13 +36,13 @@ data class Config(
     val rest: RestConfig = RestConfig(),
 ) {
     fun globalPeerId() = GlobalPeerId(peersetId, peerId)
-    fun newPeerResolver() = PeerResolver(globalPeerId(), ArrayList(parsePeers(peers)))
+    fun newPeerResolver() = PeerResolver(globalPeerId(), parsePeers(peers))
 }
 
 data class RatisConfig(
     val addresses: String = "",
 ) {
-    fun peerAddresses(): List<List<String>> = parsePeers(addresses)
+    fun peerAddresses(): Map<GlobalPeerId, PeerAddress> = parsePeers(addresses)
 }
 
 data class TwoPCConfig(val changeDelay: Duration = Duration.ofSeconds(120))

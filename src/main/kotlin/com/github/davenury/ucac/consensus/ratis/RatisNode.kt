@@ -33,9 +33,14 @@ abstract class RatisNode(
         val properties = RaftProperties()
 
         clusterGroupId = UUID(0, peersetId.toLong())
-        val peers = config.peerAddresses()[peersetId].mapIndexed { index, address ->
-            RaftPeer.newBuilder().setId("n$index").setAddress(address).build()
-        }
+        val peers = config.peerAddresses()
+            .filter { it.key.peersetId == peersetId }
+            .map {
+                RaftPeer.newBuilder()
+                    .setId("n${it.key}")
+                    .setAddress(it.value.address)
+                    .build()
+            }
         peer = peers[peerId]
 
         //set the storage directory (different for each peer) in RaftProperty object
@@ -77,9 +82,11 @@ abstract class RatisNode(
         val raftProperties = RaftProperties()
         val builder = RaftClient.newBuilder()
             .setProperties(raftProperties)
-            .setRaftGroup(RaftGroup.valueOf(
-                RaftGroupId.valueOf(clusterGroupId), peer
-            ))
+            .setRaftGroup(
+                RaftGroup.valueOf(
+                    RaftGroupId.valueOf(clusterGroupId), peer
+                )
+            )
             .setClientRpc(
                 GrpcFactory(Parameters())
                     .newRaftClientRpc(ClientId.randomId(), raftProperties)
