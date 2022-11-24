@@ -31,22 +31,24 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.DOCKER_DEPLOYMENT_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Bulid and push application image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v2
         with:
           context: .
           push: true
-          tags: "${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}"
+          file: Dockerfile.builder
+          tags: ${{env.REGISTRY}}/davenury/ucac:${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}
           target: application
 
       - name: Build and push tests image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v2
         with:
           context: .
           push: true
-          tags: "${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}"
+          file: Dockerfile.builder
+          tags: ${{env.REGISTRY}}/davenury/tests:${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}
           target: tests
 
       - name: start minikube
