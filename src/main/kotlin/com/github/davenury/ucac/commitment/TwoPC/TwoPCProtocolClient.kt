@@ -53,7 +53,7 @@ class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
     private suspend inline fun <T> sendRequests(
         peersWithBody: List<Pair<String, T>>,
         urlPath: String
-    ): List<Boolean?> =
+    ): List<Boolean> =
         peersWithBody.map {
             CoroutineScope(Dispatchers.IO).async {
                 send2PCMessage<T, Unit>("http://${it.first}/$urlPath", it.second)
@@ -66,7 +66,7 @@ class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
                 true
             } catch (e: Exception) {
                 logger.error("$id - Error while evaluating response from ${it.first}: $e", e)
-                null
+                false
             }
 
             result
@@ -87,6 +87,6 @@ class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
 
 
     companion object {
-        private val logger = LoggerFactory.getLogger(TwoPCProtocolClientImpl::class.java)
+        private val logger = LoggerFactory.getLogger("2PCProtocolClient")
     }
 }

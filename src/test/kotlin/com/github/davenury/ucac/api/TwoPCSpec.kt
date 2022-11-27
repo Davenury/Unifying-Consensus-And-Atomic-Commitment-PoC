@@ -24,6 +24,7 @@ import strikt.assertions.*
 import java.io.File
 import java.time.Duration
 import java.util.concurrent.Phaser
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 @Suppress("HttpUrlsUsage")
@@ -61,16 +62,23 @@ class TwoPCSpec {
         val peers = apps.getPeers()
         var change = change(peers[1][0])
 
-        electionPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(15))
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
         executeChange("http://${peers[0][0]}/v2/change/async?use_2pc=true", change)
 
-        changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(45))
+        changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         change = change.copy(peers = listOf(peers[1][0], peers[0][0]))
 
-        val twoPCChange = TwoPCChange(change.parentId, TwoPCStatus.ACCEPTED, change.peers, change.acceptNum, change)
+        val twoPCChange =
+            TwoPCChange(
+                change.parentId,
+                change.peers,
+                change.acceptNum,
+                twoPCStatus = TwoPCStatus.ACCEPTED,
+                change = change
+            )
 
         askAllForChanges(peers.flatten()).forEach { changes ->
             expectThat(changes.size).isEqualTo(2)
@@ -115,9 +123,15 @@ class TwoPCSpec {
 
         val result = executeChange("http://${peers[0][0]}/v2/change/async?use_2pc=True", change)
         change = change.withAddress(peers[0][0])
-        val first2PCChange = TwoPCChange(change.parentId, TwoPCStatus.ACCEPTED, change.peers, null, change)
+        val first2PCChange =
+            TwoPCChange(change.parentId, change.peers, twoPCStatus = TwoPCStatus.ACCEPTED, change = change)
         val second2PCChange =
-            TwoPCChange(first2PCChange.toHistoryEntry().getId(), TwoPCStatus.ABORTED, change.peers, null, change)
+            TwoPCChange(
+                first2PCChange.toHistoryEntry().getId(),
+                change.peers,
+                twoPCStatus = TwoPCStatus.ABORTED,
+                change = change
+            )
 
         expectThat(result.status).isEqualTo(HttpStatusCode.Accepted)
 
@@ -161,7 +175,7 @@ class TwoPCSpec {
 
         // when - executing transaction
         try {
-            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc", change(otherPeer))
+            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=true", change(otherPeer))
             fail("Exception not thrown")
         } catch (e: Exception) {
             expectThat(e).isA<ServerResponseException>()
@@ -216,7 +230,8 @@ class TwoPCSpec {
         changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         change = change.withAddress(peers[0][0])
-        val twoPCChange = TwoPCChange(change.parentId, TwoPCStatus.ACCEPTED, change.peers, null, change)
+        val twoPCChange =
+            TwoPCChange(change.parentId, change.peers, twoPCStatus = TwoPCStatus.ACCEPTED, change = change)
 
         // then - transaction should be executed in every peerset
         askAllForChanges(peers.flatten() subtract setOf(NON_RUNNING_PEER)).forEach { changes ->
@@ -242,10 +257,10 @@ class TwoPCSpec {
                 electionPhaser
             ).forEach { it.register() }
 
-            var isChangeNotAccepted = true
+            var isChangeNotAccepted:AtomicBoolean = AtomicBoolean(true)
 
             val onHandleDecision = SignalListener {
-                if (isChangeNotAccepted) throw Exception("Simulate ignoring 2PC-decision message")
+                if (isChangeNotAccepted.get()) throw Exception("Simulate ignoring 2PC-decision message")
             }
 
             val apps = TestApplicationSet(
@@ -278,12 +293,13 @@ class TwoPCSpec {
 
             firstPeersetChangeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            isChangeNotAccepted = false
+            isChangeNotAccepted.set(false)
 
             secondPeersetChangeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             change = change.withAddress(peers[0][0])
-            val twoPCChange = TwoPCChange(change.parentId, TwoPCStatus.ACCEPTED, change.peers, null, change)
+            val twoPCChange =
+                TwoPCChange(change.parentId, change.peers, twoPCStatus = TwoPCStatus.ACCEPTED, change = change)
 
             askAllForChanges(peers.flatten()).forEach { changes ->
                 expectThat(changes.size).isEqualTo(2)
@@ -399,7 +415,7 @@ class TwoPCSpec {
             )
             val peers = apps.getPeers()
 
-            consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(15))
+            consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // given - change in first peerset
             val firstChange = AddUserChange(InitialHistoryEntry.getId(), "firstUserName", listOf())
@@ -407,7 +423,7 @@ class TwoPCSpec {
                 executeChange("http://${peers[0][0]}/v2/change/sync", firstChange)
             }.isSuccess()
 
-            firstChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            firstChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // and - change in second peerset
             val secondChange = AddGroupChange(InitialHistoryEntry.getId(), "firstGroup", listOf())
@@ -418,7 +434,7 @@ class TwoPCSpec {
                 )
             }.isSuccess()
 
-            secondChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            secondChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // when - executing change between two peersets
             var lastChange: Change = AddRelationChange(
@@ -432,16 +448,15 @@ class TwoPCSpec {
                 executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=True", lastChange)
             }.isSuccess()
 
-            finalChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            finalChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
             lastChange = lastChange.withAddress(peers[0][0])
             val twoPCChange =
                 TwoPCChange(
                     lastChange.parentId,
-                    TwoPCStatus.ACCEPTED,
                     lastChange.peers,
-                    null,
-                    lastChange
+                    twoPCStatus = TwoPCStatus.ACCEPTED,
+                    change = lastChange
                 )
 
 //          First peerset

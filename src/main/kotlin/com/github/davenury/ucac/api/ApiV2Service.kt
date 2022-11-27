@@ -41,33 +41,30 @@ class ApiV2Service(
         return history.getEntryFromHistory(id)?.let { Change.fromHistoryEntry(it) }
     }
 
-    fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> = consensusProtocol.getChangeResult(changeId)
-        ?: gpacProtocol.getChangeResult(changeId)
-        ?: twoPC.getChangeResult(changeId)
-        ?: throw ChangeDoesntExist(changeId)
+    fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> =
+        consensusProtocol.getChangeResult(changeId)
+            ?: gpacProtocol.getChangeResult(changeId)
+            ?: twoPC.getChangeResult(changeId)
+            ?: throw ChangeDoesntExist(changeId)
 
-    suspend fun addChange(change: Change, enforceGpac: Boolean, useTwoPC: Boolean): CompletableFuture<ChangeResult> =
-        CompletableFuture<ChangeResult>().also {
-            val isOnePeersetChange: Boolean = allPeersFromMyPeerset(change.peers)
-            val job = ProcessorJob(change, it, isOnePeersetChange, enforceGpac, useTwoPC)
+    suspend fun addChange(job: ProcessorJob): CompletableFuture<ChangeResult> =
+        job.also {
             logger.info("Service send job $job to queue")
-            queue.send(job)
-        }
+            queue.send(it)
+        }.completableFuture
 
     suspend fun addChangeSync(
-        change: Change,
-        enforceGpac: Boolean,
-        useTwoPC: Boolean,
+        job: ProcessorJob,
         timeout: Duration?,
     ): ChangeResult? = try {
         withTimeout(timeout ?: config.rest.defaultSyncTimeout) {
-            addChange(change, enforceGpac, useTwoPC).await()
+            addChange(job).await()
         }
     } catch (e: TimeoutCancellationException) {
         null
     }
 
-    private fun allPeersFromMyPeerset(peers: List<String>) =
+    fun allPeersFromMyPeerset(peers: List<String>) =
         peerResolver.getPeersFromCurrentPeerset().map { it.address }.containsAll(peers)
 
     companion object {

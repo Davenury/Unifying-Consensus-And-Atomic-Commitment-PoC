@@ -10,6 +10,7 @@ import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 
 fun Application.apiV2Routing(
     service: ApiV2Service,
@@ -62,26 +63,27 @@ fun Application.apiV2Routing(
         }
     }
 
-    suspend fun getParamsFromCall(call: ApplicationCall): Triple<Boolean, Boolean, Change> {
+    suspend fun getParamsFromCall(call: ApplicationCall): ProcessorJob {
         val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
         val useTwoPC: Boolean = call.request.queryParameters["use_2pc"]?.toBoolean() ?: false
         val change = call.receive<Change>()
-        return Triple(enforceGpac, useTwoPC, change)
+
+
+        return ProcessorJob(change, CompletableFuture(), service.allPeersFromMyPeerset(change.peers), enforceGpac, useTwoPC)
     }
 
     routing {
         post("/v2/change/async") {
-            val (enforceGpac, useTwoPC, change) = getParamsFromCall(call)
-            service.addChange(change, enforceGpac, useTwoPC)
+            val processorJob = getParamsFromCall(call)
+            service.addChange(processorJob)
             call.respond(HttpStatusCode.Accepted)
         }
 
         post("/v2/change/sync") {
-            val (enforceGpac, useTwoPC, change) = getParamsFromCall(call)
-            val timeout = call.request.queryParameters["timeout"]
-                ?.let { Duration.parse(it) }
+            val processorJob = getParamsFromCall(call)
+            val timeout = call.request.queryParameters["timeout"]?.let { Duration.parse(it) }
 
-            val result: ChangeResult? = service.addChangeSync(change, enforceGpac,useTwoPC, timeout)
+            val result: ChangeResult? = service.addChangeSync(processorJob, timeout)
             respondChangeResult(result, call)
         }
 

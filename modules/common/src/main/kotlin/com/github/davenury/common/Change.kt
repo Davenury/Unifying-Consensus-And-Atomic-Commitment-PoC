@@ -220,9 +220,9 @@ enum class TwoPCStatus {
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class TwoPCChange(
     override val parentId: String,
-    val twoPCStatus: TwoPCStatus,
     override val peers: List<String>,
     override val acceptNum: Int? = null,
+    val twoPCStatus: TwoPCStatus,
     val change: Change
 ) : Change() {
 

@@ -2,13 +2,11 @@ package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Change
 import com.github.davenury.ucac.commitment.TwoPC.TwoPC
-import com.github.davenury.ucac.commitment.gpac.ElectMe
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
-import kotlin.text.get
 
 fun Application.twoPCRouting(twoPC: TwoPC) {
     // Starting point for a Ktor app:
@@ -26,7 +24,7 @@ fun Application.twoPCRouting(twoPC: TwoPC) {
 
         get("/2pc/ask/{changeId}") {
             val id = call.parameters["changeId"]!!
-            val change = twoPC.handleAskDecision(id)
+            val change = twoPC.getChange(id)
             call.respond(HttpStatusCode.OK, change)
         }
     }

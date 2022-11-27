@@ -17,17 +17,17 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import kotlin.math.max
 
-interface GPACProtocol : SignalSubject, AtomicCommitmentProtocol {
-    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult>
+abstract class GPACProtocol(peerResolver: PeerResolver, logger: Logger) : SignalSubject,
+    AtomicCommitmentProtocol(logger, peerResolver) {
 
-    suspend fun handleElect(message: ElectMe): ElectedYou
-    suspend fun handleAgree(message: Agree): Agreed
-    suspend fun handleApply(message: Apply)
+    abstract suspend fun handleElect(message: ElectMe): ElectedYou
+    abstract suspend fun handleAgree(message: Agree): Agreed
+    abstract suspend fun handleApply(message: Apply)
 
-    suspend fun performProtocolAsLeader(change: Change, iteration: Int = 1)
-    suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int = 1)
-    fun getTransaction(): Transaction
-    fun getBallotNumber(): Int
+    abstract suspend fun performProtocolAsLeader(change: Change, iteration: Int = 1)
+    abstract suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int = 1)
+    abstract fun getTransaction(): Transaction
+    abstract fun getBallotNumber(): Int
 
 }
 
@@ -39,8 +39,8 @@ class GPACProtocolImpl(
     private val protocolClient: GPACProtocolClient,
     private val transactionBlocker: TransactionBlocker,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
-    private val peerResolver: PeerResolver,
-) : GPACProtocol {
+    peerResolver: PeerResolver,
+) : GPACProtocol(peerResolver, logger) {
     var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, Duration.ZERO, ctx)
     var retriesTimer: ProtocolTimer =
         ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
@@ -50,7 +50,6 @@ class GPACProtocolImpl(
 
     private var transaction: Transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
-    private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
     private fun checkBallotNumber(ballotNumber: Int): Boolean =
         ballotNumber > myBallotNumber
@@ -58,25 +57,6 @@ class GPACProtocolImpl(
     override fun getTransaction(): Transaction = this.transaction
 
     override fun getBallotNumber(): Int = myBallotNumber
-
-    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
-        val cf = CompletableFuture<ChangeResult>()
-
-        val myAddress = peerResolver.currentPeerAddress().address
-        val enrichedChange =
-            if (change.peers.contains(myAddress)) {
-                change
-            } else {
-                change.withAddress(myAddress)
-            }
-        changeIdToCompletableFuture[enrichedChange.toHistoryEntry().getId()] = cf
-
-        GlobalScope.launch(MDCContext()) {
-            performProtocolAsLeader(enrichedChange)
-        }
-
-        return cf
-    }
 
     override suspend fun handleElect(message: ElectMe): ElectedYou {
         val decision = message.acceptNum?.let { acceptNum ->
@@ -476,17 +456,10 @@ class GPACProtocolImpl(
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
 
-    override fun getPeerName() = peerResolver.currentPeerAddress().globalPeerId.toString()
     override suspend fun performProtocol(change: Change) = performProtocolAsLeader(change)
 
     companion object {
         private val logger = LoggerFactory.getLogger("gpac")
-    }
-
-    override fun getLogger(): Logger = logger
-    override fun getPeerResolver(): PeerResolver = peerResolver
-    override fun putChangeToCompletableFutureMap(change: Change, completableFuture: CompletableFuture<ChangeResult>) {
-        changeIdToCompletableFuture[change.toHistoryEntry().getId()] = completableFuture
     }
 
 }

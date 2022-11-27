@@ -5,31 +5,33 @@ import com.github.davenury.common.ChangeResult
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.Logger
+import java.lang.IllegalStateException
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
 
 /**
  * @author Kamil Jarosz
  */
-interface AtomicCommitmentProtocol {
+abstract class AtomicCommitmentProtocol(
+    val logger: Logger,
+    val peerResolver: PeerResolver,
+) {
 
-    suspend fun performProtocol(change: Change)
+    val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
+    private val executorService: ExecutorCoroutineDispatcher =
+        Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
-    fun getLogger(): Logger
+    abstract suspend fun performProtocol(change: Change)
 
-    fun getPeerResolver(): PeerResolver
+    abstract fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>?
 
-    fun putChangeToCompletableFutureMap(change: Change, completableFuture: CompletableFuture<ChangeResult>)
-
-    fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>?
-
-    suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
+    open suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
         val cf = CompletableFuture<ChangeResult>()
 
-        val myAddress = getPeerResolver().currentPeerAddress().address
+        val myAddress = peerResolver.currentPeerAddress().address
         val enrichedChange =
             if (change.peers.contains(myAddress)) {
                 change
@@ -37,24 +39,38 @@ interface AtomicCommitmentProtocol {
                 change.withAddress(myAddress)
             }
 
-        putChangeToCompletableFutureMap(enrichedChange, cf)
+        changeIdToCompletableFuture[enrichedChange.toHistoryEntry().getId()] = cf
 
-        GlobalScope.launch(MDCContext()) {
-            performProtocol(enrichedChange)
+        with(CoroutineScope(executorService)) {
+            launch(MDCContext()) {
+                performProtocol(enrichedChange)
+            }
         }
 
         return cf
     }
 
+    fun close() {
+        executorService.close()
+    }
+
     fun getPeersFromChange(change: Change): List<List<PeerAddress>> {
-        if (change.peers.isEmpty()) throw RuntimeException("Change without peers")
-        val peerResolver = getPeerResolver()
+        if (change.peers.isEmpty()) throw IllegalStateException("Change without peers")
         return change.peers.map { peer ->
             val peersetId = peerResolver.findPeersetWithPeer(peer)
             if (peersetId == null) {
-                getLogger().error("Peer $peer not found in ${peerResolver.getPeers()}")
+                logger.error("Peer $peer not found in ${peerResolver.getPeers()}")
             }
-            return@map peerResolver.getPeersFromPeerset(peersetId!!) // TODO we need to specify peersetIds instead of peers
+
+            peerResolver
+                .findPeersetWithPeer(peer)
+                ?.let { peerResolver.getPeersFromPeerset(peersetId!!) } // TODO we need to specify peersetIds instead of peers
+                ?: run {
+                    logger.error("Peer $peer not found in ${peerResolver.getPeers()}")
+                    throw IllegalStateException("That peer doesn't exist")
+                }
         }.map { peerset -> peerset.filter { it.globalPeerId != peerResolver.currentPeerAddress().globalPeerId } }
     }
+
+    fun getPeerName() = peerResolver.currentPeerAddress().globalPeerId.toString()
 }
