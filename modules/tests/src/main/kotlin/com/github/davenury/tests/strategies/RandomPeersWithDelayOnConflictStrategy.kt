@@ -19,9 +19,7 @@ class RandomPeersWithDelayOnConflictStrategy(
             lateinit var ids: List<Int>
             while (true) {
                 ids = peersetsRange.filter { lockedPeersets[it] == false }.shuffled().take(numberOfPeersets)
-                println("have: ${ids.size}, want: ${numberOfPeersets}")
                 if (ids.size < numberOfPeersets) {
-                    println("Waiting")
                     condition.await()
                 } else {
                     break
@@ -31,10 +29,19 @@ class RandomPeersWithDelayOnConflictStrategy(
             return@withLock ids
         }
 
+    override suspend fun freePeersets(peersetsId: List<Int>) {
+        lock.withLock {
+            peersetsId.forEach {
+                lockedPeersets[it] = false
+            }
+            condition.signalAll()
+        }
+    }
+
     override suspend fun handleNotification(peersetId: Int) {
         lock.withLock {
-            condition.signalAll()
             lockedPeersets[peersetId] = false
+            condition.signalAll()
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.github.davenury.test
 
 import com.github.davenury.common.*
+import com.github.davenury.tests.ChangeState
 import com.github.davenury.tests.Changes
 import com.github.davenury.tests.Sender
 import kotlinx.coroutines.sync.Mutex
@@ -18,7 +19,7 @@ class DummySender(
     val appearedChanges = mutableListOf<Pair<String, Change>>()
     val mutex = Mutex()
 
-    override suspend fun executeChange(address: String, change: Change) {
+    override suspend fun executeChange(address: String, change: Change): ChangeState {
         val enrichedChange = change.withAddress(address)
         mutex.withLock {
             appearedChanges.add(Pair(address, enrichedChange))
@@ -27,6 +28,7 @@ class DummySender(
             notify(enrichedChange)
         }
         phaser?.arrive()
+        return ChangeState.ACCEPTED
     }
 
     suspend fun notify(change: Change) {
@@ -41,4 +43,6 @@ class DummySender(
     fun setChanges(changes: Changes) {
         this.changes = changes
     }
+
+    fun getLastChange(): Change = appearedChanges.last().second
 }

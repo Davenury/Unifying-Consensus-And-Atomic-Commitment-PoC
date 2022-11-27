@@ -3,9 +3,6 @@ package com.github.davenury.tests
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.GetPeersStrategy
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -34,9 +31,12 @@ class Changes(
         }
     }
 
-    suspend fun introduceChange(numberOfPeersets: Int): Change {
+    suspend fun introduceChange(numberOfPeersets: Int) {
         val ids = getPeersStrategy.getPeersets(numberOfPeersets)
-        return changes[ids[0]]!!.introduceChange(counter.getAndIncrement(), *ids.drop(1).map { peers[it]!!.first() }.toTypedArray())
+        val result = changes[ids[0]]!!.introduceChange(counter.getAndIncrement(), *ids.drop(1).map { peers[it]!!.first() }.toTypedArray())
+        if (result == ChangeState.REJECTED) {
+            getPeersStrategy.freePeersets(ids)
+        }
     }
 
     private fun findPeer(address: String): Int =
@@ -53,11 +53,10 @@ class OnePeersetChanges(
 ) {
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
 
-    suspend fun introduceChange(counter: Int, vararg otherPeers: String): Change {
+    suspend fun introduceChange(counter: Int, vararg otherPeers: String): ChangeState {
         val senderAddress = peersAddresses.asSequence().shuffled().find { true }!!
         val change = AddUserChange(getCurrentParentId(), "userName${counter}", otherPeers.asList())
-        sender.executeChange(senderAddress, change)
-        return change
+        return sender.executeChange(senderAddress, change)
     }
 
     fun getCurrentParentId(): String = parentId.get()

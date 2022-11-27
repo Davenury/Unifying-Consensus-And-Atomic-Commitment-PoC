@@ -8,4 +8,5 @@ class RandomPeersStrategy(
         peersetsRange.shuffled().take(numberOfPeersets)
 
     override suspend fun handleNotification(peersetId: Int) {}
+    override suspend fun freePeersets(peersetsId: List<Int>) {}
 }

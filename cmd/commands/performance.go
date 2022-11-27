@@ -1,15 +1,15 @@
 package commands
 
 import (
-	"context"
-	"fmt"
-	"github.com/spf13/cobra"
+    "context"
+    "fmt"
+    "github.com/spf13/cobra"
 
-	batchv1 "k8s.io/api/batch/v1"
-	"k8s.io/client-go/kubernetes"
+    batchv1 "k8s.io/api/batch/v1"
+    "k8s.io/client-go/kubernetes"
     v1 "k8s.io/api/core/v1"
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
+    "k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var performanceNamespace string
@@ -20,6 +20,7 @@ var singleRequestsNumber int
 var multipleRequestsNumber int
 var testDuration string
 var maxPeersetsInChange int
+var testsStrategy string
 
 func CreatePerformanceCommand() *cobra.Command {
 
@@ -47,6 +48,7 @@ func CreatePerformanceCommand() *cobra.Command {
 	cmd.Flags().IntVarP(&multipleRequestsNumber, "multiple-requests-number", "", 0, "Determines number of requests to send to multiple peersets at once")
 	cmd.Flags().StringVarP(&testDuration, "test-duration", "d", "PT1S", "Duration of test (in java-like duration format)")
 	cmd.Flags().IntVarP(&maxPeersetsInChange, "max-peersets-in-change", "", 2, "Determines maximum number of peersets that can take part in one change")
+	cmd.Flags().StringVarP(&testsStrategy, "tests-strategy", "", "delay_on_conflicts", "Determines tests strategy - either random or delay_on_conflicts")
 	return cmd
 }
 
@@ -117,6 +119,7 @@ func createConfigmap(clientset *kubernetes.Clientset) {
 			"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", multipleRequestsNumber),
 			"TEST_DURATION": testDuration,
 			"MAX_PEERSETS_IN_CHANGE": fmt.Sprintf("%d", maxPeersetsInChange),
+			"TESTS_STRATEGY": testsStrategy,
 		},
 	}
 

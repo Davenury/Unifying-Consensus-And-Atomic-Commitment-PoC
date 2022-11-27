@@ -88,7 +88,6 @@ class ChangesTest {
         val sender = DummySender(peers, shouldNotify = false)
         val subject = Changes(peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size)))
         sender.setChanges(subject)
-        var change: Change? = null
 
         val phaser = Phaser(2)
 
@@ -97,7 +96,7 @@ class ChangesTest {
         peers.keys.forEach { key ->
             withContext(Dispatchers.IO) {
                 if (key == 0) {
-                    change = subject.introduceChange(1)
+                    subject.introduceChange(1)
                     phaser.arrive()
                 } else {
                     subject.introduceChange(1)
@@ -108,7 +107,7 @@ class ChangesTest {
         phaser.arriveAndAwaitAdvance()
 
         // and - we explicitly unlock one peer
-        sender.notify(change!!.withAddress(peers[0]!!.first()))
+        sender.notify(sender.getLastChange())
 
         // then - should throw exception when adding another change
         expectCatching {
