@@ -1,5 +1,8 @@
 package com.github.davenury.ucac.utils
 
+import io.mockk.every
+import io.mockk.mockkStatic
+import org.fusesource.jansi.AnsiConsole
 import org.junit.jupiter.api.extension.AfterEachCallback
 import org.junit.jupiter.api.extension.BeforeEachCallback
 import org.junit.jupiter.api.extension.ExtensionContext
@@ -24,6 +27,8 @@ class TestLogExtension : BeforeEachCallback, AfterEachCallback, CloseableResourc
     }
 
     override fun beforeEach(context: ExtensionContext) {
+        disableAnsiConsoleInstallation();
+
         val className = context.testClass.orElse(null)?.name
         val methodName = context.testMethod.orElse(null)?.name
         val hash = hash(className, methodName)
@@ -41,5 +46,12 @@ class TestLogExtension : BeforeEachCallback, AfterEachCallback, CloseableResourc
 
     override fun close() {
 
+    }
+
+    private fun disableAnsiConsoleInstallation() {
+        mockkStatic(AnsiConsole::class)
+        every {
+            AnsiConsole.systemInstall()
+        } throws IllegalStateException("Ansi console not supported in tests")
     }
 }
