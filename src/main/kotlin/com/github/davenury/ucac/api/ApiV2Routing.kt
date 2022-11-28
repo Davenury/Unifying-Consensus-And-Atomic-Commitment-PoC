@@ -9,12 +9,16 @@ import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 fun Application.apiV2Routing(
     service: ApiV2Service,
 ) {
+    val logger = LoggerFactory.getLogger("V2Routing")
+
+
     suspend fun respondChangeResult(result: ChangeResult?, call: ApplicationCall) {
         when (result?.status) {
             ChangeResult.Status.SUCCESS -> {
@@ -76,6 +80,7 @@ fun Application.apiV2Routing(
             else -> ProcessorJobType.GPAC
         }
 
+        logger.info("Create ProcessorJob from parameters: (isOnePeersetChange=$isOnePeersetChange, enforceGPAC: $enforceGpac, 2PC: $useTwoPC), resultType: $processorJobType")
 
         return ProcessorJob(change, CompletableFuture(), processorJobType)
     }
