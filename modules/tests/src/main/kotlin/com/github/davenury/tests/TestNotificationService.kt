@@ -44,10 +44,6 @@ class TestNotificationService {
         changes
     )
 
-    init {
-        println("Pushgateway address: ${config.pushGatewayAddress}")
-    }
-
     private val server: NettyApplicationEngine = embeddedServer(Netty, port=8080, host = "0.0.0.0") {
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
@@ -89,7 +85,7 @@ class TestNotificationService {
 
     fun closeService() {
         val pushGateway = PushGateway(config.pushGatewayAddress)
-        pushGateway.push(meterRegistry.prometheusRegistry, "test_service")
+        pushGateway.pushAdd(meterRegistry.prometheusRegistry, "test_service")
         server.stop(200, 1000)
     }
 
