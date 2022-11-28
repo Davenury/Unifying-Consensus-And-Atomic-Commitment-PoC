@@ -59,6 +59,7 @@ sealed class Change {
         }
     }
 
+//  TODO: Check logic of this function, probably we are using it in some place when we shouldn't
     fun toHistoryEntry(): HistoryEntry {
         return IntermediateHistoryEntry(
             objectMapper.writeValueAsString(this),

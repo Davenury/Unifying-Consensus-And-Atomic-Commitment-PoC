@@ -63,7 +63,7 @@ fun Application.apiV2Routing(
         }
     }
 
-    suspend fun getParamsFromCall(call: ApplicationCall): ProcessorJob {
+    suspend fun getProcessorJob(call: ApplicationCall): ProcessorJob {
         val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
         val useTwoPC: Boolean = call.request.queryParameters["use_2pc"]?.toBoolean() ?: false
         val change = call.receive<Change>()
@@ -74,13 +74,13 @@ fun Application.apiV2Routing(
 
     routing {
         post("/v2/change/async") {
-            val processorJob = getParamsFromCall(call)
+            val processorJob = getProcessorJob(call)
             service.addChange(processorJob)
             call.respond(HttpStatusCode.Accepted)
         }
 
         post("/v2/change/sync") {
-            val processorJob = getParamsFromCall(call)
+            val processorJob = getProcessorJob(call)
             val timeout = call.request.queryParameters["timeout"]?.let { Duration.parse(it) }
 
             val result: ChangeResult? = service.addChangeSync(processorJob, timeout)

@@ -4,12 +4,9 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.IntermediateHistoryEntry
 import com.github.davenury.ucac.*
-import com.github.davenury.ucac.commitment.AtomicCommitmentProtocol
+import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.lang.Exception
@@ -17,8 +14,8 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import kotlin.math.max
 
-abstract class GPACProtocol(peerResolver: PeerResolver, logger: Logger) : SignalSubject,
-    AtomicCommitmentProtocol(logger, peerResolver) {
+abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) : SignalSubject,
+    AbstractAtomicCommitmentProtocol(logger, peerResolver) {
 
     abstract suspend fun handleElect(message: ElectMe): ElectedYou
     abstract suspend fun handleAgree(message: Agree): Agreed
@@ -32,7 +29,7 @@ abstract class GPACProtocol(peerResolver: PeerResolver, logger: Logger) : Signal
 }
 
 
-class GPACProtocolImpl(
+class GPACProtocolImplAbstract(
     private val history: History,
     private val gpacConfig: GpacConfig,
     private val ctx: ExecutorCoroutineDispatcher,
@@ -40,7 +37,7 @@ class GPACProtocolImpl(
     private val transactionBlocker: TransactionBlocker,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     peerResolver: PeerResolver,
-) : GPACProtocol(peerResolver, logger) {
+) : GPACProtocolAbstract(peerResolver, logger) {
     var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, Duration.ZERO, ctx)
     var retriesTimer: ProtocolTimer =
         ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
@@ -360,7 +357,7 @@ class GPACProtocolImpl(
         this.handleApply(
             Apply(
                 myBallotNumber,
-                this@GPACProtocolImpl.transaction.decision,
+                this@GPACProtocolImplAbstract.transaction.decision,
                 acceptVal,
                 change
             )
@@ -392,7 +389,7 @@ class GPACProtocolImpl(
         protocolClient.sendApply(
             otherPeers, Apply(
                 myBallotNumber,
-                this@GPACProtocolImpl.transaction.decision,
+                this@GPACProtocolImplAbstract.transaction.decision,
                 acceptVal,
                 change
             )

@@ -7,7 +7,7 @@ import com.github.davenury.common.Changes
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.commitment.TwoPC.TwoPC
-import com.github.davenury.ucac.commitment.gpac.GPACProtocol
+import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.TimeoutCancellationException
@@ -19,7 +19,7 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 class ApiV2Service(
-    private val gpacProtocol: GPACProtocol,
+    private val gpacProtocol: GPACProtocolAbstract,
     private val consensusProtocol: ConsensusProtocol,
     private val twoPC: TwoPC,
     private val history: History,

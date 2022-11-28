@@ -7,9 +7,9 @@ import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.commitment.TwoPC.TwoPC
 import com.github.davenury.ucac.commitment.TwoPC.TwoPCProtocolClientImpl
-import com.github.davenury.ucac.commitment.gpac.GPACProtocol
+import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
-import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
+import com.github.davenury.ucac.commitment.gpac.GPACProtocolImplAbstract
 import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
@@ -86,7 +86,7 @@ class ApplicationUcac constructor(
     private var consensusProtocol: RaftConsensusProtocol? = null
     private var twoPC: TwoPC? = null
     private val ctx: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
-    private lateinit var gpacProtocol: GPACProtocol
+    private lateinit var gpacProtocol: GPACProtocolAbstract
     private var service: ApiV2Service? = null
     private val peerResolver = config.newPeerResolver()
 
@@ -133,7 +133,7 @@ class ApplicationUcac constructor(
         )
 
         gpacProtocol =
-            GPACProtocolImpl(
+            GPACProtocolImplAbstract(
                 history,
                 config.gpac,
                 ctx,

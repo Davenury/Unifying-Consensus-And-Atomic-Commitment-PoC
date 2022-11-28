@@ -448,7 +448,7 @@ class TwoPCSpec {
                 executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=True", lastChange)
             }.isSuccess()
 
-            finalChangePhaser.arriveAndAwaitAdvanceWithTimeout()
+            finalChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
             lastChange = lastChange.withAddress(peers[0][0])
             val twoPCChange =
