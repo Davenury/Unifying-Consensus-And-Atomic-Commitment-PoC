@@ -17,13 +17,15 @@ class HttpSender(
 ): Sender {
     override suspend fun executeChange(address: String, change: Change): ChangeState {
         return try {
-            httpClient.post<HttpStatement>("http://$address/v2/change/async") {
+            logger.info("Sending change to $address")
+            val response = httpClient.post<HttpStatement>("http://$address/v2/change/async") {
                 parameter("notification_url", URLEncoder.encode("$ownAddress/api/v1/notification", Charset.defaultCharset()))
                 parameter("enforce_gpac", true)
                 accept(ContentType.Application.Json)
                 contentType(ContentType.Application.Json)
                 body = change
             }
+            logger.info("Received: ${response.execute().status.value}")
             ChangeState.ACCEPTED
         } catch (e: Exception) {
             logger.error("Couldn't execute change with address: $address")

@@ -86,7 +86,7 @@ func generateServicesForPeers(peersInPeerset []int, startPort int, increment boo
 	for idx, peersNumber := range peersInPeerset {
 		var sb strings.Builder
 
-		for i := 1; i <= peersNumber; i++ {
+		for i := 0; i < peersNumber; i++ {
 			port := startPort
 			if increment {
 				port = port + i

@@ -56,13 +56,14 @@ class ApiV2Service(
             queue.send(it)
         }.completableFuture
 
-    private suspend fun notify(notificationUrl: String?, change: Change, changeResult: ChangeResult) {
+    private suspend fun notify(notificationUrl: String, change: Change, changeResult: ChangeResult) {
         val decodedUrl = URLDecoder.decode(notificationUrl, Charset.defaultCharset())
         try {
-            httpClient.post<HttpStatement>(decodedUrl) {
+            val response = httpClient.post<HttpStatement>(decodedUrl) {
                 contentType(ContentType.Application.Json)
                 body = Notification(change, changeResult)
             }
+            logger.info("Notification response: ${response.execute().status.value}")
         } catch (e: Exception) {
             logger.error("Unable to send notification about completed change", e)
         }
