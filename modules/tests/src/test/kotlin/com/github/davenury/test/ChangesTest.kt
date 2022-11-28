@@ -17,6 +17,8 @@ import strikt.assertions.isEqualTo
 import strikt.assertions.isSuccess
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
@@ -34,7 +36,6 @@ class ChangesTest {
         )
     }
 
-    @Disabled("Infinite test - TODO fix before closing PR")
     @Test
     fun `should throw AssertionError, when list of available peersets is empty`(): Unit = runBlocking {
         // given - changes
@@ -45,8 +46,15 @@ class ChangesTest {
         sender.setChanges(subject)
         val phaser = Phaser(peers.keys.size)
         phaser.register()
+        val handleNotificationCounter = AtomicInteger(0)
 
-        every { conditionMock.await() } just Runs
+        every { conditionMock.await() } answers {
+            if (handleNotificationCounter.getAndIncrement() < 1) {
+                launch {
+                    subject.handleNotification(Notification(sender.getLastChange(), ChangeResult(ChangeResult.Status.SUCCESS)))
+                }
+            }
+        }
         every { conditionMock.signalAll() } just Runs
         every { lockMock.lock() } just Runs
         every { lockMock.unlock() } just Runs
@@ -54,9 +62,11 @@ class ChangesTest {
         // when - executing changes without notyfing about ending
         // after this all peersets are occupied with a change
         peers.keys.forEach { _ ->
-            launch {
-                subject.introduceChange(1)
-                phaser.arrive()
+            withContext(Dispatchers.IO) {
+                launch {
+                    subject.introduceChange(1)
+                    phaser.arrive()
+                }
             }
         }
 
@@ -64,22 +74,18 @@ class ChangesTest {
 
         // and - another change
         val phase2Phaser = Phaser(2)
-        launch {
-            subject.introduceChange(1)
+        withContext(Dispatchers.IO){
+            launch {
+                subject.introduceChange(1)
+                phase2Phaser.arrive()
+            }
         }
 
-        verify(exactly = 1) { conditionMock.await() }
+        phase2Phaser.arriveAndAwaitAdvance()
 
-        subject.handleNotification(
-            Notification(
-                AddUserChange(
-                    "parentId",
-                    "userName",
-                    peers = listOf("localhost2:8080")
-                ), result = ChangeResult(ChangeResult.Status.SUCCESS)
-            )
-        )
+        verify(atLeast = 1) { conditionMock.await() }
 
+        // we handle notification in response to await, in this function there's a condition.signalAll()
         verify(exactly = 1) { conditionMock.signalAll() }
     }
 
