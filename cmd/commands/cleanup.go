@@ -26,6 +26,7 @@ func CreateCleanupCommand() *cobra.Command {
 			deleteDeployments(clientset, cleanupNamespace)
 			deleteConfigMaps(clientset, cleanupNamespace)
 			deleteService(clientset, cleanupNamespace)
+			deleteJob(clientset, cleanupNamespace)
 		},
 	}
 
@@ -57,4 +58,10 @@ func deleteService(clientset *kubernetes.Clientset, namespace string) {
 		serviceClient.Delete(context.Background(), service.ObjectMeta.Name, metav1.DeleteOptions{})
 	}
 
+}
+
+func deleteJob(clientset *kubernetes.Clientset, cleanupNamespace string) {
+	clientset.BatchV1().Jobs(cleanupNamespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
+		LabelSelector: "project=ucac",
+	})
 }

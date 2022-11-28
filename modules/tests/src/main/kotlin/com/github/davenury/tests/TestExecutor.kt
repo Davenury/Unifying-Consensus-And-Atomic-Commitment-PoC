@@ -5,6 +5,7 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.ticker
 import org.slf4j.LoggerFactory
 import java.time.Duration
+import java.util.concurrent.Executors
 import kotlin.random.Random
 
 class TestExecutor(
@@ -26,7 +27,7 @@ class TestExecutor(
     suspend fun startTest() {
         logger.info("Test starts. Number of singlePeerset requests: $numberOfRequestsToSendToSinglePeerset, number of multiplePeersets requests: $numberOfRequestsToSendToMultiplePeersets\n" +
                 "time of simulation: ${timeOfSimulation.toSeconds()}s. Requests are sent in ${sendRequestBreak.toMillis()}ms breaks.")
-        withContext(Dispatchers.IO) {
+        withContext(ctx) {
             for (i in (1..overallNumberOfRequests)) {
                 channel.receive()
                 launch {
@@ -61,5 +62,7 @@ class TestExecutor(
 
     companion object {
         private val logger = LoggerFactory.getLogger("TestExecutor")
+
+        private val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
     }
 }

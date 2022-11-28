@@ -1,16 +1,16 @@
 package performance
 
 import (
-    "context"
-    "fmt"
-    "github.com/spf13/cobra"
+	"context"
+	"fmt"
+	"github.com/spf13/cobra"
 	"github.com/davenury/ucac/cmd/commands/utils"
 
-    batchv1 "k8s.io/api/batch/v1"
-    "k8s.io/client-go/kubernetes"
-    v1 "k8s.io/api/core/v1"
-    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-    "k8s.io/apimachinery/pkg/util/intstr"
+	batchv1 "k8s.io/api/batch/v1"
+	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var performanceNamespace string
@@ -51,7 +51,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&testDuration, "test-duration", "d", "PT1S", "Duration of test (in java-like duration format)")
 	cmd.Flags().IntVarP(&maxPeersetsInChange, "max-peersets-in-change", "", 2, "Determines maximum number of peersets that can take part in one change")
 	cmd.Flags().StringVarP(&testsStrategy, "tests-strategy", "", "delay_on_conflicts", "Determines tests strategy - either random or delay_on_conflicts")
-	cmd.Flags().StringVarP(&pushgatewayAddress, "pushgateway-address", "", "http://prometheus-prometheus-pushgateway.default:9091", "Pushgateway address")
+	cmd.Flags().StringVarP(&pushgatewayAddress, "pushgateway-address", "", "prometheus-prometheus-pushgateway.default:9091", "Pushgateway address")
 	return cmd
 }
 
@@ -61,7 +61,7 @@ func createJob(clientset *kubernetes.Clientset, image string) {
 
 	jobSpec := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "performance-test",
+			Name:      "performance-test",
 			Namespace: performanceNamespace,
 			Labels: map[string]string{
 				"project": "ucac",
@@ -69,10 +69,22 @@ func createJob(clientset *kubernetes.Clientset, image string) {
 		},
 		Spec: batchv1.JobSpec{
 			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "performance-test",
+					Labels: map[string]string{
+						"app.name": "performance-test",
+						"project":  "ucac",
+					},
+					Annotations: map[string]string{
+						"prometheus.io/scrape": "true",
+						"prometheus.io/port":   "8080",
+						"prometheus.io/path":   "/_meta/metrics",
+					},
+				},
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{
 						{
-							Name: "performance-test",
+							Name:  "performance-test",
 							Image: image,
 							Ports: []v1.ContainerPort{
 								{
@@ -105,26 +117,26 @@ func createJob(clientset *kubernetes.Clientset, image string) {
 func createConfigmap(clientset *kubernetes.Clientset) {
 	configMap := &v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
-			Kind: "ConfigMap",
+			Kind:       "ConfigMap",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "performance-test-configmap",
+			Name:      "performance-test-configmap",
 			Namespace: performanceNamespace,
 			Labels: map[string]string{
-				"project": "ucac",
+				"project":  "ucac",
 				"app.name": "performanceTest",
 			},
 		},
 		Data: map[string]string{
-			"TEST_PEERS": utils.GenerateServicesForPeersStaticPort(performanceNumberOfPeers, 8080),
-			"NOTIFICATION_SERVICE_ADDRESS": "http://notification-service:8080",
-			"SINGLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", singleRequestsNumber),
+			"TEST_PEERS":                      utils.GenerateServicesForPeersStaticPort(performanceNumberOfPeers, 8080),
+			"NOTIFICATION_SERVICE_ADDRESS":    "http://notification-service:8080",
+			"SINGLE_PEERSET_CHANGES_NUMBER":   fmt.Sprintf("%d", singleRequestsNumber),
 			"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", multipleRequestsNumber),
-			"TEST_DURATION": testDuration,
-			"MAX_PEERSETS_IN_CHANGE": fmt.Sprintf("%d", maxPeersetsInChange),
-			"TESTS_STRATEGY": testsStrategy,
-			"PUSHGATEWAY_ADDRESS": pushgatewayAddress,
+			"TEST_DURATION":                   testDuration,
+			"MAX_PEERSETS_IN_CHANGE":          fmt.Sprintf("%d", maxPeersetsInChange),
+			"TESTS_STRATEGY":                  testsStrategy,
+			"PUSHGATEWAY_ADDRESS":             pushgatewayAddress,
 		},
 	}
 
@@ -142,7 +154,7 @@ func createService(clientset *kubernetes.Clientset) {
 		},
 		Spec: v1.ServiceSpec{
 			Selector: map[string]string{
-				"job-name": "performance-test",
+				"app.name": "performance-test",
 			},
 			Ports: []v1.ServicePort{
 				{

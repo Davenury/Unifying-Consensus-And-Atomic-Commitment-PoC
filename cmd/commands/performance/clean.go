@@ -35,13 +35,13 @@ func createCleanupCommand() *cobra.Command {
 
 func deleteJob(clientset *kubernetes.Clientset) {
 	clientset.BatchV1().Jobs(cleanupNamespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
-		LabelSelector: "app.name=performanceTest",
+		LabelSelector: "project=ucac",
 	})
 }
 
 func deleteConfigmap(clientset *kubernetes.Clientset) {
 	clientset.CoreV1().ConfigMaps(cleanupNamespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
-		LabelSelector: "app.name=performanceTest",
+		LabelSelector: "project=ucac",
 	})
 }
 
@@ -49,7 +49,7 @@ func deleteService(clientset *kubernetes.Clientset) {
 
 	serviceClient := clientset.CoreV1().Services(cleanupNamespace)
 	services, _ := serviceClient.List(context.Background(), metav1.ListOptions{
-		LabelSelector: "app.name=performanceTest",
+		LabelSelector: "project=ucac",
 	})
 
 	for _, service := range services.Items {
