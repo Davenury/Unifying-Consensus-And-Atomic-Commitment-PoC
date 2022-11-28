@@ -18,3 +18,8 @@ fun sha512(string: String): String {
 }
 
 val meterRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
+object Metrics {
+    fun bumpIncorrectHistory() {
+        meterRegistry.counter("incorrect_history_change").increment()
+    }
+}

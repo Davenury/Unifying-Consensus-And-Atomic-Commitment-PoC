@@ -19,7 +19,8 @@ data class Config(
     val numberOfRequestsToSendToMultiplePeersets: Int,
     val durationOfTest: Duration,
     val maxPeersetsInChange: Int,
-    val strategy: Strategy
+    val strategy: Strategy,
+    val pushGatewayAddress: String,
 ) {
     fun peerAddresses(): Map<Int, List<String>> =
         parsePeers(peers)

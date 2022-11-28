@@ -32,6 +32,10 @@ dependencies {
     implementation("org.slf4j:slf4j-api:1.7.36")
     implementation("ch.qos.logback:logback-classic:$logback_version")
 
+    implementation("io.micrometer:micrometer-registry-prometheus:1.9.2")
+    implementation("io.ktor:ktor-metrics-micrometer:$ktor_version")
+    implementation("io.prometheus:simpleclient_pushgateway:0.16.0")
+
     implementation("com.sksamuel.hoplite:hoplite-core:2.0.4")
 
     implementation(project(":modules:common"))

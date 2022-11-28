@@ -1,10 +1,12 @@
 package com.github.davenury.tests
 
 import com.github.davenury.common.Change
+import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import org.slf4j.LoggerFactory
+import java.lang.Exception
 import java.net.URLEncoder
 import java.nio.charset.Charset
 
@@ -18,6 +20,7 @@ class HttpSender(
     override suspend fun executeChange(address: String, change: Change): ChangeState {
         return try {
             logger.info("Sending change to $address")
+            Metrics.bumpSentChanges()
             val response = httpClient.post<HttpStatement>("http://$address/v2/change/async") {
                 parameter("notification_url", URLEncoder.encode("$ownAddress/api/v1/notification", Charset.defaultCharset()))
                 parameter("enforce_gpac", true)
@@ -29,7 +32,10 @@ class HttpSender(
             ChangeState.ACCEPTED
         } catch (e: Exception) {
             logger.error("Couldn't execute change with address: $address")
-            // TODO - bump metrics
+            when (e) {
+                is ClientRequestException -> Metrics.reportUnsuccessfulChange(e.response.status.value)
+                is ServerResponseException -> Metrics.reportUnsuccessfulChange(e.response.status.value)
+            }
             ChangeState.REJECTED
         }
     }

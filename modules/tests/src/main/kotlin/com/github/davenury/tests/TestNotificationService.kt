@@ -2,16 +2,22 @@ package com.github.davenury.tests
 
 import com.github.davenury.common.Notification
 import com.github.davenury.common.loadConfig
+import com.github.davenury.common.meterRegistry
 import com.github.davenury.common.objectMapper
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
+import io.ktor.metrics.micrometer.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
+import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
+import io.micrometer.core.instrument.binder.system.ProcessorMetrics
+import io.prometheus.client.exporter.PushGateway
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -43,6 +49,15 @@ class TestNotificationService {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
         }
 
+        install(MicrometerMetrics) {
+            registry = meterRegistry
+            meterBinders = listOf(
+                JvmMemoryMetrics(),
+                JvmGcMetrics(),
+                ProcessorMetrics()
+            )
+        }
+
         routing {
             post("/api/v1/notification") {
                 try {
@@ -69,6 +84,8 @@ class TestNotificationService {
     }
 
     fun closeService() {
+        val pushGateway = PushGateway(config.pushGatewayAddress)
+        pushGateway.push(meterRegistry.prometheusRegistry, "test_service")
         server.stop(200, 1000)
     }
 

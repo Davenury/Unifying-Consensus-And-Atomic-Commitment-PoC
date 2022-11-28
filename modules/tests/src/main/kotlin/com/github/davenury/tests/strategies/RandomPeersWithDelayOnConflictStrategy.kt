@@ -1,5 +1,6 @@
 package com.github.davenury.tests.strategies
 
+import com.github.davenury.tests.Metrics
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.Lock
@@ -20,6 +21,7 @@ class RandomPeersWithDelayOnConflictStrategy(
             while (true) {
                 ids = peersetsRange.filter { lockedPeersets[it] == false }.shuffled().take(numberOfPeersets)
                 if (ids.size < numberOfPeersets) {
+                    Metrics.bumpDelayInSendingChange()
                     condition.await()
                 } else {
                     break

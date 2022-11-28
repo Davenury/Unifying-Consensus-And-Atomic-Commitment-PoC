@@ -1,6 +1,7 @@
 package com.github.davenury.common.history
 
 import org.slf4j.LoggerFactory
+import com.github.davenury.common.Metrics
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
@@ -48,6 +49,7 @@ class History {
         }
 
         if (!successful) {
+            Metrics.bumpIncorrectHistory()
             throw HistoryException(
                 "Optimistic locking exception: parent changed concurrently, " +
                         "entryId=${newId}"
