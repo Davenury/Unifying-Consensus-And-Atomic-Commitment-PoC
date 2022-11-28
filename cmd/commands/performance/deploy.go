@@ -63,7 +63,6 @@ func createJob(clientset *kubernetes.Clientset, image string) {
 			Namespace: performanceNamespace,
 			Labels: map[string]string{
 				"project": "ucac",
-				"app.name": "performanceTest",
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -136,12 +135,11 @@ func createService(clientset *kubernetes.Clientset) {
 			Namespace: performanceNamespace,
 			Labels: map[string]string{
 				"project": "ucac",
-				"app.name": "performanceTest",
 			},
 		},
 		Spec: v1.ServiceSpec{
 			Selector: map[string]string{
-				"app.name": "performanceTest",
+				"job-name": "performance-test",
 			},
 			Ports: []v1.ServicePort{
 				{
