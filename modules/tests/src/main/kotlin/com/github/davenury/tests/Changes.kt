@@ -3,6 +3,7 @@ package com.github.davenury.tests
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.GetPeersStrategy
+import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -22,6 +23,7 @@ class Changes(
     private var counter = AtomicInteger(0)
 
     suspend fun handleNotification(notification: Notification) {
+        logger.info("Handling notification: $notification")
         if (notification.result.status == ChangeResult.Status.SUCCESS) {
             notification.change.peers.forEach {
                 val peersetId = findPeer(it)
@@ -34,6 +36,7 @@ class Changes(
     suspend fun introduceChange(numberOfPeersets: Int) {
         val ids = getPeersStrategy.getPeersets(numberOfPeersets)
         val result = changes[ids[0]]!!.introduceChange(counter.getAndIncrement(), *ids.drop(1).map { peers[it]!!.first() }.toTypedArray())
+        logger.info("Introduced change to peersets with ids $ids with result: $result")
         if (result == ChangeState.REJECTED) {
             getPeersStrategy.freePeersets(ids)
         }
@@ -44,6 +47,10 @@ class Changes(
             .entries
             .firstOrNull()
             ?.key ?: throw AssertionError("Peer $address was not found in map of peers")
+
+    companion object {
+        private val logger = LoggerFactory.getLogger("Changes")
+    }
 
 }
 

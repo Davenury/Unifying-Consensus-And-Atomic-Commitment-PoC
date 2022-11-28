@@ -3,6 +3,7 @@ package com.github.davenury.tests
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.ticker
+import org.slf4j.LoggerFactory
 import java.time.Duration
 import kotlin.random.Random
 
@@ -23,15 +24,19 @@ class TestExecutor(
     private val channel: ReceiveChannel<Unit> = ticker(sendRequestBreak.toMillis(), 0)
 
     suspend fun startTest() {
+        logger.info("Test starts. Number of singlePeerset requests: $numberOfRequestsToSendToSinglePeerset, number of multiplePeersets requests: $numberOfRequestsToSendToMultiplePeersets\n" +
+                "time of simulation: ${timeOfSimulation.toSeconds()}s. Requests are sent in ${sendRequestBreak.toMillis()}ms breaks.")
         withContext(Dispatchers.IO) {
             for (i in (1..overallNumberOfRequests)) {
                 channel.receive()
                 launch {
+                    logger.info("Introducing change $i")
                     changes.introduceChange(determineNumberOfPeersets())
                 }
             }
             channel.cancel()
         }
+        logger.info("Test Executor sent ended it's work.")
     }
 
     private fun determineNumberOfPeersets(): Int {
@@ -52,5 +57,9 @@ class TestExecutor(
         }
 
         return Random.nextInt(maxPeersetsInChange - 1) + 2
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger("TestExecutor")
     }
 }
