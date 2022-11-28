@@ -121,7 +121,7 @@ class TwoPCSpec {
         val otherPeer = peers[1][0]
         var change: Change = change(otherPeer)
 
-        val result = executeChange("http://${peers[0][0]}/v2/change/async?use_2pc=True", change)
+        val result = executeChange("http://${peers[0][0]}/v2/change/async?use_2pc=true", change)
         change = change.withAddress(peers[0][0])
         val first2PCChange =
             TwoPCChange(change.parentId, change.peers, twoPCStatus = TwoPCStatus.ACCEPTED, change = change)
@@ -289,7 +289,7 @@ class TwoPCSpec {
 
             electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=True", change)
+            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=true", change)
 
             firstPeersetChangeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -350,7 +350,7 @@ class TwoPCSpec {
 
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
-            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=True", change(otherPeer))
+            executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=true", change(otherPeer))
         }
 
         applyCommittedPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -445,7 +445,7 @@ class TwoPCSpec {
             )
 
             expectCatching {
-                executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=True", lastChange)
+                executeChange("http://${peers[0][0]}/v2/change/sync?use_2pc=true", lastChange)
             }.isSuccess()
 
             finalChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
