@@ -9,7 +9,7 @@ import com.github.davenury.ucac.commitment.TwoPC.TwoPC
 import com.github.davenury.ucac.commitment.TwoPC.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
-import com.github.davenury.ucac.commitment.gpac.GPACProtocolImplAbstract
+import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
 import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
@@ -27,7 +27,6 @@ import io.ktor.metrics.micrometer.*
 import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
-import io.ktor.util.pipeline.*
 import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics
@@ -133,7 +132,7 @@ class ApplicationUcac constructor(
         )
 
         gpacProtocol =
-            GPACProtocolImplAbstract(
+            GPACProtocolImpl(
                 history,
                 config.gpac,
                 ctx,

@@ -29,7 +29,7 @@ abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) 
 }
 
 
-class GPACProtocolImplAbstract(
+class GPACProtocolImpl(
     private val history: History,
     private val gpacConfig: GpacConfig,
     private val ctx: ExecutorCoroutineDispatcher,
@@ -357,7 +357,7 @@ class GPACProtocolImplAbstract(
         this.handleApply(
             Apply(
                 myBallotNumber,
-                this@GPACProtocolImplAbstract.transaction.decision,
+                this@GPACProtocolImpl.transaction.decision,
                 acceptVal,
                 change
             )
@@ -389,7 +389,7 @@ class GPACProtocolImplAbstract(
         protocolClient.sendApply(
             otherPeers, Apply(
                 myBallotNumber,
-                this@GPACProtocolImplAbstract.transaction.decision,
+                this@GPACProtocolImpl.transaction.decision,
                 acceptVal,
                 change
             )

@@ -6,9 +6,6 @@ import java.util.concurrent.CompletableFuture
 
 enum class ProcessorJobType {
     CONSENSUS, GPAC, TWO_PC;
-
-    companion object {
-    }
 }
 
 data class ProcessorJob(

@@ -27,7 +27,7 @@ class GPACProtocolSpec {
     private val timerMock = mockk<ProtocolTimer>()
     private val protocolClientMock = mockk<GPACProtocolClient>()
     private val transactionBlockerMock = mockk<TransactionBlocker>()
-    private var subject = GPACProtocolImplAbstract(
+    private var subject = GPACProtocolImpl(
         history,
         GpacConfig(3),
         ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),

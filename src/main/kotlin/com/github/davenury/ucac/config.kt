@@ -36,10 +36,7 @@ data class RatisConfig(
     fun peerAddresses(): List<List<String>> = parsePeers(addresses)
 }
 
-data class TwoPCConfig(
-    val changeDelay: Duration = Duration.ofSeconds(120),
-    val maxChangeRetries: Int = 5,
-)
+data class TwoPCConfig(val changeDelay: Duration = Duration.ofSeconds(120))
 
 data class GpacConfig(
     val maxLeaderElectionTries: Int = 5,

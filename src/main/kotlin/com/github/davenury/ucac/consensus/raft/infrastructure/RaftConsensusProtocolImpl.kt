@@ -53,6 +53,8 @@ class RaftConsensusProtocolImpl(
     //    DONE: Use only one mutex
     private val mutex = Mutex()
     private var executorService: ExecutorCoroutineDispatcher? = null
+    private val leaderRequestExecutorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
     private fun otherConsensusPeers(): List<PeerAddress> {
@@ -431,23 +433,28 @@ class RaftConsensusProtocolImpl(
     private suspend fun sendRequestToLeader(change: Change): CompletableFuture<ChangeResult> {
         val cf = CompletableFuture<ChangeResult>()
         changeIdToCompletableFuture[change.toHistoryEntry().getId()] = cf
-        GlobalScope.launch(MDCContext()) {
-            val result: ChangeResult = try {
-                val response =
-                    httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
-                        contentType(ContentType.Application.Json)
-                        accept(ContentType.Application.Json)
-                        body = change
-                    }
-                logger.info("Response from leader: $response")
-                response
-            } catch (e: Exception) {
-                logger.info("Request to leader (${votedFor!!.address}) failed", e)
-                null
-            } ?: ChangeResult(ChangeResult.Status.TIMEOUT)
 
-            if (result.status == ChangeResult.Status.CONFLICT) cf.complete(result)
+
+        with(CoroutineScope(leaderRequestExecutorService)) {
+            launch(MDCContext()) {
+                val result: ChangeResult = try {
+                    val response =
+                        httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
+                            contentType(ContentType.Application.Json)
+                            accept(ContentType.Application.Json)
+                            body = change
+                        }
+                    logger.info("Response from leader: $response")
+                    response
+                } catch (e: Exception) {
+                    logger.info("Request to leader (${votedFor!!.address}) failed", e)
+                    null
+                } ?: ChangeResult(ChangeResult.Status.TIMEOUT)
+
+                if (result.status == ChangeResult.Status.CONFLICT) cf.complete(result)
+            }
         }
+
         return cf
     }
 
@@ -505,6 +512,8 @@ class RaftConsensusProtocolImpl(
         executorService?.cancel()
         executorService?.close()
         executorService = null
+        leaderRequestExecutorService.cancel()
+        leaderRequestExecutorService.close()
     }
 
     //    DONE: unit tests for this function
