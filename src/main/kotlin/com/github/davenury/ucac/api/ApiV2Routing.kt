@@ -76,7 +76,7 @@ fun Application.apiV2Routing(
             else -> ProcessorJobType.GPAC
         }
 
-        println("enforceGpac: $enforceGpac \nuse2pc: $useTwoPC\nisOnePeersetChange: $isOnePeersetChange\njobType: $processorJobType")
+//        println("enforceGpac: $enforceGpac \nuse2pc: $useTwoPC\nisOnePeersetChange: $isOnePeersetChange\njobType: $processorJobType")
 
         return ProcessorJob(change, CompletableFuture(), processorJobType)
     }
