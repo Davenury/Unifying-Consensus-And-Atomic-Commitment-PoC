@@ -51,7 +51,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&testDuration, "test-duration", "d", "PT1S", "Duration of test (in java-like duration format)")
 	cmd.Flags().IntVarP(&maxPeersetsInChange, "max-peersets-in-change", "", 2, "Determines maximum number of peersets that can take part in one change")
 	cmd.Flags().StringVarP(&testsStrategy, "tests-strategy", "", "delay_on_conflicts", "Determines tests strategy - either random or delay_on_conflicts")
-	cmd.Flags().StringVarP(&pushgatewayAddress, "pushgateway", "g", "http://prometheus-prometheus-pushgateway.default:9091", "Pushgateway address")
+	cmd.Flags().StringVarP(&pushgatewayAddress, "pushgateway-address", "", "http://prometheus-prometheus-pushgateway.default:9091", "Pushgateway address")
 	return cmd
 }
 

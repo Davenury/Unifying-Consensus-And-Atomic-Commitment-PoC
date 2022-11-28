@@ -44,6 +44,10 @@ class TestNotificationService {
         changes
     )
 
+    init {
+        println("Pushgateway address: ${config.pushGatewayAddress}")
+    }
+
     private val server: NettyApplicationEngine = embeddedServer(Netty, port=8080, host = "0.0.0.0") {
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
