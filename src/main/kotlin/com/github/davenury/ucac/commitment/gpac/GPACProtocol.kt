@@ -32,7 +32,6 @@ interface GPACProtocol : SignalSubject, AtomicCommitmentProtocol {
 
 }
 
-
 class GPACProtocolImpl(
     private val history: History,
     private val gpacConfig: GpacConfig,
@@ -471,7 +470,6 @@ class GPACProtocolImpl(
 
     private fun changeTimeout(change: Change, detailedMessage: String? = null) {
         val changeId = change.toHistoryEntry().getId()
-        logger.info("Change timeout: $changeId, map: $changeIdToCompletableFuture")
         changeIdToCompletableFuture[changeId]!!.complete(ChangeResult(ChangeResult.Status.TIMEOUT, detailedMessage))
     }
 

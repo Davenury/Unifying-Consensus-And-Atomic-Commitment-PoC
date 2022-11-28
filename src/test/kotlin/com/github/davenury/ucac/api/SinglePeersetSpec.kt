@@ -204,6 +204,7 @@ class SinglePeersetSpec {
     fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
         val phaserPeer1 = Phaser(2)
         val phaserOtherPeers = Phaser(4)
+        val leaderElectedPhaser = Phaser(4)
 
         val proposedChange = AddGroupChange(
             InitialHistoryEntry.getId(),
@@ -232,25 +233,33 @@ class SinglePeersetSpec {
 
         val peer1Action = SignalListener { phaserPeer1.arrive() }
         val peersAction = SignalListener { phaserOtherPeers.arrive() }
+        val peerLeaderElected = SignalListener { leaderElectedPhaser.arrive() }
 
         val firstPeerSignals = mapOf(
             Signal.BeforeSendingApply to firstLeaderAction,
-            Signal.OnHandlingApplyEnd to peersAction
+            Signal.OnHandlingApplyCommitted to peersAction,
+            Signal.ConsensusLeaderElected to peerLeaderElected,
         )
 
-        val peerSignals = mapOf(Signal.OnHandlingApplyEnd to peersAction)
+        val peerSignals =
+            mapOf(Signal.OnHandlingApplyCommitted to peersAction, Signal.ConsensusLeaderElected to peerLeaderElected)
+
+        val peer1Signals =
+            mapOf(Signal.OnHandlingApplyCommitted to peer1Action, Signal.ConsensusLeaderElected to peerLeaderElected)
 
         val apps = TestApplicationSet(
             listOf(5),
             signalListeners = mapOf(
                 0 to firstPeerSignals,
-                1 to mapOf(Signal.OnHandlingApplyEnd to peer1Action),
+                1 to peer1Signals,
                 2 to peerSignals,
                 3 to peerSignals,
                 4 to peerSignals,
             )
         )
         val peers = apps.getPeers()
+
+        leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // change that will cause leader to fall according to action
         try {
