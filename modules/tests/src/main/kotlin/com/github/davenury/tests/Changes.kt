@@ -62,7 +62,7 @@ class OnePeersetChanges(
 
     suspend fun introduceChange(counter: Int, vararg otherPeers: String): ChangeState {
         val senderAddress = peersAddresses.asSequence().shuffled().find { true }!!
-        val change = AddUserChange(getCurrentParentId(), "userName${counter}", otherPeers.asList() + listOf(senderAddress))
+        val change = AddUserChange(getCurrentParentId(), "userName${counter}", otherPeers.asList())
         return sender.executeChange(senderAddress, change)
     }
 

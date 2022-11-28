@@ -37,7 +37,7 @@ class ChangesTest {
     }
 
     @Test
-    fun `should throw AssertionError, when list of available peersets is empty`(): Unit = runBlocking {
+    fun `should call lock, when list of available peersets is empty`(): Unit = runBlocking {
         // given - changes
         val sender = DummySender(peers, shouldNotify = false)
         val lockMock = mockk<Lock>()
