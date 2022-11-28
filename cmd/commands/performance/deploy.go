@@ -1,9 +1,10 @@
-package commands
+package performance
 
 import (
     "context"
     "fmt"
     "github.com/spf13/cobra"
+	"github.com/davenury/ucac/cmd/commands/utils"
 
     batchv1 "k8s.io/api/batch/v1"
     "k8s.io/client-go/kubernetes"
@@ -22,14 +23,14 @@ var testDuration string
 var maxPeersetsInChange int
 var testsStrategy string
 
-func CreatePerformanceCommand() *cobra.Command {
+func createPerformanceDeployCommand() *cobra.Command {
 
 	var cmd = &cobra.Command{
-		Use:   "performance",
+		Use:   "deploy",
 		Short: "Execute performance test",
 		Run: func(cmd *cobra.Command, args []string) {
 
-			clientset, err := GetClientset()
+			clientset, err := utils.GetClientset()
 			if err != nil {
 				panic(err)
 			}
@@ -42,7 +43,7 @@ func CreatePerformanceCommand() *cobra.Command {
 
 	cmd.Flags().StringVarP(&performanceNamespace, "namespace", "n", "default", "Namespace to clear deployemtns for")
 	cmd.Flags().IntSliceVar(&performanceNumberOfPeers, "peers", make([]int, 0), "Number of peers in peersets; example usage '--peers=1,2,3'")
-	cmd.Flags().StringVarP(&performanceImage, "image", "", "ghcr.io/davenury/performance:latest", "Docker image for tests")
+	cmd.Flags().StringVarP(&performanceImage, "image", "", "ghcr.io/davenury/tests:latest", "Docker image for tests")
 
 	cmd.Flags().IntVarP(&singleRequestsNumber, "single-requests-number", "", 1, "Determines number of requests to send to single peerset")
 	cmd.Flags().IntVarP(&multipleRequestsNumber, "multiple-requests-number", "", 0, "Determines number of requests to send to multiple peersets at once")
@@ -61,6 +62,7 @@ func createJob(clientset *kubernetes.Clientset, image string) {
 			Name: "performance-test",
 			Namespace: performanceNamespace,
 			Labels: map[string]string{
+				"project": "ucac",
 				"app.name": "performanceTest",
 			},
 		},
@@ -110,10 +112,11 @@ func createConfigmap(clientset *kubernetes.Clientset) {
 			Namespace: performanceNamespace,
 			Labels: map[string]string{
 				"project": "ucac",
+				"app.name": "performanceTest",
 			},
 		},
 		Data: map[string]string{
-			"TEST_PEERS": GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, 8080),
+			"TEST_PEERS": utils.GenerateServicesForPeersStaticPort(performanceNumberOfPeers, 8080),
 			"NOTIFICATION_SERVICE_ADDRESS": "http://notification-service:8080",
 			"SINGLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", singleRequestsNumber),
 			"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", multipleRequestsNumber),
@@ -133,6 +136,7 @@ func createService(clientset *kubernetes.Clientset) {
 			Namespace: performanceNamespace,
 			Labels: map[string]string{
 				"project": "ucac",
+				"app.name": "performanceTest",
 			},
 		},
 		Spec: v1.ServiceSpec{

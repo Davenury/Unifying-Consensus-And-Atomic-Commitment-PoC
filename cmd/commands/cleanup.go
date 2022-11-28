@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"github.com/spf13/cobra"
+	"github.com/davenury/ucac/cmd/commands/utils"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -17,7 +18,7 @@ func CreateCleanupCommand() *cobra.Command {
 		Short: "Cleanups deployment",
 		Run: func(cmd *cobra.Command, args []string) {
 
-			clientset, err := GetClientset()
+			clientset, err := utils.GetClientset()
 			if err != nil {
 				panic(err)
 			}

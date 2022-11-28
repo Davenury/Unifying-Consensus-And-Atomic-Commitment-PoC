@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"github.com/davenury/ucac/cmd/commands/utils"
 	"github.com/spf13/cobra"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -34,7 +35,7 @@ func initCommand() {
 
 	// create namespace
 	if initCreateNamespace {
-		CreateNamespace(initNamespace)
+		utils.CreateNamespace(initNamespace)
 	}
 
 	// install prometheus
