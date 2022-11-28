@@ -471,7 +471,8 @@ class GPACProtocolImpl(
 
     private fun changeTimeout(change: Change, detailedMessage: String? = null) {
         val changeId = change.toHistoryEntry().getId()
-        changeIdToCompletableFuture[changeId]?.complete(ChangeResult(ChangeResult.Status.TIMEOUT, detailedMessage))
+        logger.info("Change timeout: $changeId, map: $changeIdToCompletableFuture")
+        changeIdToCompletableFuture[changeId]!!.complete(ChangeResult(ChangeResult.Status.TIMEOUT, detailedMessage))
     }
 
     private fun getPeersFromChange(change: Change): List<List<PeerAddress>> {

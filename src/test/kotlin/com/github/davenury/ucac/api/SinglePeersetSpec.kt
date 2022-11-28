@@ -3,7 +3,6 @@ package com.github.davenury.ucac.api
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
-import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Agree
 import com.github.davenury.ucac.commitment.gpac.Agreed
@@ -84,7 +83,10 @@ class SinglePeersetSpec {
             val signalListenersForLeader = mapOf(
                 Signal.BeforeSendingApply to SignalListener {
                     expectCatching {
-                        executeChange("http://${it.peers[0][1].address}/v2/change/sync?enforce_gpac=true", change(listOf()))
+                        executeChange(
+                            "http://${it.peers[0][1].address}/v2/change/sync?enforce_gpac=true",
+                            change(listOf())
+                        )
                     }
                 },
             )
@@ -128,7 +130,8 @@ class SinglePeersetSpec {
             } catch (e: Exception) {
                 expect {
                     that(e).isA<ServerResponseException>()
-                    that(e.message).isNotNull().contains("Transaction failed due to too many retries of becoming a leader.")
+                    that(e.message).isNotNull()
+                        .contains("Transaction failed due to too many retries of becoming a leader.")
                 }
             }
 
@@ -199,10 +202,17 @@ class SinglePeersetSpec {
 
     @Test
     fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
-        val phaser = Phaser(2)
+        val phaserPeer1 = Phaser(2)
+        val phaserOtherPeers = Phaser(4)
+
+        val proposedChange = AddGroupChange(
+            InitialHistoryEntry.getId(),
+            "name",
+            listOf(),
+        )
 
         val firstLeaderAction = SignalListener { signalData ->
-            val url = "http://${signalData.peers[0][1].address}/apply"
+            val url = "http://${signalData.peers[0][0].address}/apply"
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
@@ -211,36 +221,33 @@ class SinglePeersetSpec {
                         signalData.transaction!!.ballotNumber,
                         true,
                         Accept.COMMIT,
-                        AddGroupChange(
-                            InitialHistoryEntry.getId(),
-                            "groupName",
-                            listOf("http://${signalData.peers[0][1].address}"),
-                        )
+                        signalData.change!!
                     )
                 }.also {
                     logger.info("Got response ${it.status.value}")
                 }
             }
-            throw RuntimeException()
+            throw RuntimeException("Stop leader after apply")
         }
-        val firstLeaderCallbacks: Map<Signal, SignalListener> = mapOf(
-            Signal.BeforeSendingApply to firstLeaderAction
+
+        val peer1Action = SignalListener { phaserPeer1.arrive() }
+        val peersAction = SignalListener { phaserOtherPeers.arrive() }
+
+        val firstPeerSignals = mapOf(
+            Signal.BeforeSendingApply to firstLeaderAction,
+            Signal.OnHandlingApplyEnd to peersAction
         )
 
-        val peer3Action = SignalListener {
-            runBlocking {
-                phaser.arriveAndAwaitAdvanceWithTimeout()
-            }
-        }
-        val peer3Callbacks: Map<Signal, SignalListener> = mapOf(
-            Signal.OnHandlingApplyEnd to peer3Action
-        )
+        val peerSignals = mapOf(Signal.OnHandlingApplyEnd to peersAction)
 
         val apps = TestApplicationSet(
             listOf(5),
             signalListeners = mapOf(
-                0 to firstLeaderCallbacks,
-                2 to peer3Callbacks,
+                0 to firstPeerSignals,
+                1 to mapOf(Signal.OnHandlingApplyEnd to peer1Action),
+                2 to peerSignals,
+                3 to peerSignals,
+                4 to peerSignals,
             )
         )
         val peers = apps.getPeers()
@@ -248,42 +255,45 @@ class SinglePeersetSpec {
         // change that will cause leader to fall according to action
         try {
             executeChange(
-                "http://${peers[0][0]}/v2/change/sync?enforce_gpac=true", AddGroupChange(
-                    InitialHistoryEntry.getId(),
-                    "name",
-                    listOf(),
-                )
+                "http://${peers[0][0]}/v2/change/sync?enforce_gpac=true",
+                proposedChange
             )
             fail("Change passed")
         } catch (e: Exception) {
             logger.info("Leader 1 fails", e)
         }
 
-        // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
-        phaser.arriveAndAwaitAdvanceWithTimeout()
-
-        val change = testHttpClient.get<Change>("http://${peers[0][2]}/change") {
+        phaserPeer1.arriveAndAwaitAdvanceWithTimeout()
+        val change = testHttpClient.get<Change>("http://${peers[0][1]}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
 
         expect {
             that(change).isA<AddGroupChange>()
-            that((change as AddGroupChange).groupName).isEqualTo("name")
+            that((change as AddGroupChange).groupName).isEqualTo(proposedChange.groupName)
         }
 
-        // and should not execute this change couple of times
-        val changes = testHttpClient.get<Changes>("http://${peers[0][1]}/changes") {
-            contentType(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
+        // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
+        phaserOtherPeers.arriveAndAwaitAdvanceWithTimeout()
+
+
+        peers[0].forEach {
+            // and should not execute this change couple of times
+            val changes = testHttpClient.get<Changes>("http://${it}/changes") {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+            }
+
+            // only one change and this change shouldn't be applied two times
+            expectThat(changes.size).isGreaterThanOrEqualTo(1)
+            expect {
+                that(changes[0]).isA<AddGroupChange>()
+                that((changes[0] as AddGroupChange).groupName).isEqualTo(proposedChange.groupName)
+            }
         }
 
-        // only one change and this change shouldn't be applied two times
-        expectThat(changes.size).isGreaterThanOrEqualTo(1)
-        expect {
-            that(changes[0]).isA<AddGroupChange>()
-            that((changes[0] as AddGroupChange).groupName).isEqualTo("name")
-        }
+
 
         apps.stopApps()
     }
