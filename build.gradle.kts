@@ -73,6 +73,9 @@ dependencies {
 
     // wiremock
     testImplementation("com.github.tomakehurst:wiremock-jre8:2.33.2")
+
+    // for disabling AnsiConsole in tests
+    testImplementation("org.fusesource.jansi:jansi:2.4.0")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
