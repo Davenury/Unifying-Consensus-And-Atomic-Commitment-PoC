@@ -61,16 +61,15 @@ class TwoPC(
         }
     }
 
-    private suspend fun askForDecisionChange(change: Change, iteration: Int = 0) {
+    private suspend fun askForDecisionChange(change: Change) {
         val resultChange = protocolClient.askForChangeStatus(
             change.peers.first { it != myAddress() }, change
         )
 
-        if (resultChange == null && iteration == twoPCConfig.maxChangeRetries) throw TwoPCConflictException("We are blocked, because we didn't received decision change")
 
         if (resultChange != null) handleDecision(resultChange.copyWithNewParentId(change.parentId))
         else changeTimer.startCounting {
-            askForDecisionChange(change, iteration + 1)
+            askForDecisionChange(change)
         }
     }
 
