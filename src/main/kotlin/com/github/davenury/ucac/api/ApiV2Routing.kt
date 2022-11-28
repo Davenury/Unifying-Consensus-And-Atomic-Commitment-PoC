@@ -68,8 +68,17 @@ fun Application.apiV2Routing(
         val useTwoPC: Boolean = call.request.queryParameters["use_2pc"]?.toBoolean() ?: false
         val change = call.receive<Change>()
 
+        val isOnePeersetChange = service.allPeersFromMyPeerset(change.peers)
 
-        return ProcessorJob(change, CompletableFuture(), service.allPeersFromMyPeerset(change.peers), enforceGpac, useTwoPC)
+        val processorJobType = when {
+            isOnePeersetChange && !enforceGpac -> ProcessorJobType.CONSENSUS
+            useTwoPC -> ProcessorJobType.TWO_PC
+            else -> ProcessorJobType.GPAC
+        }
+
+        println("enforceGpac: $enforceGpac \nuse2pc: $useTwoPC\nisOnePeersetChange: $isOnePeersetChange\njobType: $processorJobType")
+
+        return ProcessorJob(change, CompletableFuture(), processorJobType)
     }
 
     routing {

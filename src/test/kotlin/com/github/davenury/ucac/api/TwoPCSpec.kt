@@ -118,7 +118,7 @@ class TwoPCSpec {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         val peers = apps.getPeers()
-        val otherPeer = peers[0][1]
+        val otherPeer = peers[1][0]
         var change: Change = change(otherPeer)
 
         val result = executeChange("http://${peers[0][0]}/v2/change/async?use_2pc=true", change)
