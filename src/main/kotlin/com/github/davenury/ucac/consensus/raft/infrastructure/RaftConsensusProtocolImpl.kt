@@ -53,6 +53,8 @@ class RaftConsensusProtocolImpl(
     //    DONE: Use only one mutex
     private val mutex = Mutex()
     private var executorService: ExecutorCoroutineDispatcher? = null
+    private val leaderRequestExecutorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
     private fun otherConsensusPeers(): List<PeerAddress> {
@@ -216,6 +218,11 @@ class RaftConsensusProtocolImpl(
             proposedChanges.last().change
         )
 
+        anyChanges.acceptedItems.forEach {
+            val changeId = it.change.toHistoryEntry().getId()
+            changeIdToCompletableFuture[changeId]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
+        }
+
         logger.info(
             "Received heartbeat from ${heartbeat.leaderId} with " +
                     "${anyChanges.proposedItems.size} proposed and " +
@@ -248,7 +255,8 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendHeartbeatToPeer(peer: GlobalPeerId) {
         val peerAddress = peerResolver.resolve(peer)
-        val response = protocolClient.sendConsensusHeartbeat(peerAddress, getMessageForPeer(peerAddress))
+        val peerMessage = getMessageForPeer(peerAddress)
+        val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
 
         // We should schedule heartbeat even if something failed during handling response
         if (role == RaftRole.Leader
@@ -265,7 +273,7 @@ class RaftConsensusProtocolImpl(
 
             response.message.success -> {
                 logger.debug("Heartbeat sent successfully to ${peerAddress.globalPeerId}")
-                handleSuccessHeartbeatResponseFromPeer(peerAddress)
+                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage)
             }
 
             response.message.term <= currentTerm -> {
@@ -318,12 +326,16 @@ class RaftConsensusProtocolImpl(
     }
 
 
-    private suspend fun handleSuccessHeartbeatResponseFromPeer(peerAddress: PeerAddress) {
+    private suspend fun handleSuccessHeartbeatResponseFromPeer(
+        peerAddress: PeerAddress,
+        peerMessage: ConsensusHeartbeat
+    ) {
         val globalPeerId = peerAddress.globalPeerId
 
         val peerIndices = peerUrlToNextIndex.getOrDefault(globalPeerId, PeerIndices())
-        val newAcceptedChanges = state.getNewAcceptedItems(peerIndices.acceptedIndex)
-        val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedIndex)
+
+        val newAcceptedChanges = peerMessage.acceptedChanges
+        val newProposedChanges = peerMessage.proposedChanges
 
         if (newProposedChanges.isNotEmpty()) {
             newProposedChanges.forEach {
@@ -398,6 +410,7 @@ class RaftConsensusProtocolImpl(
         mutex.withLock {
 
             if (state.changeAlreadyProposed(change)) {
+                logger.info("Already proposed that change: $change")
                 return changeIdToCompletableFuture[change.toHistoryEntry().getId()]!!
             }
 
@@ -419,8 +432,11 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendRequestToLeader(change: Change): CompletableFuture<ChangeResult> {
         val cf = CompletableFuture<ChangeResult>()
-        coroutineScope {
-            launch {
+        changeIdToCompletableFuture[change.toHistoryEntry().getId()] = cf
+
+
+        with(CoroutineScope(leaderRequestExecutorService)) {
+            launch(MDCContext()) {
                 val result: ChangeResult = try {
                     val response =
                         httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
@@ -433,10 +449,12 @@ class RaftConsensusProtocolImpl(
                 } catch (e: Exception) {
                     logger.info("Request to leader (${votedFor!!.address}) failed", e)
                     null
-                } ?: ChangeResult(ChangeResult.Status.CONFLICT)
-                cf.complete(result)
+                } ?: ChangeResult(ChangeResult.Status.TIMEOUT)
+
+                if (result.status == ChangeResult.Status.CONFLICT) cf.complete(result)
             }
         }
+
         return cf
     }
 
@@ -452,7 +470,7 @@ class RaftConsensusProtocolImpl(
             }
 
             votedFor != null -> {
-                logger.info("Forwarding change to the leader: $change")
+                logger.info("Forwarding change to the leader(${votedFor!!}): $change")
                 sendRequestToLeader(change)
             }
 //              TODO: Change after queue
@@ -494,6 +512,8 @@ class RaftConsensusProtocolImpl(
         executorService?.cancel()
         executorService?.close()
         executorService = null
+        leaderRequestExecutorService.cancel()
+        leaderRequestExecutorService.close()
     }
 
     //    DONE: unit tests for this function

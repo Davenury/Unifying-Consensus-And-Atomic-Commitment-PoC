@@ -1,25 +1,20 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.ucac.commitment.gpac.GPACProtocol
+import com.github.davenury.ucac.commitment.TwoPC.TwoPC
+import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.consensus.ConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
-import io.ktor.client.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
-import java.util.*
-import java.util.concurrent.CompletableFuture
 
 
 class Worker(
     private val queue: Channel<ProcessorJob>,
-    private val gpacProtocol: GPACProtocol,
+    private val gpacProtocol: GPACProtocolAbstract,
     private val consensusProtocol: ConsensusProtocol,
-    passMdc: Boolean = true,
+    private val twoPC: TwoPC,
+    passMdc: Boolean = true
 ) : Runnable {
     private var mdc: MutableMap<String, String>? = if (passMdc) {
         MDC.getCopyOfContextMap()
@@ -31,11 +26,13 @@ class Worker(
         try {
             while (!Thread.interrupted()) {
                 val job = queue.receive()
-                val result = if (job.isConsensusOnly) {
-                    consensusProtocol.proposeChangeAsync(job.change)
-                } else {
-                    gpacProtocol.proposeChangeAsync(job.change)
-                }
+                logger.info("Worker receive job: $job")
+                val result =
+                    when (job.processorJobType) {
+                        ProcessorJobType.CONSENSUS -> consensusProtocol.proposeChangeAsync(job.change)
+                        ProcessorJobType.TWO_PC -> twoPC.proposeChangeAsync(job.change)
+                        ProcessorJobType.GPAC -> gpacProtocol.proposeChangeAsync(job.change)
+                    }
                 result.thenAccept { job.completableFuture.complete(it) }
             }
         } catch (e: Exception) {
@@ -56,8 +53,3 @@ class Worker(
     }
 }
 
-data class ProcessorJob(
-    val change: Change,
-    val completableFuture: CompletableFuture<ChangeResult>,
-    val isConsensusOnly: Boolean = false
-)

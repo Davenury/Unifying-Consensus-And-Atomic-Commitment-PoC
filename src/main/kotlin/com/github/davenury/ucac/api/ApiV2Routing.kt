@@ -9,11 +9,16 @@ import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import org.slf4j.LoggerFactory
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 
 fun Application.apiV2Routing(
     service: ApiV2Service,
 ) {
+    val logger = LoggerFactory.getLogger("V2Routing")
+
+
     suspend fun respondChangeResult(result: ChangeResult?, call: ApplicationCall) {
         when (result?.status) {
             ChangeResult.Status.SUCCESS -> {
@@ -62,21 +67,36 @@ fun Application.apiV2Routing(
         }
     }
 
+    suspend fun getProcessorJob(call: ApplicationCall): ProcessorJob {
+        val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
+        val useTwoPC: Boolean = call.request.queryParameters["use_2pc"]?.toBoolean() ?: false
+        val change = call.receive<Change>()
+
+        val isOnePeersetChange = service.allPeersFromMyPeerset(change.peers)
+
+        val processorJobType = when {
+            isOnePeersetChange && !enforceGpac -> ProcessorJobType.CONSENSUS
+            useTwoPC -> ProcessorJobType.TWO_PC
+            else -> ProcessorJobType.GPAC
+        }
+
+        logger.info("Create ProcessorJob from parameters: (isOnePeersetChange=$isOnePeersetChange, enforceGPAC: $enforceGpac, 2PC: $useTwoPC), resultType: $processorJobType")
+
+        return ProcessorJob(change, CompletableFuture(), processorJobType)
+    }
+
     routing {
         post("/v2/change/async") {
-            val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
-            val change = call.receive<Change>()
-            service.addChange(change, enforceGpac)
+            val processorJob = getProcessorJob(call)
+            service.addChange(processorJob)
             call.respond(HttpStatusCode.Accepted)
         }
 
         post("/v2/change/sync") {
-            val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
-            val change = call.receive<Change>()
-            val timeout = call.request.queryParameters["timeout"]
-                ?.let { Duration.parse(it) }
+            val processorJob = getProcessorJob(call)
+            val timeout = call.request.queryParameters["timeout"]?.let { Duration.parse(it) }
 
-            val result: ChangeResult? = service.addChangeSync(change, enforceGpac, timeout)
+            val result: ChangeResult? = service.addChangeSync(processorJob, timeout)
             respondChangeResult(result, call)
         }
 

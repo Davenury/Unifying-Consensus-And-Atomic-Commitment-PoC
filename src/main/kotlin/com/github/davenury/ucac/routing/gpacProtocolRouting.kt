@@ -3,14 +3,14 @@ package com.github.davenury.ucac.routing
 import com.github.davenury.ucac.commitment.gpac.Agree
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.commitment.gpac.ElectMe
-import com.github.davenury.ucac.commitment.gpac.GPACProtocol
+import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 
-fun Application.gpacProtocolRouting(protocol: GPACProtocol) {
+fun Application.gpacProtocolRouting(protocol: GPACProtocolAbstract) {
 
     routing {
 

@@ -23,6 +23,7 @@ data class Config(
     val raft: RaftConfig = RaftConfig(),
     val ratis: RatisConfig = RatisConfig(),
     val gpac: GpacConfig = GpacConfig(),
+    val twoPC: TwoPCConfig = TwoPCConfig(),
     val rest: RestConfig = RestConfig(),
 ) {
     fun globalPeerId() = GlobalPeerId(peersetId, peerId)
@@ -34,6 +35,8 @@ data class RatisConfig(
 ) {
     fun peerAddresses(): List<List<String>> = parsePeers(addresses)
 }
+
+data class TwoPCConfig(val changeDelay: Duration = Duration.ofSeconds(120))
 
 data class GpacConfig(
     val maxLeaderElectionTries: Int = 5,
