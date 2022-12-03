@@ -1,5 +1,6 @@
 package com.github.davenury.common.history
 
+import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
@@ -51,6 +52,8 @@ class History {
                 "Optimistic locking exception: parent changed concurrently, " +
                         "entryId=${newId}"
             )
+        } else {
+            logger.info("History entry added: $entry")
         }
     }
 
@@ -88,5 +91,9 @@ class History {
 
     fun isEntryCompatible(entry: HistoryEntry): Boolean {
         return containsEntry(entry.getId()) || getCurrentEntry().getId() == entry.getParentId()
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger("history")
     }
 }

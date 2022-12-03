@@ -58,14 +58,14 @@ abstract class AbstractAtomicCommitmentProtocol(
         return change.peers.map { peer ->
             val peersetId = peerResolver.findPeersetWithPeer(peer)
             if (peersetId == null) {
-                logger.error("Peer $peer not found in ${peerResolver.getPeers()}")
+                logger.error("Peer $peer not found in ${peerResolver.getPeersPrintable()}")
             }
 
             peerResolver
                 .findPeersetWithPeer(peer)
                 ?.let { peerResolver.getPeersFromPeerset(peersetId!!) } // TODO we need to specify peersetIds instead of peers
                 ?: run {
-                    logger.error("Peer $peer not found in ${peerResolver.getPeers()}")
+                    logger.error("Peer $peer not found in ${peerResolver.getPeersPrintable()}")
                     throw IllegalStateException("That peer doesn't exist")
                 }
         }.map { peerset -> peerset.filter { it.globalPeerId != peerResolver.currentPeerAddress().globalPeerId } }

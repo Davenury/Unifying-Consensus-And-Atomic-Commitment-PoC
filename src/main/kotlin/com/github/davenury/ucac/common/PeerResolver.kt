@@ -5,10 +5,16 @@ package com.github.davenury.ucac.common
  */
 class PeerResolver(
     private val currentPeer: GlobalPeerId,
-    private var peers: List<List<String>>,
+    peers: Map<GlobalPeerId, PeerAddress>,
 ) {
+    private val peers: MutableMap<GlobalPeerId, PeerAddress> = HashMap()
+
+    init {
+        this.peers.putAll(peers)
+    }
+
     fun resolve(globalPeerId: GlobalPeerId): PeerAddress {
-        return PeerAddress(globalPeerId, peers[globalPeerId.peersetId][globalPeerId.peerId])
+        return peers[globalPeerId]!!
     }
 
     fun currentPeerAddress() = resolve(currentPeer)
@@ -18,21 +24,24 @@ class PeerResolver(
     }
 
     fun getPeersFromPeerset(peersetId: Int): List<PeerAddress> {
-        return peers[peersetId].mapIndexed { index, address ->
-            PeerAddress(GlobalPeerId(peersetId, index), address)
-        }
+        return peers.values
+            .filter { it.globalPeerId.peersetId == peersetId }
+            .sortedBy { it.globalPeerId.peerId }
     }
 
-    fun getPeers() = peers
+    fun getPeersPrintable(): List<List<String>> = peers.asSequence()
+        .groupBy { it.key.peersetId }
+        .map { it.value }
+        .map { peerset -> peerset.map { it.value.address } }
 
-    fun setPeers(newPeers: List<List<String>>) {
-        peers = newPeers.map { ArrayList(it) }
+    fun setPeers(newPeers: Map<GlobalPeerId, PeerAddress>) {
+        peers.putAll(newPeers)
     }
 
     fun findPeersetWithPeer(peer: String): Int? {
-        peers.forEachIndexed { index, peerset ->
-            if (peerset.contains(peer)) {
-                return index
+        peers.forEach { (id, peerAddress) ->
+            if (peerAddress.address == peer) {
+                return id.peersetId
             }
         }
         return null

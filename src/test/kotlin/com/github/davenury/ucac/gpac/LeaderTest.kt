@@ -13,6 +13,7 @@ import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
 import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
 import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.utils.PeerThree
@@ -88,36 +89,32 @@ class LeaderTest {
     private val client = GPACProtocolClientImpl()
     private val transactionBlocker = TransactionBlocker()
     private val phaser: Phaser = Phaser(1).also { it.register() }
-    private val peerReachedMaxRetries = SignalListener {
-        phaser.arrive()
+
+    private var subject = GPACProtocolImpl(
+        history,
+        GpacConfig(3),
+        ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
+        client,
+        transactionBlocker,
+        peerResolver = PeerResolver(
+            GlobalPeerId(1, 0),
+            mapOf(
+                GlobalPeerId(1, 0) to PeerAddress(GlobalPeerId(1, 0), "localhost:8081"),
+                GlobalPeerId(1, 1) to PeerAddress(GlobalPeerId(1, 1), "localhost:${PeerTwo.getPort()}"),
+                GlobalPeerId(1, 2) to PeerAddress(GlobalPeerId(1, 2), "localhost:${PeerThree.getPort()}"),
+            )
+        ),
+        signalPublisher = SignalPublisher(
+            mapOf(
+                Signal.ReachedMaxRetries to SignalListener {
+                    phaser.arrive()
+                }
+            )
+        )
+    ).also {
+        it.leaderTimer = timer
+        it.retriesTimer = timer
     }
 
-    private var subject =
-        GPACProtocolImpl(
-            history,
-            GpacConfig(3),
-            ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
-            client,
-            transactionBlocker,
-            peerResolver = PeerResolver(
-                GlobalPeerId(1, 0),
-                listOf(
-                    listOf(),
-                    listOf(
-                        "localhost:8081",
-                        "localhost:${PeerTwo.getPort()}",
-                        "localhost:${PeerThree.getPort()}"
-                    )
-                )
-            ),
-            signalPublisher = SignalPublisher(
-                mapOf(
-                    Signal.ReachedMaxRetries to peerReachedMaxRetries
-                )
-            )
-        ).also {
-            it.leaderTimer = timer
-            it.retriesTimer = timer
-        }
     private val change = AddUserChange(InitialHistoryEntry.getId(), "userName", listOf("localhost:8081"))
 }
