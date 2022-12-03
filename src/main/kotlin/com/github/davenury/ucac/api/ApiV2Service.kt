@@ -6,7 +6,7 @@ import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.Changes
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
-import com.github.davenury.ucac.commitment.TwoPC.TwoPC
+import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
@@ -24,7 +24,6 @@ class ApiV2Service(
     private val twoPC: TwoPC,
     private val history: History,
     private var config: Config,
-    private var peerResolver: PeerResolver,
 ) {
     private val queue: Channel<ProcessorJob> = Channel(Channel.Factory.UNLIMITED)
     private val worker: Thread = Thread(Worker(queue, gpacProtocol, consensusProtocol, twoPC))
@@ -63,9 +62,6 @@ class ApiV2Service(
     } catch (e: TimeoutCancellationException) {
         null
     }
-
-    fun allPeersFromMyPeerset(peers: List<String>) =
-        peerResolver.getPeersFromCurrentPeerset().map { it.address }.containsAll(peers)
 
     companion object {
         private val logger = LoggerFactory.getLogger("service")

@@ -23,8 +23,8 @@ data class IntermediateHistoryEntry(
     override fun serialize(): String {
         return ObjectMapper().writeValueAsString(
             mapOf(
-                "content" to content,
                 "parentId" to parentId,
+                "content" to content,
             )
         )
     }

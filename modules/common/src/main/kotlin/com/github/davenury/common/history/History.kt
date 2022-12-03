@@ -53,7 +53,7 @@ class History {
                         "entryId=${newId}"
             )
         } else {
-            logger.info("History entry added: $entry")
+            logger.info("History entry added ($newId): $entry")
         }
     }
 

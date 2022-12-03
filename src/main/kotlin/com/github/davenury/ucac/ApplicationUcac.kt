@@ -5,8 +5,8 @@ import com.github.davenury.common.history.History
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
-import com.github.davenury.ucac.commitment.TwoPC.TwoPC
-import com.github.davenury.ucac.commitment.TwoPC.TwoPCProtocolClientImpl
+import com.github.davenury.ucac.commitment.twopc.TwoPC
+import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
@@ -158,7 +158,6 @@ class ApplicationUcac constructor(
             consensusProtocol as RaftConsensusProtocolImpl,
             twoPC!!,history,
             config,
-            peerResolver,
         )
 
         install(CallLogging) {
@@ -258,7 +257,7 @@ class ApplicationUcac constructor(
 
         metaRouting()
         historyRouting(history)
-        apiV2Routing(service!!)
+        apiV2Routing(service!!, peerResolver.currentPeer())
         gpacProtocolRouting(gpacProtocol)
         consensusProtocolRouting(consensusProtocol!!)
         twoPCRouting(twoPC!!)

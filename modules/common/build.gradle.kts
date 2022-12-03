@@ -25,6 +25,10 @@ dependencies {
     implementation("io.ktor:ktor-metrics-micrometer:$ktor_version")
 
     implementation(kotlin("stdlib-jdk8"))
+
+    testImplementation(platform("org.junit:junit-bom:5.8.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("io.strikt:strikt-core:0.34.0")
 }
 repositories {
     mavenCentral()

@@ -1,7 +1,7 @@
 package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Change
-import com.github.davenury.ucac.commitment.TwoPC.TwoPC
+import com.github.davenury.ucac.commitment.twopc.TwoPC
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
