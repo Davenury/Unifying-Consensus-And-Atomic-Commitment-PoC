@@ -21,14 +21,16 @@ class Changes(
     private val changes = List(peers.size) { it to OnePeersetChanges(peers[it]!!, sender) }.toMap()
 
     private var counter = AtomicInteger(0)
+    private val handledChanges: MutableList<String> = mutableListOf()
 
     suspend fun handleNotification(notification: Notification) {
         logger.info("Handling notification: $notification")
-        if (notification.result.status == ChangeResult.Status.SUCCESS) {
+        if (!handledChanges.contains(notification.change.toHistoryEntry().getId())) {
             notification.change.peers.forEach {
                 val peersetId = findPeer(it)
                 changes[peersetId]!!.overrideParentId(notification.change.toHistoryEntry().getId())
                 getPeersStrategy.handleNotification(peersetId)
+                handledChanges.add(notification.change.toHistoryEntry().getId())
             }
         }
     }

@@ -6,6 +6,7 @@ import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.Notification
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.Changes
+import com.github.davenury.tests.strategies.GetPeersStrategy
 import com.github.davenury.tests.strategies.RandomPeersWithDelayOnConflictStrategy
 import io.mockk.*
 import kotlinx.coroutines.*
@@ -143,6 +144,35 @@ class ChangesTest {
 
         val changes = sender.appearedChanges
         expectThat(areChangesValid(changes)).isEqualTo(true)
+    }
+
+    @Test
+    fun `handle notification should be idempotent`() {
+        val peersetsRange = (1..10)
+        val counter = AtomicInteger(0)
+        val strategy = object : GetPeersStrategy {
+            override suspend fun getPeersets(numberOfPeersets: Int): List<Int> =
+                peersetsRange.shuffled().take(numberOfPeersets)
+
+            override suspend fun freePeersets(peersetsId: List<Int>) {}
+
+            override suspend fun handleNotification(peersetId: Int) {
+                counter.incrementAndGet()
+            }
+        }
+
+        val changes = Changes(peers, DummySender(peers, shouldNotify = false), strategy)
+
+        repeat(3) {
+            runBlocking {
+                changes.handleNotification(Notification(
+                    AddUserChange("parentId", "userName", listOf("localhost0:8080")),
+                    ChangeResult(ChangeResult.Status.SUCCESS)
+                ))
+            }
+        }
+
+        expectThat(counter.get()).isEqualTo(1)
     }
 
     private fun areChangesValid(changes: List<Pair<String, Change>>): Boolean {

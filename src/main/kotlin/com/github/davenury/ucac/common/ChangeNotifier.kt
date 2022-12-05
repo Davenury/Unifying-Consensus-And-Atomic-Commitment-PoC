@@ -17,7 +17,7 @@ object ChangeNotifier {
                     contentType(ContentType.Application.Json)
                     body = Notification(change, changeResult)
                 }
-                logger.debug("Response from notifier: ${response.execute().status.value}")
+                logger.info("Response from notifier: ${response.execute().status.value}")
             } catch (e: Exception) {
                 logger.error("Error while sending notification to $it", e)
             }
