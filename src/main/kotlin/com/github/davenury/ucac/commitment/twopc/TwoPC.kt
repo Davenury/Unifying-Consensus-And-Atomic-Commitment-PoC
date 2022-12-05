@@ -58,6 +58,7 @@ class TwoPC(
         val result = consensusProtocol.proposeChangeAsync(changeWithProperParentId).await()
 
         if (result.status != ChangeResult.Status.SUCCESS) {
+            ChangeNotifier.notify(change, result)
             throw TwoPCHandleException("TwoPCChange didn't apply change")
         }
 
@@ -214,6 +215,7 @@ class TwoPC(
         .also { checkChangeCompatibility(it) }
         .let { consensusProtocol.proposeChangeAsync(change) }
 
+
     private fun changeConflict(changeId: String, exceptionText: String) =
         changeIdToCompletableFuture[changeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
             .also { throw TwoPCConflictException(exceptionText) }
@@ -222,3 +224,4 @@ class TwoPC(
         private val logger = LoggerFactory.getLogger("2pc")
     }
 }
+

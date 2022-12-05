@@ -1,6 +1,7 @@
 package com.github.davenury.common
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.core.JsonProcessingException
@@ -46,6 +47,7 @@ data class ChangePeersetInfo(
 sealed class Change {
     val id = UUID.randomUUID().toString()
     abstract val peersets: List<ChangePeersetInfo>
+    abstract val notificationUrl: String?
 
     // TODO remove
     abstract val acceptNum: Int?
@@ -92,6 +94,8 @@ data class AddRelationChange(
     val from: String,
     val to: String,
     override val acceptNum: Int? = null,
+    @JsonProperty("notification_url")
+    override val notificationUrl: String? = null,
 ) : Change() {
     override fun equals(other: Any?): Boolean {
         if (other !is AddRelationChange || !super.doesEqual(other)) {
@@ -122,6 +126,8 @@ data class DeleteRelationChange(
     val from: String,
     val to: String,
     override val acceptNum: Int? = null,
+    @JsonProperty("notification_url")
+    override val notificationUrl: String? = null,
 ) : Change() {
     override fun equals(other: Any?): Boolean {
         if (other !is DeleteRelationChange || !super.doesEqual(other)) {
@@ -151,6 +157,8 @@ data class AddUserChange(
     override val peersets: List<ChangePeersetInfo>,
     val userName: String,
     override val acceptNum: Int? = null,
+    @JsonProperty("notification_url")
+    override val notificationUrl: String? = null,
 ) : Change() {
     override fun equals(other: Any?): Boolean {
         if (other !is AddUserChange || !super.doesEqual(other)) {
@@ -179,6 +187,8 @@ data class AddGroupChange(
     override val peersets: List<ChangePeersetInfo>,
     val groupName: String,
     override val acceptNum: Int? = null,
+    @JsonProperty("notification_url")
+    override val notificationUrl: String? = null,
 ) : Change() {
     override fun equals(other: Any?): Boolean {
         if (other !is AddGroupChange || !super.doesEqual(other)) {
@@ -215,8 +225,10 @@ enum class TwoPCStatus {
 data class TwoPCChange(
     override val peersets: List<ChangePeersetInfo>,
     override val acceptNum: Int? = null,
+    @JsonProperty("notification_url")
+    override val notificationUrl: String? = null,
     val twoPCStatus: TwoPCStatus,
-    val change: Change
+    val change: Change,
 ) : Change() {
     override fun equals(other: Any?): Boolean {
         if (other !is TwoPCChange || !super.doesEqual(other)) {
