@@ -97,6 +97,7 @@ data class AddRelationChange(
     @JsonProperty("notification_url")
     override val notificationUrl: String? = null,
 ) : Change() {
+
     override fun equals(other: Any?): Boolean {
         if (other !is AddRelationChange || !super.doesEqual(other)) {
             return false
@@ -129,6 +130,7 @@ data class DeleteRelationChange(
     @JsonProperty("notification_url")
     override val notificationUrl: String? = null,
 ) : Change() {
+
     override fun equals(other: Any?): Boolean {
         if (other !is DeleteRelationChange || !super.doesEqual(other)) {
             return false
@@ -160,6 +162,7 @@ data class AddUserChange(
     @JsonProperty("notification_url")
     override val notificationUrl: String? = null,
 ) : Change() {
+
     override fun equals(other: Any?): Boolean {
         if (other !is AddUserChange || !super.doesEqual(other)) {
             return false
@@ -190,6 +193,7 @@ data class AddGroupChange(
     @JsonProperty("notification_url")
     override val notificationUrl: String? = null,
 ) : Change() {
+
     override fun equals(other: Any?): Boolean {
         if (other !is AddGroupChange || !super.doesEqual(other)) {
             return false

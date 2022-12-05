@@ -8,12 +8,14 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import org.slf4j.LoggerFactory
+import java.net.URLDecoder
+import java.nio.charset.Charset
 
 object ChangeNotifier {
     suspend fun notify(change: Change, changeResult: ChangeResult) {
         change.notificationUrl?.let {
             try {
-                val response = httpClient.post<HttpStatement>(it) {
+                val response = httpClient.post<HttpStatement>(URLDecoder.decode(it, Charset.defaultCharset())) {
                     contentType(ContentType.Application.Json)
                     body = Notification(change, changeResult)
                 }
