@@ -26,10 +26,10 @@ class Changes(
     private var counter = AtomicInteger(0)
     private val handledChanges: MutableList<String> = mutableListOf()
 
-    suspend fun handleNotification(notification: Notification) {
+    suspend fun handleNotification(notification: Notification, peerAddress: String? = null) {
         logger.info("Handling notification: $notification")
         if (!handledChanges.contains(notification.change.toHistoryEntry().getId())) {
-            notification.change.peers.forEach {
+            (notification.change.peers + peerAddress).filterNotNull().forEach {
                 val peersetId = findPeer(it)
                 changes[peersetId]!!.overrideParentId(notification.change.toHistoryEntry().getId())
                 getPeersStrategy.handleNotification(peersetId)
@@ -68,7 +68,7 @@ class OnePeersetChanges(
 
     suspend fun introduceChange(counter: Int, vararg otherPeers: String): ChangeState {
         val senderAddress = peersAddresses.asSequence().shuffled().find { true }!!
-        val change = AddUserChange(getCurrentParentId(), "userName${counter}", otherPeers.asList(), notificationUrl = URLEncoder.encode("$ownAddress/api/v1/notification", Charset.defaultCharset()))
+        val change = AddUserChange(getCurrentParentId(), "userName${counter}", otherPeers.asList(), notificationUrl = URLEncoder.encode("$ownAddress/api/v1/notification?sender_address=${URLEncoder.encode(senderAddress, Charset.defaultCharset())}", Charset.defaultCharset()))
         return sender.executeChange(senderAddress, change)
     }
 
