@@ -7,20 +7,19 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import org.slf4j.LoggerFactory
 import java.lang.Exception
-import java.net.URLEncoder
-import java.nio.charset.Charset
 
 interface Sender {
     suspend fun executeChange(address: String, change: Change): ChangeState
 }
 
-class HttpSender: Sender {
+class HttpSender(
+    private val acProtocolConfig: ACProtocolConfig
+): Sender {
     override suspend fun executeChange(address: String, change: Change): ChangeState {
         return try {
             logger.info("Sending change to $address")
             Metrics.bumpSentChanges()
-            val response = httpClient.post<HttpStatement>("http://$address/v2/change/async") {
-                parameter("enforce_gpac", true)
+            val response = httpClient.post<HttpStatement>("http://$address/v2/change/async?${acProtocolConfig.protocol.getParam(acProtocolConfig.enforceUsage)}") {
                 accept(ContentType.Application.Json)
                 contentType(ContentType.Application.Json)
                 body = change

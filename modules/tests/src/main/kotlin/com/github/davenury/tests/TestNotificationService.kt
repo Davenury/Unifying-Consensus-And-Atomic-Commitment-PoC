@@ -19,12 +19,9 @@ import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics
 import io.prometheus.client.exporter.PushGateway
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import java.time.Duration
 
 fun main() {
     val service = TestNotificationService()
@@ -33,10 +30,14 @@ fun main() {
 
 class TestNotificationService {
 
-    private val config = loadConfig<Config>(decoders = listOf(StrategyDecoder()))
+    private val config = loadConfig<Config>(decoders = listOf(StrategyDecoder(), ACProtocolDecoder()))
+
+    init {
+        logger.info("Starting performance tests with config: $config")
+    }
 
     private val peers = config.peerAddresses()
-    private val changes = Changes(peers, HttpSender(), config.getStrategy(), config.notificationServiceAddress)
+    private val changes = Changes(peers, HttpSender(config.acProtocol), config.getStrategy(), config.notificationServiceAddress)
     private val testExecutor = TestExecutor(
         config.numberOfRequestsToSendToSinglePeerset,
         config.numberOfRequestsToSendToMultiplePeersets,

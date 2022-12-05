@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/davenury/ucac/cmd/commands/utils"
+	"strconv"
 
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/client-go/kubernetes"
@@ -23,6 +24,9 @@ var testDuration string
 var maxPeersetsInChange int
 var testsStrategy string
 var pushgatewayAddress string
+var enforceAcUsage bool
+var acProtocol string
+var consensusProtocol string
 
 func createPerformanceDeployCommand() *cobra.Command {
 
@@ -52,6 +56,11 @@ func createPerformanceDeployCommand() *cobra.Command {
 	cmd.Flags().IntVarP(&maxPeersetsInChange, "max-peersets-in-change", "", 2, "Determines maximum number of peersets that can take part in one change")
 	cmd.Flags().StringVarP(&testsStrategy, "tests-strategy", "", "delay_on_conflicts", "Determines tests strategy - either random or delay_on_conflicts")
 	cmd.Flags().StringVarP(&pushgatewayAddress, "pushgateway-address", "", "prometheus-prometheus-pushgateway.default:9091", "Pushgateway address")
+
+	cmd.Flags().BoolVarP(&enforceAcUsage, "enforce-ac", "", false, "Determines if usage of AC protocol should be enforced even if it isn't required (GPAC)")
+	cmd.Flags().StringVarP(&acProtocol, "ac-protocol", "", "gpac", "AC protocol to use in case it's needed. two_pc or gpac")
+	cmd.Flags().StringVarP(&consensusProtocol, "consensus-protocol", "", "", "Consensus protocol to use. For now it's one protocol")
+
 	return cmd
 }
 
@@ -137,6 +146,9 @@ func createConfigmap(clientset *kubernetes.Clientset) {
 			"MAX_PEERSETS_IN_CHANGE":          fmt.Sprintf("%d", maxPeersetsInChange),
 			"TESTS_STRATEGY":                  testsStrategy,
 			"PUSHGATEWAY_ADDRESS":             pushgatewayAddress,
+			"ENFORCE_AC_USAGE":                strconv.FormatBool(enforceAcUsage),
+			"AC_PROTOCOL":					   acProtocol,
+			"CONSENSUS_PROTOCOL":			   consensusProtocol,
 		},
 	}
 
