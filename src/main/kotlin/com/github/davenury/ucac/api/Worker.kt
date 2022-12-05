@@ -8,6 +8,7 @@ import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import io.micrometer.core.instrument.LongTaskTimer
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -46,7 +47,7 @@ class Worker(
                     runBlocking {
                         ChangeNotifier.notify(job.change, it)
                     }
-                }
+                }.await()
             }
         } catch (e: Exception) {
             if (e is InterruptedException) {
