@@ -23,6 +23,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 import java.time.Duration
 
 fun main() {
@@ -65,7 +66,7 @@ class TestNotificationService {
                     changes.handleNotification(notification)
                     call.respond(HttpStatusCode.OK)
                 } catch (e: Exception) {
-                    println(e)
+                    logger.error("Error while handling notification", e)
                     call.respond(HttpStatusCode.ServiceUnavailable)
                 }
             }
@@ -87,6 +88,10 @@ class TestNotificationService {
         val pushGateway = PushGateway(config.pushGatewayAddress)
         pushGateway.pushAdd(meterRegistry.prometheusRegistry, "test_service")
         server.stop(200, 1000)
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger("TestNotificationService")
     }
 
 }

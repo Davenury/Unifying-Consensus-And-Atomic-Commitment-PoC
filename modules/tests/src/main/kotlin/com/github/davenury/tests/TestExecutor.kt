@@ -57,6 +57,7 @@ class TestExecutor(
             return 1
         }
 
+        sentMulitplePeersetChanges++
         return Random.nextInt(maxPeersetsInChange - 1) + 2
     }
 

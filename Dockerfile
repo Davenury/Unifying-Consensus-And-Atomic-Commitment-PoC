@@ -1,4 +1,4 @@
-FROM adoptopenjdk:11-jre-hotspot as application
+FROM adoptopenjdk:11-jre-hotspot
 WORKDIR /application
 
 ADD build/distributions/PoC-*.tar /application
