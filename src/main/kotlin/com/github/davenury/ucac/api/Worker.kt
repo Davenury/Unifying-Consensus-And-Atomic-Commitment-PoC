@@ -4,6 +4,7 @@ import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -33,7 +34,7 @@ class Worker(
                         ProcessorJobType.TWO_PC -> twoPC.proposeChangeAsync(job.change)
                         ProcessorJobType.GPAC -> gpacProtocol.proposeChangeAsync(job.change)
                     }
-                result.thenAccept { job.completableFuture.complete(it) }
+                result.thenAccept { job.completableFuture.complete(it) }.await()
             }
         } catch (e: Exception) {
             if (e is InterruptedException) {
