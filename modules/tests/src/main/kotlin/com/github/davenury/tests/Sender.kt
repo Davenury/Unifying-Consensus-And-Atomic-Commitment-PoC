@@ -14,15 +14,12 @@ interface Sender {
     suspend fun executeChange(address: String, change: Change): ChangeState
 }
 
-class HttpSender(
-    private val ownAddress: String
-): Sender {
+class HttpSender: Sender {
     override suspend fun executeChange(address: String, change: Change): ChangeState {
         return try {
             logger.info("Sending change to $address")
             Metrics.bumpSentChanges()
             val response = httpClient.post<HttpStatement>("http://$address/v2/change/async") {
-                parameter("notification_url", URLEncoder.encode("$ownAddress/api/v1/notification", Charset.defaultCharset()))
                 parameter("enforce_gpac", true)
                 accept(ContentType.Application.Json)
                 contentType(ContentType.Application.Json)

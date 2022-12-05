@@ -35,6 +35,8 @@ class ChangesTest {
             4 to listOf("localhost4:8080"),
             5 to listOf("localhost5:8080"),
         )
+
+        private val ownAddress = "http://localhost:8080"
     }
 
     @Test
@@ -43,7 +45,7 @@ class ChangesTest {
         val sender = DummySender(peers, shouldNotify = false)
         val lockMock = mockk<Lock>()
         val conditionMock = mockk<Condition>()
-        val subject = Changes(peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size), lockMock, conditionMock))
+        val subject = Changes(peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size), lockMock, conditionMock), ownAddress)
         sender.setChanges(subject)
         val phaser = Phaser(peers.keys.size)
         phaser.register()
@@ -93,7 +95,7 @@ class ChangesTest {
     @Test
     fun `should be able to unlock peersets`(): Unit = runBlocking {
         val sender = DummySender(peers, shouldNotify = false)
-        val subject = Changes(peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size)))
+        val subject = Changes(peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size)), ownAddress)
         sender.setChanges(subject)
 
         val phaser = Phaser(2)
@@ -128,7 +130,7 @@ class ChangesTest {
         val phaser = Phaser(changesToExecute)
         phaser.register()
         val sender = DummySender(peers, shouldNotify = true, phaser = phaser)
-        val subject = Changes(peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size)))
+        val subject = Changes(peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size)), ownAddress)
         sender.setChanges(subject)
 
         // max 3 threads as we have 6 possible peersets and we cannot execute change to all of them plus 1
@@ -161,7 +163,7 @@ class ChangesTest {
             }
         }
 
-        val changes = Changes(peers, DummySender(peers, shouldNotify = false), strategy)
+        val changes = Changes(peers, DummySender(peers, shouldNotify = false), strategy, ownAddress)
 
         repeat(3) {
             runBlocking {

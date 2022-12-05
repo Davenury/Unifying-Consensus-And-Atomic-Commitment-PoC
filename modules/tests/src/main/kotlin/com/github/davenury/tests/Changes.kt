@@ -4,6 +4,8 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.GetPeersStrategy
 import org.slf4j.LoggerFactory
+import java.net.URLEncoder
+import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -16,9 +18,10 @@ import java.util.concurrent.atomic.AtomicReference
 class Changes(
     private val peers: Map<Int, List<String>>,
     private val sender: Sender,
-    private val getPeersStrategy: GetPeersStrategy
+    private val getPeersStrategy: GetPeersStrategy,
+    private val ownAddress: String
 ) {
-    private val changes = List(peers.size) { it to OnePeersetChanges(peers[it]!!, sender) }.toMap()
+    private val changes = List(peers.size) { it to OnePeersetChanges(peers[it]!!, sender, ownAddress) }.toMap()
 
     private var counter = AtomicInteger(0)
     private val handledChanges: MutableList<String> = mutableListOf()
@@ -59,12 +62,13 @@ class Changes(
 class OnePeersetChanges(
     private val peersAddresses: List<String>,
     private val sender: Sender,
+    private val ownAddress: String
 ) {
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
 
     suspend fun introduceChange(counter: Int, vararg otherPeers: String): ChangeState {
         val senderAddress = peersAddresses.asSequence().shuffled().find { true }!!
-        val change = AddUserChange(getCurrentParentId(), "userName${counter}", otherPeers.asList())
+        val change = AddUserChange(getCurrentParentId(), "userName${counter}", otherPeers.asList(), notificationUrl = URLEncoder.encode("$ownAddress/api/v1/notification", Charset.defaultCharset()))
         return sender.executeChange(senderAddress, change)
     }
 

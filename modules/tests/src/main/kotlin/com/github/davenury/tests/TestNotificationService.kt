@@ -36,7 +36,7 @@ class TestNotificationService {
     private val config = loadConfig<Config>(decoders = listOf(StrategyDecoder()))
 
     private val peers = config.peerAddresses()
-    private val changes = Changes(peers, HttpSender(config.notificationServiceAddress), config.getStrategy())
+    private val changes = Changes(peers, HttpSender(), config.getStrategy(), config.notificationServiceAddress)
     private val testExecutor = TestExecutor(
         config.numberOfRequestsToSendToSinglePeerset,
         config.numberOfRequestsToSendToMultiplePeersets,
