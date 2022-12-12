@@ -17,7 +17,7 @@ class HttpSender(
 ): Sender {
     override suspend fun executeChange(address: String, change: Change): ChangeState {
         return try {
-            logger.info("Sending change to $address")
+            logger.info("Sending $change to $address")
             Metrics.bumpSentChanges()
             val response = httpClient.post<HttpStatement>("http://$address/v2/change/async?${acProtocolConfig.protocol.getParam(acProtocolConfig.enforceUsage)}") {
                 accept(ContentType.Application.Json)
