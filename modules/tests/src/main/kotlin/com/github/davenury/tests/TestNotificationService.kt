@@ -72,6 +72,10 @@ class TestNotificationService {
                     call.respond(HttpStatusCode.ServiceUnavailable)
                 }
             }
+
+            get("/_meta/metrics") {
+                call.respond(meterRegistry.scrape())
+            }
         }
 
         GlobalScope.launch {
