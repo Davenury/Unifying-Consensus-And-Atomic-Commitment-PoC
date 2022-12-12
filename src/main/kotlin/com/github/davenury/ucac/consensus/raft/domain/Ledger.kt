@@ -23,8 +23,10 @@ data class Ledger(
             val acceptedIds = acceptedItems.map { it.ledgerIndex }
             lastApplied = acceptedIds.maxOrDefault(lastApplied)
 
-            this.proposedItems.removeAll { acceptedIds.contains(it.ledgerIndex) }
             val newProposedItems = proposedItems - this.proposedItems.toSet()
+            this.proposedItems.removeAll { acceptedIds.contains(it.ledgerIndex) }
+            val newProposedLedgerIndex = proposedItems.map { it.ledgerIndex }
+            this.proposedItems.removeAll { newProposedLedgerIndex.contains(it.ledgerIndex) }
             this.proposedItems.addAll(newProposedItems)
             commitIndex = newProposedItems.maxOrDefault(commitIndex)
 
