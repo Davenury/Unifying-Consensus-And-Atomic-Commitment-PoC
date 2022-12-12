@@ -58,7 +58,6 @@ class TwoPC(
         val result = consensusProtocol.proposeChangeAsync(changeWithProperParentId).await()
 
         if (result.status != ChangeResult.Status.SUCCESS) {
-            ChangeNotifier.notify(change, result)
             throw TwoPCHandleException("TwoPCChange didn't apply change")
         }
 
@@ -224,4 +223,3 @@ class TwoPC(
         private val logger = LoggerFactory.getLogger("2pc")
     }
 }
-

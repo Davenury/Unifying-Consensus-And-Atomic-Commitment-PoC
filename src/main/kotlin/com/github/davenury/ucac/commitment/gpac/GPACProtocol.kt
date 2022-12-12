@@ -300,7 +300,7 @@ class GPACProtocolImpl(
     ): ElectMeResult {
         if (!history.isEntryCompatible(change.toHistoryEntry(globalPeerId.peersetId))) {
             signal(Signal.OnSendingElectBuildFail, this.transaction, change)
-            changeConflicts(change, "History entry not compatible, got: ${change.toHistoryEntry().getId()}, expected: ${history.getCurrentEntry().getId()}")
+            changeConflicts(change, "History entry not compatible, change: ${change}, expected: ${history.getCurrentEntry().getId()}")
             throw HistoryCannotBeBuildException()
         }
 

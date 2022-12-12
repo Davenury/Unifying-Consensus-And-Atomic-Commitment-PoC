@@ -200,7 +200,7 @@ class RaftConsensusProtocolImpl(
         mutex.withLock {
             updateResult = state.updateLedger(acceptedChanges, proposedChanges)
         }
-
+        
         updateResult.acceptedItems.forEach { acceptedItem ->
             signalPublisher.signal(
                 signal = Signal.ConsensusFollowerChangeAccepted,
