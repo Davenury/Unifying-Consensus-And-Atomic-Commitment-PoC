@@ -1,8 +1,6 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.common.Changes
+import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
@@ -37,24 +35,26 @@ class ApiV2Service(
     }
 
     fun getChangeById(id: String): Change? {
-        return history.getEntryFromHistory(id)?.let { Change.fromHistoryEntry(it) }
+        return history.getEntryFromHistory(id)
+                ?.let { Transition.fromHistoryEntry(it) }
+                ?.let { it as? ChangeApplyingTransition }?.change
     }
 
     fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> =
         worker.getChangeStatus(changeId)
 
-    suspend fun addChange(job: ProcessorJob): CompletableFuture<ChangeResult> =
+    suspend fun addJob(job: ProcessorJob): CompletableFuture<ChangeResult> =
         job.also {
             logger.info("Service send job $job to queue")
             queue.send(it)
         }.completableFuture
 
-    suspend fun addChangeSync(
+    suspend fun addJobSync(
         job: ProcessorJob,
         timeout: Duration?,
     ): ChangeResult? = try {
         withTimeout(timeout ?: config.rest.defaultSyncTimeout) {
-            addChange(job).await()
+            addJob(job).await()
         }
     } catch (e: TimeoutCancellationException) {
         null

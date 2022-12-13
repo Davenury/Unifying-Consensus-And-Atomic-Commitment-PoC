@@ -1,9 +1,9 @@
 package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
+import com.github.davenury.common.Transition
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusHeartbeat
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusProposeChange
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import io.ktor.application.*
 import io.ktor.request.*
@@ -27,9 +27,9 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         }
 
         // kiedy nie jesteś leaderem to prosisz leadera o zmianę
-        post("/consensus/request_apply_change") {
-            val message: ConsensusProposeChange = call.receive()
-            val result = protocol.handleProposeChange(message).await()
+        post("/consensus/request_apply_transition") {
+            val message: Transition = call.receive()
+            val result = protocol.proposeTransitionAsync(message).await()
             call.respond(result)
         }
 //      Endpoints for tests

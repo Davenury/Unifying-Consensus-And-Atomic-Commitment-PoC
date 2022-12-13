@@ -3,6 +3,7 @@ package com.github.davenury.ucac.gpac
 import com.github.davenury.common.AddUserChange
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangePeersetInfo
+import com.github.davenury.common.Transition
 import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
@@ -73,7 +74,7 @@ class LeaderTest {
 
         runBlocking { subject.performProtocolAsLeader(change) }
 
-        expectThat(history.getCurrentEntry().let { Change.fromHistoryEntry(it) })
+        expectThat(history.getCurrentEntry().let { Transition.fromHistoryEntry(it)?.change })
             .isEqualTo(change)
     }
 

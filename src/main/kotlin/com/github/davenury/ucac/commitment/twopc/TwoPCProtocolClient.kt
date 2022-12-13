@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.commitment.twopc
 
 import com.github.davenury.common.Change
+import com.github.davenury.common.Transition
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
@@ -10,33 +11,28 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.slf4j.LoggerFactory
 
-data class ResponsesWithErrorAggregation<K>(
-    val responses: List<List<K>>,
-    val aggregatedValue: Int?
-)
-
 interface TwoPCProtocolClient {
-    suspend fun sendAccept(peers: List<PeerAddress>, change: Change): List<Boolean>
-    suspend fun sendDecision(peers: List<PeerAddress>, decisionChange: Change): List<Boolean>
+    suspend fun sendAccept(peers: List<PeerAddress>, transition: Transition): List<Boolean>
+    suspend fun sendDecision(peers: List<PeerAddress>, transition: Transition): List<Boolean>
 
-    suspend fun askForChangeStatus(peer: PeerAddress, change: Change): Change?
+    suspend fun askForChangeStatus(peer: PeerAddress, transition: Transition): Transition?
 }
 
 class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
 
 
-    override suspend fun sendAccept(peers: List<PeerAddress>, change: Change): List<Boolean> =
-        sendMessages(peers, change, "2pc/accept")
+    override suspend fun sendAccept(peers: List<PeerAddress>, transition: Transition): List<Boolean> =
+        sendMessages(peers, transition, "2pc/accept")
 
 
-    override suspend fun sendDecision(peers: List<PeerAddress>, decisionChange: Change): List<Boolean> =
-        sendMessages(peers, decisionChange, "2pc/decision")
+    override suspend fun sendDecision(peers: List<PeerAddress>, transition: Transition): List<Boolean> =
+        sendMessages(peers, transition, "2pc/decision")
 
-    override suspend fun askForChangeStatus(peer: PeerAddress, change: Change): Change? {
-        val url = "http://${peer.address}/2pc/ask/${change.id}"
+    override suspend fun askForChangeStatus(peer: PeerAddress, transition: Transition): Transition? {
+        val url = "http://${peer.address}/2pc/ask/${transition.change.id}"
         logger.info("Sending to: $url")
         return try {
-            httpClient.get<Change?>(url) {
+            httpClient.get<Transition?>(url) {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }

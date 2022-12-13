@@ -13,7 +13,6 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,7 +35,7 @@ class RaftConsensusProtocolImpl(
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
     private val transactionBlocker: TransactionBlocker,
     private val isMetricTest: Boolean
-) : ConsensusProtocol, RaftConsensusProtocol, SignalSubject {
+) : RaftConsensusProtocol, SignalSubject {
     private val globalPeerId = peerResolver.currentPeer()
     private val peerId = globalPeerId.peerId
 
@@ -56,10 +55,11 @@ class RaftConsensusProtocolImpl(
     private var executorService: ExecutorCoroutineDispatcher? = null
     private val leaderRequestExecutorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
+    private val transitionIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
     //    TODO: Useless, it should use a worker queue.
-    private val queuedChanges: MutableList<Change> = mutableListOf()
+    private val queuedTransitions: MutableList<Transition> = mutableListOf()
 
     private fun otherConsensusPeers(): List<PeerAddress> {
         return peerResolver.getPeersFromCurrentPeerset().filter { it.globalPeerId != globalPeerId }
@@ -200,7 +200,8 @@ class RaftConsensusProtocolImpl(
                 signal = Signal.ConsensusFollowerHeartbeatReceived,
                 subject = this,
                 peers = listOf(otherConsensusPeers()),
-                change = Change.fromHistoryEntry(entry),
+                change = Transition.fromHistoryEntry(entry)?.change,
+                transition = Transition.fromHistoryEntry(entry),
                 historyEntry = entry,
             )
         }
@@ -212,7 +213,7 @@ class RaftConsensusProtocolImpl(
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
         val prevEntryId = heartbeat.prevEntryId
 
-//        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex")
+//        logger.debug("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex")
 //        logger.info("Lastapplied: ${state.lastApplied} commitIndex: ${state.commitIndex}")
 //        logger.info("PrevEntry: ${prevEntryId},  leaderCommitId: ${leaderCommitId} logEntries: ${proposedChanges.map { it.entry.getId() }}")
 
@@ -292,7 +293,7 @@ class RaftConsensusProtocolImpl(
             }
 
             notAppliedProposedChanges.isNotEmpty() -> {
-                logger.info("Introduce new changes")
+                logger.info("Introduce new changes: $notAppliedProposedChanges")
                 transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, notAppliedProposedChanges.first().changeId)
             }
         }
@@ -310,11 +311,13 @@ class RaftConsensusProtocolImpl(
         val updateResult: LedgerUpdateResult = state.updateLedger(leaderCommitId, proposedChanges)
 
         updateResult.acceptedItems.forEach { acceptedItem ->
+            val transition = Transition.fromHistoryEntry(acceptedItem.entry)
             signalPublisher.signal(
-                signal = Signal.ConsensusFollowerChangeAccepted,
+                signal = Signal.ConsensusFollowerTransitionAccepted,
                 subject = this,
                 peers = listOf(otherConsensusPeers()),
-                change = Change.fromHistoryEntry(acceptedItem.entry),
+                change = transition?.change,
+                transition = transition,
                 historyEntry = acceptedItem.entry,
             )
         }
@@ -333,7 +336,7 @@ class RaftConsensusProtocolImpl(
                 signal = Signal.ConsensusFollowerChangeProposed,
                 subject = this,
                 peers = listOf(otherConsensusPeers()),
-                change = Change.fromHistoryEntry(proposedItem.entry),
+                change = Transition.fromHistoryEntry(proposedItem.entry)?.change,
                 historyEntry = proposedItem.entry
             )
         }
@@ -369,10 +372,6 @@ class RaftConsensusProtocolImpl(
         }
     }
 
-
-    override suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult> =
-        proposeChangeAsync(change)
-
     override fun setPeerAddress(address: String) {
         this.peerAddress = address
     }
@@ -390,7 +389,8 @@ class RaftConsensusProtocolImpl(
     override suspend fun getProposedChanges(): List<Change> = state.getLogEntries()
         .reversed()
         .takeWhile { it.entry.getId() != state.lastApplied }
-        .mapNotNull { Change.fromHistoryEntry(it.entry) }
+        .mapNotNull { Transition.fromHistoryEntry(it.entry) }
+        .map { it.change }
 
 
     override suspend fun getAcceptedChanges(): List<Change> =
@@ -398,7 +398,9 @@ class RaftConsensusProtocolImpl(
             .let { entries ->
                 val index = entries.indexOfFirst { it.entry.getId() == state.lastApplied }
                 history.toEntryList() + entries.take(index + 1).map { it.entry }
-            }.mapNotNull { Change.fromHistoryEntry(it) }
+            }
+            .mapNotNull { Transition.fromHistoryEntry(it) }
+            .map { it.change }
 
     private suspend fun sendHeartbeatToPeer(peer: GlobalPeerId) {
         val peerAddress = peerResolver.resolve(peer)
@@ -495,7 +497,7 @@ class RaftConsensusProtocolImpl(
                 signal = Signal.ConsensusAfterProposingChange,
                 subject = this,
                 peers = listOf(otherConsensusPeers()),
-                change = Change.fromHistoryEntry(it.entry),
+                change = Transition.fromHistoryEntry(it.entry)?.change,
                 historyEntry = it.entry,
             )
         }
@@ -518,9 +520,9 @@ class RaftConsensusProtocolImpl(
 
     //  TODO: Useless function
     private suspend fun checkIfQueuedChanges() {
-        if (queuedChanges.isEmpty()) return
-        val change = queuedChanges.removeAt(0)
-        proposeChangeToLedger(changeIdToCompletableFuture[change.id]!!, change)
+        if (queuedTransitions.isEmpty()) return
+        val transition = queuedTransitions.removeAt(0)
+        proposeChangeToLedger(changeIdToCompletableFuture[transition.change.id]!!, transition)
     }
 
     private suspend fun handleSuccessHeartbeatResponseFromPeer(
@@ -611,36 +613,33 @@ class RaftConsensusProtocolImpl(
     }
 
     //  TODO: sync change will have to use Condition/wait/notifyAll
-    private suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
-        var entry = change.toHistoryEntry(globalPeerId.peersetId)
-        changeIdToCompletableFuture[change.id] = result
+    private suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, transition: Transition) {
+        val change = transition.change
+        val entry = transition.toHistoryEntry(globalPeerId.peersetId)
+        if (transition is ChangeApplyingTransition) {
+            changeIdToCompletableFuture[change.id] = result
+        }
+        transitionIdToCompletableFuture[transition.id] = result
 
         mutex.withLock {
             if (state.entryAlreadyProposed(entry)) {
-                logger.info("Already proposed that change: $change")
+                logger.info("Already proposed that transition: $transition")
                 return
             }
 
-            if (transactionBlocker.isAcquired() || isDuring2PAndChangeDoesntFinishIt(change)) {
+            if (transactionBlocker.isAcquired() || isDuring2PAndChangeDoesntFinishIt(transition)) {
                 val msg =
                     if (transactionBlocker.isAcquired()) "transaction is blocked"
                     else "is during 2PC"
                 logger.info(
                     "Queued change, because: $msg"
                 )
-                queuedChanges.add(change)
+                queuedTransitions.add(transition)
                 return
             }
 
-            val updatedChange: Change
-
-            val peersetId = peerResolver.currentPeer().peersetId
-
-            updatedChange = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
-            entry = updatedChange.toHistoryEntry(peersetId)
-
             try {
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, updatedChange.id)
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, change.id)
             } catch (ex: AlreadyLockedException) {
                 logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
@@ -652,34 +651,34 @@ class RaftConsensusProtocolImpl(
                     "Proposed change is incompatible. \n CurrentChange: ${
                         history.getCurrentEntry().getId()
                     } \n Change.parentId: ${
-                        updatedChange.toHistoryEntry(peerResolver.currentPeer().peersetId).getParentId()
+                        entry.getParentId()
                     }"
                 )
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, updatedChange.id)
+                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, change.id)
                 return
             }
 
-            logger.info("Propose change to ledger: $updatedChange")
-            state.proposeEntry(entry, updatedChange.id)
+            logger.info("Propose transition to ledger: $transition")
+            state.proposeEntry(entry, transition.change.id)
             voteContainer.initializeChange(entry.getId())
         }
     }
 
-    private fun isDuring2PAndChangeDoesntFinishIt(change: Change): Boolean {
-        val currentHistoryChange = history
+    private fun isDuring2PAndChangeDoesntFinishIt(transition: Transition): Boolean {
+        val currentHistoryTransition = history
             .getCurrentEntry()
-            .let { Change.fromHistoryEntry(it) }
+            .let { Transition.fromHistoryEntry(it) }
 
-        val isDuring2PC: Boolean = currentHistoryChange
-            ?.let { it is TwoPCChange && it.twoPCStatus == TwoPCStatus.ACCEPTED }
+        val isDuring2PC: Boolean = currentHistoryTransition
+            ?.let { it is TwoPCTransition && it.twoPCStatus == TwoPCStatus.ACCEPTED }
             ?: false
 
         val changeIsAbortingOf2PC: Boolean =
-            change is TwoPCChange && change.twoPCStatus == TwoPCStatus.ABORTED
+            transition is TwoPCTransition && transition.twoPCStatus == TwoPCStatus.ABORTED
 
         val changeIsApplyingOf2PC: Boolean =
-            currentHistoryChange is TwoPCChange && change == currentHistoryChange.change.copyWithNewParentId(
+            currentHistoryTransition is TwoPCTransition && transition.change == currentHistoryTransition.change.copyWithNewParentId(
                 peerResolver.currentPeer().peersetId,
                 history.getCurrentEntry().getId(),
             )
@@ -703,15 +702,15 @@ class RaftConsensusProtocolImpl(
     }
 
 
-    private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change) {
+    private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, transition: Transition) {
         with(CoroutineScope(leaderRequestExecutorService)) {
             launch(MDCContext()) {
                 val result: ChangeResult = try {
                     val response =
-                        httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
+                        httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_transition") {
                             contentType(ContentType.Application.Json)
                             accept(ContentType.Application.Json)
-                            body = change
+                            body = transition
                         }
                     logger.info("Response from leader: $response")
                     response
@@ -727,22 +726,21 @@ class RaftConsensusProtocolImpl(
         }
     }
 
-    //   TODO: only one change can be proposed at the same time
-    @Deprecated("use proposeChangeAsync")
-    override suspend fun proposeChange(change: Change): ChangeResult = proposeChangeAsync(change).await()
-
-    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
+    override suspend fun proposeTransitionAsync(transition: Transition): CompletableFuture<ChangeResult> {
         val result = CompletableFuture<ChangeResult>()
-        changeIdToCompletableFuture[change.id] = result
+        if (transition is ChangeApplyingTransition) {
+            changeIdToCompletableFuture[transition.change.id] = result
+        }
+        transitionIdToCompletableFuture[transition.id] = result
         when {
             amILeader() -> {
-                logger.info("Proposing change: $change")
-                proposeChangeToLedger(result, change)
+                logger.info("Proposing transition: $transition")
+                proposeChangeToLedger(result, transition)
             }
 
             votedFor != null -> {
-                logger.info("Forwarding change to the leader(${votedFor!!}): $change")
-                sendRequestToLeader(result, change)
+                logger.info("Forwarding change to the leader(${votedFor!!}): $transition")
+                sendRequestToLeader(result, transition)
             }
 //              TODO: Change after queue
             else -> {

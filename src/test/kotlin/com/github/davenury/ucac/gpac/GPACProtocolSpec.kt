@@ -133,7 +133,7 @@ class GPACProtocolSpec {
         val message = Apply(10, true, Accept.COMMIT, change)
 
         subject.handleApply(message)
-        expectThat(history.getCurrentEntry()).isEqualTo(change.toHistoryEntry(0))
+        expectThat(history.getCurrentEntry()).isEqualTo(ChangeApplyingTransition(change).toHistoryEntry(0))
     }
 
     @Test

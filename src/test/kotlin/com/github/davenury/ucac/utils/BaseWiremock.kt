@@ -6,17 +6,10 @@ import com.github.tomakehurst.wiremock.client.WireMock.*
 import org.junit.jupiter.api.AfterAll
 
 abstract class BaseWiremock {
-
     private var wireMockServer: WireMockServer = WireMockServer(0)
 
     init {
         wireMockServer.start()
-    }
-
-    @AfterAll
-    fun cleanup() {
-        wireMockServer.resetAll()
-        wireMockServer.stop()
     }
 
     fun stubForElectMe(ballotNumber: Int, initVal: Accept, acceptNum: Int, acceptVal: Accept?, decision: Boolean) {
@@ -74,10 +67,5 @@ abstract class BaseWiremock {
         wireMockServer.verify(expected, postRequestedFor(urlMatching("/ft-agree")))
     }
 
-    fun verifyApplyStub(expected: Int) {
-        wireMockServer.verify(expected, postRequestedFor(urlMatching("/apply")))
-    }
-
     fun getPort(): Int = wireMockServer.port()
-
 }

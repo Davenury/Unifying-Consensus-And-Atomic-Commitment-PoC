@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
 import com.github.davenury.common.Change
+import com.github.davenury.common.Transition
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
@@ -35,7 +36,7 @@ data class Ledger(
             val entries =
                 history.getAllEntriesUntilHistoryEntryId(historyEntryId)
                     .map {
-                        val change = Change.fromHistoryEntry(it)
+                        val change = Transition.fromHistoryEntry(it)?.change
                         LedgerItem(it, change?.id ?: it.getId())
                     }
 
@@ -46,7 +47,7 @@ data class Ledger(
 
         }
 
-    private suspend fun updateCommitIndex(commitHistoryEntryId: String): List<LedgerItem> {
+    private fun updateCommitIndex(commitHistoryEntryId: String): List<LedgerItem> {
         this.commitIndex = commitHistoryEntryId
         if (lastApplied == commitIndex) return listOf()
 

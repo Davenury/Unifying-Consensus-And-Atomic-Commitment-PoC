@@ -7,8 +7,6 @@ import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
-import java.net.URLEncoder
-import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicReference
 
 class Changes(
@@ -28,7 +26,7 @@ class Changes(
         if (!handledChanges.contains(notification.change.id)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
                 if (notification.result.status == ChangeResult.Status.SUCCESS) {
-                    val parentId = notification.change.toHistoryEntry(peersetId).getId()
+                    val parentId = ChangeApplyingTransition(notification.change).toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
                     logger.info("Setting new parent id for peerset $peersetId: $parentId, change was for ${(notification.change as AddUserChange).userName}")
                 }
@@ -46,7 +44,8 @@ class Changes(
 
             val result = changes[ids[0]]!!.introduceChange(change)
             if (result == ChangeState.ACCEPTED) {
-                logger.info("Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: ${ids.map { it to change.toHistoryEntry(it).getId() }}")
+                // TODO
+//                logger.info("Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: ${ids.map { it to change.toHistoryEntry(it).getId() }}")
             } else {
                 logger.info("Change $change was rejected, freeing peersets $ids")
                 getPeersStrategy.freePeersets(ids)

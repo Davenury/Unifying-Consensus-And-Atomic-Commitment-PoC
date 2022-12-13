@@ -83,7 +83,7 @@ class GPACProtocolImpl(
             throw NotElectingYou(myBallotNumber, message.ballotNumber)
         }
 
-        val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
+        val entry = ChangeApplyingTransition(message.change).toHistoryEntry(globalPeerId.peersetId)
         val initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
 
         myBallotNumber = message.ballotNumber
@@ -117,7 +117,7 @@ class GPACProtocolImpl(
         }
         logger.info("Handling agree $message")
 
-        val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
+        val entry = ChangeApplyingTransition(message.change).toHistoryEntry(globalPeerId.peersetId)
         val initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
 
         myBallotNumber = message.ballotNumber
@@ -187,7 +187,7 @@ class GPACProtocolImpl(
 
 
             val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(
-                    message.change.toHistoryEntry(
+                    ChangeApplyingTransition(message.change).toHistoryEntry(
                         globalPeerId.peersetId
                     ).getId()
                 )
@@ -224,7 +224,7 @@ class GPACProtocolImpl(
     }
 
     private fun addChangeToHistory(change: Change) {
-        change.toHistoryEntry(globalPeerId.peersetId).let {
+        ChangeApplyingTransition(change).toHistoryEntry(globalPeerId.peersetId).let {
             history.addEntry(it)
         }
     }
@@ -382,7 +382,7 @@ class GPACProtocolImpl(
         transaction: Transaction? = null,
         acceptNum: Int? = null
     ): ElectMeResult {
-        if (!history.isEntryCompatible(change.toHistoryEntry(globalPeerId.peersetId))) {
+        if (!history.isEntryCompatible(ChangeApplyingTransition(change).toHistoryEntry(globalPeerId.peersetId))) {
             signal(Signal.OnSendingElectBuildFail, this.transaction, change)
             changeRejected(
                 change,

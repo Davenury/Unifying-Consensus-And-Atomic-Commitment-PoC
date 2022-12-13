@@ -1,6 +1,8 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.common.Change
+import com.github.davenury.common.ChangeApplyingTransition
+import com.github.davenury.common.Transition
 import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.ucac.commitment.gpac.Transaction
 import com.github.davenury.ucac.common.PeerAddress
@@ -22,7 +24,7 @@ enum class Signal {
     ConsensusLeaderDoesNotSendHeartbeat,
     ConsensusAfterProposingChange,
     ConsensusFollowerHeartbeatReceived,
-    ConsensusFollowerChangeAccepted,
+    ConsensusFollowerTransitionAccepted,
     ConsensusFollowerChangeProposed,
     ConsensusTryToBecomeLeader,
     TwoPCOnChangeApplied,
@@ -45,6 +47,7 @@ class SignalPublisher(
         peers: List<List<PeerAddress>>,
         transaction: Transaction? = null,
         change: Change? = null,
+        transition: Transition? = null,
         historyEntry: HistoryEntry? = null
     ) {
         listeners[signal]?.onSignal(
@@ -54,7 +57,8 @@ class SignalPublisher(
                 peers,
                 transaction,
                 change,
-                historyEntry
+                transition,
+                historyEntry,
             )
         )
     }
@@ -66,6 +70,7 @@ data class SignalData(
     val peers: List<List<PeerAddress>>,
     val transaction: Transaction?,
     val change: Change? = null,
+    val transition: Transition? = null,
     val historyEntry: HistoryEntry? = null
 )
 

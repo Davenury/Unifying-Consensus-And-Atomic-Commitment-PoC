@@ -435,14 +435,14 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 listOf(3, 5),
                 signalListeners = List(3) {
                     it to mapOf(
-                        Signal.ConsensusFollowerChangeAccepted to firstChangeListener,
+                        Signal.ConsensusFollowerTransitionAccepted to firstChangeListener,
                         Signal.OnHandlingApplyEnd to finalChangeListener,
                         Signal.ConsensusLeaderElected to leaderElectedListener,
                     )
                 }.toMap()
                         + List(5) {
                     it + 3 to mapOf(
-                        Signal.ConsensusFollowerChangeAccepted to secondChangeListener,
+                        Signal.ConsensusFollowerTransitionAccepted to secondChangeListener,
                         Signal.ConsensusLeaderElected to leaderElectedListener,
                         Signal.OnHandlingApplyEnd to finalChangeListener
                     )
@@ -481,16 +481,16 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
             secondChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            val lastChange0 = askForChanges(apps.getPeer(0, 0)).last()
-            val lastChange1 = askForChanges(apps.getPeer(1, 0)).last()
+            val lastTransition0 = askForTransitions(apps.getPeer(0, 0)).last()
+            val lastTransition1 = askForTransitions(apps.getPeer(1, 0)).last()
 
             // when - executing change between two peersets
             val addRelationChange = AddRelationChange(
                 "firstUserName",
                 "firstGroup",
                 peersets = listOf(
-                    ChangePeersetInfo(0, lastChange0.toHistoryEntry(0).getId()),
-                    ChangePeersetInfo(1, lastChange1.toHistoryEntry(1).getId()),
+                    ChangePeersetInfo(0, lastTransition0.toHistoryEntry(0).getId()),
+                    ChangePeersetInfo(1, lastTransition1.toHistoryEntry(1).getId()),
                 ),
             )
 
@@ -522,6 +522,12 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
     private suspend fun askForChanges(peerAddress: PeerAddress) =
         testHttpClient.get<Changes>("http://${peerAddress.address}/changes") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }
+
+    private suspend fun askForTransitions(peerAddress: PeerAddress) =
+        testHttpClient.get<Transitions>("http://${peerAddress.address}/transitions") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }

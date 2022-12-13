@@ -39,13 +39,4 @@ class PeerResolver(
     fun setPeers(newPeers: Map<GlobalPeerId, PeerAddress>) {
         peers.putAll(newPeers)
     }
-
-    fun findPeersetWithPeer(peer: String): Int? {
-        peers.forEach { (id, peerAddress) ->
-            if (peerAddress.address == peer) {
-                return id.peersetId
-            }
-        }
-        return null
-    }
 }

@@ -210,7 +210,7 @@ class ChangesTest {
                     return false
                 }
 
-                mapOfChanges[peersetId] = change.toHistoryEntry(peersetId).getId()
+                mapOfChanges[peersetId] = ChangeApplyingTransition(change).toHistoryEntry(peersetId).getId()
             }
         }
         return true

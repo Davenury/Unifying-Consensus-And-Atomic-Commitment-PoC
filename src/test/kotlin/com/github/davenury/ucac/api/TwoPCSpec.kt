@@ -24,7 +24,6 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
-import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -48,8 +47,10 @@ class TwoPCSpec : IntegrationTestBase() {
         listOf(changeAppliedPhaser, electionPhaser).forEach { it.register() }
 
         val signalListenersForCohort = mapOf(
-            Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                changeAppliedPhaser.arrive()
+            Signal.ConsensusFollowerTransitionAccepted to SignalListener { data ->
+                if (data.transition is ChangeApplyingTransition) {
+                    changeAppliedPhaser.arrive()
+                }
             },
             Signal.ConsensusLeaderElected to SignalListener { electionPhaser.arrive() }
         )
@@ -61,7 +62,11 @@ class TwoPCSpec : IntegrationTestBase() {
 
         val change = change(0, 1)
 
+        logger.info("Waiting for election")
+
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        logger.info("Executing change")
 
         // when - executing transaction
         executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", change)
@@ -69,12 +74,18 @@ class TwoPCSpec : IntegrationTestBase() {
         changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         askAllForChanges(apps.getPeers().values).forEach { changes ->
-            expectThat(changes.size).isEqualTo(2)
-            expectThat(changes[0]).isA<TwoPCChange>()
-                .with(TwoPCChange::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
-                .with(TwoPCChange::change) { isEqualTo(change) }
-            expectThat(changes[1]).isA<AddUserChange>()
+            expectThat(changes.size).isEqualTo(1)
+            expectThat(changes[0]).isA<AddUserChange>()
                 .with(AddUserChange::userName) { isEqualTo("userName") }
+        }
+
+        askAllForTransitions(apps.getPeers().values).forEach { transitions ->
+            expectThat(transitions.size).isEqualTo(2)
+            expectThat(transitions[0]).isA<TwoPCTransition>()
+                .with(TwoPCTransition::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
+                .with(TwoPCTransition::change) { isEqualTo(change) }
+            expectThat(transitions[1]).isA<ChangeApplyingTransition>()
+                .with(ChangeApplyingTransition::change) { isEqualTo(change) }
         }
     }
 
@@ -88,13 +99,13 @@ class TwoPCSpec : IntegrationTestBase() {
         val change = change(0, 1)
 
         val historyEntryId = { peersetId: Int ->
-            change.toHistoryEntry(peersetId).getId()
+            ChangeApplyingTransition(change).toHistoryEntry(peersetId).getId()
         }
 
         val changeSecond = change(Pair(0, historyEntryId(0)), Pair(1, historyEntryId(1)))
 
         val signalListenersForCohort = mapOf(
-            Signal.ConsensusFollowerChangeAccepted to SignalListener {
+            Signal.ConsensusFollowerTransitionAccepted to SignalListener {
                 if (it.change!!.id == change.id) changeAppliedPhaser.arrive()
                 if (it.change!!.id == changeSecond.id) changeSecondAppliedPhaser.arrive()
             },
@@ -119,14 +130,14 @@ class TwoPCSpec : IntegrationTestBase() {
 
         askAllForChanges(apps.getPeers().values).forEach { changes ->
             expectThat(changes.size).isEqualTo(4)
-            expectThat(changes[0]).isA<TwoPCChange>()
-                .with(TwoPCChange::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
-                .with(TwoPCChange::change) { isEqualTo(change) }
+            expectThat(changes[0]).isA<TwoPCTransition>()
+                .with(TwoPCTransition::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
+                .with(TwoPCTransition::change) { isEqualTo(change) }
             expectThat(changes[1]).isA<AddUserChange>()
                 .with(AddUserChange::userName) { isEqualTo("userName") }
-            expectThat(changes[2]).isA<TwoPCChange>()
-                .with(TwoPCChange::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
-                .with(TwoPCChange::change) { isEqualTo(changeSecond) }
+            expectThat(changes[2]).isA<TwoPCTransition>()
+                .with(TwoPCTransition::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
+                .with(TwoPCTransition::change) { isEqualTo(changeSecond) }
             expectThat(changes[3]).isA<AddUserChange>()
                 .with(AddUserChange::userName) { isEqualTo("userName") }
         }
@@ -148,7 +159,7 @@ class TwoPCSpec : IntegrationTestBase() {
         listOf(electionPhaser, changeAppliedPhaser).forEach { it.register() }
 
         val signalListenersForCohort = mapOf(
-            Signal.ConsensusFollowerChangeAccepted to appliedChangesListener,
+            Signal.ConsensusFollowerTransitionAccepted to appliedChangesListener,
             Signal.ConsensusLeaderElected to leaderElected
         )
 
@@ -170,18 +181,18 @@ class TwoPCSpec : IntegrationTestBase() {
         // then - transaction should not be executed
         askAllForChanges(apps.getPeers(0).values).forEach { changes ->
             expectThat(changes.size).isEqualTo(2)
-            expectThat(changes[0]).isA<TwoPCChange>()
-                .with(TwoPCChange::twoPCStatus) {
+            expectThat(changes[0]).isA<TwoPCTransition>()
+                .with(TwoPCTransition::twoPCStatus) {
                     isEqualTo(TwoPCStatus.ACCEPTED)
                 }
-                .with(TwoPCChange::change) {
+                .with(TwoPCTransition::change) {
                     isEqualTo(change)
                 }
-            expectThat(changes[1]).isA<TwoPCChange>()
-                .with(TwoPCChange::twoPCStatus) {
+            expectThat(changes[1]).isA<TwoPCTransition>()
+                .with(TwoPCTransition::twoPCStatus) {
                     isEqualTo(TwoPCStatus.ABORTED)
                 }
-                .with(TwoPCChange::change) {
+                .with(TwoPCTransition::change) {
                     isEqualTo(change)
                 }
         }
@@ -245,7 +256,7 @@ class TwoPCSpec : IntegrationTestBase() {
         }
 
         val signalListenersForCohort = mapOf(
-            Signal.ConsensusFollowerChangeAccepted to peerApplyCommitted,
+            Signal.ConsensusFollowerTransitionAccepted to peerApplyCommitted,
             Signal.ConsensusLeaderElected to leaderElected
         )
 
@@ -267,10 +278,9 @@ class TwoPCSpec : IntegrationTestBase() {
         // then - transaction should be executed in every peerset
         askAllForChanges(peers.values.filter { it.address != NON_RUNNING_PEER }).forEach { changes ->
             expectThat(changes.size).isEqualTo(2)
-            expectThat(changes[0]).isA<TwoPCChange>()
-                .with(Change::peersets) { isEqualTo(change.peersets) }
-                .with(TwoPCChange::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
-                .with(TwoPCChange::change) { isEqualTo(change) }
+            expectThat(changes[0]).isA<TwoPCTransition>()
+                .with(TwoPCTransition::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
+                .with(TwoPCTransition::change) { isEqualTo(change) }
             expectThat(changes[1]).isA<AddUserChange>()
                 .with(AddUserChange::userName) { isEqualTo("userName") }
         }
@@ -303,7 +313,7 @@ class TwoPCSpec : IntegrationTestBase() {
                 (0..2).associateWith {
                     mapOf(
                         Signal.ConsensusLeaderElected to leaderElected,
-                        Signal.ConsensusFollowerChangeAccepted to
+                        Signal.ConsensusFollowerTransitionAccepted to
                                 SignalListener { firstPeersetChangeAppliedPhaser.arrive() }
                     )
                 }.toMap() +
@@ -311,7 +321,7 @@ class TwoPCSpec : IntegrationTestBase() {
                             mapOf(
                                 Signal.TwoPCOnHandleDecision to onHandleDecision,
                                 Signal.ConsensusLeaderElected to leaderElected,
-                                Signal.ConsensusFollowerChangeAccepted to
+                                Signal.ConsensusFollowerTransitionAccepted to
                                         SignalListener { secondPeersetChangeAppliedPhaser.arrive() }
                             )
                         }.toMap(),
@@ -331,14 +341,11 @@ class TwoPCSpec : IntegrationTestBase() {
 
             askAllForChanges(peers.values).forEach { changes ->
                 expectThat(changes.size).isEqualTo(2)
-                expectThat(changes[0]).isA<TwoPCChange>()
-                    .with(TwoPCChange::peersets) {
-                        isEqualTo(change.peersets)
-                    }
-                    .with(TwoPCChange::twoPCStatus) {
+                expectThat(changes[0]).isA<TwoPCTransition>()
+                    .with(TwoPCTransition::twoPCStatus) {
                         isEqualTo(TwoPCStatus.ACCEPTED)
                     }
-                    .with(TwoPCChange::change) {
+                    .with(TwoPCTransition::change) {
                         isEqualTo(change)
                     }
                 expectThat(changes[1]).isA<AddUserChange>()
@@ -432,13 +439,13 @@ class TwoPCSpec : IntegrationTestBase() {
                 listOf(3, 5),
                 signalListeners = List(3) {
                     it to mapOf(
-                        Signal.ConsensusFollowerChangeAccepted to firstChangeListener,
+                        Signal.ConsensusFollowerTransitionAccepted to firstChangeListener,
                         Signal.ConsensusLeaderElected to leaderElectedListener,
                     )
                 }.toMap()
                         + List(5) {
                     it + 3 to mapOf(
-                        Signal.ConsensusFollowerChangeAccepted to secondChangeListener,
+                        Signal.ConsensusFollowerTransitionAccepted to secondChangeListener,
                         Signal.ConsensusLeaderElected to leaderElectedListener,
                     )
                 }.toMap()
@@ -476,8 +483,8 @@ class TwoPCSpec : IntegrationTestBase() {
                 "firstUserName",
                 "firstGroup",
                 peersets = listOf(
-                    ChangePeersetInfo(0, firstChange.toHistoryEntry(0).getId()),
-                    ChangePeersetInfo(1, secondChange.toHistoryEntry(1).getId()),
+                    ChangePeersetInfo(0, ChangeApplyingTransition(firstChange).toHistoryEntry(0).getId()),
+                    ChangePeersetInfo(1, ChangeApplyingTransition(secondChange).toHistoryEntry(1).getId()),
                 ),
             )
 
@@ -491,9 +498,9 @@ class TwoPCSpec : IntegrationTestBase() {
             askAllForChanges(apps.getPeers(0).values).forEach {
                 expectThat(it.size).isEqualTo(3)
                 expectThat(it[0]).isEqualTo(firstChange)
-                expectThat(it[1]).isA<TwoPCChange>()
-                    .with(TwoPCChange::change) { isEqualTo(lastChange) }
-                    .with(TwoPCChange::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
+                expectThat(it[1]).isA<TwoPCTransition>()
+                    .with(TwoPCTransition::change) { isEqualTo(lastChange) }
+                    .with(TwoPCTransition::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
                 expectThat(it[2]).isA<AddRelationChange>()
                     .with(AddRelationChange::from) { isEqualTo("firstUserName") }
                     .with(AddRelationChange::to) { isEqualTo("firstGroup") }
@@ -502,9 +509,9 @@ class TwoPCSpec : IntegrationTestBase() {
             askAllForChanges(apps.getPeers(1).values).forEach {
                 expectThat(it.size).isEqualTo(3)
                 expectThat(it[0]).isEqualTo(secondChange)
-                expectThat(it[1]).isA<TwoPCChange>()
-                    .with(TwoPCChange::change) { isEqualTo(lastChange) }
-                    .with(TwoPCChange::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
+                expectThat(it[1]).isA<TwoPCTransition>()
+                    .with(TwoPCTransition::change) { isEqualTo(lastChange) }
+                    .with(TwoPCTransition::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
                 expectThat(it[2]).isA<AddRelationChange>()
                     .with(AddRelationChange::from) { isEqualTo("firstUserName") }
                     .with(AddRelationChange::to) { isEqualTo("firstGroup") }
@@ -524,8 +531,17 @@ class TwoPCSpec : IntegrationTestBase() {
             accept(ContentType.Application.Json)
         }
 
+    private suspend fun askForTransitions(peer: PeerAddress) =
+        testHttpClient.get<Transitions>("http://${peer.address}/transitions") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }
+
     private suspend fun askAllForChanges(peerAddresses: Collection<PeerAddress>) =
         peerAddresses.map { askForChanges(it) }
+
+    private suspend fun askAllForTransitions(peerAddresses: Collection<PeerAddress>) =
+        peerAddresses.map { askForTransitions(it) }
 
     private fun change(vararg peersetIds: Int) = AddUserChange(
         "userName",

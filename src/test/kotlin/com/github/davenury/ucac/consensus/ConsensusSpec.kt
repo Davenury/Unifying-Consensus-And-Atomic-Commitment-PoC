@@ -76,7 +76,7 @@ class ConsensusSpec : IntegrationTestBase() {
             signalListeners = (0..4).associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
-                    Signal.ConsensusFollowerChangeAccepted to peerApplyChange
+                    Signal.ConsensusFollowerTransitionAccepted to peerApplyChange
                 )
             }
         )
@@ -103,8 +103,10 @@ class ConsensusSpec : IntegrationTestBase() {
             }
         }
 
+        val lastTransition = askForTransitions(apps.getPeer(0, 0)).last()
+
         // when: peer2 executes change
-        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(0).getId())
+        val change2 = createChange(1, userName = "userName2", parentId = lastTransition.toHistoryEntry(0).getId())
         expectCatching {
             executeChange("${apps.getPeer(0, 1).address}/v2/change/sync", change2)
         }.isSuccess()
@@ -227,7 +229,6 @@ class ConsensusSpec : IntegrationTestBase() {
             that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress.address)
         }
     }
-
 
     @Test
     fun `less than half peers failed`(): Unit = runBlocking {
@@ -396,7 +397,7 @@ class ConsensusSpec : IntegrationTestBase() {
         val signalListener = mapOf(
             Signal.ConsensusAfterProposingChange to leaderAction,
             Signal.ConsensusLeaderElected to peerLeaderElected,
-            Signal.ConsensusFollowerChangeAccepted to peerApplyChange,
+            Signal.ConsensusFollowerTransitionAccepted to peerApplyChange,
             Signal.ConsensusFollowerHeartbeatReceived to ignoreHeartbeatAfterProposingChange
         )
 
@@ -462,7 +463,7 @@ class ConsensusSpec : IntegrationTestBase() {
                 logger.info("Arrived at election ${it.subject.getPeerName()}")
                 electionPhaser.arrive()
             },
-            Signal.ConsensusFollowerChangeAccepted to SignalListener {
+            Signal.ConsensusFollowerTransitionAccepted to SignalListener {
                 logger.info("Arrived at apply ${it.subject.getPeerName()}")
                 changePhaser.arrive()
             }
@@ -565,7 +566,7 @@ class ConsensusSpec : IntegrationTestBase() {
     }
 
     @Test
-    fun `network divide on half and then merge`(): Unit = runBlocking {
+    fun `network divide in half and then merge`(): Unit = runBlocking {
         var peersWithoutLeader = 4
 
         var isNetworkDivided = false
@@ -591,7 +592,7 @@ class ConsensusSpec : IntegrationTestBase() {
                     }
                 }
             },
-            Signal.ConsensusFollowerChangeAccepted to SignalListener {
+            Signal.ConsensusFollowerTransitionAccepted to SignalListener {
                 if (change1Phaser.phase == 0) {
                     logger.info("Arrived at change 1 ${it.subject.getPeerName()}")
                     change1Phaser.arrive()
@@ -843,7 +844,7 @@ class ConsensusSpec : IntegrationTestBase() {
 
         val firstPeerSignals = mapOf(
             Signal.BeforeSendingApply to firstLeaderAction,
-            Signal.ConsensusFollowerChangeAccepted to raftPeersAction,
+            Signal.ConsensusFollowerTransitionAccepted to raftPeersAction,
             Signal.ConsensusLeaderElected to leaderElectedAction,
             Signal.OnHandlingElectBegin to SignalListener {
                 if (isSecondGPAC.get()) {
@@ -855,7 +856,7 @@ class ConsensusSpec : IntegrationTestBase() {
         val peerSignals =
             mapOf(
                 Signal.ConsensusLeaderElected to leaderElectedAction,
-                Signal.ConsensusFollowerChangeAccepted to raftPeersAction,
+                Signal.ConsensusFollowerTransitionAccepted to raftPeersAction,
                 Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") }
             )
 
@@ -961,6 +962,12 @@ class ConsensusSpec : IntegrationTestBase() {
 
     private suspend fun askForChanges(peerAddress: PeerAddress) =
         testHttpClient.get<Changes>("http://${peerAddress.address}/v2/change") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }
+
+    private suspend fun askForTransitions(peerAddress: PeerAddress) =
+        testHttpClient.get<Transitions>("http://${peerAddress.address}/transitions") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }

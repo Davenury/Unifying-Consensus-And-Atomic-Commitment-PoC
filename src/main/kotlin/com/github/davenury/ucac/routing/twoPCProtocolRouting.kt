@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Change
+import com.github.davenury.common.Transition
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import io.ktor.application.*
 import io.ktor.http.*
@@ -12,12 +13,12 @@ fun Application.twoPCRouting(twoPC: TwoPC) {
     // Starting point for a Ktor app:
     routing {
         post("/2pc/accept") {
-            val message = call.receive<Change>()
+            val message = call.receive<Transition>()
             twoPC.handleAccept(message)
             call.respond(HttpStatusCode.OK)
         }
         post("/2pc/decision") {
-            val message = call.receive<Change>()
+            val message = call.receive<Transition>()
             twoPC.handleDecision(message)
             call.respond(HttpStatusCode.OK)
         }

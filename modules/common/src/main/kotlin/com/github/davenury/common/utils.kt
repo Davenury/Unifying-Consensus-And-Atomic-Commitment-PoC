@@ -60,7 +60,7 @@ object Metrics {
             .register(meterRegistry)
             .record(timeElapsed)
     }
-    
+
     fun refreshLastHeartbeat() {
         lastHearbeat = Instant.now()
     }

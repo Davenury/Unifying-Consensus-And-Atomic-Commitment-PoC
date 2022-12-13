@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory
 import strikt.api.expectThat
 import strikt.assertions.*
 import java.io.File
-import java.time.Duration
 import java.util.concurrent.Phaser
 
 @Suppress("HttpUrlsUsage")
@@ -41,7 +40,7 @@ class MixedChangesSpec : IntegrationTestBase() {
     @Test
     fun `try to execute two following changes in the same time, first GPAC, then Raft`(): Unit = runBlocking {
         val change = change(0, 1)
-        val secondChange = change(mapOf(0 to change.toHistoryEntry(0).getId()))
+        val secondChange = change(mapOf(0 to ChangeApplyingTransition(change).toHistoryEntry(0).getId()))
 
         val applyEndPhaser = Phaser(6)
         val beforeSendingApplyPhaser = Phaser(1)
@@ -64,7 +63,7 @@ class MixedChangesSpec : IntegrationTestBase() {
             Signal.BeforeSendingApply to SignalListener {
                 beforeSendingApplyPhaser.arrive()
             },
-            Signal.ConsensusFollowerChangeAccepted to SignalListener {
+            Signal.ConsensusFollowerTransitionAccepted to SignalListener {
                 if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
             }
         )
@@ -109,7 +108,7 @@ class MixedChangesSpec : IntegrationTestBase() {
     fun `try to execute two following changes in the same time (two different peers), first GPAC, then Raft`(): Unit =
         runBlocking {
             val change = change(0, 1)
-            val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
+            val secondChange = change(mapOf(1 to ChangeApplyingTransition(change).toHistoryEntry(0).getId()))
 
             val applyEndPhaser = Phaser(6)
             val beforeSendingApplyPhaser = Phaser(1)
@@ -132,7 +131,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                 Signal.BeforeSendingApply to SignalListener {
                     beforeSendingApplyPhaser.arrive()
                 },
-                Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                Signal.ConsensusFollowerTransitionAccepted to SignalListener {
                     if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }
             )
@@ -175,7 +174,7 @@ class MixedChangesSpec : IntegrationTestBase() {
     @Test
     fun `try to execute two following changes in the same time, first 2PC, then Raft`(): Unit = runBlocking {
         val change = change(0, 1)
-        val secondChange = change(mapOf(0 to change.toHistoryEntry(0).getId()))
+        val secondChange = change(mapOf(0 to ChangeApplyingTransition(change).toHistoryEntry(0).getId()))
 
 
         val applyEndPhaser = Phaser(1)
@@ -199,7 +198,7 @@ class MixedChangesSpec : IntegrationTestBase() {
             Signal.TwoPCOnChangeAccepted to SignalListener {
                 beforeSendingApplyPhaser.arrive()
             },
-            Signal.ConsensusFollowerChangeAccepted to SignalListener {
+            Signal.ConsensusFollowerTransitionAccepted to SignalListener {
                 if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
             }
         )
@@ -244,7 +243,7 @@ class MixedChangesSpec : IntegrationTestBase() {
     fun `try to execute two following changes in the same time (two different peers), first 2PC, then Raft`(): Unit =
         runBlocking {
             val change = change(0, 1)
-            val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
+            val secondChange = change(mapOf(1 to ChangeApplyingTransition(change).toHistoryEntry(0).getId()))
 
             val beforeSendingApplyPhaser = Phaser(1)
             val applyEndPhaser = Phaser(1)
@@ -266,7 +265,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                 Signal.TwoPCOnChangeAccepted to SignalListener {
                     beforeSendingApplyPhaser.arrive()
                 },
-                Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                Signal.ConsensusFollowerTransitionAccepted to SignalListener {
                     if (it.change?.id == change.id){
                         apply2PCPhaser.arrive()
                     }
@@ -318,7 +317,7 @@ class MixedChangesSpec : IntegrationTestBase() {
     fun `try to execute two following changes, first 2PC, then Raft`(): Unit =
         runBlocking {
             val change = change(0, 1)
-            val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
+            val secondChange = change(mapOf(1 to ChangeApplyingTransition(change).toHistoryEntry(0).getId()))
 
 
             val applyEndPhaser = Phaser(1)
@@ -338,7 +337,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                     applyEndPhaser.arrive()
                 },
                 Signal.ConsensusLeaderElected to leaderElected,
-                Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                Signal.ConsensusFollowerTransitionAccepted to SignalListener {
                     if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }
             )
@@ -410,3 +409,4 @@ class MixedChangesSpec : IntegrationTestBase() {
     }
 
 }
+

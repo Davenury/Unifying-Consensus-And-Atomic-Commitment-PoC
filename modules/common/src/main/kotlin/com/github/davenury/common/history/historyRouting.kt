@@ -1,8 +1,6 @@
 package com.github.davenury.common.history
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.Changes
-import com.github.davenury.common.ErrorMessage
+import com.github.davenury.common.*
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.response.*
@@ -16,7 +14,9 @@ fun Application.historyRouting(history: History) {
             get {
                 history.getCurrentEntry()
                     .takeIf { it != InitialHistoryEntry }
-                    ?.let { Change.fromHistoryEntry(it) }
+                    ?.let { Transition.fromHistoryEntry(it) }
+                    ?.let { it as? ChangeApplyingTransition }
+                    ?.change
                     ?.let { call.respond(it) }
                     ?: call.respond(
                         HttpStatusCode.NotFound,
@@ -27,6 +27,11 @@ fun Application.historyRouting(history: History) {
         route("/changes") {
             get {
                 call.respond(Changes.fromHistory(history))
+            }
+        }
+        route("/transitions") {
+            get {
+                call.respond(Transitions.fromHistory(history))
             }
         }
     }

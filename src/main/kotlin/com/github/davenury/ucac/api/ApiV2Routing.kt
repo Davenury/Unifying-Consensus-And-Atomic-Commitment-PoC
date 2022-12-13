@@ -62,6 +62,17 @@ fun Application.apiV2Routing(
                     ),
                 )
             }
+
+            else -> {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ChangeCreationResponse(
+                        "Other status: ${result.status}",
+                        detailedMessage = result.detailedMessage,
+                        changeStatus = ChangeCreationStatus.UNKNOWN,
+                    ),
+                )
+            }
         }
     }
 
@@ -94,7 +105,7 @@ fun Application.apiV2Routing(
     routing {
         post("/v2/change/async") {
             val processorJob = createProcessorJob(call)
-            service.addChange(processorJob)
+            service.addJob(processorJob)
 
             call.respond(HttpStatusCode.Accepted)
         }
@@ -103,7 +114,7 @@ fun Application.apiV2Routing(
             val processorJob = createProcessorJob(call)
             val timeout = call.request.queryParameters["timeout"]?.let { Duration.parse(it) }
 
-            val result: ChangeResult? = service.addChangeSync(processorJob, timeout)
+            val result: ChangeResult? = service.addJobSync(processorJob, timeout)
             respondChangeResult(result, call)
         }
 

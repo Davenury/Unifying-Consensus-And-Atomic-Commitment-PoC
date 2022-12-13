@@ -1,7 +1,9 @@
 package com.github.davenury.ucac.consensus.ratis
 
 import com.github.davenury.common.Change
+import com.github.davenury.common.ChangeApplyingTransition
 import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.Transition
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.RatisConfig
 import com.github.davenury.ucac.consensus.ConsensusProtocol
@@ -29,20 +31,14 @@ class HistoryRatisNode(
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
-    @Deprecated("use proposeChangeAsync")
-    override suspend fun proposeChange(change: Change): ChangeResult {
-        val result = applyTransaction(change.toHistoryEntry(peersetId).serialize())
-        return if (result == "ERROR") ChangeResult(ChangeResult.Status.CONFLICT) else ChangeResult(ChangeResult.Status.SUCCESS)
-    }
-
-    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
+    override suspend fun proposeTransitionAsync(transition: Transition): CompletableFuture<ChangeResult> {
 
         val cf = CompletableFuture<ChangeResult>()
-        val changeId = change.id
+        val changeId = transition.change.id
         changeIdToCompletableFuture[changeId] = cf
 
         GlobalScope.launch(MDCContext()) {
-            val result = applyTransaction(change.toHistoryEntry(peersetId).serialize())
+            val result = applyTransaction(transition.toHistoryEntry(peersetId).serialize())
             val changeResult = if (result == "ERROR") {
                 ChangeResult(ChangeResult.Status.CONFLICT)
             } else {
