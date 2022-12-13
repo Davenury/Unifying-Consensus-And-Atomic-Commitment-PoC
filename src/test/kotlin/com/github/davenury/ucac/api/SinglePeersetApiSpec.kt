@@ -2,6 +2,7 @@ package com.github.davenury.ucac.api
 
 
 import com.github.davenury.common.AddUserChange
+import com.github.davenury.common.ChangePeersetInfo
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.common.objectMapper
 import com.github.davenury.ucac.utils.ApplicationTestcontainersEnvironment
@@ -47,14 +48,15 @@ class SinglePeersetApiSpec {
     @Test
     fun `sync api`(): Unit = runBlocking {
         val change = AddUserChange(
-            InitialHistoryEntry.getId(),
+            listOf(
+                ChangePeersetInfo(0, InitialHistoryEntry.getId())
+            ),
             "test user",
-            listOf(),
         )
 
         logger.info("Sending change $change")
 
-        val peer0Address = environment.getAddress(1, 1)
+        val peer0Address = environment.getAddress(0, 0)
         val response = http.post<HttpResponse>("http://${peer0Address}/v2/change/sync") {
             contentType(ContentType.Application.Json)
             body = change

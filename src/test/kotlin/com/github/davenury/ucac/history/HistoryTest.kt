@@ -73,7 +73,7 @@ internal class HistoryTest {
     fun `serialize entry`(): Unit = runBlocking {
         val entry = IntermediateHistoryEntry("test1", "parent")
 
-        assert(entry.serialize() == """{"content":"test1","parentId":"parent"}""")
+        assert(entry.serialize() == """{"parentId":"parent","content":"test1"}""")
     }
 
     @Test
@@ -103,9 +103,9 @@ internal class HistoryTest {
     @Test
     fun `deserialize entry with wrong order`(): Unit = runBlocking {
         expectThrows<IllegalArgumentException> {
-            HistoryEntry.deserialize("""{"parentId":"parent","content":"content"}""")
+            HistoryEntry.deserialize("""{"content":"content","parentId":"parent"}""")
         }
-        HistoryEntry.deserialize("""{"content":"content","parentId":"parent"}""")
+        HistoryEntry.deserialize("""{"parentId":"parent","content":"content"}""")
     }
 
     @Test

@@ -1,6 +1,7 @@
-package com.github.davenury.ucac.commitment.TwoPC
+package com.github.davenury.ucac.commitment.twopc
 
 import com.github.davenury.common.Change
+import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -15,48 +16,46 @@ data class ResponsesWithErrorAggregation<K>(
 )
 
 interface TwoPCProtocolClient {
-    suspend fun sendAccept(peers: List<String>, change: Change): List<Boolean>
-    suspend fun sendDecision(peers: List<String>, decisionChange: Change): List<Boolean>
+    suspend fun sendAccept(peers: List<PeerAddress>, change: Change): List<Boolean>
+    suspend fun sendDecision(peers: List<PeerAddress>, decisionChange: Change): List<Boolean>
 
-    suspend fun askForChangeStatus(peer: String, change: Change): Change?
+    suspend fun askForChangeStatus(peer: PeerAddress, change: Change): Change?
 }
 
 class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
 
 
-    override suspend fun sendAccept(peers: List<String>, change: Change): List<Boolean> =
+    override suspend fun sendAccept(peers: List<PeerAddress>, change: Change): List<Boolean> =
         sendMessages(peers, change, "2pc/accept")
 
 
-    override suspend fun sendDecision(peers: List<String>, decisionChange: Change): List<Boolean> =
+    override suspend fun sendDecision(peers: List<PeerAddress>, decisionChange: Change): List<Boolean> =
         sendMessages(peers, decisionChange, "2pc/decision")
 
-    override suspend fun askForChangeStatus(peer: String, change: Change): Change? {
-        val url = "http://${peer}/2pc/ask/${change.toHistoryEntry().getId()}"
-        logger.info("$id - Sending to: $url")
+    override suspend fun askForChangeStatus(peer: PeerAddress, change: Change): Change? {
+        val url = "http://${peer.address}/2pc/ask/${change.id}"
+        logger.info("Sending to: $url")
         return try {
             httpClient.get<Change?>(url) {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }
         } catch (e: Exception) {
-            logger.error("$id - Error while evaluating response from ${peer}: $e", e)
+            logger.error("Error while evaluating response from ${peer}: $e", e)
             null
         }
     }
 
-
-    private suspend fun <T> sendMessages(peers: List<String>, body: T, path: String) =
-        sendRequests(peers.map { Pair(it, body) }, path).map { it ?: false }
-
+    private suspend fun <T> sendMessages(peers: List<PeerAddress>, body: T, path: String): List<Boolean> =
+        sendRequests(peers.map { Pair(it, body) }, path)
 
     private suspend inline fun <T> sendRequests(
-        peersWithBody: List<Pair<String, T>>,
+        peersWithBody: List<Pair<PeerAddress, T>>,
         urlPath: String
     ): List<Boolean> =
         peersWithBody.map {
             CoroutineScope(Dispatchers.IO).async {
-                send2PCMessage<T, Unit>("http://${it.first}/$urlPath", it.second)
+                send2PCMessage<T, Unit>("http://${it.first.address}/$urlPath", it.second)
             }.let { coroutine ->
                 Pair(it.first, coroutine)
             }
@@ -65,13 +64,12 @@ class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
                 it.second.await()
                 true
             } catch (e: Exception) {
-                logger.error("$id - Error while evaluating response from ${it.first}: $e", e)
+                logger.error("Error while evaluating response from ${it.first}", e)
                 false
             }
 
             result
         }
-
 
     private suspend inline fun <Message, reified Response> send2PCMessage(
         url: String,
@@ -85,8 +83,7 @@ class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
         }
     }
 
-
     companion object {
-        private val logger = LoggerFactory.getLogger("2PCProtocolClient")
+        private val logger = LoggerFactory.getLogger("2pc-client")
     }
 }
