@@ -64,23 +64,29 @@ func ServiceName(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
+func StatefulSetName(config PeerConfig) string {
+	return fmt.Sprintf("peer%s-peerset%s", config.PeerId, config.PeersetId)
+}
 func DeploymentName(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-dep", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
-func GenerateServicesForPeers(peersInPeerset []int, startPort int) string {
-	return generateServicesForPeers(peersInPeerset, startPort, true)
+func GenerateServicesForPeers(peersInPeerset []int, startPort int, addressFunc func(PeerConfig) string) string {
+	return generateServicesForPeers(peersInPeerset, startPort, true, addressFunc)
 }
 
-func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int) string {
-	return generateServicesForPeers(peersInPeerset, port, false)
+func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int, addressFunc func(PeerConfig) string) string {
+	return generateServicesForPeers(peersInPeerset, port, false, addressFunc)
 }
 
+func StatefulSetPodAddress(config PeerConfig) string {
+	return fmt.Sprintf("%s-0", StatefulSetName(config))
+}
 func ServiceAddress(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
-func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool) string {
+func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool, addressFunc func(PeerConfig) string) string {
 
 	var resultSb strings.Builder
 	for idx, peersNumber := range peersInPeerset {
@@ -91,7 +97,7 @@ func generateServicesForPeers(peersInPeerset []int, startPort int, increment boo
 			if increment {
 				port = port + i
 			}
-			sb.WriteString(fmt.Sprintf("%s:%d,", ServiceAddress(PeerConfig{
+			sb.WriteString(fmt.Sprintf("%s:%d,", addressFunc(PeerConfig{
 				PeerId:    strconv.Itoa(i),
 				PeersetId: strconv.Itoa(idx),
 			}), port))

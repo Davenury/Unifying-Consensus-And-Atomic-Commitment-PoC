@@ -21,6 +21,7 @@ var deployNamespace string
 var deployCreateNamespace bool
 var waitForReadiness bool
 var imageName string
+var deployAsStatefulSet bool
 
 func CreateDeployCommand() *cobra.Command {
 
@@ -29,8 +30,16 @@ func CreateDeployCommand() *cobra.Command {
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
 
-			ratisPeers := GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort)
-			gpacPeers := GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort)
+			var addressFunc func(PeerConfig) string
+
+			if deployAsStatefulSet {
+				addressFunc = StatefulSetPodAddress
+			} else {
+				addressFunc = ServiceAddress
+			}
+
+			ratisPeers := GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort, addressFunc)
+			gpacPeers := GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort, addressFunc)
 			ratisGroups := make([]string, len(numberOfPeersInPeersets))
 			for i := 0; i < len(numberOfPeersInPeersets); i++ {
 				ratisGroups[i] = uuid.New().String()
@@ -53,11 +62,14 @@ func CreateDeployCommand() *cobra.Command {
 						PeersetsConfig: numberOfPeersInPeersets,
 					}
 
-					deploySinglePeerService(deployNamespace, peerConfig, ratisPort+i)
+					deploySinglePeerConfigMap(deployNamespace, peerConfig, ratisPeers, gpacPeers, addressFunc)
 
-					deploySinglePeerConfigMap(deployNamespace, peerConfig, ratisPeers, gpacPeers)
-
-					deploySinglePeerDeployment(deployNamespace, peerConfig)
+					if deployAsStatefulSet {
+						deployStatefulSet(deployNamespace, peerConfig)
+					} else {
+						deploySinglePeerService(deployNamespace, peerConfig, ratisPort+i)
+						deploySinglePeerDeployment(deployNamespace, peerConfig)
+					}
 
 					fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
 				}
@@ -74,6 +86,7 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().StringVarP(&deployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
 	deployCommand.Flags().BoolVarP(&waitForReadiness, "wait-for-readiness", "", false, "Wait for deployment to be ready")
 	deployCommand.Flags().StringVarP(&imageName, "image", "", "davenury/ucac", "A Docker image to be used in the deployment")
+	deployCommand.Flags().BoolVarP(&deployAsStatefulSet, "as-statefulset", "", false, "Determines if pods should be deployed as StatefulSets, changes networking dns by pods, not services")
 
 	return deployCommand
 
@@ -113,6 +126,43 @@ func anyPodNotReady(expectedPeers int) bool {
 	return totalCount != expectedPeers || notReadyCount > 0
 }
 
+func deployStatefulSet(namespace string, config PeerConfig) {
+	clientset, err := GetClientset()
+	if err != nil {
+		panic(err)
+	}
+
+	statefulSetClient := clientset.AppsV1().StatefulSets(namespace)
+	oneReplicaPointer := int32(1)
+
+	statefulSet := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: StatefulSetName(config),
+			Namespace: namespace,
+			Labels: map[string]string{
+				"project": "ucac",
+			},
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &oneReplicaPointer,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"peerId": config.PeerId,
+					"peersetId": config.PeersetId,
+				},
+			},
+			Template: createPodTemplate(config, StatefulSetPodAddress),
+		},
+	}
+
+	fmt.Println("Creating StatefulSet...")
+	result, err := statefulSetClient.Create(context.Background(), statefulSet, metav1.CreateOptions{})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Created StatefulSet: %q.\n", result.GetObjectMeta().GetName())
+}
+
 func deploySinglePeerDeployment(namespace string, peerConfig PeerConfig) {
 
 	clientset, err := GetClientset()
@@ -140,7 +190,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig PeerConfig) {
 					"peersetId": peerConfig.PeersetId,
 				},
 			},
-			Template: createPodTemplate(peerConfig),
+			Template: createPodTemplate(peerConfig, ServiceAddress),
 		},
 	}
 
@@ -153,7 +203,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig PeerConfig) {
 
 }
 
-func createPodTemplate(peerConfig PeerConfig) apiv1.PodTemplateSpec {
+func createPodTemplate(peerConfig PeerConfig, addressFunc func(PeerConfig) string) apiv1.PodTemplateSpec {
 	containerName := ContainerName(peerConfig)
 
 	return apiv1.PodTemplateSpec{
@@ -172,6 +222,7 @@ func createPodTemplate(peerConfig PeerConfig) apiv1.PodTemplateSpec {
 			},
 		},
 		Spec: apiv1.PodSpec{
+			Hostname: addressFunc(peerConfig),
 			Containers: []apiv1.Container{
 				createSingleContainer(containerName, peerConfig),
 			},
@@ -212,7 +263,7 @@ func createSingleContainer(containerName string, peerConfig PeerConfig) apiv1.Co
 	}
 }
 
-func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig, ratisPeers string, gpacPeers string) {
+func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig, ratisPeers string, gpacPeers string, addressFunc func(PeerConfig) string) {
 	clientset, err := GetClientset()
 	if err != nil {
 		panic(err)
@@ -232,7 +283,7 @@ func deploySinglePeerConfigMap(namespace string, peerConfig PeerConfig, ratisPee
 		},
 		Data: map[string]string{
 			"CONFIG_FILE":            "application-kubernetes.conf",
-			"config_host":            ServiceAddress(peerConfig),
+			"config_host":            addressFunc(peerConfig),
 			"config_port":            "8080",
 			"config_peersetId":       peerConfig.PeersetId,
 			"config_peerId":          peerConfig.PeerId,
