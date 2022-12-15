@@ -206,6 +206,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig PeerConfig) {
 func createPodTemplate(peerConfig PeerConfig, addressFunc func(PeerConfig) string) apiv1.PodTemplateSpec {
 	containerName := ContainerName(peerConfig)
 
+	tr := true
 	return apiv1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: containerName,
@@ -223,6 +224,7 @@ func createPodTemplate(peerConfig PeerConfig, addressFunc func(PeerConfig) strin
 		},
 		Spec: apiv1.PodSpec{
 			Hostname: addressFunc(peerConfig),
+			SetHostnameAsFQDN: &tr,
 			Containers: []apiv1.Container{
 				createSingleContainer(containerName, peerConfig),
 			},
