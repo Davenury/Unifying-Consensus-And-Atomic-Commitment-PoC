@@ -1,16 +1,12 @@
 package com.github.davenury.test
 
-import com.github.davenury.common.AddUserChange
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.common.Notification
+import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.Changes
 import com.github.davenury.tests.strategies.GetPeersStrategy
 import com.github.davenury.tests.strategies.RandomPeersWithDelayOnConflictStrategy
 import io.mockk.*
 import kotlinx.coroutines.*
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import strikt.api.expectCatching
 import strikt.api.expectThat
@@ -19,10 +15,8 @@ import strikt.assertions.isSuccess
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.Lock
-import java.util.concurrent.locks.ReentrantLock
 
 class ChangesTest {
 
@@ -165,10 +159,14 @@ class ChangesTest {
 
         val changes = Changes(peers, DummySender(peers, shouldNotify = false), strategy, ownAddress)
 
+        val singleChange = AddUserChange(
+            listOf(ChangePeersetInfo(0, "a2fasda2f")),
+            "userName"
+        )
         repeat(3) {
             runBlocking {
                 changes.handleNotification(Notification(
-                    AddUserChange("parentId", "userName", listOf("localhost0:8080")),
+                    singleChange,
                     ChangeResult(ChangeResult.Status.SUCCESS)
                 ))
             }
@@ -180,17 +178,15 @@ class ChangesTest {
     private fun areChangesValid(changes: List<Pair<String, Change>>): Boolean {
         val mapOfChanges = (0..changes.size).associateWith { InitialHistoryEntry.getId() }.toMutableMap()
         changes.forEach { (address, change) ->
-            val peersetId = address.extractPeersetIdFromAddress()
-            if (change.parentId != mapOfChanges[peersetId]) {
-                println("ParentId differs for change in peerset $peersetId - parentId: ${change.parentId}, expected parent id: ${mapOfChanges[peersetId]}")
-                return false
+            change.peersets.forEach { (peersetId, parentId) ->
+                if (parentId != mapOfChanges[peersetId]) {
+                    println("ParentId differs for change in peerset $peersetId - parentId: ${parentId}, expected parent id: ${mapOfChanges[peersetId]}")
+                    return false
+                }
+
+                mapOfChanges[peersetId] = change.toHistoryEntry(peersetId).getId()
             }
-            (change.peers.map { it.extractPeersetIdFromAddress() } + peersetId)
-                .forEach { mapOfChanges[it] = change.toHistoryEntry().getId() }
         }
         return true
     }
-
-    private fun String.extractPeersetIdFromAddress(): Int =
-        this.split(":").first().chunked(1).last().toInt()
 }

@@ -64,8 +64,7 @@ class TestNotificationService {
             post("/api/v1/notification") {
                 try {
                     val notification = call.receive<Notification>()
-                    val peerAddress = call.request.queryParameters["sender_address"]!!
-                    changes.handleNotification(notification, peerAddress)
+                    changes.handleNotification(notification)
                     call.respond(HttpStatusCode.OK)
                 } catch (e: Exception) {
                     logger.error("Error while handling notification", e)

@@ -20,12 +20,11 @@ class DummySender(
     val mutex = Mutex()
 
     override suspend fun executeChange(address: String, change: Change): ChangeState {
-        val enrichedChange = change.withAddress(address)
         mutex.withLock {
-            appearedChanges.add(Pair(address, enrichedChange))
+            appearedChanges.add(Pair(address, change))
         }
         if (shouldNotify) {
-            notify(enrichedChange)
+            notify(change)
         }
         phaser?.arrive()
         return ChangeState.ACCEPTED
