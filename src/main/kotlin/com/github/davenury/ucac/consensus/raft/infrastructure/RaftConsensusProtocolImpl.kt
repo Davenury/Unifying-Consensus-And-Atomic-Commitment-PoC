@@ -185,7 +185,7 @@ class RaftConsensusProtocolImpl(
         val prevLogIndex = heartbeat.prevLogIndex
         val prevLogTerm = heartbeat.prevLogTerm
 
-        logger.debug("Received heartbeat $heartbeat")
+        logger.info("Received heartbeat $heartbeat")
 
         if (term < currentTerm) {
             logger.info("The received heartbeat has an old term ($term vs $currentTerm)")

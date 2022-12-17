@@ -31,12 +31,12 @@ func CreateDeployCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 
 			var addressFunc func(PeerConfig) string
-
-			if deployAsStatefulSet {
-				addressFunc = StatefulSetPodAddress
-			} else {
-				addressFunc = ServiceAddress
-			}
+			addressFunc = ServiceAddress
+			//if deployAsStatefulSet {
+			//	addressFunc = StatefulSetPodAddress
+			//} else {
+			//	addressFunc = ServiceAddress
+			//}
 
 			ratisPeers := GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort, addressFunc)
 			gpacPeers := GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort, addressFunc)
@@ -63,11 +63,11 @@ func CreateDeployCommand() *cobra.Command {
 					}
 
 					deploySinglePeerConfigMap(deployNamespace, peerConfig, ratisPeers, gpacPeers, addressFunc)
+					deploySinglePeerService(deployNamespace, peerConfig, ratisPort+i)
 
 					if deployAsStatefulSet {
 						deployStatefulSet(deployNamespace, peerConfig)
 					} else {
-						deploySinglePeerService(deployNamespace, peerConfig, ratisPort+i)
 						deploySinglePeerDeployment(deployNamespace, peerConfig)
 					}
 
@@ -151,7 +151,7 @@ func deployStatefulSet(namespace string, config PeerConfig) {
 					"peersetId": config.PeersetId,
 				},
 			},
-			Template: createPodTemplate(config, StatefulSetPodAddress),
+			Template: createPodTemplate(config, ServiceAddress),
 		},
 	}
 
