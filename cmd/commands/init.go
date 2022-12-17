@@ -39,13 +39,47 @@ func initCommand() {
 	}
 
 	// install prometheus
-	installChart(initNamespace, "prometheus-community", "prometheus", "prometheus")
+	installChart(initNamespace, "prometheus-community", "prometheus", "prometheus", nil)
+
+	grafanaValues := map[string]interface{}{
+		"adminPassword": "admin123",
+		"resources": map[string]interface{}{
+			"limits": map[string]string{
+				"cpu": "512m",
+				"memory": "512Mi",
+			},
+			"requests": map[string]string{
+				"cpu": "256m",
+				"memory": "256Mi",
+			},
+		},
+		"datasources": map[string]interface{}{
+			"datasources.yaml": map[string]interface{}{
+				"apiVersion": 1,
+				"datasources": []map[string]interface{}{
+					{
+						"name": "Prometheus",
+						"url": fmt.Sprintf("http://prometheus-server.%s.svc.cluster.local:80", initNamespace),
+						"type": "prometheus",
+						"isDefault": true,
+					},
+				},
+			},
+		},
+		//"dashboards": map[string]interface{}{
+		//	"default": map[string]interface{}{
+		//		"ucac-dashboard": map[string]interface{}{
+		//			"file": "./dashboard.json",
+		//		},
+		//	},
+		//},
+	}
 
 	// install grafana
-	installChart(initNamespace, "grafana", "grafana", "grafana")
+	installChart(initNamespace, "grafana", "grafana", "grafana", grafanaValues)
 }
 
-func installChart(namespace string, repoName string, chartName string, releaseName string) {
+func installChart(namespace string, repoName string, chartName string, releaseName string, values map[string]interface{}) {
 	actionConfig := new(action.Configuration)
 	if err := actionConfig.Init(settings.RESTClientGetter(), namespace, "", log.Printf); err != nil {
 		log.Fatal(err)
@@ -63,8 +97,9 @@ func installChart(namespace string, repoName string, chartName string, releaseNa
 		log.Fatal(err)
 	}
 
+
 	client.Namespace = namespace
-	release, err := client.Run(cr, nil)
+	release, err := client.Run(cr, values)
 	if err != nil {
 		log.Fatal(err)
 	}
