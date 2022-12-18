@@ -197,7 +197,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
     @Test
     fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
         val phaserPeer1 = Phaser(2)
-        val phaserOtherPeers = Phaser(4)
+        val phaserOtherPeers = Phaser(5)
         val leaderElectedPhaser = Phaser(4)
 
         val proposedChange = AddGroupChange(

@@ -663,10 +663,9 @@ class ConsensusSpec : IntegrationTestBase() {
         logger.info("After change 1")
 
         firstHalf.forEach {
-            logger.debug("Checking $it")
-
             val proposedChanges = askForProposedChanges(it)
             val acceptedChanges = askForAcceptedChanges(it)
+            logger.debug("Checking $it proposed: $proposedChanges accepted: $acceptedChanges")
             expect {
                 that(proposedChanges.size).isEqualTo(1)
                 that(acceptedChanges.size).isEqualTo(0)
@@ -678,10 +677,9 @@ class ConsensusSpec : IntegrationTestBase() {
         }
 
         secondHalf.forEach {
-            logger.debug("Checking $it")
-
             val proposedChanges = askForProposedChanges(it)
             val acceptedChanges = askForAcceptedChanges(it)
+            logger.debug("Checking $it proposed: $proposedChanges accepted: $acceptedChanges")
             expect {
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
@@ -704,10 +702,9 @@ class ConsensusSpec : IntegrationTestBase() {
         logger.info("After change 2")
 
         peerAddresses.forEach {
-            logger.debug("Checking $it")
-
             val proposedChanges = askForProposedChanges(it)
             val acceptedChanges = askForAcceptedChanges(it)
+            logger.debug("Checking $it proposed: $proposedChanges accepted: $acceptedChanges")
             expect {
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)

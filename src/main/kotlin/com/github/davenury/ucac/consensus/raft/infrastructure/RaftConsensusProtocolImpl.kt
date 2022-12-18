@@ -49,6 +49,7 @@ class RaftConsensusProtocolImpl(
     @Volatile
     private var role: RaftRole = RaftRole.Candidate
     private var timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofSeconds(2), ctx)
+    private var lastHeartbeatTime = System.currentTimeMillis()
 
     //    DONE: Use only one mutex
     private val mutex = Mutex()
@@ -69,6 +70,7 @@ class RaftConsensusProtocolImpl(
     override fun getPeerName() = globalPeerId.toString()
 
     private suspend fun sendLeaderRequest() {
+        if (executorService != null) throw Exception("$globalPeerId Try become leader before cleaning")
         signalPublisher.signal(
             Signal.ConsensusTryToBecomeLeader,
             this,
@@ -141,7 +143,7 @@ class RaftConsensusProtocolImpl(
                 return denyVoteResponse
             }
             if (iteration <= currentTerm) {
-                logger.info("Denying vote for $peerId due to an old term ($iteration vs $currentTerm)")
+                logger.info("Denying vote for $peerId due to an old term ($iteration vs $currentTerm), I voted for ${votedFor?.id ?: "null"}")
                 return denyVoteResponse
             }
             if (lastLogIndex < state.commitIndex) {
@@ -192,14 +194,29 @@ class RaftConsensusProtocolImpl(
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
-        if (prevLogIndex != null && prevLogTerm != null && !state.checkIfItemExist(prevLogIndex, prevLogTerm)) {
+//      Restart timer because we received heartbeat from proper leader
+        logger.info("Timer restarted, because of receiving heartbeat")
+        mutex.withLock {
+            lastHeartbeatTime = System.currentTimeMillis()
+        }
+        restartTimer()
+
+        val haveAllPreviousChanges = if (prevLogIndex == null || prevLogTerm == null) true
+        else state.checkIfItemExist(
+            prevLogIndex,
+            prevLogTerm
+        ) || acceptedChanges.any { it.ledgerIndex == prevLogIndex && it.term == prevLogTerm }
+
+        if (!haveAllPreviousChanges) {
             logger.info("The received heartbeat is missing some changes (I am behind)")
-            state.removeNotAcceptedItems(prevLogIndex, prevLogTerm)
+            state.removeNotAcceptedItems(prevLogIndex!!, prevLogTerm!!)
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
         val updateResult: LedgerUpdateResult
         mutex.withLock {
+            if (role == RaftRole.Leader) stop()
+            role = RaftRole.Follower
             updateResult = state.updateLedger(acceptedChanges, proposedChanges)
         }
 
@@ -235,7 +252,7 @@ class RaftConsensusProtocolImpl(
             logger.info(message)
         }
 
-        restartTimer()
+
         return ConsensusHeartbeatResponse(true, currentTerm)
     }
 
@@ -257,11 +274,11 @@ class RaftConsensusProtocolImpl(
         }
 
     override suspend fun getProposedChanges(): List<Change> = state.getProposedItems()
-            .mapNotNull { Change.fromHistoryEntry(it.entry) }
-    
+        .mapNotNull { Change.fromHistoryEntry(it.entry) }
 
-    override suspend fun getAcceptedChanges(): List<Change> =  state.getAcceptedItems()
-            .mapNotNull { Change.fromHistoryEntry(it.entry) }
+
+    override suspend fun getAcceptedChanges(): List<Change> = state.getAcceptedItems()
+        .mapNotNull { Change.fromHistoryEntry(it.entry) }
 
     private suspend fun sendHeartbeatToPeer(peer: GlobalPeerId) {
         val peerAddress = peerResolver.resolve(peer)
@@ -321,6 +338,12 @@ class RaftConsensusProtocolImpl(
 
         state.acceptItems(acceptedIndexes)
         voteContainer.removeChanges(acceptedIndexes)
+
+        acceptedItems.forEach {
+            if (!changeIdToCompletableFuture.contains(it.changeId)) changeIdToCompletableFuture[it.changeId] =
+                CompletableFuture()
+        }
+
         acceptedItems
             .map { changeIdToCompletableFuture[it.changeId] }
             .forEach { it!!.complete(ChangeResult(ChangeResult.Status.SUCCESS)) }
@@ -381,11 +404,11 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun restartTimer(role: RaftRole = RaftRole.Follower) {
+
         timer.cancelCounting()
         val text = when (role) {
 //            DONE: Think about this case again -> changed to candidate
             RaftRole.Candidate -> {
-//                timer = getLeaderTimer(heartbeatTimeout)
                 timer = getHeartbeatTimer()
                 "Leader not chosen make a timeout and try once again"
             }
@@ -399,15 +422,23 @@ class RaftConsensusProtocolImpl(
                 throw AssertionError()
             }
         }
+
         timer.startCounting {
-            signalPublisher.signal(
-                Signal.ConsensusLeaderDoesNotSendHeartbeat,
-                this,
-                listOf(otherConsensusPeers()),
-                null
-            )
-            logger.info(text)
-            sendLeaderRequest()
+
+            val differenceFromLastHeartbeat: Long
+            mutex.withLock {
+                differenceFromLastHeartbeat = System.currentTimeMillis() - lastHeartbeatTime
+            }
+            if (differenceFromLastHeartbeat > heartbeatTimeout.toMillis()) {
+                signalPublisher.signal(
+                    Signal.ConsensusLeaderDoesNotSendHeartbeat,
+                    this,
+                    listOf(otherConsensusPeers()),
+                    null
+                )
+                logger.info(text)
+                sendLeaderRequest()
+            }
         }
     }
 
@@ -511,7 +542,6 @@ class RaftConsensusProtocolImpl(
         changeIdToCompletableFuture[changeId]
 
     override fun stop() {
-        logger.info("Stopping app")
         executorService?.cancel()
         executorService?.close()
         executorService = null
