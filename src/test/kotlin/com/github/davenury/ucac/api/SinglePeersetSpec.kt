@@ -197,7 +197,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
     @Test
     fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
         val phaserPeer1 = Phaser(2)
-        val phaserOtherPeers = Phaser(4)
+        val phaserAllPeers = Phaser(5)
         val leaderElectedPhaser = Phaser(4)
 
         val proposedChange = AddGroupChange(
@@ -227,7 +227,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
         }
 
         val peer1Action = SignalListener { phaserPeer1.arrive() }
-        val peersAction = SignalListener { phaserOtherPeers.arrive() }
+        val peersAction = SignalListener { phaserAllPeers.arrive() }
         val peerLeaderElected = SignalListener { leaderElectedPhaser.arrive() }
 
         val firstPeerSignals = mapOf(
@@ -280,7 +280,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
         }
 
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
-        phaserOtherPeers.arriveAndAwaitAdvanceWithTimeout()
+        phaserAllPeers.arriveAndAwaitAdvanceWithTimeout()
 
         apps.getPeers(0).forEach { (_, peerAddress) ->
             // and should not execute this change couple of times

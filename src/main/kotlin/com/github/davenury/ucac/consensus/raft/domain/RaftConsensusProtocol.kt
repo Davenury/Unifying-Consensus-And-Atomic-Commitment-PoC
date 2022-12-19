@@ -2,7 +2,6 @@ package com.github.davenury.ucac.consensus.raft.domain
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
-import com.github.davenury.ucac.common.PeerAddress
 import java.util.concurrent.CompletableFuture
 
 interface RaftConsensusProtocol {

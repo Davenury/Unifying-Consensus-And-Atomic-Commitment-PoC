@@ -57,5 +57,6 @@ class HistoryRatisNode(
         return history
     }
 
-    override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? = changeIdToCompletableFuture[changeId]
+    override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
+        changeIdToCompletableFuture[changeId]
 }

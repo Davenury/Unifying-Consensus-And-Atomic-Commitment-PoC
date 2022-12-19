@@ -26,6 +26,7 @@ interface RaftProtocolClient {
     suspend fun sendConsensusHeartbeat(
         peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>,
     ): List<RaftResponse<ConsensusHeartbeatResponse?>>
+
     suspend fun sendConsensusHeartbeat(
         peer: PeerAddress,
         message: ConsensusHeartbeat,
@@ -60,11 +61,9 @@ class RaftProtocolClientImpl : RaftProtocolClient {
     override suspend fun sendConsensusHeartbeat(
         peer: PeerAddress, message: ConsensusHeartbeat,
     ): RaftResponse<ConsensusHeartbeatResponse?> {
+
         return CoroutineScope(Dispatchers.IO).async(MDCContext()) {
-            sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(
-                "http://${peer.address}/consensus/heartbeat",
-                message
-            )
+            sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(peer, "consensus/heartbeat", message)
         }.let {
             val result = try {
                 it.await()
@@ -84,7 +83,7 @@ class RaftProtocolClientImpl : RaftProtocolClient {
             val peer = it.first
             val body = it.second
             CoroutineScope(Dispatchers.IO).async(MDCContext()) {
-                sendConsensusMessage<T, K>("http://${peer.address}/$urlPath", body)
+                sendConsensusMessage<T, K>(peer, urlPath, body)
             }.let { coroutine ->
                 Pair(peer, coroutine)
             }
@@ -100,11 +99,12 @@ class RaftProtocolClientImpl : RaftProtocolClient {
         }
 
     private suspend inline fun <Message, reified Response> sendConsensusMessage(
-        url: String,
+        peer: PeerAddress,
+        suffix: String,
         message: Message,
     ): Response? {
-        logger.debug("Sending request to: $url, message: $message")
-        return raftHttpClient.post<Response>(url) {
+        logger.debug("Sending request to: ${peer.globalPeerId}, message: $message")
+        return raftHttpClient.post<Response>("http://${peer.address}/${suffix}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = message!!

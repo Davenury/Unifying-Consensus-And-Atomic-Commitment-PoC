@@ -53,7 +53,7 @@ abstract class StateMachine<A>(open var state: A) : BaseStateMachine() {
      */
     override fun takeSnapshot(): Long {
         // get the last applied index
-        val last: TermIndex = getLastAppliedTermIndex()
+        val last: TermIndex = lastAppliedTermIndex
 
         // create a file with a proper name to store the snapshot
         val snapshotFile: File = storage.getSnapshotFile(last.term, last.index)
