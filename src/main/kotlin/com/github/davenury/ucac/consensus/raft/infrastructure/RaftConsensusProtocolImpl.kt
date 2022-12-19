@@ -429,7 +429,7 @@ class RaftConsensusProtocolImpl(
 
             val differenceFromLastHeartbeat: Duration
             mutex.withLock {
-                differenceFromLastHeartbeat = Duration.between(Instant.now(), lastHeartbeatTime)
+                differenceFromLastHeartbeat = Duration.between(lastHeartbeatTime, Instant.now())
             }
             if (differenceFromLastHeartbeat > heartbeatTimeout) {
                 signalPublisher.signal(
