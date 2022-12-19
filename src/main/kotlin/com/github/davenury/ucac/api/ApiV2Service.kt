@@ -6,9 +6,8 @@ import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.Changes
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
-import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
-import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel

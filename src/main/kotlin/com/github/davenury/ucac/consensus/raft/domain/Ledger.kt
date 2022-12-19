@@ -1,6 +1,5 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
-import com.github.davenury.common.Change
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
 import kotlinx.coroutines.sync.Mutex

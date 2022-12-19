@@ -2,7 +2,10 @@ package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.*
+import com.github.davenury.ucac.GpacConfig
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -191,7 +194,7 @@ class GPACProtocolImpl(
         change: Change,
         iteration: Int
     ) {
-        logger.info("$globalPeerId Starting performing GPAC iteration: $iteration")
+        logger.info("Starting performing GPAC iteration: $iteration")
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
 
         val electMeResult =
@@ -229,7 +232,7 @@ class GPACProtocolImpl(
 
         try {
             applySignal(Signal.BeforeSendingApply, this.transaction, change)
-        } catch (e: Exception){
+        } catch (e: Exception) {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
             transactionBlocker.releaseBlock()
             throw e
@@ -238,7 +241,7 @@ class GPACProtocolImpl(
     }
 
     override suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int) {
-        logger.info("$globalPeerId Starting performing GPAC iteration: $iteration as recovery leader")
+        logger.info("Starting performing GPAC iteration: $iteration as recovery leader")
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         val electMeResult = electMePhase(
             change,
@@ -292,7 +295,7 @@ class GPACProtocolImpl(
         // I got to ft-agree phase, so my voice of this is crucial
         signal(Signal.BeforeSendingAgree, this.transaction, change)
 
-        logger.info("$globalPeerId Recovery leader transaction state: ${this.transaction}")
+        logger.info("Recovery leader transaction state: ${this.transaction}")
         val agreed = ftAgreePhase(
             change,
             this.transaction.acceptVal!!,

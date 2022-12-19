@@ -22,6 +22,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
 import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 
@@ -49,7 +50,7 @@ class RaftConsensusProtocolImpl(
     @Volatile
     private var role: RaftRole = RaftRole.Candidate
     private var timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofSeconds(2), ctx)
-    private var lastHeartbeatTime = System.currentTimeMillis()
+    private var lastHeartbeatTime = Instant.now()
 
     //    DONE: Use only one mutex
     private val mutex = Mutex()
@@ -197,15 +198,17 @@ class RaftConsensusProtocolImpl(
 //      Restart timer because we received heartbeat from proper leader
         logger.info("Timer restarted, because of receiving heartbeat")
         mutex.withLock {
-            lastHeartbeatTime = System.currentTimeMillis()
+            lastHeartbeatTime = Instant.now()
         }
         restartTimer()
 
         val haveAllPreviousChanges = if (prevLogIndex == null || prevLogTerm == null) true
-        else state.checkIfItemExist(
-            prevLogIndex,
-            prevLogTerm
-        ) || acceptedChanges.any { it.ledgerIndex == prevLogIndex && it.term == prevLogTerm }
+        else {
+            state.checkIfItemExist(
+                prevLogIndex,
+                prevLogTerm
+            ) || acceptedChanges.any { it.ledgerIndex == prevLogIndex && it.term == prevLogTerm }
+        }
 
         if (!haveAllPreviousChanges) {
             logger.info("The received heartbeat is missing some changes (I am behind)")
@@ -340,8 +343,7 @@ class RaftConsensusProtocolImpl(
         voteContainer.removeChanges(acceptedIndexes)
 
         acceptedItems.forEach {
-            if (!changeIdToCompletableFuture.contains(it.changeId)) changeIdToCompletableFuture[it.changeId] =
-                CompletableFuture()
+            changeIdToCompletableFuture.putIfAbsent(it.changeId, CompletableFuture())
         }
 
         acceptedItems
@@ -425,11 +427,11 @@ class RaftConsensusProtocolImpl(
 
         timer.startCounting {
 
-            val differenceFromLastHeartbeat: Long
+            val differenceFromLastHeartbeat: Duration
             mutex.withLock {
-                differenceFromLastHeartbeat = System.currentTimeMillis() - lastHeartbeatTime
+                differenceFromLastHeartbeat = Duration.between(Instant.now(), lastHeartbeatTime)
             }
-            if (differenceFromLastHeartbeat > heartbeatTimeout.toMillis()) {
+            if (differenceFromLastHeartbeat > heartbeatTimeout) {
                 signalPublisher.signal(
                     Signal.ConsensusLeaderDoesNotSendHeartbeat,
                     this,
