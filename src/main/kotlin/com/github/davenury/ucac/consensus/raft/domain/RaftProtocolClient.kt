@@ -104,10 +104,12 @@ class RaftProtocolClientImpl : RaftProtocolClient {
         message: Message,
     ): Response? {
         logger.debug("Sending request to: $url, message: $message")
-        return raftHttpClient.post<Response>(url) {
-            contentType(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
-            body = message!!
+        return raftHttpClient().use { client ->
+            client.post<Response>(url) {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+                body = message!!
+            }
         }
     }
 

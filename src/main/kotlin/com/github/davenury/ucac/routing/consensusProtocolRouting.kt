@@ -26,7 +26,6 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
 
         post("/consensus/heartbeat") {
             val message: ConsensusHeartbeat = call.receive()
-            println("Received heartbeat request: $message")
             val heartbeatResult = protocol.handleHeartbeat(message)
             call.respond(heartbeatResult)
         }
