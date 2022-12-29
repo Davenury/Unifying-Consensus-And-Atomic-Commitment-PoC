@@ -11,16 +11,16 @@ import (
 )
 
 var settings *cli.EnvSettings
-var initNamespace string
-var initCreateNamespace bool
 
 func CreateInitCommand() *cobra.Command {
+	var initNamespace string
+	var initCreateNamespace bool
 
 	var initCommand = &cobra.Command{
 		Use:   "init",
 		Short: "deploy prometheus and grafana to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
-			initCommand()
+			DoInit(initNamespace, initCreateNamespace)
 		},
 	}
 
@@ -30,16 +30,16 @@ func CreateInitCommand() *cobra.Command {
 	return initCommand
 }
 
-func initCommand() {
+func DoInit(namespace string, createNamespace bool) {
 	settings = cli.New()
 
 	// create namespace
-	if initCreateNamespace {
-		utils.CreateNamespace(initNamespace)
+	if createNamespace {
+		utils.CreateNamespace(namespace)
 	}
 
 	// install prometheus
-	installChart(initNamespace, "prometheus-community", "prometheus", "prometheus", nil)
+	installChart(namespace, "prometheus-community", "prometheus", "prometheus", nil)
 
 	grafanaValues := map[string]interface{}{
 		"adminPassword": "admin123",
@@ -59,7 +59,7 @@ func initCommand() {
 				"datasources": []map[string]interface{}{
 					{
 						"name": "Prometheus",
-						"url": fmt.Sprintf("http://prometheus-server.%s.svc.cluster.local:80", initNamespace),
+						"url": fmt.Sprintf("http://prometheus-server.%s.svc.cluster.local:80", namespace),
 						"type": "prometheus",
 						"isDefault": true,
 					},
@@ -76,7 +76,7 @@ func initCommand() {
 	}
 
 	// install grafana
-	installChart(initNamespace, "grafana", "grafana", "grafana", grafanaValues)
+	installChart(namespace, "grafana", "grafana", "grafana", grafanaValues)
 }
 
 func installChart(namespace string, repoName string, chartName string, releaseName string, values map[string]interface{}) {

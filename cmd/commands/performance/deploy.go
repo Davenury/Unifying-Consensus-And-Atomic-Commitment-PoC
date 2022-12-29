@@ -3,46 +3,65 @@ package performance
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/cobra"
 	"github.com/davenury/ucac/cmd/commands/utils"
+	"github.com/spf13/cobra"
 	"strconv"
 
 	batchv1 "k8s.io/api/batch/v1"
-	"k8s.io/client-go/kubernetes"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes"
 )
 
-var performanceNamespace string
-var performanceNumberOfPeers []int
-var performanceImage string
-
-var singleRequestsNumber int
-var multipleRequestsNumber int
-var testDuration string
-var maxPeersetsInChange int
-var testsStrategy string
-var pushgatewayAddress string
-var enforceAcUsage bool
-var acProtocol string
-var consensusProtocol string
-
+type Config struct {
+	PerformanceNamespace     string
+	PerformanceNumberOfPeers []int
+	PerformanceImage       string
+	SingleRequestsNumber   int
+	MultipleRequestsNumber int
+	TestDuration        string
+	MaxPeersetsInChange int
+	TestsStrategy      string
+	PushgatewayAddress string
+	EnforceAcUsage    bool
+	AcProtocol        string
+	ConsensusProtocol string
+}
 func createPerformanceDeployCommand() *cobra.Command {
+
+	var performanceNamespace string
+	var performanceNumberOfPeers []int
+	var performanceImage string
+
+	var singleRequestsNumber int
+	var multipleRequestsNumber int
+	var testDuration string
+	var maxPeersetsInChange int
+	var testsStrategy string
+	var pushgatewayAddress string
+	var enforceAcUsage bool
+	var acProtocol string
+	var consensusProtocol string
 
 	var cmd = &cobra.Command{
 		Use:   "deploy",
 		Short: "Execute performance test",
 		Run: func(cmd *cobra.Command, args []string) {
-
-			clientset, err := utils.GetClientset()
-			if err != nil {
-				panic(err)
-			}
-
-			createService(clientset)
-			createConfigmap(clientset)
-			createJob(clientset, performanceImage)
+			DoPerformanceTest(Config{
+				PerformanceNamespace:     performanceNamespace,
+				PerformanceNumberOfPeers: performanceNumberOfPeers,
+				PerformanceImage:         performanceImage,
+				SingleRequestsNumber:     singleRequestsNumber,
+				MultipleRequestsNumber:   multipleRequestsNumber,
+				TestDuration:             testDuration,
+				MaxPeersetsInChange:      maxPeersetsInChange,
+				TestsStrategy:            testDuration,
+				PushgatewayAddress:       pushgatewayAddress,
+				EnforceAcUsage:           enforceAcUsage,
+				AcProtocol:               acProtocol,
+				ConsensusProtocol:        consensusProtocol,
+			})
 		},
 	}
 
@@ -64,14 +83,25 @@ func createPerformanceDeployCommand() *cobra.Command {
 	return cmd
 }
 
-func createJob(clientset *kubernetes.Clientset, image string) {
+func DoPerformanceTest(config Config) {
+	clientset, err := utils.GetClientset()
+	if err != nil {
+		panic(err)
+	}
 
-	jobs := clientset.BatchV1().Jobs(performanceNamespace)
+	createService(clientset, config)
+	createConfigmap(clientset, config)
+	createJob(clientset, config)
+}
+
+func createJob(clientset *kubernetes.Clientset, config Config) {
+
+	jobs := clientset.BatchV1().Jobs(config.PerformanceNamespace)
 
 	jobSpec := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "performance-test",
-			Namespace: performanceNamespace,
+			Namespace: config.PerformanceNamespace,
 			Labels: map[string]string{
 				"project": "ucac",
 			},
@@ -94,7 +124,7 @@ func createJob(clientset *kubernetes.Clientset, image string) {
 					Containers: []v1.Container{
 						{
 							Name:  "performance-test",
-							Image: image,
+							Image: config.PerformanceImage,
 							Ports: []v1.ContainerPort{
 								{
 									ContainerPort: 8080,
@@ -123,7 +153,7 @@ func createJob(clientset *kubernetes.Clientset, image string) {
 	}
 }
 
-func createConfigmap(clientset *kubernetes.Clientset) {
+func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 	configMap := &v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -131,35 +161,35 @@ func createConfigmap(clientset *kubernetes.Clientset) {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "performance-test-configmap",
-			Namespace: performanceNamespace,
+			Namespace: config.PerformanceNamespace,
 			Labels: map[string]string{
 				"project":  "ucac",
 				"app.name": "performanceTest",
 			},
 		},
 		Data: map[string]string{
-			"TEST_PEERS":                      utils.GenerateServicesForPeersStaticPort(performanceNumberOfPeers, 8080),
+			"TEST_PEERS":                      utils.GenerateServicesForPeersStaticPort(config.PerformanceNumberOfPeers, 8080),
 			"NOTIFICATION_SERVICE_ADDRESS":    "http://notification-service:8080",
-			"SINGLE_PEERSET_CHANGES_NUMBER":   fmt.Sprintf("%d", singleRequestsNumber),
-			"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", multipleRequestsNumber),
-			"TEST_DURATION":                   testDuration,
-			"MAX_PEERSETS_IN_CHANGE":          fmt.Sprintf("%d", maxPeersetsInChange),
-			"TESTS_STRATEGY":                  testsStrategy,
-			"PUSHGATEWAY_ADDRESS":             pushgatewayAddress,
-			"ENFORCE_AC_USAGE":                strconv.FormatBool(enforceAcUsage),
-			"AC_PROTOCOL":					   acProtocol,
-			"CONSENSUS_PROTOCOL":			   consensusProtocol,
+			"SINGLE_PEERSET_CHANGES_NUMBER":   fmt.Sprintf("%d", config.SingleRequestsNumber),
+			"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", config.MultipleRequestsNumber),
+			"TEST_DURATION":                   config.TestDuration,
+			"MAX_PEERSETS_IN_CHANGE":          fmt.Sprintf("%d", config.MaxPeersetsInChange),
+			"TESTS_STRATEGY":                  config.TestsStrategy,
+			"PUSHGATEWAY_ADDRESS":             config.PushgatewayAddress,
+			"ENFORCE_AC_USAGE":                strconv.FormatBool(config.EnforceAcUsage),
+			"AC_PROTOCOL":					   config.AcProtocol,
+			"CONSENSUS_PROTOCOL":			   config.ConsensusProtocol,
 		},
 	}
 
-	clientset.CoreV1().ConfigMaps(performanceNamespace).Create(context.Background(), configMap, metav1.CreateOptions{})
+	clientset.CoreV1().ConfigMaps(config.PerformanceNamespace).Create(context.Background(), configMap, metav1.CreateOptions{})
 }
 
-func createService(clientset *kubernetes.Clientset) {
+func createService(clientset *kubernetes.Clientset, config Config) {
 	service := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "notification-service",
-			Namespace: performanceNamespace,
+			Namespace: config.PerformanceNamespace,
 			Labels: map[string]string{
 				"project": "ucac",
 			},
@@ -178,6 +208,6 @@ func createService(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	clientset.CoreV1().Services(performanceNamespace).Create(context.Background(), service, metav1.CreateOptions{})
+	clientset.CoreV1().Services(config.PerformanceNamespace).Create(context.Background(), service, metav1.CreateOptions{})
 
 }

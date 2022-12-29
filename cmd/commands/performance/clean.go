@@ -9,22 +9,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-var cleanupNamespace string
 
 func createCleanupCommand() *cobra.Command {
+	var cleanupNamespace string
 	var cmd = &cobra.Command{
 		Use: "cleanup",
 		Short: "Cleanups performance tests without deleting apps",
 		Run: func(cmd *cobra.Command, args []string) {
-
-			clientset, err := utils.GetClientset()
-			if err != nil {
-				panic(err)
-			}
-
-			deleteJob(clientset)
-			deleteService(clientset)
-			deleteConfigmap(clientset)
+			DoPerformanceCleanup(cleanupNamespace)
 		},
 	}
 
@@ -33,21 +25,35 @@ func createCleanupCommand() *cobra.Command {
 	return cmd
 }
 
-func deleteJob(clientset *kubernetes.Clientset) {
-	clientset.BatchV1().Jobs(cleanupNamespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
+func DoPerformanceCleanup(namespace string) {
+	clientset, err := utils.GetClientset()
+	if err != nil {
+		panic(err)
+	}
+
+	deleteJob(clientset, namespace)
+	deleteService(clientset, namespace)
+	deleteConfigmap(clientset, namespace)
+}
+
+func deleteJob(clientset *kubernetes.Clientset, namespace string) {
+	policy := metav1.DeletePropagationForeground
+	clientset.BatchV1().Jobs(namespace).DeleteCollection(context.Background(), metav1.DeleteOptions{
+		PropagationPolicy: &policy,
+	}, metav1.ListOptions{
 		LabelSelector: "project=ucac",
 	})
 }
 
-func deleteConfigmap(clientset *kubernetes.Clientset) {
-	clientset.CoreV1().ConfigMaps(cleanupNamespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
+func deleteConfigmap(clientset *kubernetes.Clientset, namespace string) {
+	clientset.CoreV1().ConfigMaps(namespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
 		LabelSelector: "project=ucac",
 	})
 }
 
-func deleteService(clientset *kubernetes.Clientset) {
+func deleteService(clientset *kubernetes.Clientset, namespace string) {
 
-	serviceClient := clientset.CoreV1().Services(cleanupNamespace)
+	serviceClient := clientset.CoreV1().Services(namespace)
 	services, _ := serviceClient.List(context.Background(), metav1.ListOptions{
 		LabelSelector: "project=ucac",
 	})
