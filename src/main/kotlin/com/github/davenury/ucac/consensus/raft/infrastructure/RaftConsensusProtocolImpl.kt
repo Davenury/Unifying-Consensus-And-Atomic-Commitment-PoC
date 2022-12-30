@@ -196,7 +196,6 @@ class RaftConsensusProtocolImpl(
         }
 
 //      Restart timer because we received heartbeat from proper leader
-        logger.info("Timer restarted, because of receiving heartbeat")
         mutex.withLock {
             lastHeartbeatTime = Instant.now()
         }

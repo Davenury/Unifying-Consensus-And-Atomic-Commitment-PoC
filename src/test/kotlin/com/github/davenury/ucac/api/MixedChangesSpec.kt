@@ -71,8 +71,8 @@ class MixedChangesSpec : IntegrationTestBase() {
         )
 
         val peers = apps.getPeers()
-        val change = change(listOf(apps.getPeer(1, 0)))
-        val secondChange = change(listOf(), change.toHistoryEntry().getId())
+        val change = change(0, 1)
+        val secondChange = change(mapOf(0 to change.toHistoryEntry(0).getId()))
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -87,10 +87,19 @@ class MixedChangesSpec : IntegrationTestBase() {
 
         applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
-        askAllForChanges(peers.values).forEach { changes ->
+
+//      First peerset
+        askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
+            val changes = it.second
             expectThat(changes.size).isGreaterThanOrEqualTo(2)
             expectThat(changes[0]).isEqualTo(change)
             expectThat(changes[1]).isEqualTo(secondChange)
+        }
+
+        askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
+            val changes = it.second
+            expectThat(changes.size).isGreaterThanOrEqualTo(1)
+            expectThat(changes[0]).isEqualTo(change)
         }
     }
 
@@ -108,15 +117,19 @@ class MixedChangesSpec : IntegrationTestBase() {
         }
 
     private suspend fun askAllForChanges(peerAddresses: Collection<PeerAddress>) =
-        peerAddresses.map { askForChanges(it) }
+        peerAddresses.map { Pair(it, askForChanges(it)) }
 
-    private fun change(peersetPeers: List<PeerAddress>, historyId: String = InitialHistoryEntry.getId()) =
-        AddUserChange(
-            historyId,
-            "userName",
-            // leader should enrich himself
-            peersetPeers.map { it.address }
-        )
+    private fun change(vararg peersetIds: Int) = AddUserChange(
+        peersetIds.map {
+            ChangePeersetInfo(it, InitialHistoryEntry.getId())
+        },
+        "userName",
+    )
+
+    private fun change(peerSetIdToId: Map<Int, String>) = AddUserChange(
+        peerSetIdToId.map { ChangePeersetInfo(it.key, it.value) },
+        "userName",
+    )
 
     private fun deleteRaftHistories() {
         File(System.getProperty("user.dir")).listFiles { pathname -> pathname?.name?.startsWith("history") == true }
