@@ -36,10 +36,10 @@ func CreateWholeCommand() *cobra.Command {
 
 	var config Config
 	var cmd = &cobra.Command{
-		Use: "brr",
+		Use: "perform",
 		Short: "whole command - deploys monitoring, peers, executes performance, cleanup",
 		Run: func(cmd *cobra.Command, args []string) {
-			goBrr(config)
+			perform(config)
 		},
 	}
 
@@ -66,7 +66,7 @@ func CreateWholeCommand() *cobra.Command {
 	return cmd
 }
 
-func goBrr(config Config) {
+func perform(config Config) {
 	fmt.Println("Deploying monitoring...")
 	DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
 	fmt.Println("Deploying application...")

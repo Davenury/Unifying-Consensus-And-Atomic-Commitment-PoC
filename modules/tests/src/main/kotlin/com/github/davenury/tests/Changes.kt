@@ -28,7 +28,6 @@ class Changes(
         if (!handledChanges.contains(notification.change.id)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
                 val parentId = notification.change.toHistoryEntry(peersetId).getId()
-                println("New parent id for $peersetId - $parentId")
                 changes[peersetId]!!.overrideParentId(parentId)
                 getPeersStrategy.handleNotification(peersetId)
                 handledChanges.add(notification.change.id)
@@ -65,7 +64,7 @@ class OnePeersetChanges(
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
 
     suspend fun introduceChange(change: AddUserChange): ChangeState {
-        val senderAddress = peersAddresses.asSequence().shuffled().find { true }!!
+        val senderAddress = peersAddresses.asSequence().shuffled().first()
         return sender.executeChange(
             senderAddress,
             change.copy(
