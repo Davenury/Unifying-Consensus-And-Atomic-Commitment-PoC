@@ -1,8 +1,8 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.common.ChangeNotifier
+import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking

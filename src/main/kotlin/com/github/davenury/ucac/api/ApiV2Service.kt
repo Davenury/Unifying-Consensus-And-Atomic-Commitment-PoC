@@ -3,9 +3,8 @@ package com.github.davenury.ucac.api
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
-import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
-import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*

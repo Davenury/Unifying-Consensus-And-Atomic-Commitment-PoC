@@ -57,7 +57,7 @@ class GPACProtocolSpec {
 
         expect {
             that(result).isEqualTo(ElectedYou(100000, Accept.COMMIT, 0, null, false))
-            that(subject.getTransaction().ballotNumber).isEqualTo(100000)
+            that(subject.getBallotNumber()).isEqualTo(100000)
         }
     }
 
@@ -88,8 +88,8 @@ class GPACProtocolSpec {
 
         val result = subject.handleElect(message)
 
-        expectThat(result.initVal).isEqualTo(Accept.COMMIT)
-        expectThat(subject.getTransaction()).isEqualTo(Transaction(3, Accept.COMMIT, 0, null, false, change = change))
+        expectThat(result).isEqualTo(ElectedYou(3,Accept.COMMIT, 0,null,false))
+        expectThat(subject.getBallotNumber()).isEqualTo(3)
     }
 
     @Test

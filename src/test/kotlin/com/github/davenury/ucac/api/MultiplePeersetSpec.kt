@@ -279,13 +279,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 5 to signalListenersForCohort,
                 6 to signalListenersForCohort,
                 7 to signalListenersForCohort,
-            ),
-            configOverrides = (0..5).associateWith {
-                mapOf(
-                    "gpac.leaderFailDelay" to Duration.ofSeconds(0).toString(),
-                    "gpac.initialRetriesDelay" to Duration.ofSeconds(if (it == 1) 0 else 100).toString(),
-                )
-            }
+            )
         )
         val peers = apps.getPeers()
         val change = change(0, 1)

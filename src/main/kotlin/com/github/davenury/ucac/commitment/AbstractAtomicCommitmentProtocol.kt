@@ -4,10 +4,12 @@ import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.Logger
-import java.lang.IllegalStateException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 

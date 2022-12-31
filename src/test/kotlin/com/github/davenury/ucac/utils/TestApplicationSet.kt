@@ -37,10 +37,10 @@ class TestApplicationSet(
         apps = (0 until numberOfPeersets).map { peersetId ->
             (0 until numberOfPeersInPeersets[peersetId]).map { peerId ->
                 createApplication(
-                    signalListeners[currentApp++] ?: emptyMap(),
+                    signalListeners[currentApp] ?: emptyMap(),
                     mapOf("peerId" to peerId, "peersetId" to peersetId) +
                             testConfigOverrides +
-                            (configOverrides[peerId] ?: emptyMap()),
+                            (configOverrides[currentApp++] ?: emptyMap()),
                 )
             }.toMutableList()
         }.toMutableList()

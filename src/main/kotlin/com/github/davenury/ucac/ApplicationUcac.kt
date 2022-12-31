@@ -5,12 +5,12 @@ import com.github.davenury.common.history.History
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
-import com.github.davenury.ucac.commitment.twopc.TwoPC
-import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
 import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
+import com.github.davenury.ucac.commitment.twopc.TwoPC
+import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.common.GlobalPeerId
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
@@ -143,15 +143,15 @@ class ApplicationUcac constructor(
                 signalPublisher,
                 peerResolver,
             )
-            twoPC = TwoPC(
-                history,
-                config.twoPC,
-                ctx,
-                TwoPCProtocolClientImpl(config.peerId),
-                consensusProtocol as RaftConsensusProtocolImpl,
-                signalPublisher,
-                peerResolver,
-            )
+        twoPC = TwoPC(
+            history,
+            config.twoPC,
+            ctx,
+            TwoPCProtocolClientImpl(config.peerId),
+            consensusProtocol as RaftConsensusProtocolImpl,
+            signalPublisher,
+            peerResolver,
+        )
 
         service = ApiV2Service(
             gpacProtocol,
