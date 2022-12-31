@@ -66,13 +66,6 @@ func DoInit(namespace string, createNamespace bool) {
 				},
 			},
 		},
-		//"dashboards": map[string]interface{}{
-		//	"default": map[string]interface{}{
-		//		"ucac-dashboard": map[string]interface{}{
-		//			"file": "./dashboard.json",
-		//		},
-		//	},
-		//},
 	}
 
 	// install grafana
