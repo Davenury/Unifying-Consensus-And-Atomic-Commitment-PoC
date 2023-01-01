@@ -2,15 +2,13 @@ package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.GpacConfig
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalPublisher
-import com.github.davenury.ucac.SignalSubject
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.lang.Exception
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import kotlin.math.max
@@ -30,7 +28,7 @@ abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) 
 
 class GPACProtocolImpl(
     private val history: History,
-    private val gpacConfig: GpacConfig,
+    gpacConfig: GpacConfig,
     ctx: ExecutorCoroutineDispatcher,
     private val protocolClient: GPACProtocolClient,
     private val transactionBlocker: TransactionBlocker,
@@ -321,7 +319,7 @@ class GPACProtocolImpl(
     ): ElectMeResult {
         if (!history.isEntryCompatible(change.toHistoryEntry(globalPeerId.peersetId))) {
             signal(Signal.OnSendingElectBuildFail, this.transaction, change)
-            changeConflicts(change)
+            changeConflicts(change, "History entry not compatible, change: ${change}, expected: ${history.getCurrentEntry().getId()}")
             throw HistoryCannotBeBuildException()
         }
 
@@ -435,7 +433,7 @@ class GPACProtocolImpl(
             } && allShards
     }
 
-    private fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
+    private suspend fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
         try {
             signal(signal, transaction, change)
         } catch (e: Exception) {

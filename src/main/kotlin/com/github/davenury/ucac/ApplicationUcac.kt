@@ -72,7 +72,7 @@ fun createApplication(
     signalListeners: Map<Signal, SignalListener> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
 ): ApplicationUcac {
-    val config = loadConfig(configOverrides)
+    val config = loadConfig<Config>(configOverrides)
     return ApplicationUcac(signalListeners, config)
 }
 
@@ -156,7 +156,8 @@ class ApplicationUcac constructor(
         service = ApiV2Service(
             gpacProtocol,
             consensusProtocol as RaftConsensusProtocolImpl,
-            twoPC!!, history,
+            twoPC!!,
+            history,
             config,
         )
 

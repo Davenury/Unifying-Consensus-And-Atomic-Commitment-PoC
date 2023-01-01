@@ -217,6 +217,7 @@ class TwoPC(
         .also { checkChangeCompatibility(it) }
         .let { consensusProtocol.proposeChangeAsync(change) }
 
+
     private fun changeConflict(changeId: String, exceptionText: String) =
         changeIdToCompletableFuture[changeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
             .also { throw TwoPCConflictException(exceptionText) }

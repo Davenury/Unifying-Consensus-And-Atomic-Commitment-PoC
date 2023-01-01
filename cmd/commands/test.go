@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/davenury/ucac/cmd/commands/utils"
 	"github.com/goccy/kpoward"
 	"github.com/spf13/cobra"
 	"io/ioutil"
@@ -34,12 +35,12 @@ func CreateTestCommand() *cobra.Command {
 }
 
 func test() {
-	config, err := GetKubernetesConfig()
+	config, err := utils.GetKubernetesConfig()
 	if err != nil {
 		panic(err)
 	}
 
-	client, err := GetClientset()
+	client, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
 	}

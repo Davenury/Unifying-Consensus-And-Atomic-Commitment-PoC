@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.api
 
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
+import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.channels.Channel
@@ -33,7 +34,12 @@ class Worker(
                         ProcessorJobType.TWO_PC -> twoPC.proposeChangeAsync(job.change)
                         ProcessorJobType.GPAC -> gpacProtocol.proposeChangeAsync(job.change)
                     }
-                result.thenAccept { job.completableFuture.complete(it) }
+                result.thenAccept {
+                    job.completableFuture.complete(it)
+                    runBlocking {
+                        ChangeNotifier.notify(job.change, it)
+                    }
+                }
             }
         } catch (e: Exception) {
             if (e is InterruptedException) {

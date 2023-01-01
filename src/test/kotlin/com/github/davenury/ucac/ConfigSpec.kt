@@ -9,8 +9,9 @@ class ConfigSpec {
 
     @Test
     fun parsePeers(): Unit = runBlocking {
-        val peerAddresses = "peer1.com:8080 ,  peer2:8080,  peer3:8080  ; peer4:8080,peer5:8080  ,peer6:8080".split(";")
-            .map { peerset -> peerset.split(",").map { it.trim() } }
+        val peerAddresses =
+            com.github.davenury.common.parsePeers("peer1.com:8080 ,  peer2:8080,  peer3:8080  ; peer4:8080,peer5:8080  ,peer6:8080")
+
         expectThat(peerAddresses).isEqualTo(
             listOf(
                 listOf("peer1.com:8080", "peer2:8080", "peer3:8080"),
