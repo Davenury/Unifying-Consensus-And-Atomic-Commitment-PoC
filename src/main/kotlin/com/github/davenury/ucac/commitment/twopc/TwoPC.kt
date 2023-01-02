@@ -7,6 +7,7 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.TwoPCConfig
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
+import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -23,6 +24,7 @@ class TwoPC(
     private val consensusProtocol: ConsensusProtocol,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     peerResolver: PeerResolver,
+    private val transactionBlocker: TransactionBlocker
 ) : SignalSubject, AbstractAtomicCommitmentProtocol(logger, peerResolver) {
 
     private var changeTimer: ProtocolTimer = ProtocolTimerImpl(twoPCConfig.changeDelay, Duration.ZERO, ctx)
@@ -42,7 +44,12 @@ class TwoPC(
             .map { peerResolver.resolve(GlobalPeerId(it, 0)) }
 
         val decision = proposePhase(acceptChange, mainChangeId, otherPeers)
-        decisionPhase(acceptChange, decision, otherPeers)
+        transactionBlocker.tryToBlock(ProtocolName.TWO_PC)
+        try {
+            decisionPhase(acceptChange, decision, otherPeers)
+        } finally {
+            transactionBlocker.releaseBlock()
+        }
 
         val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
         changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(result))
@@ -63,6 +70,8 @@ class TwoPC(
         if (result.status != ChangeResult.Status.SUCCESS) {
             throw TwoPCHandleException("TwoPCChange didn't apply change")
         }
+
+        transactionBlocker.tryToBlock(ProtocolName.TWO_PC)
 
         changeTimer.startCounting {
             askForDecisionChange(change)
@@ -96,7 +105,10 @@ class TwoPC(
 
             change is TwoPCChange && change.twoPCStatus == TwoPCStatus.ABORTED && change.change == currentProcessedChange.change -> {
                 changeTimer.cancelCounting()
-                checkChangeAndProposeToConsensus(change)
+                checkChangeAndProposeToConsensus(change).thenApply {
+                    transactionBlocker.releaseBlock()
+                    it
+                }
             }
 
             change == currentProcessedChange.change -> {
@@ -105,7 +117,10 @@ class TwoPC(
                     peerResolver.currentPeer().peersetId,
                     history.getCurrentEntry().getId(),
                 )
-                checkChangeAndProposeToConsensus(updatedChange)
+                checkChangeAndProposeToConsensus(updatedChange).thenApply {
+                    transactionBlocker.releaseBlock()
+                    it
+                }
             }
 
             else -> throw TwoPCHandleException(
@@ -171,6 +186,7 @@ class TwoPC(
         decision: Boolean,
         otherPeersets: List<PeerAddress>,
     ) {
+
         val change = acceptChange.change
         val acceptChangeId = acceptChange.toHistoryEntry(peerResolver.currentPeer().peersetId).getId()
 

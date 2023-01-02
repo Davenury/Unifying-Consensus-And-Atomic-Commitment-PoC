@@ -75,7 +75,7 @@ class GPACProtocolImpl(
 
         if (transactionBlocker.isAcquired()) {
             logger.info("Tried to respond to elect me when semaphore acquired!")
-            throw AlreadyLockedException()
+            throw AlreadyLockedException(ProtocolName.GPAC)
         }
 
         if (!checkBallotNumber(message.ballotNumber)) {
@@ -124,7 +124,7 @@ class GPACProtocolImpl(
         myBallotNumber = message.ballotNumber
 
         if (!message.decision) {
-            transactionBlocker.tryToBlock()
+            transactionBlocker.tryToBlock(ProtocolName.GPAC)
             logger.info("Lock aquired: ${message.ballotNumber}")
         }
 
@@ -349,7 +349,7 @@ class GPACProtocolImpl(
         decision: Boolean = false,
         acceptNum: Int? = null
     ): Boolean {
-        transactionBlocker.tryToBlock()
+        transactionBlocker.tryToBlock(ProtocolName.GPAC)
 
         val agreedResponses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
         if (!superSet(agreedResponses, getPeersFromChange(change))) {

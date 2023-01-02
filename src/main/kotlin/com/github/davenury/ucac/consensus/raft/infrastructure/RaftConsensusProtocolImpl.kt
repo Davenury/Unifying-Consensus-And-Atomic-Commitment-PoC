@@ -2,14 +2,12 @@ package com.github.davenury.ucac.consensus.raft.infrastructure
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.ProtocolName
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
-import com.github.davenury.ucac.common.GlobalPeerId
-import com.github.davenury.ucac.common.PeerAddress
-import com.github.davenury.ucac.common.PeerResolver
-import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.*
 import com.github.davenury.ucac.httpClient
@@ -37,6 +35,7 @@ class RaftConsensusProtocolImpl(
     private val protocolClient: RaftProtocolClient,
     private val heartbeatTimeout: Duration = Duration.ofSeconds(4),
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
+    private val transactionBlocker: TransactionBlocker
 ) : ConsensusProtocol, RaftConsensusProtocol, SignalSubject {
     private val globalPeerId = peerResolver.currentPeer()
     private val peerId = globalPeerId.peerId
@@ -215,6 +214,9 @@ class RaftConsensusProtocolImpl(
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
+//        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.GPAC)
+//            return ConsensusHeartbeatResponse(false, currentTerm, true)
+
         val updateResult: LedgerUpdateResult
         mutex.withLock {
             if (role == RaftRole.Leader) stop()
@@ -305,6 +307,14 @@ class RaftConsensusProtocolImpl(
                 handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage)
             }
 
+            response.message.term > currentTerm -> stopBeingLeader(response.message.term)
+
+            response.message.transactionBlocked -> {
+                logger.info("Other peer has blocked transaction check if still can process proposed changes")
+                state.checkIfProposedItemsAreStillValid()
+            }
+
+
             response.message.term <= currentTerm -> {
                 logger.info("Peer ${peerAddress.globalPeerId} is not up to date, decrementing index")
                 val oldValues = peerUrlToNextIndex[peerAddress.globalPeerId]
@@ -314,10 +324,8 @@ class RaftConsensusProtocolImpl(
                     ?: PeerIndices()
             }
 
-            response.message.term > currentTerm -> stopBeingLeader(response.message.term)
         }
     }
-
 
     private suspend fun applyAcceptedChanges() {
 //      DONE: change name of ledgerIndexToMatchIndex
@@ -326,6 +334,8 @@ class RaftConsensusProtocolImpl(
         val acceptedItems = state.getProposedItems(acceptedIndexes)
         if (acceptedItems.isNotEmpty()) {
             logger.info("Applying accepted changes: $acceptedItems")
+//            if (!listOf(ProtocolName.CONSENSUS, ProtocolName.TWO_PC).contains(transactionBlocker.getProtocolName()))
+//                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
         }
 
         acceptedItems.forEach {
@@ -384,6 +394,14 @@ class RaftConsensusProtocolImpl(
             peerUrlToNextIndex[globalPeerId] =
                 newPeerIndices.copy(acceptedIndex = newAcceptedChanges.maxOf { it.ledgerIndex })
         }
+
+        val howManyAcceptedLastChange = peerUrlToNextIndex
+            .values
+            .groupBy { it.acceptedIndex }
+            .mapValues { it.value.count() }.getOrDefault(state.lastApplied, 0)
+
+//        if (isMoreThanHalf(howManyAcceptedLastChange) && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS)
+//            transactionBlocker.releaseBlock()
 
         applyAcceptedChanges()
     }

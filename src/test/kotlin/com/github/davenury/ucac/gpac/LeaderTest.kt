@@ -12,7 +12,7 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
-import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
+import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.common.GlobalPeerId
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver

@@ -8,11 +8,11 @@ import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
-import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.common.GlobalPeerId
 import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -122,6 +122,8 @@ class ApplicationUcac constructor(
 
         val raftProtocolClientImpl = RaftProtocolClientImpl()
 
+        val transactionBlocker = TransactionBlocker()
+
         consensusProtocol = RaftConsensusProtocolImpl(
             history,
             config.host + ":" + config.port,
@@ -131,7 +133,9 @@ class ApplicationUcac constructor(
             raftProtocolClientImpl,
             heartbeatTimeout = config.raft.heartbeatTimeout,
             heartbeatDelay = config.raft.leaderTimeout,
+            transactionBlocker = transactionBlocker
         )
+
 
         gpacProtocol =
             GPACProtocolImpl(
@@ -139,10 +143,12 @@ class ApplicationUcac constructor(
                 config.gpac,
                 ctx,
                 GPACProtocolClientImpl(),
-                TransactionBlocker(),
+                transactionBlocker,
                 signalPublisher,
                 peerResolver,
             )
+
+
         twoPC = TwoPC(
             history,
             config.twoPC,
@@ -151,6 +157,7 @@ class ApplicationUcac constructor(
             consensusProtocol as RaftConsensusProtocolImpl,
             signalPublisher,
             peerResolver,
+            transactionBlocker
         )
 
         service = ApiV2Service(
@@ -219,11 +226,11 @@ class ApplicationUcac constructor(
                     )
                 )
             }
-            exception<AlreadyLockedException> {
+            exception<AlreadyLockedException> { cause ->
                 call.respond(
                     HttpStatusCode.Conflict,
                     ErrorMessage(
-                        "We cannot perform your transaction, as another transaction is currently running"
+                        cause.message!!
                     )
                 )
             }
