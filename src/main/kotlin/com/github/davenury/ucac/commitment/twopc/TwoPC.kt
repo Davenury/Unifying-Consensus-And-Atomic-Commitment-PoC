@@ -171,6 +171,7 @@ class TwoPC(
         decision: Boolean,
         otherPeersets: List<PeerAddress>,
     ) {
+
         val change = acceptChange.change
         val acceptChangeId = acceptChange.toHistoryEntry(peerResolver.currentPeer().peersetId).getId()
 

@@ -1,7 +1,6 @@
 package com.github.davenury.ucac.consensus.raft.infrastructure
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
@@ -35,6 +34,7 @@ class RaftConsensusProtocolImpl(
     private val protocolClient: RaftProtocolClient,
     private val heartbeatTimeout: Duration = Duration.ofSeconds(4),
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
+    private val transactionBlocker: TransactionBlocker
 ) : ConsensusProtocol, RaftConsensusProtocol, SignalSubject {
     private val globalPeerId = peerResolver.currentPeer()
     private val peerId = globalPeerId.peerId
@@ -177,6 +177,10 @@ class RaftConsensusProtocolImpl(
             listOf(otherConsensusPeers()),
             null
         )
+
+        //      Release block
+        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS)
+            transactionBlocker.releaseBlock()
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
@@ -186,7 +190,8 @@ class RaftConsensusProtocolImpl(
         val prevLogIndex = heartbeat.prevLogIndex
         val prevLogTerm = heartbeat.prevLogTerm
 
-        logger.debug("Received heartbeat $heartbeat")
+//        logger.debug("Received heartbeat $heartbeat")
+        logger.info("Received heartbeat $heartbeat")
 
         if (term < currentTerm) {
             logger.info("The received heartbeat has an old term ($term vs $currentTerm)")
@@ -213,6 +218,33 @@ class RaftConsensusProtocolImpl(
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
+
+        when {
+            proposedChanges.isNotEmpty() && acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
+                updateLedger(heartbeat, acceptedChanges)
+                return ConsensusHeartbeatResponse(true, currentTerm, true)
+            }
+
+            proposedChanges.isNotEmpty() && transactionBlocker.isAcquired() ->
+                return ConsensusHeartbeatResponse(false, currentTerm, true)
+
+            proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) } && !transactionBlocker.isAcquired() ->
+                return ConsensusHeartbeatResponse(true, currentTerm, incompatibleWithHistory = true)
+
+            proposedChanges.isNotEmpty() ->
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
+        }
+
+        updateLedger(heartbeat, acceptedChanges, proposedChanges)
+
+        return ConsensusHeartbeatResponse(true, currentTerm)
+    }
+
+    private suspend fun updateLedger(
+        heartbeat: ConsensusHeartbeat,
+        acceptedChanges: List<LedgerItem>,
+        proposedChanges: List<LedgerItem> = listOf()
+    ) {
         val updateResult: LedgerUpdateResult
         mutex.withLock {
             if (role == RaftRole.Leader) stop()
@@ -229,6 +261,7 @@ class RaftConsensusProtocolImpl(
                 historyEntry = acceptedItem.entry,
             )
         }
+
         updateResult.proposedItems.forEach { proposedItem ->
             signalPublisher.signal(
                 signal = Signal.ConsensusFollowerChangeProposed,
@@ -248,13 +281,14 @@ class RaftConsensusProtocolImpl(
                 "${updateResult.acceptedItems.size} accepted items"
         logger.debug(message)
 
+        if (transactionBlocker.isAcquired() && updateResult.acceptedItems.isNotEmpty())
+            transactionBlocker.releaseBlock()
+
         if (updateResult.proposedItems.isNotEmpty() || updateResult.acceptedItems.isNotEmpty()) {
             logger.info(message)
         }
-
-
-        return ConsensusHeartbeatResponse(true, currentTerm)
     }
+
 
     override suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult> =
         proposeChangeAsync(change)
@@ -298,10 +332,31 @@ class RaftConsensusProtocolImpl(
                 logger.info("Peer did not respond to heartbeat ${peerAddress.globalPeerId}")
             }
 
+            response.message.transactionBlocked && response.message.success -> {
+                logger.info("Peer $peer has transaction blocker on but accepted changes was applied")
+                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.acceptedChanges)
+            }
+
             response.message.success -> {
                 logger.debug("Heartbeat sent successfully to ${peerAddress.globalPeerId}")
-                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage)
+                handleSuccessHeartbeatResponseFromPeer(
+                    peerAddress,
+                    peerMessage.acceptedChanges,
+                    peerMessage.proposedChanges
+                )
             }
+
+            response.message.term > currentTerm -> stopBeingLeader(response.message.term)
+
+            response.message.transactionBlocked -> {
+                logger.info("Peer $peer has transaction blocker on")
+            }
+
+            response.message.incompatibleWithHistory -> {
+                logger.info("Peer $peer's history is incompatible with proposed change")
+                state.checkIfProposedItemsAreStillValid()
+            }
+
 
             response.message.term <= currentTerm -> {
                 logger.info("Peer ${peerAddress.globalPeerId} is not up to date, decrementing index")
@@ -312,10 +367,8 @@ class RaftConsensusProtocolImpl(
                     ?: PeerIndices()
             }
 
-            response.message.term > currentTerm -> stopBeingLeader(response.message.term)
         }
     }
-
 
     private suspend fun applyAcceptedChanges() {
 //      DONE: change name of ledgerIndexToMatchIndex
@@ -324,6 +377,7 @@ class RaftConsensusProtocolImpl(
         val acceptedItems = state.getProposedItems(acceptedIndexes)
         if (acceptedItems.isNotEmpty()) {
             logger.info("Applying accepted changes: $acceptedItems")
+            transactionBlocker.releaseBlock()
         }
 
         acceptedItems.forEach {
@@ -359,14 +413,12 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun handleSuccessHeartbeatResponseFromPeer(
         peerAddress: PeerAddress,
-        peerMessage: ConsensusHeartbeat
+        newAcceptedChanges: List<LedgerItemDto>,
+        newProposedChanges: List<LedgerItemDto> = listOf()
     ) {
         val globalPeerId = peerAddress.globalPeerId
 
         val peerIndices = peerUrlToNextIndex.getOrDefault(globalPeerId, PeerIndices())
-
-        val newAcceptedChanges = peerMessage.acceptedChanges
-        val newProposedChanges = peerMessage.proposedChanges
 
         if (newProposedChanges.isNotEmpty()) {
             newProposedChanges.forEach {
@@ -455,6 +507,12 @@ class RaftConsensusProtocolImpl(
             if (!history.isEntryCompatible(entry)) {
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                 return
+            }
+            try {
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
+            } catch (ex: AlreadyLockedException) {
+                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                throw ex
             }
 
             timer.cancelCounting()
