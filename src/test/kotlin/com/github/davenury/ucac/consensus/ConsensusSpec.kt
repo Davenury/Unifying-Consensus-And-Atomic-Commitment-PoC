@@ -9,6 +9,7 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.common.GlobalPeerId
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
@@ -733,6 +734,7 @@ class ConsensusSpec : IntegrationTestBase() {
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
             protocolClient = RaftProtocolClientImpl(),
+            transactionBlocker = TransactionBlocker()
         )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()

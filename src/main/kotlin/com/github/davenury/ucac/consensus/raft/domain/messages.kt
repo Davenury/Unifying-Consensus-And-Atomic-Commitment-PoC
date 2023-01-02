@@ -21,7 +21,9 @@ data class ConsensusHeartbeat(
 
 data class ConsensusHeartbeatResponse(
     val success: Boolean,
-    val term: Int
+    val term: Int,
+    val transactionBlocked: Boolean = false,
+    val incompatibleWithHistory: Boolean = false
 )
 
 typealias ConsensusProposeChange = Change
