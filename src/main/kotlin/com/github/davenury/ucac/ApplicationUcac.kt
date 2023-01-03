@@ -156,8 +156,7 @@ class ApplicationUcac constructor(
             TwoPCProtocolClientImpl(config.peerId),
             consensusProtocol as RaftConsensusProtocolImpl,
             signalPublisher,
-            peerResolver,
-            transactionBlocker
+            peerResolver
         )
 
         service = ApiV2Service(

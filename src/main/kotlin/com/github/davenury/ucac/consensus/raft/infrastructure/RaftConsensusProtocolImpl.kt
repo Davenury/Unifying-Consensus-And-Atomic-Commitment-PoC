@@ -1,5 +1,6 @@
 package com.github.davenury.ucac.consensus.raft.infrastructure
 
+import com.github.davenury.common.AlreadyLockedException
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.ProtocolName
@@ -214,8 +215,10 @@ class RaftConsensusProtocolImpl(
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
-//        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.GPAC)
-//            return ConsensusHeartbeatResponse(false, currentTerm, true)
+        if (proposedChanges.isNotEmpty() && transactionBlocker.isAcquired())
+            return ConsensusHeartbeatResponse(false, currentTerm, true)
+        else if(proposedChanges.isNotEmpty())
+            transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
 
         val updateResult: LedgerUpdateResult
         mutex.withLock {
@@ -233,6 +236,7 @@ class RaftConsensusProtocolImpl(
                 historyEntry = acceptedItem.entry,
             )
         }
+
         updateResult.proposedItems.forEach { proposedItem ->
             signalPublisher.signal(
                 signal = Signal.ConsensusFollowerChangeProposed,
@@ -251,6 +255,9 @@ class RaftConsensusProtocolImpl(
                 "${updateResult.proposedItems.size} proposed and " +
                 "${updateResult.acceptedItems.size} accepted items"
         logger.debug(message)
+
+        if(updateResult.acceptedItems.isNotEmpty())
+            transactionBlocker.releaseBlock()
 
         if (updateResult.proposedItems.isNotEmpty() || updateResult.acceptedItems.isNotEmpty()) {
             logger.info(message)
@@ -334,8 +341,7 @@ class RaftConsensusProtocolImpl(
         val acceptedItems = state.getProposedItems(acceptedIndexes)
         if (acceptedItems.isNotEmpty()) {
             logger.info("Applying accepted changes: $acceptedItems")
-//            if (!listOf(ProtocolName.CONSENSUS, ProtocolName.TWO_PC).contains(transactionBlocker.getProtocolName()))
-//                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
+            transactionBlocker.releaseBlock()
         }
 
         acceptedItems.forEach {
@@ -394,14 +400,6 @@ class RaftConsensusProtocolImpl(
             peerUrlToNextIndex[globalPeerId] =
                 newPeerIndices.copy(acceptedIndex = newAcceptedChanges.maxOf { it.ledgerIndex })
         }
-
-        val howManyAcceptedLastChange = peerUrlToNextIndex
-            .values
-            .groupBy { it.acceptedIndex }
-            .mapValues { it.value.count() }.getOrDefault(state.lastApplied, 0)
-
-//        if (isMoreThanHalf(howManyAcceptedLastChange) && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS)
-//            transactionBlocker.releaseBlock()
 
         applyAcceptedChanges()
     }
@@ -475,6 +473,12 @@ class RaftConsensusProtocolImpl(
             if (!history.isEntryCompatible(entry)) {
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                 return
+            }
+            try {
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
+            } catch (ex: AlreadyLockedException){
+                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                throw ex
             }
 
             timer.cancelCounting()
