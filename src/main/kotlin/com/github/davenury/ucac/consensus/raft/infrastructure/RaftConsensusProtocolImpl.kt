@@ -179,6 +179,10 @@ class RaftConsensusProtocolImpl(
             listOf(otherConsensusPeers()),
             null
         )
+
+        //      Release block
+        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS)
+            transactionBlocker.releaseBlock()
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
@@ -217,7 +221,7 @@ class RaftConsensusProtocolImpl(
 
         if (proposedChanges.isNotEmpty() && transactionBlocker.isAcquired())
             return ConsensusHeartbeatResponse(false, currentTerm, true)
-        else if(proposedChanges.isNotEmpty())
+        else if (proposedChanges.isNotEmpty())
             transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
 
         val updateResult: LedgerUpdateResult
@@ -256,7 +260,7 @@ class RaftConsensusProtocolImpl(
                 "${updateResult.acceptedItems.size} accepted items"
         logger.debug(message)
 
-        if(updateResult.acceptedItems.isNotEmpty())
+        if (updateResult.acceptedItems.isNotEmpty())
             transactionBlocker.releaseBlock()
 
         if (updateResult.proposedItems.isNotEmpty() || updateResult.acceptedItems.isNotEmpty()) {
@@ -476,7 +480,7 @@ class RaftConsensusProtocolImpl(
             }
             try {
                 transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
-            } catch (ex: AlreadyLockedException){
+            } catch (ex: AlreadyLockedException) {
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                 throw ex
             }
