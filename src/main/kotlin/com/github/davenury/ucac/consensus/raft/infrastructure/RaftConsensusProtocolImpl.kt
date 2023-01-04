@@ -192,7 +192,8 @@ class RaftConsensusProtocolImpl(
         val prevLogIndex = heartbeat.prevLogIndex
         val prevLogTerm = heartbeat.prevLogTerm
 
-        logger.debug("Received heartbeat $heartbeat")
+//        logger.debug("Received heartbeat $heartbeat")
+        logger.info("Received heartbeat $heartbeat")
 
         if (term < currentTerm) {
             logger.info("The received heartbeat has an old term ($term vs $currentTerm)")
@@ -221,6 +222,8 @@ class RaftConsensusProtocolImpl(
 
         if (proposedChanges.isNotEmpty() && transactionBlocker.isAcquired())
             return ConsensusHeartbeatResponse(false, currentTerm, true)
+        if (proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) } && transactionBlocker.isAcquired())
+            return ConsensusHeartbeatResponse(false, currentTerm, incompatibleWithHistory = true)
         else if (proposedChanges.isNotEmpty())
             transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
 
@@ -322,6 +325,10 @@ class RaftConsensusProtocolImpl(
 
             response.message.transactionBlocked -> {
                 logger.info("Other peer has blocked transaction check if still can process proposed changes")
+            }
+
+            response.message.incompatibleWithHistory -> {
+                logger.info("Other peer history is incompatible with proposed change")
                 state.checkIfProposedItemsAreStillValid()
             }
 
