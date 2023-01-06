@@ -505,6 +505,7 @@ class RaftConsensusProtocolImpl(
             }
 
             if (!history.isEntryCompatible(entry)) {
+                logger.info("Proposed change is incompatible. Change: $change")
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                 return
             }
