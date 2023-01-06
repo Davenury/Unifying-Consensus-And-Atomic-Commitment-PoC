@@ -85,7 +85,7 @@ class MixedChangesSpec : IntegrationTestBase() {
 
         applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+        applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 
 //      First peerset
