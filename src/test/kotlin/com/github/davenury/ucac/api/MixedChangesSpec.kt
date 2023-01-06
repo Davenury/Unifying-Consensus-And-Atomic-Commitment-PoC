@@ -38,6 +38,72 @@ class MixedChangesSpec : IntegrationTestBase() {
     }
 
     @Test
+    fun `try to execute two following changes in the same time, first GPAC, then Raft`(): Unit = runBlocking {
+        val applyEndPhaser = Phaser(6)
+        val beforeSendingAgreePhaser = Phaser(1)
+        val electionPhaser = Phaser(4)
+        val applyConsensusPhaser = Phaser(2)
+
+        listOf(applyEndPhaser, electionPhaser, beforeSendingAgreePhaser, applyConsensusPhaser)
+            .forEach { it.register() }
+        val leaderElected = SignalListener {
+            logger.info("Arrived ${it.subject.getPeerName()}")
+            electionPhaser.arrive()
+        }
+
+        val signalListenersForCohort = mapOf(
+            Signal.OnHandlingApplyEnd to SignalListener {
+                logger.info("Arrived: ${it.subject.getPeerName()}")
+                applyEndPhaser.arrive()
+            },
+            Signal.ConsensusLeaderElected to leaderElected,
+            Signal.BeforeSendingAgree to SignalListener {
+                beforeSendingAgreePhaser.arrive()
+            },
+            Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                applyConsensusPhaser.arrive()
+            }
+        )
+
+        apps = TestApplicationSet(
+            listOf(3, 3),
+            signalListeners = (0..5).associateWith { signalListenersForCohort }
+        )
+
+        val peers = apps.getPeers()
+        val change = change(0, 1)
+        val secondChange = change(mapOf(0 to change.toHistoryEntry(0).getId()))
+
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        // when - executing transaction
+        executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", change)
+
+        beforeSendingAgreePhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", secondChange)
+
+        applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+
+//      First peerset
+        askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
+            val changes = it.second
+            expectThat(changes.size).isGreaterThanOrEqualTo(2)
+            expectThat(changes[0]).isEqualTo(change)
+            expectThat(changes[1]).isEqualTo(secondChange)
+        }
+
+        askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
+            val changes = it.second
+            expectThat(changes.size).isGreaterThanOrEqualTo(1)
+            expectThat(changes[0]).isEqualTo(change)
+        }
+    }
+
+    @Test
     fun `try to execute two change in the same time, first GPAC, then Raft`(): Unit = runBlocking {
         val applyEndPhaser = Phaser(6)
         val beforeSendingAgreePhaser = Phaser(1)

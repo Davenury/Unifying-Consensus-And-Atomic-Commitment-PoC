@@ -509,14 +509,14 @@ class RaftConsensusProtocolImpl(
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                 return
             }
+
             try {
                 transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
             } catch (ex: AlreadyLockedException) {
+                logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                 throw ex
             }
-
-            timer.cancelCounting()
             logger.info("Propose change to ledger: $change")
             id = state.proposeEntry(entry, currentTerm, change.id)
         }

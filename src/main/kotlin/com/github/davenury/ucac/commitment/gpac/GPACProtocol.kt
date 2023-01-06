@@ -157,10 +157,12 @@ class GPACProtocolImpl(
             } else {
                 changeSucceeded(message.change)
             }
+            transactionBlocker.releaseBlock()
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
-            transactionBlocker.releaseBlock()
+            if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.GPAC)
+                transactionBlocker.releaseBlock()
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
         }
