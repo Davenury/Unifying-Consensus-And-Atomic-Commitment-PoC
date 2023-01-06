@@ -57,6 +57,8 @@ class RaftConsensusProtocolImpl(
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
+    private val queuedChanges: MutableList<Change> = mutableListOf()
+
     private fun otherConsensusPeers(): List<PeerAddress> {
         return peerResolver.getPeersFromCurrentPeerset().filter { it.globalPeerId != globalPeerId }
     }
@@ -281,8 +283,9 @@ class RaftConsensusProtocolImpl(
                 "${updateResult.acceptedItems.size} accepted items"
         logger.debug(message)
 
-        if (transactionBlocker.isAcquired() && updateResult.acceptedItems.isNotEmpty())
+        if (transactionBlocker.isAcquired() && updateResult.acceptedItems.isNotEmpty()) {
             transactionBlocker.releaseBlock()
+        }
 
         if (updateResult.proposedItems.isNotEmpty() || updateResult.acceptedItems.isNotEmpty()) {
             logger.info(message)
@@ -366,8 +369,9 @@ class RaftConsensusProtocolImpl(
                     ?.decrement()
                     ?: PeerIndices()
             }
-
         }
+
+        checkIfQueuedChanges()
     }
 
     private suspend fun applyAcceptedChanges() {
@@ -410,6 +414,12 @@ class RaftConsensusProtocolImpl(
         restartTimer()
     }
 
+
+    private suspend fun checkIfQueuedChanges() {
+        if (queuedChanges.isEmpty()) return
+        val change = queuedChanges.removeAt(0)
+        proposeChangeToLedger(changeIdToCompletableFuture[change.id]!!, change)
+    }
 
     private suspend fun handleSuccessHeartbeatResponseFromPeer(
         peerAddress: PeerAddress,
@@ -496,6 +506,7 @@ class RaftConsensusProtocolImpl(
     //  TODO: sync change will have to use Condition/wait/notifyAll
     private suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
         val entry = change.toHistoryEntry(globalPeerId.peersetId)
+        changeIdToCompletableFuture[change.id] = result
 
         val id: Int
         mutex.withLock {
@@ -503,24 +514,29 @@ class RaftConsensusProtocolImpl(
                 logger.info("Already proposed that change: $change")
                 return
             }
+            if (!transactionBlocker.isAcquired()) {
+                try {
+                    transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
+                } catch (ex: AlreadyLockedException) {
+                    logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
+                    result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                    throw ex
+                }
 
-            if (!history.isEntryCompatible(entry)) {
-                logger.info("Proposed change is incompatible. Change: $change")
-                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                return
-            }
+                if (!history.isEntryCompatible(entry)) {
+                    logger.info("Proposed change is incompatible. Change: $change")
+                    result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                    transactionBlocker.releaseBlock()
+                    return
+                }
 
-            try {
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
-            } catch (ex: AlreadyLockedException) {
-                logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
-                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                throw ex
+                logger.info("Propose change to ledger: $change")
+                id = state.proposeEntry(entry, currentTerm, change.id)
+                voteContainer.initializeChange(id)
+            } else {
+                queuedChanges.add(change)
             }
-            logger.info("Propose change to ledger: $change")
-            id = state.proposeEntry(entry, currentTerm, change.id)
         }
-        voteContainer.initializeChange(id)
     }
 
     private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change) {
