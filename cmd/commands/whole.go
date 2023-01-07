@@ -57,7 +57,7 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.testDuration, "test-duration", "PT1S", "Duration of test (in java-like duration format)")
 	cmd.Flags().IntVar(&config.maxPeersetsInChange, "max-peersets-in-change", 2, "Determines maximum number of peersets that can take part in one change")
 	cmd.Flags().StringVar(&config.testsStrategy, "tests-strategy", "delay_on_conflicts", "Determines tests strategy - either random or delay_on_conflicts")
-	cmd.Flags().StringVar(&config.pushgatewayAddress, "pushgateway-address", "prometheus-prometheus-pushgateway.default:9091", "Pushgateway address")
+	cmd.Flags().StringVar(&config.pushgatewayAddress, "pushgateway-address", "prometheus-prometheus-pushgateway:9091", "Pushgateway address")
 	cmd.Flags().BoolVar(&config.enforceAcUsage, "enforce-ac", false, "Determines if usage of AC protocol should be enforced even if it isn't required (GPAC)")
 	cmd.Flags().StringVar(&config.acProtocol, "ac-protocol", "gpac", "AC protocol to use in case it's needed. two_pc or gpac")
 	cmd.Flags().StringVar(&config.consensusProtocol, "consensus-protocol", "", "Consensus protocol to use. For now it's one protocol")

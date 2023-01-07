@@ -38,8 +38,21 @@ func DoInit(namespace string, createNamespace bool) {
 		utils.CreateNamespace(namespace)
 	}
 
+	prometheusValues := map[string]interface{}{
+		"alertmanager": map[string]interface{}{
+			"enabled": false,
+		},
+		"server": map[string]interface{}{
+			"global": map[string]interface{}{
+				"scrape_interval": "10s",
+			},
+		},
+		"prometheus-node-exporter": map[string]interface{}{
+			"enabled": false,
+		},
+	}
 	// install prometheus
-	installChart(namespace, "prometheus-community", "prometheus", "prometheus", nil)
+	installChart(namespace, "prometheus-community", "prometheus", "prometheus", prometheusValues)
 
 	grafanaValues := map[string]interface{}{
 		"adminPassword": "admin123",
@@ -59,7 +72,7 @@ func DoInit(namespace string, createNamespace bool) {
 				"datasources": []map[string]interface{}{
 					{
 						"name": "Prometheus",
-						"url": fmt.Sprintf("http://prometheus-server.%s.svc.cluster.local:80", namespace),
+						"url": fmt.Sprintf("http://prometheus-server", namespace),
 						"type": "prometheus",
 						"isDefault": true,
 					},

@@ -27,8 +27,10 @@ class Changes(
         logger.info("Handling notification: $notification")
         if (!handledChanges.contains(notification.change.id)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
-                val parentId = notification.change.toHistoryEntry(peersetId).getId()
-                changes[peersetId]!!.overrideParentId(parentId)
+                if (notification.result.status != ChangeResult.Status.CONFLICT) {
+                    val parentId = notification.change.toHistoryEntry(peersetId).getId()
+                    changes[peersetId]!!.overrideParentId(parentId)
+                }
                 getPeersStrategy.handleNotification(peersetId)
                 handledChanges.add(notification.change.id)
             }
