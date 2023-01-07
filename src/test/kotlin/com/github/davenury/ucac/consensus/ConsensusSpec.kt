@@ -9,10 +9,10 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
-import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.common.GlobalPeerId
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.testHttpClient
@@ -778,9 +778,9 @@ class ConsensusSpec : IntegrationTestBase() {
         userName: String = "userName",
         parentId: String = InitialHistoryEntry.getId(),
     ) = AddUserChange(
-        listOf(ChangePeersetInfo(0, parentId)),
         userName,
         acceptNum,
+        peersets = listOf(ChangePeersetInfo(0, parentId)),
     )
 
     private suspend fun executeChange(uri: String, change: Change) =

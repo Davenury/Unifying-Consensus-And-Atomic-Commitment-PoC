@@ -49,7 +49,6 @@ class TwoPCSpec : IntegrationTestBase() {
 
         val signalListenersForCohort = mapOf(
             Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                println("Change accepted ${it.subject.getPeerName()} ${it.change}")
                 changeAppliedPhaser.arrive()
             },
             Signal.ConsensusLeaderElected to SignalListener { electionPhaser.arrive() }
@@ -395,8 +394,8 @@ class TwoPCSpec : IntegrationTestBase() {
 
             // given - change in first peerset
             val firstChange = AddUserChange(
-                listOf(ChangePeersetInfo(0, InitialHistoryEntry.getId())),
                 "firstUserName",
+                peersets = listOf(ChangePeersetInfo(0, InitialHistoryEntry.getId())),
             )
             expectCatching {
                 executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync", firstChange)
@@ -406,8 +405,8 @@ class TwoPCSpec : IntegrationTestBase() {
 
             // and - change in second peerset
             val secondChange = AddGroupChange(
-                listOf(ChangePeersetInfo(1, InitialHistoryEntry.getId())),
                 "firstGroup",
+                peersets = listOf(ChangePeersetInfo(1, InitialHistoryEntry.getId())),
             )
             expectCatching {
                 executeChange(
@@ -420,12 +419,12 @@ class TwoPCSpec : IntegrationTestBase() {
 
             // when - executing change between two peersets
             val lastChange: Change = AddRelationChange(
-                listOf(
+                "firstUserName",
+                "firstGroup",
+                peersets = listOf(
                     ChangePeersetInfo(0, firstChange.toHistoryEntry(0).getId()),
                     ChangePeersetInfo(1, secondChange.toHistoryEntry(1).getId()),
                 ),
-                "firstUserName",
-                "firstGroup",
             )
 
             expectCatching {
@@ -475,10 +474,10 @@ class TwoPCSpec : IntegrationTestBase() {
         peerAddresses.map { askForChanges(it) }
 
     private fun change(vararg peersetIds: Int) = AddUserChange(
-        peersetIds.map {
+        "userName",
+        peersets = peersetIds.map {
             ChangePeersetInfo(it, InitialHistoryEntry.getId())
         },
-        "userName",
     )
 
     private fun deleteRaftHistories() {

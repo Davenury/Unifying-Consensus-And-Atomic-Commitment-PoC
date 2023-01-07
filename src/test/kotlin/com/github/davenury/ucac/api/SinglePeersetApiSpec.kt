@@ -48,10 +48,10 @@ class SinglePeersetApiSpec {
     @Test
     fun `sync api`(): Unit = runBlocking {
         val change = AddUserChange(
-            listOf(
+            "test user",
+            peersets = listOf(
                 ChangePeersetInfo(0, InitialHistoryEntry.getId())
             ),
-            "test user",
         )
 
         logger.info("Sending change $change")

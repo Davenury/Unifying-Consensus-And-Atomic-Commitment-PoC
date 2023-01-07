@@ -41,7 +41,9 @@ class TwoPC(
             .filter { it != peerResolver.currentPeer().peersetId }
             .map { peerResolver.resolve(GlobalPeerId(it, 0)) }
 
+        signal(Signal.TwoPCBeforeProposePhase, change)
         val decision = proposePhase(acceptChange, mainChangeId, otherPeers)
+        signal(Signal.TwoPCOnChangeAccepted,change)
         decisionPhase(acceptChange, decision, otherPeers)
 
         val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
