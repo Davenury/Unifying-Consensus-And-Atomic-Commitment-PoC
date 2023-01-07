@@ -1,6 +1,7 @@
 package com.github.davenury.tests
 
 import com.github.davenury.common.meterRegistry
+import io.micrometer.core.instrument.Tag
 
 object Metrics {
 
@@ -14,6 +15,10 @@ object Metrics {
 
     fun bumpDelayInSendingChange() {
         meterRegistry.counter("sending_change_delay").increment()
+    }
+
+    fun bumpConflictedChanges(message: String?) {
+        meterRegistry.counter("conflicted_message", listOf(Tag.of("detailed_message", message ?: "null"))).increment()
     }
 
 }

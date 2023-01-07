@@ -32,6 +32,8 @@ class Changes(
                 if (notification.result.status != ChangeResult.Status.CONFLICT) {
                     val parentId = notification.change.toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
+                } else {
+                    Metrics.bumpConflictedChanges(notification.result.detailedMessage)
                 }
                 getPeersStrategy.handleNotification(peersetId)
                 handledChanges.add(notification.change.id)
