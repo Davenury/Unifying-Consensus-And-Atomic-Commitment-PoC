@@ -1,5 +1,6 @@
 package com.github.davenury.common
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
@@ -44,8 +45,7 @@ data class ChangePeersetInfo(
         JsonSubTypes.Type(value = TwoPCChange::class, name = "TWO_PC_Change"),
     )
 )
-sealed class Change {
-    val id = UUID.randomUUID().toString()
+sealed class Change(open val id: String = UUID.randomUUID().toString()) {
     abstract val peersets: List<ChangePeersetInfo>
     abstract val notificationUrl: String?
 
@@ -72,7 +72,7 @@ sealed class Change {
         (other is Change) && Objects.equals(id, other.id)
 
     companion object {
-        private fun fromJson(json: String): Change =  objectMapper.readValue(json, Change::class.java)
+        private fun fromJson(json: String): Change = objectMapper.readValue(json, Change::class.java)
 
         fun fromHistoryEntry(entry: HistoryEntry): Change? {
             if (entry == InitialHistoryEntry) {
@@ -90,20 +90,20 @@ sealed class Change {
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class AddRelationChange(
-    override val peersets: List<ChangePeersetInfo>,
     val from: String,
     val to: String,
     override val acceptNum: Int? = null,
     @JsonProperty("notification_url")
     override val notificationUrl: String? = null,
-) : Change() {
+    override val id: String = UUID.randomUUID().toString(),
+    override val peersets: List<ChangePeersetInfo> = listOf()
+) : Change(id) {
 
     override fun equals(other: Any?): Boolean {
         if (other !is AddRelationChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(peersets, other.peersets) &&
-                Objects.equals(from, other.from) &&
+        return Objects.equals(from, other.from) &&
                 Objects.equals(to, other.to)
     }
 
@@ -123,20 +123,20 @@ data class AddRelationChange(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class DeleteRelationChange(
-    override val peersets: List<ChangePeersetInfo>,
     val from: String,
     val to: String,
     override val acceptNum: Int? = null,
     @JsonProperty("notification_url")
     override val notificationUrl: String? = null,
-) : Change() {
+    override val id: String = UUID.randomUUID().toString(),
+    override val peersets: List<ChangePeersetInfo> = listOf()
+) : Change(id) {
 
     override fun equals(other: Any?): Boolean {
         if (other !is DeleteRelationChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(peersets, other.peersets) &&
-                Objects.equals(from, other.from) &&
+        return Objects.equals(from, other.from) &&
                 Objects.equals(to, other.to)
     }
 
@@ -156,19 +156,18 @@ data class DeleteRelationChange(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class AddUserChange(
-    override val peersets: List<ChangePeersetInfo>,
     val userName: String,
     override val acceptNum: Int? = null,
+    override val id: String = UUID.randomUUID().toString(),
+    override val peersets: List<ChangePeersetInfo> = listOf(),
     @JsonProperty("notification_url")
-    override val notificationUrl: String? = null,
-) : Change() {
-
+    override val notificationUrl: String? = null
+) : Change(id) {
     override fun equals(other: Any?): Boolean {
         if (other !is AddUserChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(peersets, other.peersets) &&
-                Objects.equals(userName, other.userName)
+        return Objects.equals(userName, other.userName)
     }
 
     override fun hashCode(): Int {
@@ -187,19 +186,19 @@ data class AddUserChange(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class AddGroupChange(
-    override val peersets: List<ChangePeersetInfo>,
     val groupName: String,
     override val acceptNum: Int? = null,
     @JsonProperty("notification_url")
     override val notificationUrl: String? = null,
-) : Change() {
+    override val id: String = UUID.randomUUID().toString(),
+    override val peersets: List<ChangePeersetInfo>,
+) : Change(id) {
 
     override fun equals(other: Any?): Boolean {
         if (other !is AddGroupChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(peersets, other.peersets) &&
-                Objects.equals(groupName, other.groupName)
+        return Objects.equals(groupName, other.groupName)
     }
 
     override fun hashCode(): Int {
@@ -227,19 +226,19 @@ enum class TwoPCStatus {
 // Else: 2PCChange-Accept -> 2PCChange-Abort
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class TwoPCChange(
-    override val peersets: List<ChangePeersetInfo>,
     override val acceptNum: Int? = null,
     @JsonProperty("notification_url")
     override val notificationUrl: String? = null,
     val twoPCStatus: TwoPCStatus,
     val change: Change,
-) : Change() {
+    override val id: String = UUID.randomUUID().toString(),
+    override val peersets: List<ChangePeersetInfo>
+) : Change(id) {
     override fun equals(other: Any?): Boolean {
         if (other !is TwoPCChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(peersets, other.peersets) &&
-                Objects.equals(twoPCStatus, other.twoPCStatus) &&
+        return Objects.equals(twoPCStatus, other.twoPCStatus) &&
                 Objects.equals(this.change, other.change)
     }
 

@@ -31,11 +31,13 @@ class GPACProtocolSpec {
         ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
         protocolClientMock,
         transactionBlockerMock,
-        peerResolver = PeerResolver(GlobalPeerId(0, 0), mapOf(
-            GlobalPeerId(0, 0) to PeerAddress(GlobalPeerId(0, 0), "peer1"),
-            GlobalPeerId(0, 1) to PeerAddress(GlobalPeerId(0, 1), "peer2"),
-            GlobalPeerId(0, 2) to PeerAddress(GlobalPeerId(0, 2), "peer3"),
-        )),
+        peerResolver = PeerResolver(
+            GlobalPeerId(0, 0), mapOf(
+                GlobalPeerId(0, 0) to PeerAddress(GlobalPeerId(0, 0), "peer1"),
+                GlobalPeerId(0, 1) to PeerAddress(GlobalPeerId(0, 1), "peer2"),
+                GlobalPeerId(0, 2) to PeerAddress(GlobalPeerId(0, 2), "peer3"),
+            )
+        ),
     ).also {
         it.leaderTimer = timerMock
         it.retriesTimer = timerMock
@@ -85,7 +87,7 @@ class GPACProtocolSpec {
 
         val result = subject.handleElect(message)
 
-        expectThat(result).isEqualTo(ElectedYou(3,Accept.COMMIT, 0,null,false))
+        expectThat(result).isEqualTo(ElectedYou(3, Accept.COMMIT, 0, null, false))
         expectThat(subject.getBallotNumber()).isEqualTo(3)
     }
 
@@ -150,10 +152,10 @@ class GPACProtocolSpec {
     }
 
     private val change = AddUserChange(
-        listOf(
+        "userName",
+        peersets = listOf(
             ChangePeersetInfo(0, InitialHistoryEntry.getId()),
             ChangePeersetInfo(1, InitialHistoryEntry.getId()),
         ),
-        "userName",
     )
 }

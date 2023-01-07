@@ -1,15 +1,11 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.ucac.*
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.httpClient
-import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.IntegrationTestBase
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
@@ -447,10 +443,10 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             expectCatching {
                 executeChange(
                     "http://${apps.getPeer(0, 0).address}/v2/change/sync", AddUserChange(
-                        listOf(
+                        "firstUserName",
+                        peersets = listOf(
                             ChangePeersetInfo(0, InitialHistoryEntry.getId()),
                         ),
-                        "firstUserName",
                     )
                 )
             }.isSuccess()
@@ -462,10 +458,10 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 executeChange(
                     "http://${apps.getPeer(1, 0).address}/v2/change/sync",
                     AddGroupChange(
-                        listOf(
+                        "firstGroup",
+                        peersets = listOf(
                             ChangePeersetInfo(1, InitialHistoryEntry.getId()),
                         ),
-                        "firstGroup",
                     )
                 )
             }.isSuccess()
@@ -477,12 +473,12 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
             // when - executing change between two peersets
             val addRelationChange = AddRelationChange(
-                listOf(
+                "firstUserName",
+                "firstGroup",
+                peersets = listOf(
                     ChangePeersetInfo(0, lastChange0.toHistoryEntry(0).getId()),
                     ChangePeersetInfo(1, lastChange1.toHistoryEntry(1).getId()),
                 ),
-                "firstUserName",
-                "firstGroup",
             )
 
             expectCatching {
@@ -521,10 +517,10 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         peerAddresses.map { askForChanges(it) }
 
     private fun change(vararg peersetIds: Int) = AddUserChange(
-        peersetIds.map {
+        "userName",
+        peersets = peersetIds.map {
             ChangePeersetInfo(it, InitialHistoryEntry.getId())
         },
-        "userName",
     )
 
     private fun deleteRaftHistories() {

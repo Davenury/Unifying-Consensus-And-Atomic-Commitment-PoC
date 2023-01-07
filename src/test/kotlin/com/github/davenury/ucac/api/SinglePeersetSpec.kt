@@ -201,10 +201,10 @@ class SinglePeersetSpec : IntegrationTestBase() {
         val leaderElectedPhaser = Phaser(4)
 
         val proposedChange = AddGroupChange(
-            listOf(
+            "name",
+            peersets = listOf(
                 ChangePeersetInfo(0, InitialHistoryEntry.getId())
             ),
-            "name",
         )
 
         val firstLeaderAction = SignalListener { signalData ->
@@ -306,10 +306,10 @@ class SinglePeersetSpec : IntegrationTestBase() {
         }
 
     private fun change(vararg peersets: Int) = AddUserChange(
-        peersets.map {
+        "userName",
+        peersets = peersets.map {
             ChangePeersetInfo(it, InitialHistoryEntry.getId())
         },
-        "userName",
     )
 
     private fun deleteRaftHistories() {

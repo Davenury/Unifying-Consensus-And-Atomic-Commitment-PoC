@@ -505,7 +505,7 @@ class RaftConsensusProtocolImpl(
 
     //  TODO: sync change will have to use Condition/wait/notifyAll
     private suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
-        val entry = change.toHistoryEntry(globalPeerId.peersetId)
+        var entry = change.toHistoryEntry(globalPeerId.peersetId)
         changeIdToCompletableFuture[change.id] = result
 
         val id: Int
@@ -514,30 +514,96 @@ class RaftConsensusProtocolImpl(
                 logger.info("Already proposed that change: $change")
                 return
             }
-            if (!transactionBlocker.isAcquired()) {
-                try {
-                    transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
-                } catch (ex: AlreadyLockedException) {
-                    logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
-                    result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                    throw ex
-                }
 
-                if (!history.isEntryCompatible(entry)) {
-                    logger.info("Proposed change is incompatible. Change: $change")
-                    result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                    transactionBlocker.releaseBlock()
-                    return
-                }
-
-                logger.info("Propose change to ledger: $change")
-                id = state.proposeEntry(entry, currentTerm, change.id)
-                voteContainer.initializeChange(id)
-            } else {
+            if (transactionBlocker.isAcquired() || isDuring2PAndChangeDoesntFinishIt(change)) {
+                val msg =
+                    if (transactionBlocker.isAcquired()) "transaction is blocked"
+                    else "is during 2PC"
+                logger.info(
+                    "Queued change, because: $msg"
+                )
                 queuedChanges.add(change)
+                return
             }
+
+            try {
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
+            } catch (ex: AlreadyLockedException) {
+                logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
+                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                throw ex
+            }
+
+            val updatedChange: Change
+
+
+            if (checkTwoPCHistoryCompatibility(change)) {
+                val peersetId = peerResolver.currentPeer().peersetId
+                updatedChange = change.copyWithNewParentId(peersetId, history.getCurrentEntry().getId())
+                entry = updatedChange.toHistoryEntry(peersetId)
+            } else {
+                updatedChange = change
+            }
+
+
+
+            if (!history.isEntryCompatible(entry)) {
+                logger.info(
+                    "Proposed change is incompatible. \n CurrentChange: ${
+                        history.getCurrentEntry().getId()
+                    } \n Change.parentId: ${
+                        updatedChange.toHistoryEntry(peerResolver.currentPeer().peersetId).getParentId()
+                    }"
+                )
+                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                transactionBlocker.releaseBlock()
+                return
+            }
+
+            logger.info("Propose change to ledger: $updatedChange")
+            id = state.proposeEntry(entry, currentTerm, updatedChange.id)
+            voteContainer.initializeChange(id)
         }
     }
+
+    private fun isDuring2PAndChangeDoesntFinishIt(change: Change): Boolean {
+        val currentHistoryChange = history
+            .getCurrentEntry()
+            .let { Change.fromHistoryEntry(it) }
+
+        val isDuring2PC: Boolean = currentHistoryChange
+            ?.let { it is TwoPCChange && it.twoPCStatus == TwoPCStatus.ACCEPTED }
+            ?: false
+
+        val changeIsAbortingOf2PC: Boolean =
+            change is TwoPCChange && change.twoPCStatus == TwoPCStatus.ABORTED
+
+        val changeIsApplyingOf2PC: Boolean =
+            currentHistoryChange is TwoPCChange && change == currentHistoryChange.change.copyWithNewParentId(
+                peerResolver.currentPeer().peersetId,
+                history.getCurrentEntry().getId(),
+            )
+
+        return isDuring2PC && !(changeIsAbortingOf2PC || changeIsApplyingOf2PC)
+    }
+
+    private fun checkTwoPCHistoryCompatibility(change: Change): Boolean {
+        val currentEntry = history.getCurrentEntry()
+
+        val grandParentChange: Change =
+            history.getEntryFromHistory(currentEntry.getParentId() ?: return false)
+                ?.let { Change.fromHistoryEntry(it) }
+                ?: return false
+
+        if (grandParentChange !is TwoPCChange) return false
+
+        val peersetId = peerResolver.currentPeer().peersetId
+
+
+        return grandParentChange.change.toHistoryEntry(peersetId).getId() == change.toHistoryEntry(peersetId)
+            .getParentId()
+    }
+
 
     private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change) {
         with(CoroutineScope(leaderRequestExecutorService)) {

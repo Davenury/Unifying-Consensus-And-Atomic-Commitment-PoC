@@ -11,12 +11,12 @@ internal class ChangeTest {
     @Test
     internal fun idUniqueness() {
         val change1 = AddUserChange(
-            listOf(),
             "test1",
+            peersets = listOf(),
         )
         val change2 = AddUserChange(
-            listOf(),
             "test2",
+            peersets = listOf(),
         )
         val change3 = change1.copyWithNewParentId(0, "")
 
