@@ -31,7 +31,6 @@ class TestExecutor(
             for (i in (1..overallNumberOfRequests)) {
                 channel.receive()
                 launch {
-                    logger.info("Introducing change $i")
                     changes.introduceChange(determineNumberOfPeersets())
                 }
             }

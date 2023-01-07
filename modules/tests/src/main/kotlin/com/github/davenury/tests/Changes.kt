@@ -68,7 +68,7 @@ class OnePeersetChanges(
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
 
     suspend fun introduceChange(change: AddUserChange): ChangeState {
-        val senderAddress = peersAddresses.asSequence().shuffled().first()
+        val senderAddress = peersAddresses.first()
         return sender.executeChange(
             senderAddress,
             change.copy(

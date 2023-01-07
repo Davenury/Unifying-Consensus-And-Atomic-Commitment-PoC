@@ -72,7 +72,7 @@ func DoInit(namespace string, createNamespace bool) {
 				"datasources": []map[string]interface{}{
 					{
 						"name": "Prometheus",
-						"url": fmt.Sprintf("http://prometheus-server", namespace),
+						"url": fmt.Sprintf("http://prometheus-server.%s", namespace),
 						"type": "prometheus",
 						"isDefault": true,
 					},
