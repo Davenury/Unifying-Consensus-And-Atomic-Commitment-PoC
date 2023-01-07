@@ -3,6 +3,7 @@ package com.github.davenury.tests
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.GetPeersStrategy
+import io.ktor.utils.io.bits.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
@@ -22,8 +23,9 @@ class Changes(
     private var counter = AtomicInteger(0)
     private val handledChanges: MutableList<String> = mutableListOf()
     private val mutex = Mutex()
+    private val notificationMutex = Mutex()
 
-    suspend fun handleNotification(notification: Notification) {
+    suspend fun handleNotification(notification: Notification) = notificationMutex.withLock {
         logger.info("Handling notification: $notification")
         if (!handledChanges.contains(notification.change.id)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
