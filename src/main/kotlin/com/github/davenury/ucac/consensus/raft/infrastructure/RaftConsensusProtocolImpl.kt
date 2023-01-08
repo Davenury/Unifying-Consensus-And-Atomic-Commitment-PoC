@@ -237,6 +237,7 @@ class RaftConsensusProtocolImpl(
 
             proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) } && !transactionBlocker.isAcquired() -> {
                 logger.debug("Received heartbeat but changes are incompatible")
+                updateLedger(heartbeat, acceptedChanges)
                 return ConsensusHeartbeatResponse(true, currentTerm, incompatibleWithHistory = true)
             }
 
