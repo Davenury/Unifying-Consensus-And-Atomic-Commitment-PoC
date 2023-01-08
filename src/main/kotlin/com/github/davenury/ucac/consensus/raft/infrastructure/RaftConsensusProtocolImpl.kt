@@ -222,6 +222,8 @@ class RaftConsensusProtocolImpl(
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
+        val areProposedChangesIncompatible =
+            proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) }
 
         when {
             acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
@@ -235,10 +237,15 @@ class RaftConsensusProtocolImpl(
                 return ConsensusHeartbeatResponse(false, currentTerm, true)
             }
 
-            proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) } && !transactionBlocker.isAcquired() -> {
-                logger.debug("Received heartbeat but changes are incompatible")
+            acceptedChanges.isNotEmpty() && areProposedChangesIncompatible -> {
+                logger.debug("Received heartbeat but changes are incompatible, updated accepted changes")
                 updateLedger(heartbeat, acceptedChanges)
                 return ConsensusHeartbeatResponse(true, currentTerm, incompatibleWithHistory = true)
+            }
+
+            areProposedChangesIncompatible -> {
+                logger.debug("Received heartbeat but changes are incompatible")
+                return ConsensusHeartbeatResponse(false, currentTerm, incompatibleWithHistory = true)
             }
 
             proposedChanges.isNotEmpty() ->
@@ -348,6 +355,20 @@ class RaftConsensusProtocolImpl(
                 handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.acceptedChanges)
             }
 
+            response.message.success && response.message.incompatibleWithHistory -> {
+                logger.info("Peer $peer's history is incompatible with proposed change but accepted some changes so retry proposing")
+                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.acceptedChanges)
+            }
+
+            response.message.transactionBlocked -> {
+                logger.info("Peer $peer has transaction blocker on")
+            }
+
+            response.message.incompatibleWithHistory -> {
+                logger.info("Peer $peer's history is incompatible with proposed change")
+                state.checkIfProposedItemsAreStillValid()
+            }
+
             response.message.success -> {
                 logger.debug("Heartbeat sent successfully to ${peerAddress.globalPeerId}")
                 handleSuccessHeartbeatResponseFromPeer(
@@ -360,15 +381,6 @@ class RaftConsensusProtocolImpl(
             response.message.term > currentTerm -> {
                 logger.info("Based on info from $peer, someone else is currently leader")
                 stopBeingLeader(response.message.term)
-            }
-
-            response.message.transactionBlocked -> {
-                logger.info("Peer $peer has transaction blocker on")
-            }
-
-            response.message.incompatibleWithHistory -> {
-                logger.info("Peer $peer's history is incompatible with proposed change")
-                state.checkIfProposedItemsAreStillValid()
             }
 
 
