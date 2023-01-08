@@ -90,9 +90,9 @@ func perform(config Config) {
 	})
 	fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
 	waitUntilJobPodCompleted(config)
-	//fmt.Println("Cleanuping")
-	//DoCleanup(config.testNamespace)
-	//fmt.Printf("Do cleanup after monitoring after you're done with it by: helm delete prometheus grafana -n %s \n", config.monitoringNamespace)
+	fmt.Println("Cleanuping")
+	DoCleanup(config.testNamespace)
+	fmt.Printf("Do cleanup after monitoring after you're done with it by: helm delete prometheus grafana -n %s \n", config.monitoringNamespace)
 }
 
 func waitUntilJobPodCompleted(config Config) {
