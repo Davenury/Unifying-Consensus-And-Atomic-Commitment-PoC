@@ -216,6 +216,7 @@ class RaftConsensusProtocolImpl(
 
         if (!haveAllPreviousChanges) {
             logger.info("The received heartbeat is missing some changes (I am behind)")
+            logger.debug("I have in state: ${state.acceptedItems.map { it.ledgerIndex }} ${state.proposedItems.map { it.ledgerIndex }} \n and should have: $prevLogIndex, message changes: ${acceptedChanges.map { it.ledgerIndex }} ${proposedChanges.map { it.ledgerIndex }}")
             state.removeNotAcceptedItems(prevLogIndex!!, prevLogTerm!!)
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
@@ -332,7 +333,7 @@ class RaftConsensusProtocolImpl(
 
         when {
             response.message == null -> {
-                logger.info("Peer did not respond to heartbeat ${peerAddress.globalPeerId}")
+                logger.info("Peer $peer did not respond to heartbeat ${peerAddress.globalPeerId}")
             }
 
             response.message.transactionBlocked && response.message.success -> {
@@ -349,7 +350,10 @@ class RaftConsensusProtocolImpl(
                 )
             }
 
-            response.message.term > currentTerm -> stopBeingLeader(response.message.term)
+            response.message.term > currentTerm -> {
+                logger.info("Based on info from $peer, someone else is currently leader")
+                stopBeingLeader(response.message.term)
+            }
 
             response.message.transactionBlocked -> {
                 logger.info("Peer $peer has transaction blocker on")
