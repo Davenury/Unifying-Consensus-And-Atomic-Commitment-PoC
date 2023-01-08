@@ -3,6 +3,7 @@ package com.github.davenury.tests
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.GetPeersStrategy
+import io.ktor.utils.io.bits.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
@@ -22,13 +23,18 @@ class Changes(
     private var counter = AtomicInteger(0)
     private val handledChanges: MutableList<String> = mutableListOf()
     private val mutex = Mutex()
+    private val notificationMutex = Mutex()
 
-    suspend fun handleNotification(notification: Notification) {
+    suspend fun handleNotification(notification: Notification) = notificationMutex.withLock {
         logger.info("Handling notification: $notification")
         if (!handledChanges.contains(notification.change.id)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
-                val parentId = notification.change.toHistoryEntry(peersetId).getId()
-                changes[peersetId]!!.overrideParentId(parentId)
+                if (notification.result.status != ChangeResult.Status.CONFLICT) {
+                    val parentId = notification.change.toHistoryEntry(peersetId).getId()
+                    changes[peersetId]!!.overrideParentId(parentId)
+                } else {
+                    Metrics.bumpConflictedChanges(notification.result.detailedMessage)
+                }
                 getPeersStrategy.handleNotification(peersetId)
                 handledChanges.add(notification.change.id)
             }
@@ -64,7 +70,7 @@ class OnePeersetChanges(
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
 
     suspend fun introduceChange(change: AddUserChange): ChangeState {
-        val senderAddress = peersAddresses.asSequence().shuffled().first()
+        val senderAddress = peersAddresses.first()
         return sender.executeChange(
             senderAddress,
             change.copy(

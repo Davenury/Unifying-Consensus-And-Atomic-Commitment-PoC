@@ -65,7 +65,7 @@ func ServiceName(peerConfig PeerConfig) string {
 }
 
 func DeploymentName(peerConfig PeerConfig) string {
-	return fmt.Sprintf("peer%s-peerset%s-dep", peerConfig.PeerId, peerConfig.PeersetId)
+	return fmt.Sprintf("peerset%s-peer%s-dep", peerConfig.PeersetId, peerConfig.PeerId)
 }
 
 func GenerateServicesForPeers(peersInPeerset []int, startPort int) string {

@@ -151,8 +151,12 @@ class GPACProtocolImpl(
             }
             if (message.acceptVal == Accept.COMMIT && !changeWasAppliedBefore(message.change)) {
                 addChangeToHistory(message.change)
+                changeSucceeded(message.change)
+            } else if (message.acceptVal == Accept.ABORT) {
+                changeConflicts(message.change, "Message was applied but state was ABORT")
+            } else {
+                changeSucceeded(message.change)
             }
-            changeSucceeded(message.change)
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 

@@ -1,13 +1,17 @@
 package com.github.davenury.ucac.api
 
+import com.github.davenury.common.Metrics
+import com.github.davenury.common.meterRegistry
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
-import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.commitment.twopc.TwoPC
+import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.consensus.ConsensusProtocol
+import io.micrometer.core.instrument.LongTaskTimer
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import java.util.*
 
 
 class Worker(
@@ -28,6 +32,9 @@ class Worker(
             while (!Thread.interrupted()) {
                 val job = queue.receive()
                 logger.info("Worker receive job: $job")
+
+                Metrics.startTimer(job.change.id, job.processorJobType.name.lowercase())
+
                 val result =
                     when (job.processorJobType) {
                         ProcessorJobType.CONSENSUS -> consensusProtocol.proposeChangeAsync(job.change)
@@ -36,6 +43,7 @@ class Worker(
                     }
                 result.thenAccept {
                     job.completableFuture.complete(it)
+                    Metrics.stopTimer(job.change.id)
                     runBlocking {
                         ChangeNotifier.notify(job.change, it)
                     }
