@@ -30,6 +30,7 @@ type Config struct {
 	acProtocol string
 	consensusProtocol string
 	performanceTestTimeoutDeadline string
+	cleanupAfterWork bool
 }
 
 func CreateWholeCommand() *cobra.Command {
@@ -62,6 +63,7 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.acProtocol, "ac-protocol", "gpac", "AC protocol to use in case it's needed. two_pc or gpac")
 	cmd.Flags().StringVar(&config.consensusProtocol, "consensus-protocol", "", "Consensus protocol to use. For now it's one protocol")
 	cmd.Flags().StringVar(&config.performanceTestTimeoutDeadline, "performance-test-timeout-deadline", "PT0S", "Additional duration after which test job should be force ended")
+	cmd.Flags().BoolVar(&config.cleanupAfterWork, "cleanup-after-work", true, "Determines if command should clean ucac resources after work (doesn't appy to grafana and prometheus)")
 
 	return cmd
 }
@@ -90,9 +92,11 @@ func perform(config Config) {
 	})
 	fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
 	waitUntilJobPodCompleted(config)
-	fmt.Println("Cleanuping")
-	DoCleanup(config.testNamespace)
-	fmt.Printf("Do cleanup after monitoring after you're done with it by: helm delete prometheus grafana -n %s \n", config.monitoringNamespace)
+	if config.cleanupAfterWork {
+		fmt.Println("Cleanuping")
+		DoCleanup(config.testNamespace)
+		fmt.Printf("Do cleanup after monitoring after you're done with it by: helm delete prometheus grafana -n %s \n", config.monitoringNamespace)
+	}
 }
 
 func waitUntilJobPodCompleted(config Config) {
