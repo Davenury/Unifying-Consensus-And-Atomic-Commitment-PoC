@@ -194,6 +194,8 @@ class RaftConsensusProtocolImpl(
 
 //        logger.debug("Received heartbeat $heartbeat")
         logger.info("Received heartbeat $heartbeat")
+        logger.debug("I have in state: ${state.acceptedItems.map { it.ledgerIndex }} ${state.proposedItems.map { it.ledgerIndex }} \n and should have: $prevLogIndex, message changes: ${acceptedChanges.map { it.ledgerIndex }} ${proposedChanges.map { it.ledgerIndex }}")
+
 
         if (term < currentTerm) {
             logger.info("The received heartbeat has an old term ($term vs $currentTerm)")
@@ -216,23 +218,27 @@ class RaftConsensusProtocolImpl(
 
         if (!haveAllPreviousChanges) {
             logger.info("The received heartbeat is missing some changes (I am behind)")
-            logger.debug("I have in state: ${state.acceptedItems.map { it.ledgerIndex }} ${state.proposedItems.map { it.ledgerIndex }} \n and should have: $prevLogIndex, message changes: ${acceptedChanges.map { it.ledgerIndex }} ${proposedChanges.map { it.ledgerIndex }}")
             state.removeNotAcceptedItems(prevLogIndex!!, prevLogTerm!!)
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
 
         when {
-            proposedChanges.isNotEmpty() && acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
+            acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
+                logger.debug("Received heartbeat when is blocked so only accepted changes")
                 updateLedger(heartbeat, acceptedChanges)
                 return ConsensusHeartbeatResponse(true, currentTerm, true)
             }
 
-            proposedChanges.isNotEmpty() && transactionBlocker.isAcquired() ->
+            proposedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
+                logger.debug("Received heartbeat but is blocked, so can't accept proposed changes")
                 return ConsensusHeartbeatResponse(false, currentTerm, true)
+            }
 
-            proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) } && !transactionBlocker.isAcquired() ->
+            proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) } && !transactionBlocker.isAcquired() -> {
+                logger.debug("Received heartbeat but changes are incompatible")
                 return ConsensusHeartbeatResponse(true, currentTerm, incompatibleWithHistory = true)
+            }
 
             proposedChanges.isNotEmpty() ->
                 transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)

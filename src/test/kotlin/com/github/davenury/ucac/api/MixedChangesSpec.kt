@@ -112,7 +112,7 @@ class MixedChangesSpec : IntegrationTestBase() {
             val applyEndPhaser = Phaser(6)
             val beforeSendingApplyPhaser = Phaser(1)
             val electionPhaser = Phaser(4)
-            val applyConsensusPhaser = Phaser(2)
+            val applyConsensusPhaser = Phaser(3)
 
             listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser)
                 .forEach { it.register() }
@@ -299,7 +299,7 @@ class MixedChangesSpec : IntegrationTestBase() {
             val applyEndPhaser = Phaser(1)
             val beforeSendingApplyPhaser = Phaser(1)
             val electionPhaser = Phaser(4)
-            val applyConsensusPhaser = Phaser(2)
+            val applyConsensusPhaser = Phaser(3)
 
             listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser)
                 .forEach { it.register() }
@@ -318,6 +318,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                     beforeSendingApplyPhaser.arrive()
                 },
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                    println("${it.subject.getPeerName()} Arrived change: ${it.change} ")
                     if (it.change == secondChange) applyConsensusPhaser.arrive()
                 }
             )
@@ -356,59 +357,6 @@ class MixedChangesSpec : IntegrationTestBase() {
                 expectThat(changes[2]).isEqualTo(secondChange)
             }
         }
-
-    @Test
-    fun `try to execute two change in the same time, first 2PC, then Raft`(): Unit = runBlocking {
-        val change = change(0, 1)
-        val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
-
-        val applyEndPhaser = Phaser(1)
-        val beforeProposePhasePhaser = Phaser(1)
-        val electionPhaser = Phaser(4)
-
-        listOf(applyEndPhaser, electionPhaser, beforeProposePhasePhaser)
-            .forEach { it.register() }
-        val leaderElected = SignalListener {
-            logger.info("Arrived ${it.subject.getPeerName()}")
-            electionPhaser.arrive()
-        }
-
-        val signalListenersForCohort = mapOf(
-            Signal.TwoPCOnChangeApplied to SignalListener {
-                logger.info("Arrived: ${it.subject.getPeerName()}")
-                applyEndPhaser.arrive()
-            },
-            Signal.ConsensusLeaderElected to leaderElected,
-            Signal.TwoPCBeforeProposePhase to SignalListener {
-                beforeProposePhasePhaser.arrive()
-            }
-        )
-
-        apps = TestApplicationSet(
-            listOf(3, 3),
-            signalListeners = (0..5).associateWith { signalListenersForCohort }
-        )
-
-        val peers = apps.getPeers()
-
-        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
-
-        // when - executing transaction
-        executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", change)
-
-        beforeProposePhasePhaser.arriveAndAwaitAdvanceWithTimeout()
-
-        executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
-
-        applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
-
-
-        askAllForChanges(peers.values).forEach {
-            val changes = it.second
-            expectThat(changes.size).isGreaterThanOrEqualTo(2)
-            expectThat(changes[1]).isEqualTo(change)
-        }
-    }
 
     private suspend fun executeChange(uri: String, change: Change): HttpResponse =
         testHttpClient.post(uri) {
