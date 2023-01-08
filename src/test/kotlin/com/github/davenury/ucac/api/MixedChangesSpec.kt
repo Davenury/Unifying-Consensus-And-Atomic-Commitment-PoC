@@ -38,6 +38,9 @@ class MixedChangesSpec : IntegrationTestBase() {
 
     @Test
     fun `try to execute two following changes in the same time, first GPAC, then Raft`(): Unit = runBlocking {
+        val change = change(0, 1)
+        val secondChange = change(mapOf(0 to change.toHistoryEntry(0).getId()))
+
         val applyEndPhaser = Phaser(6)
         val beforeSendingApplyPhaser = Phaser(1)
         val electionPhaser = Phaser(4)
@@ -60,7 +63,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                 beforeSendingApplyPhaser.arrive()
             },
             Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                applyConsensusPhaser.arrive()
+                if (it.change == secondChange) applyConsensusPhaser.arrive()
             }
         )
 
@@ -70,8 +73,6 @@ class MixedChangesSpec : IntegrationTestBase() {
         )
 
         val peers = apps.getPeers()
-        val change = change(0, 1)
-        val secondChange = change(mapOf(0 to change.toHistoryEntry(0).getId()))
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -105,6 +106,9 @@ class MixedChangesSpec : IntegrationTestBase() {
     @Test
     fun `try to execute two following changes in the same time (two different peers), first GPAC, then Raft`(): Unit =
         runBlocking {
+            val change = change(0, 1)
+            val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
+
             val applyEndPhaser = Phaser(6)
             val beforeSendingApplyPhaser = Phaser(1)
             val electionPhaser = Phaser(4)
@@ -127,7 +131,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                     beforeSendingApplyPhaser.arrive()
                 },
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                    applyConsensusPhaser.arrive()
+                    if (it.change == secondChange) applyConsensusPhaser.arrive()
                 }
             )
 
@@ -137,8 +141,6 @@ class MixedChangesSpec : IntegrationTestBase() {
             )
 
             val peers = apps.getPeers()
-            val change = change(0, 1)
-            val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
 
             electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -224,7 +226,6 @@ class MixedChangesSpec : IntegrationTestBase() {
     fun `try to execute two following changes in the same time, first 2PC, then Raft`(): Unit = runBlocking {
         val change = change(0, 1)
         val secondChange = change(mapOf(0 to change.toHistoryEntry(0).getId()))
-
 
 
         val applyEndPhaser = Phaser(1)
