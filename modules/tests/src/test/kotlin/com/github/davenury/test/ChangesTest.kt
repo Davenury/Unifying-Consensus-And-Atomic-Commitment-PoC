@@ -39,7 +39,12 @@ class ChangesTest {
         val sender = DummySender(peers, shouldNotify = false)
         val lockMock = mockk<Lock>()
         val conditionMock = mockk<Condition>()
-        val subject = Changes(peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size), lockMock, conditionMock), ownAddress)
+        val subject = Changes(
+            peers,
+            sender,
+            RandomPeersWithDelayOnConflictStrategy((0 until peers.size), lockMock, conditionMock),
+            ownAddress
+        )
         sender.setChanges(subject)
         val phaser = Phaser(peers.keys.size)
         phaser.register()
@@ -48,7 +53,12 @@ class ChangesTest {
         every { conditionMock.await() } answers {
             if (handleNotificationCounter.getAndIncrement() < 1) {
                 launch {
-                    subject.handleNotification(Notification(sender.getLastChange(), ChangeResult(ChangeResult.Status.SUCCESS)))
+                    subject.handleNotification(
+                        Notification(
+                            sender.getLastChange(),
+                            ChangeResult(ChangeResult.Status.SUCCESS)
+                        )
+                    )
                 }
             }
         }
@@ -71,7 +81,7 @@ class ChangesTest {
 
         // and - another change
         val phase2Phaser = Phaser(2)
-        withContext(Dispatchers.IO){
+        withContext(Dispatchers.IO) {
             launch {
                 subject.introduceChange(1)
                 phase2Phaser.arrive()
@@ -160,15 +170,17 @@ class ChangesTest {
         val changes = Changes(peers, DummySender(peers, shouldNotify = false), strategy, ownAddress)
 
         val singleChange = AddUserChange(
-            listOf(ChangePeersetInfo(0, "a2fasda2f")),
-            "userName"
+            "userName",
+            peersets = listOf(ChangePeersetInfo(0, "a2fasda2f"))
         )
         repeat(3) {
             runBlocking {
-                changes.handleNotification(Notification(
-                    singleChange,
-                    ChangeResult(ChangeResult.Status.SUCCESS)
-                ))
+                changes.handleNotification(
+                    Notification(
+                        singleChange,
+                        ChangeResult(ChangeResult.Status.SUCCESS)
+                    )
+                )
             }
         }
 
