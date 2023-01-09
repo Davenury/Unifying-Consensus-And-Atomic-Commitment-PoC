@@ -202,6 +202,11 @@ class RaftConsensusProtocolImpl(
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
+        if (history.getCurrentEntry().getId() != heartbeat.currentHistoryEntryId && acceptedChanges.isEmpty()) {
+            logger.info("Received heartbeat from leader that has outdated history")
+            return ConsensusHeartbeatResponse(false, currentTerm)
+        }
+
 //      Restart timer because we received heartbeat from proper leader
         mutex.withLock {
             lastHeartbeatTime = Instant.now()
@@ -483,7 +488,8 @@ class RaftConsensusProtocolImpl(
             newAcceptedChanges.map { it.toDto() },
             newProposedChanges.map { it.toDto() },
             lastAppliedChangeIdAndTerm?.first,
-            lastAppliedChangeIdAndTerm?.second
+            lastAppliedChangeIdAndTerm?.second,
+            history.getCurrentEntry().getId()
         )
     }
 
