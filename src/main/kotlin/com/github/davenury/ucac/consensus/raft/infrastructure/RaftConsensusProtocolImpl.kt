@@ -69,7 +69,10 @@ class RaftConsensusProtocolImpl(
     override fun getPeerName() = globalPeerId.toString()
 
     private suspend fun sendLeaderRequest() {
-        if (executorService != null) throw Exception("$globalPeerId Try become leader before cleaning")
+        if (executorService != null) {
+            restartTimer(RaftRole.Candidate)
+            throw Exception("$globalPeerId Try become leader before cleaning")
+        }
         signalPublisher.signal(
             Signal.ConsensusTryToBecomeLeader,
             this,
@@ -419,7 +422,8 @@ class RaftConsensusProtocolImpl(
             }
 
             else -> {
-                throw AssertionError()
+                restartTimer()
+                throw AssertionError("Leader restarted timer")
             }
         }
 
