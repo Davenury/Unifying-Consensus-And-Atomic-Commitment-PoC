@@ -3,6 +3,7 @@ package com.github.davenury.common
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.Timer
 import io.micrometer.prometheus.PrometheusConfig
@@ -34,14 +35,23 @@ object Metrics {
         meterRegistry.counter("incorrect_history_change").increment()
     }
 
+    fun bumpChangeProcessed(changeResult: ChangeResult) {
+        Counter
+            .builder("change_processed")
+            .tag("result", changeResult.status.name.lowercase())
+            .register(meterRegistry)
+            .increment()
+    }
+
     fun startTimer(changeId: String) {
         changeIdToTimer[changeId] = Instant.now()
     }
-    fun stopTimer(changeId: String, protocol: String) {
+    fun stopTimer(changeId: String, protocol: String, result: ChangeResult) {
         val timeElapsed = Duration.between(changeIdToTimer[changeId]!!, Instant.now())
         Timer
             .builder("change_processing_time")
             .tag("protocol", protocol)
+            .tag("result", result.status.name.lowercase())
             .register(meterRegistry)
             .record(timeElapsed)
     }
