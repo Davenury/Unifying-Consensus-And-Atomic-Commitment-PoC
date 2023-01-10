@@ -41,7 +41,6 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVarP(&waitForReadiness, "wait-for-readiness", "", false, "Wait for deployment to be ready")
 	deployCommand.Flags().StringVarP(&imageName, "image", "", "davenury/ucac", "A Docker image to be used in the deployment")
 	deployCommand.Flags().BoolVarP(&deployAsStatefulSet, "as-statefulset", "", false, "Determines if pods should be deployed as StatefulSets, changes networking dns by pods, not services")
-	deployCommand.Flags().StringVarP(&imageName, "image", "", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
 
 	return deployCommand
 
