@@ -9,7 +9,6 @@ import java.time.Instant
 
 object Metrics {
 
-    private val changeIdToInstant = mutableMapOf<String, Instant>()
     fun reportUnsuccessfulChange(code: Int) {
         meterRegistry.counter("unsuccessful_change", "$code").increment()
     }
@@ -25,20 +24,5 @@ object Metrics {
     fun bumpConflictedChanges(message: String?) {
         meterRegistry.counter("conflicted_changes", listOf(Tag.of("detailed_message", message ?: "null"))).increment()
     }
-
-    fun startTimer(changeId: String) {
-        changeIdToInstant[changeId] = Instant.now()
-    }
-
-    fun stopTimer(changeId: String) {
-        val timeElapsed = Duration.between(changeIdToInstant[changeId]!!, Instant.now())
-        logger.info("Time processing of change with id: $changeId is $timeElapsed")
-        Timer
-            .builder("tests_change_processing_time")
-            .register(meterRegistry)
-            .record(timeElapsed)
-    }
-
-    private val logger = LoggerFactory.getLogger("TestsMetrics")
 
 }
