@@ -51,6 +51,7 @@ object Metrics {
     fun stopTimer(changeId: String, protocol: String, result: ChangeResult) {
         val timeElapsed = Duration.between(changeIdToTimer[changeId]!!, Instant.now())
         Timer
+            // call it delay of processing
             .builder("change_processing_time")
             .tag("protocol", protocol)
             .tag("result", result.status.name.lowercase())

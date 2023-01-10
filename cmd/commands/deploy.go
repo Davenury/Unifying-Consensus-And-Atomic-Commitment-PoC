@@ -86,7 +86,7 @@ func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace str
 
 func waitForPodsReadiness(expectedPeers int, namespace string) {
 	fmt.Println("Waiting for pods to be ready")
-	deadline := time.Now().Add(2 * time.Minute)
+	deadline := time.Now().Add(3 * time.Minute)
 	for anyPodNotReady(expectedPeers, namespace) {
 		if time.Now().After(deadline) {
 			panic("Timed out while waiting for pod readiness")

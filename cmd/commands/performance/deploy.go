@@ -56,7 +56,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 				MultipleRequestsNumber:   multipleRequestsNumber,
 				TestDuration:             testDuration,
 				MaxPeersetsInChange:      maxPeersetsInChange,
-				TestsStrategy:            testDuration,
+				TestsStrategy:            testsStrategy,
 				PushgatewayAddress:       pushgatewayAddress,
 				EnforceAcUsage:           enforceAcUsage,
 				AcProtocol:               acProtocol,
