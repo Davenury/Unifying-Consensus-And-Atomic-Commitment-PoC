@@ -111,3 +111,154 @@ jobs:
           path: |
             build/reports/
             build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports10
+          path: |
+            build/reports/
+            build/test-results/
+
+
+      - name: Build with Gradle
+        run: ./gradlew build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports11
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports12
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports13
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports14
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports15
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports16
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports17
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports18
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports19
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports20
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports21
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports22
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports23
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports24
+          path: |
+            build/reports/
+            build/test-results/
