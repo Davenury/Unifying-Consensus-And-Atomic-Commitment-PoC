@@ -32,9 +32,7 @@ class Worker(
             while (!Thread.interrupted()) {
                 val job = queue.receive()
                 logger.info("Worker receive job: $job")
-
-                Metrics.startTimer(job.change.id, job.processorJobType.name.lowercase())
-
+                Metrics.startTimer(job.change.id)
                 val result =
                     when (job.processorJobType) {
                         ProcessorJobType.CONSENSUS -> consensusProtocol.proposeChangeAsync(job.change)
@@ -43,7 +41,8 @@ class Worker(
                     }
                 result.thenAccept {
                     job.completableFuture.complete(it)
-                    Metrics.stopTimer(job.change.id)
+                    Metrics.stopTimer(job.change.id, job.processorJobType.name.lowercase(), it)
+                    Metrics.bumpChangeProcessed(it)
                     runBlocking {
                         ChangeNotifier.notify(job.change, it)
                     }

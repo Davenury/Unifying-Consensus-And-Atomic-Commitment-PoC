@@ -18,7 +18,7 @@ object Metrics {
     }
 
     fun bumpConflictedChanges(message: String?) {
-        meterRegistry.counter("conflicted_message", listOf(Tag.of("detailed_message", message ?: "null"))).increment()
+        meterRegistry.counter("conflicted_changes", listOf(Tag.of("detailed_message", message ?: "null"))).increment()
     }
 
 }
