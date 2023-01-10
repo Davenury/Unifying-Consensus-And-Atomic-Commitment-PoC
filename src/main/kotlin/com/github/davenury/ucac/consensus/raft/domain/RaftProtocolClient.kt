@@ -102,13 +102,11 @@ class RaftProtocolClientImpl : RaftProtocolClient {
         message: Message,
     ): Response? {
         logger.debug("Sending request to: ${peer.globalPeerId}, message: $message")
-        return raftHttpClient().use { client ->
-            client.post<Response>("http://${peer.address}/${suffix}") {
+        return raftHttpClient.post<Response>("http://${peer.address}/${suffix}") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
                 body = message!!
             }
-        }
     }
 
     companion object {

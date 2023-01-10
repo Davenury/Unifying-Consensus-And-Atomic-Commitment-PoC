@@ -16,11 +16,10 @@ val httpClient = HttpClient(OkHttp) {
         requestTimeoutMillis = 5_000
     }
 }
-fun raftHttpClient() = HttpClient(OkHttp) {
+val raftHttpClient = HttpClient(OkHttp) {
     engine {
         this.config {
             this.connectionPool(ConnectionPool(0, 1, TimeUnit.MILLISECONDS))
-            this.cache(null)
         }
     }
     install(JsonFeature) {
