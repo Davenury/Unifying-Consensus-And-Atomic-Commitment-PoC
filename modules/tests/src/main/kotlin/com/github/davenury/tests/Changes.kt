@@ -28,6 +28,7 @@ class Changes(
     suspend fun handleNotification(notification: Notification) = notificationMutex.withLock {
         logger.info("Handling notification: $notification")
         if (!handledChanges.contains(notification.change.id)) {
+            Metrics.stopTimer(notification.change.id)
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
                 if (notification.result.status != ChangeResult.Status.CONFLICT) {
                     val parentId = notification.change.toHistoryEntry(peersetId).getId()
@@ -48,6 +49,7 @@ class Changes(
                 userName = "user${counter.incrementAndGet()}",
                 peersets = ids.map { ChangePeersetInfo(it, changes[it]!!.getCurrentParentId()) }
             )
+            Metrics.startTimer(change.id)
             val result = changes[ids[0]]!!.introduceChange(change)
             logger.info("Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: ${ids.map { it to change.toHistoryEntry(it).getId() }}")
             if (result == ChangeState.REJECTED) {

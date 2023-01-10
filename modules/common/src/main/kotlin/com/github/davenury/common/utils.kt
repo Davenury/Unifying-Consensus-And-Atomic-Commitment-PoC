@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.Timer
 import io.micrometer.prometheus.PrometheusConfig
 import io.micrometer.prometheus.PrometheusMeterRegistry
+import org.slf4j.LoggerFactory
 import java.security.MessageDigest
 import java.time.Clock
 import java.time.Duration
@@ -50,6 +51,7 @@ object Metrics {
     }
     fun stopTimer(changeId: String, protocol: String, result: ChangeResult) {
         val timeElapsed = Duration.between(changeIdToTimer[changeId]!!, Instant.now())
+        logger.info("Time elapsed for change: $changeId is $timeElapsed")
         Timer
             // call it delay of processing
             .builder("change_processing_time")
@@ -58,7 +60,7 @@ object Metrics {
             .register(meterRegistry)
             .record(timeElapsed)
     }
-
+    
     fun refreshLastHeartbeat() {
         lastHearbeat = Instant.now()
     }
@@ -71,4 +73,6 @@ object Metrics {
             .record(Duration.between(lastHearbeat, now))
         lastHearbeat = now
     }
+
+    private val logger = LoggerFactory.getLogger("Metrics")
 }
