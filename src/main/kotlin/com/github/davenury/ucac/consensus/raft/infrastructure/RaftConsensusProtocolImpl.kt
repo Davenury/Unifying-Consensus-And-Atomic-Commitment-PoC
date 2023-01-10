@@ -196,9 +196,19 @@ class RaftConsensusProtocolImpl(
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
+        if (history.getCurrentEntry().getId() != heartbeat.currentHistoryEntryId && acceptedChanges.isEmpty()) {
+            logger.info("Received heartbeat from leader that has outdated history")
+            return ConsensusHeartbeatResponse(false, currentTerm)
+        }
+
 //      Restart timer because we received heartbeat from proper leader
         logger.info("Timer restarted, because of receiving heartbeat")
         mutex.withLock {
+            if (role == RaftRole.Leader){
+                stopBeingLeader(term)
+                role = RaftRole.Follower
+
+            }
             lastHeartbeatTime = Instant.now()
         }
         restartTimer()
@@ -219,8 +229,6 @@ class RaftConsensusProtocolImpl(
 
         val updateResult: LedgerUpdateResult
         mutex.withLock {
-            if (role == RaftRole.Leader) stop()
-            role = RaftRole.Follower
             updateResult = state.updateLedger(acceptedChanges, proposedChanges)
         }
 
@@ -356,7 +364,7 @@ class RaftConsensusProtocolImpl(
         logger.info("Some peer is a new leader in new term: $newTerm, currentTerm $currentTerm")
 //       TODO: fix switch role and add test for it
         this.currentTerm = newTerm
-        stop()
+        stopExecutorService()
         restartTimer()
     }
 
@@ -402,7 +410,8 @@ class RaftConsensusProtocolImpl(
             newAcceptedChanges.map { it.toDto() },
             newProposedChanges.map { it.toDto() },
             lastAppliedChangeIdAndTerm?.first,
-            lastAppliedChangeIdAndTerm?.second
+            lastAppliedChangeIdAndTerm?.second,
+            history.getCurrentEntry().getId()
         )
     }
 
@@ -442,8 +451,9 @@ class RaftConsensusProtocolImpl(
                 )
                 logger.info(text)
                 sendLeaderRequest()
+            } else {
+                restartTimer(this.role)
             }
-            restartTimer(this.role)
         }
     }
 
@@ -549,11 +559,15 @@ class RaftConsensusProtocolImpl(
         changeIdToCompletableFuture[changeId]
 
     override fun stop() {
+        stopExecutorService()
+        leaderRequestExecutorService.cancel()
+        leaderRequestExecutorService.close()
+    }
+
+    private fun stopExecutorService(){
         executorService?.cancel()
         executorService?.close()
         executorService = null
-        leaderRequestExecutorService.cancel()
-        leaderRequestExecutorService.close()
     }
 
     //    DONE: unit tests for this function
