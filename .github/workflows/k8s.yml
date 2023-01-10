@@ -2,21 +2,45 @@ name: K8s
 
 on: [ push, pull_request ]
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  TESTS_IMAGE_NAME: ${{ github.repository }}-tests
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v3
 
-      - name: Build and publish image
-        uses: pmorelli92/github-container-registry-build-push@2.0.0
+      - name: Log in container registry
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
         with:
-          github-push-secret: ${{ secrets.DOCKER_DEPLOYMENT_TOKEN }}
-          docker-image-name: ucac
-          docker-image-tag: "${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}"
-          dockerfile-path: ./Dockerfile.builder
-          build-context: .
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bulid and push application image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          file: Dockerfile.builder
+          tags: ${{env.REGISTRY}}/davenury/ucac:${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}
+          target: application
+
+      - name: Build and push tests image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          file: Dockerfile.builder
+          tags: ${{env.REGISTRY}}/davenury/tests:${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}
+          target: tests
 
       - name: start minikube
         id: minikube

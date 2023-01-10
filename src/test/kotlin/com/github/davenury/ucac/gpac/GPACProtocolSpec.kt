@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.gpac
 
 import com.github.davenury.common.AddUserChange
+import com.github.davenury.common.ChangePeersetInfo
 import com.github.davenury.common.NotElectingYou
 import com.github.davenury.common.NotValidLeader
 import com.github.davenury.common.history.History
@@ -56,7 +57,7 @@ class GPACProtocolSpec {
 
         expect {
             that(result).isEqualTo(ElectedYou(100000, Accept.COMMIT, 0, null, false))
-            that(subject.getTransaction().ballotNumber).isEqualTo(100000)
+            that(subject.getBallotNumber()).isEqualTo(100000)
         }
     }
 
@@ -87,8 +88,8 @@ class GPACProtocolSpec {
 
         val result = subject.handleElect(message)
 
-        expectThat(result.initVal).isEqualTo(Accept.COMMIT)
-        expectThat(subject.getTransaction()).isEqualTo(Transaction(3, Accept.COMMIT, 0, null, false, change = change))
+        expectThat(result).isEqualTo(ElectedYou(3,Accept.COMMIT, 0,null,false))
+        expectThat(subject.getBallotNumber()).isEqualTo(3)
     }
 
     @Test
@@ -120,7 +121,6 @@ class GPACProtocolSpec {
 
     @Test
     fun `should apply change`(): Unit = runBlocking {
-
         every { transactionBlockerMock.isAcquired() } returns false
         every { transactionBlockerMock.tryToBlock() } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
@@ -132,7 +132,7 @@ class GPACProtocolSpec {
         val message = Apply(10, true, Accept.COMMIT, change)
 
         subject.handleApply(message)
-        expectThat(history.getCurrentEntry()).isEqualTo(change.toHistoryEntry())
+        expectThat(history.getCurrentEntry()).isEqualTo(change.toHistoryEntry(0))
     }
 
     @Test
@@ -153,9 +153,10 @@ class GPACProtocolSpec {
     }
 
     private val change = AddUserChange(
-        InitialHistoryEntry.getId(),
+        listOf(
+            ChangePeersetInfo(0, InitialHistoryEntry.getId()),
+            ChangePeersetInfo(1, InitialHistoryEntry.getId()),
+        ),
         "userName",
-        listOf("peer2"),
     )
-
 }

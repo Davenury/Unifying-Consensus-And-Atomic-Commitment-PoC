@@ -14,7 +14,7 @@ import java.util.concurrent.CompletableFuture
 
 class HistoryRatisNode(
     peerId: Int,
-    peersetId: Int,
+    private val peersetId: Int,
     config: RatisConfig,
     private val history: History,
 ) :
@@ -31,19 +31,23 @@ class HistoryRatisNode(
 
     @Deprecated("use proposeChangeAsync")
     override suspend fun proposeChange(change: Change): ChangeResult {
-        val result = applyTransaction(change.toHistoryEntry().serialize())
+        val result = applyTransaction(change.toHistoryEntry(peersetId).serialize())
         return if (result == "ERROR") ChangeResult(ChangeResult.Status.CONFLICT) else ChangeResult(ChangeResult.Status.SUCCESS)
     }
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
 
         val cf = CompletableFuture<ChangeResult>()
-        val changeId = change.toHistoryEntry().getId()
+        val changeId = change.id
         changeIdToCompletableFuture[changeId] = cf
 
         GlobalScope.launch(MDCContext()) {
-            val result = applyTransaction(change.toHistoryEntry().serialize())
-            val changeResult = if (result == "ERROR") ChangeResult(ChangeResult.Status.CONFLICT) else ChangeResult(ChangeResult.Status.SUCCESS)
+            val result = applyTransaction(change.toHistoryEntry(peersetId).serialize())
+            val changeResult = if (result == "ERROR") {
+                ChangeResult(ChangeResult.Status.CONFLICT)
+            } else {
+                ChangeResult(ChangeResult.Status.SUCCESS)
+            }
             changeIdToCompletableFuture[changeId]!!.complete(changeResult)
         }
         return cf
@@ -53,5 +57,6 @@ class HistoryRatisNode(
         return history
     }
 
-    override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? = changeIdToCompletableFuture[changeId]
+    override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
+        changeIdToCompletableFuture[changeId]
 }

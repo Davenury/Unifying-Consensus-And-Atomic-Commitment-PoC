@@ -32,16 +32,15 @@ class TestLogExtension : BeforeEachCallback, AfterEachCallback, CloseableResourc
         val className = context.testClass.orElse(null)?.name
         val methodName = context.testMethod.orElse(null)?.name
         val hash = hash(className, methodName)
-        logger.info("===== Start test: $className/$methodName ($hash) =====")
         MDC.put("test", hash)
+        logger.info("===== Start test: $className/$methodName =====")
     }
 
     override fun afterEach(context: ExtensionContext) {
         val className = context.testClass.orElse(null)?.name
         val methodName = context.testMethod.orElse(null)?.name
-        val hash = hash(className, methodName)
+        logger.info("===== End test: $className/$methodName =====")
         MDC.remove("test")
-        logger.info("===== End test: $className/$methodName ($hash) =====")
     }
 
     override fun close() {

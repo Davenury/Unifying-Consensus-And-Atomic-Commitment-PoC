@@ -2,6 +2,7 @@ package com.github.davenury.ucac.gpac
 
 import com.github.davenury.common.AddUserChange
 import com.github.davenury.common.Change
+import com.github.davenury.common.ChangePeersetInfo
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.GpacConfig
@@ -34,7 +35,6 @@ import java.util.concurrent.Phaser
 
 @ExtendWith(TestLogExtension::class)
 class LeaderTest {
-
     val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
 
     @Test
@@ -116,5 +116,11 @@ class LeaderTest {
         it.retriesTimer = timer
     }
 
-    private val change = AddUserChange(InitialHistoryEntry.getId(), "userName", listOf("localhost:8081"))
+    private val change = AddUserChange(
+        listOf(
+            ChangePeersetInfo(0, InitialHistoryEntry.getId()),
+            ChangePeersetInfo(1, InitialHistoryEntry.getId()),
+        ),
+        "userName",
+    )
 }

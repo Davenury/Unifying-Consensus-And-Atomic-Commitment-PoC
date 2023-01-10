@@ -1,9 +1,10 @@
 package com.github.davenury.common
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
-import com.fasterxml.jackson.databind.annotation.JsonSerialize
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
@@ -21,11 +22,16 @@ class Changes : ArrayList<Change> {
         fun fromHistory(history: History): Changes {
             return history.toEntryList()
                 .reversed()
-                .map { Change.fromHistoryEntry(it) }
+                .mapNotNull { Change.fromHistoryEntry(it) }
                 .let { Changes(it) }
         }
     }
 }
+
+data class ChangePeersetInfo(
+    val peersetId: Int,
+    val parentId: String?,
+)
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME)
@@ -39,174 +45,175 @@ class Changes : ArrayList<Change> {
     )
 )
 sealed class Change {
-    abstract val parentId: String
-    abstract val peers: List<String>
+    val id = UUID.randomUUID().toString()
+    abstract val peersets: List<ChangePeersetInfo>
+    abstract val notificationUrl: String?
 
     // TODO remove
     abstract val acceptNum: Int?
 
-    companion object {
+    fun getPeersetInfo(peersetId: Int): ChangePeersetInfo? =
+        peersets.find { it.peersetId == peersetId }
 
-        fun fromJson(json: String): Change {
-            return objectMapper.readValue(json, Change::class.java)
-        }
-
-        fun fromHistoryEntry(entry: HistoryEntry): Change {
-            if (entry == InitialHistoryEntry) {
-                throw IllegalArgumentException("Initial history entry cannot be converted to a change")
-            }
-            return fromJson(entry.getContent())
-        }
-    }
-
-//  TODO: Check logic of this function, probably we are using it in some place when we shouldn't
-    fun toHistoryEntry(): HistoryEntry {
+    fun toHistoryEntry(peersetId: Int, parentIdDefault: String? = null): HistoryEntry {
+        val info = getPeersetInfo(peersetId)
+            ?: throw IllegalArgumentException("Unknown peersetId: $peersetId")
         return IntermediateHistoryEntry(
             objectMapper.writeValueAsString(this),
-            parentId,
+            info.parentId
+                ?: parentIdDefault
+                ?: throw IllegalArgumentException("No parent ID"),
         )
     }
 
-    abstract fun withAddress(myAddress: String): Change
+    abstract fun copyWithNewParentId(peersetId: Int, parentId: String?): Change
 
-    abstract fun copyWithNewParentId(parentId: String): Change
+    protected fun doesEqual(other: Any?): Boolean =
+        (other is Change) && Objects.equals(id, other.id)
+
+    companion object {
+        private fun fromJson(json: String): Change =  objectMapper.readValue(json, Change::class.java)
+
+        fun fromHistoryEntry(entry: HistoryEntry): Change? {
+            if (entry == InitialHistoryEntry) {
+                return null
+            }
+
+            return try {
+                fromJson(entry.getContent())
+            } catch (e: JsonProcessingException) {
+                null
+            }
+        }
+    }
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class AddRelationChange(
-    override val parentId: String,
+    override val peersets: List<ChangePeersetInfo>,
     val from: String,
     val to: String,
-    override val peers: List<String>,
     override val acceptNum: Int? = null,
+    @JsonProperty("notification_url")
+    override val notificationUrl: String? = null,
 ) : Change() {
-    override fun withAddress(myAddress: String): Change {
-        return AddRelationChange(
-            parentId,
-            from,
-            to,
-            peers.toMutableList().also { it.add(myAddress) },
-            acceptNum,
-        )
-    }
-
-    override fun copyWithNewParentId(parentId: String): Change =
-        this.copy(parentId = parentId)
 
     override fun equals(other: Any?): Boolean {
-        if (other !is AddRelationChange) {
+        if (other !is AddRelationChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(parentId, other.parentId) &&
+        return Objects.equals(peersets, other.peersets) &&
                 Objects.equals(from, other.from) &&
                 Objects.equals(to, other.to)
     }
 
     override fun hashCode(): Int {
-        return Objects.hash(parentId, from, to)
+        return Objects.hash(peersets, from, to)
     }
+
+    override fun copyWithNewParentId(peersetId: Int, parentId: String?): Change =
+        this.copy(peersets = peersets.map {
+            if (it.peersetId == peersetId) {
+                ChangePeersetInfo(peersetId, parentId)
+            } else {
+                it
+            }
+        })
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class DeleteRelationChange(
-    override val parentId: String,
+    override val peersets: List<ChangePeersetInfo>,
     val from: String,
     val to: String,
-    override val peers: List<String>,
     override val acceptNum: Int? = null,
+    @JsonProperty("notification_url")
+    override val notificationUrl: String? = null,
 ) : Change() {
-    override fun withAddress(myAddress: String): Change {
-        return DeleteRelationChange(
-            parentId,
-            from,
-            to,
-            peers.toMutableList().also { it.add(myAddress) },
-            acceptNum,
-        )
-    }
 
     override fun equals(other: Any?): Boolean {
-        if (other !is DeleteRelationChange) {
+        if (other !is DeleteRelationChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(parentId, other.parentId) &&
+        return Objects.equals(peersets, other.peersets) &&
                 Objects.equals(from, other.from) &&
                 Objects.equals(to, other.to)
     }
 
     override fun hashCode(): Int {
-        return Objects.hash(parentId, from, to)
+        return Objects.hash(peersets, from, to)
     }
 
-
-    override fun copyWithNewParentId(parentId: String): Change =
-        this.copy(parentId = parentId)
+    override fun copyWithNewParentId(peersetId: Int, parentId: String?): Change =
+        this.copy(peersets = peersets.map {
+            if (it.peersetId == peersetId) {
+                ChangePeersetInfo(peersetId, parentId)
+            } else {
+                it
+            }
+        })
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class AddUserChange(
-    override val parentId: String,
+    override val peersets: List<ChangePeersetInfo>,
     val userName: String,
-    override val peers: List<String>,
     override val acceptNum: Int? = null,
+    @JsonProperty("notification_url")
+    override val notificationUrl: String? = null,
 ) : Change() {
-    override fun withAddress(myAddress: String): Change {
-        return AddUserChange(
-            parentId,
-            userName,
-            peers.plus(myAddress),
-            acceptNum,
-        )
-    }
 
     override fun equals(other: Any?): Boolean {
-        if (other !is AddUserChange) {
+        if (other !is AddUserChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(parentId, other.parentId) &&
+        return Objects.equals(peersets, other.peersets) &&
                 Objects.equals(userName, other.userName)
     }
 
     override fun hashCode(): Int {
-        return Objects.hash(parentId, userName)
+        return Objects.hash(peersets, userName)
     }
 
-    override fun copyWithNewParentId(parentId: String): Change =
-        this.copy(parentId = parentId)
-
+    override fun copyWithNewParentId(peersetId: Int, parentId: String?): Change =
+        this.copy(peersets = peersets.map {
+            if (it.peersetId == peersetId) {
+                ChangePeersetInfo(peersetId, parentId)
+            } else {
+                it
+            }
+        })
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class AddGroupChange(
-    override val parentId: String,
+    override val peersets: List<ChangePeersetInfo>,
     val groupName: String,
-    override val peers: List<String>,
     override val acceptNum: Int? = null,
+    @JsonProperty("notification_url")
+    override val notificationUrl: String? = null,
 ) : Change() {
-    override fun withAddress(myAddress: String): Change {
-        return AddGroupChange(
-            parentId,
-            groupName,
-            peers.toMutableList().also { it.add(myAddress) },
-            acceptNum,
-        )
-    }
 
     override fun equals(other: Any?): Boolean {
-        if (other !is AddGroupChange) {
+        if (other !is AddGroupChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(parentId, other.parentId) &&
+        return Objects.equals(peersets, other.peersets) &&
                 Objects.equals(groupName, other.groupName)
     }
 
     override fun hashCode(): Int {
-        return Objects.hash(parentId, groupName)
+        return Objects.hash(peersets, groupName)
     }
 
-    override fun copyWithNewParentId(parentId: String): Change =
-        this.copy(parentId = parentId)
-
+    override fun copyWithNewParentId(peersetId: Int, parentId: String?): Change =
+        this.copy(peersets = peersets.map {
+            if (it.peersetId == peersetId) {
+                ChangePeersetInfo(peersetId, parentId)
+            } else {
+                it
+            }
+        })
 }
 
 
@@ -220,30 +227,32 @@ enum class TwoPCStatus {
 // Else: 2PCChange-Accept -> 2PCChange-Abort
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class TwoPCChange(
-    override val parentId: String,
-    override val peers: List<String>,
+    override val peersets: List<ChangePeersetInfo>,
     override val acceptNum: Int? = null,
+    @JsonProperty("notification_url")
+    override val notificationUrl: String? = null,
     val twoPCStatus: TwoPCStatus,
-    val change: Change
+    val change: Change,
 ) : Change() {
-
-    override fun withAddress(myAddress: String): Change {
-        return this.copy(peers = peers.toMutableList().also { it.add(myAddress) })
-    }
-
     override fun equals(other: Any?): Boolean {
-        if (other !is TwoPCChange) {
+        if (other !is TwoPCChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(parentId, other.parentId) &&
+        return Objects.equals(peersets, other.peersets) &&
                 Objects.equals(twoPCStatus, other.twoPCStatus) &&
                 Objects.equals(this.change, other.change)
     }
 
     override fun hashCode(): Int {
-        return Objects.hash(parentId, twoPCStatus)
+        return Objects.hash(peersets, twoPCStatus)
     }
 
-    override fun copyWithNewParentId(parentId: String): Change =
-        this.copy(parentId = parentId)
+    override fun copyWithNewParentId(peersetId: Int, parentId: String?): Change =
+        this.copy(peersets = peersets.map {
+            if (it.peersetId == peersetId) {
+                ChangePeersetInfo(peersetId, parentId)
+            } else {
+                it
+            }
+        })
 }

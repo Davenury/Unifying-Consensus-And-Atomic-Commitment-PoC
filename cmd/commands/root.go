@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/davenury/ucac/cmd/commands/performance"
 	"github.com/spf13/cobra"
 )
 
@@ -25,4 +26,6 @@ func init() {
 	rootCommand.AddCommand(CreateCleanupCommand())
 	rootCommand.AddCommand(CreateInitCommand())
 	rootCommand.AddCommand(CreateTestCommand())
+	rootCommand.AddCommand(performance.CreatePerformanceCommand())
+	rootCommand.AddCommand(CreateWholeCommand())
 }

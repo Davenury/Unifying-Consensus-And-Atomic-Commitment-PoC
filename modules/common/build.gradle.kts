@@ -24,7 +24,15 @@ dependencies {
     implementation("io.micrometer:micrometer-registry-prometheus:1.9.2")
     implementation("io.ktor:ktor-metrics-micrometer:$ktor_version")
 
+    // config reading
+    implementation("com.sksamuel.hoplite:hoplite-core:2.6.5")
+    implementation("com.sksamuel.hoplite:hoplite-hocon:2.6.5")
+
     implementation(kotlin("stdlib-jdk8"))
+
+    testImplementation(platform("org.junit:junit-bom:5.8.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("io.strikt:strikt-core:0.34.0")
 }
 repositories {
     mavenCentral()

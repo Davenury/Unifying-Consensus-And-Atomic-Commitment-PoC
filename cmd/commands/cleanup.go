@@ -3,35 +3,40 @@ package commands
 import (
 	"context"
 	"github.com/spf13/cobra"
+	"github.com/davenury/ucac/cmd/commands/utils"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
-var cleanupNamespace string
-
 func CreateCleanupCommand() *cobra.Command {
+
+	var cleanupNamespace string
 
 	var cmd = &cobra.Command{
 		Use:   "cleanup",
 		Short: "Cleanups deployment",
 		Run: func(cmd *cobra.Command, args []string) {
-
-			clientset, err := GetClientset()
-			if err != nil {
-				panic(err)
-			}
-
-			deleteDeployments(clientset, cleanupNamespace)
-			deleteConfigMaps(clientset, cleanupNamespace)
-			deleteService(clientset, cleanupNamespace)
-			deleteStatefulSets(clientset, cleanupNamespace)
+			DoCleanup(cleanupNamespace)
 		},
 	}
 
 	cmd.Flags().StringVarP(&cleanupNamespace, "namespace", "n", "default", "Namespace to clear deployemtns for")
 
 	return cmd
+}
+
+func DoCleanup(namespace string) {
+	clientset, err := utils.GetClientset()
+	if err != nil {
+		panic(err)
+	}
+
+	deleteDeployments(clientset, namespace)
+	deleteConfigMaps(clientset, namespace)
+	deleteService(clientset, namespace)
+	deleteJob(clientset, namespace)
+	deleteStatefulSets(clientset, namespace)
 }
 
 func deleteDeployments(clientset *kubernetes.Clientset, namespace string) {
@@ -61,6 +66,14 @@ func deleteService(clientset *kubernetes.Clientset, namespace string) {
 
 func deleteStatefulSets(clientset *kubernetes.Clientset, namespace string) {
 	clientset.AppsV1().StatefulSets(namespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
+		LabelSelector: "project=ucac",
+	})
+}
+func deleteJob(clientset *kubernetes.Clientset, cleanupNamespace string) {
+	policy := metav1.DeletePropagationForeground
+	clientset.BatchV1().Jobs(cleanupNamespace).DeleteCollection(context.Background(), metav1.DeleteOptions{
+		PropagationPolicy: &policy,
+	}, metav1.ListOptions{
 		LabelSelector: "project=ucac",
 	})
 }

@@ -1,7 +1,7 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
-import com.github.davenury.common.Change
 import com.github.davenury.common.history.History
+import com.github.davenury.common.history.HistoryEntry
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -30,7 +30,7 @@ data class Ledger(
             this.proposedItems.addAll(newProposedItems)
             commitIndex = newProposedItems.maxOrDefault(commitIndex)
 
-            newAcceptedItems.forEach { history.addEntry(it.change.toHistoryEntry()) }
+            newAcceptedItems.forEach { history.addEntry(it.entry) }
             return LedgerUpdateResult(
                 acceptedItems = newAcceptedItems,
                 proposedItems = newProposedItems,
@@ -52,15 +52,15 @@ data class Ledger(
         mutex.withLock {
             val newAcceptedItems = proposedItems.filter { acceptedIndexes.contains(it.ledgerIndex) }
             acceptedItems.addAll(newAcceptedItems)
-            newAcceptedItems.forEach { history.addEntry(it.change.toHistoryEntry()) }
+            newAcceptedItems.forEach { history.addEntry(it.entry) }
             proposedItems.removeAll(newAcceptedItems)
             lastApplied = newAcceptedItems.maxOrDefault(lastApplied)
         }
 
-    suspend fun proposeChange(change: Change, term: Int): Int {
+    suspend fun proposeEntry(entry: HistoryEntry, term: Int, changeId: String): Int {
         mutex.withLock {
             val newId = commitIndex
-            proposedItems.add(LedgerItem(newId, term, change))
+            proposedItems.add(LedgerItem(newId, term, entry, changeId))
             commitIndex++
             return newId
         }
@@ -70,21 +70,21 @@ data class Ledger(
         return history
     }
 
-    suspend fun getAcceptedChanges(): List<Change> =
+    suspend fun getAcceptedItems(): List<LedgerItem> =
         mutex.withLock {
-            acceptedItems.map { it.change }.toMutableList()
+            acceptedItems.map { it }.toList()
         }
 
-    suspend fun getProposedChanges(): List<Change> =
+    suspend fun getProposedItems(): List<LedgerItem> =
         mutex.withLock {
-            proposedItems.map { it.change }.toMutableList()
+            proposedItems.map { it }.toList()
         }
 
-    suspend fun getProposedChanges(ids: List<Int>): List<Change> =
+    suspend fun getProposedItems(ids: List<Int>): List<LedgerItem> =
         mutex.withLock {
             proposedItems
                 .filter { ids.contains(it.ledgerIndex) }
-                .map { it.change }.toMutableList()
+                .map { it }.toList()
         }
 
     suspend fun checkIfItemExist(logIndex: Int, logTerm: Int): Boolean =
@@ -109,10 +109,10 @@ data class Ledger(
                 ?.let { Pair(it.ledgerIndex, it.term) }
         }
 
-    suspend fun changeAlreadyProposed(change: Change): Boolean =
+    suspend fun entryAlreadyProposed(entry: HistoryEntry): Boolean =
         mutex.withLock {
             (acceptedItems + proposedItems)
-                .any { it.change.toHistoryEntry() == change.toHistoryEntry() }
+                .any { it.entry == entry }
         }
 
     private fun List<LedgerItem>.maxOrDefault(defaultValue: Int): Int =
@@ -122,12 +122,12 @@ data class Ledger(
     private fun List<Int>.maxOrDefault(defaultValue: Int): Int = this.maxOfOrNull { it } ?: defaultValue
 }
 
-data class LedgerItemDto(val ledgerIndex: Int, val term: Int, val change: Change) {
-    fun toLedgerItem(): LedgerItem = LedgerItem(ledgerIndex, term, change)
+data class LedgerItemDto(val ledgerIndex: Int, val term: Int, val serializedEntry: String, val changeId: String) {
+    fun toLedgerItem(): LedgerItem = LedgerItem(ledgerIndex, term, HistoryEntry.deserialize(serializedEntry), changeId)
 }
 
-data class LedgerItem(val ledgerIndex: Int, val term: Int, val change: Change) {
-    fun toDto(): LedgerItemDto = LedgerItemDto(ledgerIndex, term, change)
+data class LedgerItem(val ledgerIndex: Int, val term: Int, val entry: HistoryEntry, val changeId: String) {
+    fun toDto(): LedgerItemDto = LedgerItemDto(ledgerIndex, term, entry.serialize(), changeId)
 }
 
 data class LedgerUpdateResult(val acceptedItems: List<LedgerItem>, val proposedItems: List<LedgerItem>)

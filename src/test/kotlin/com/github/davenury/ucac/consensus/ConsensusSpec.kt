@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus
 
 import com.github.davenury.common.AddUserChange
 import com.github.davenury.common.Change
+import com.github.davenury.common.ChangePeersetInfo
 import com.github.davenury.common.Changes
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.InitialHistoryEntry
@@ -77,15 +78,16 @@ class ConsensusSpec : IntegrationTestBase() {
         val peerAddresses = apps.getPeers(0)
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
+        logger.info("Leader elected")
 
         // when: peer1 executed change
         val change1 = createChange(null)
-        val change1Id = change1.toHistoryEntry().getId()
         expectCatching {
             executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change1)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
+        logger.info("Change 1 applied")
 
         askAllForChanges(peerAddresses.values).forEach { changes ->
             // then: there's one change, and it's change we've requested
@@ -97,12 +99,13 @@ class ConsensusSpec : IntegrationTestBase() {
         }
 
         // when: peer2 executes change
-        val change2 = createChange(1, userName = "userName2", parentId = change1Id)
+        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(0).getId())
         expectCatching {
             executeChange("${apps.getPeer(0, 1).address}/v2/change/sync", change2)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
+        logger.info("Change 2 applied")
 
         askAllForChanges(peerAddresses.values).forEach { changes ->
             // then: there are two changes
@@ -458,10 +461,11 @@ class ConsensusSpec : IntegrationTestBase() {
         val peersToStop = peerAddresses.filter { it != firstLeaderAddress }.take(2)
         peersToStop.forEach { apps.getApp(it.globalPeerId).stop(0, 0) }
         val runningPeers = peerAddresses.filter { address -> address !in peersToStop }
+        val change = createChange(null)
 
 //      Start processing
         expectCatching {
-            executeChange("${runningPeers.first().address}/v2/change/sync", createChange(null))
+            executeChange("${runningPeers.first().address}/v2/change/sync", change)
         }.isSuccess()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -474,10 +478,9 @@ class ConsensusSpec : IntegrationTestBase() {
                 that(acceptedChanges.size).isEqualTo(1)
             }
             expect {
-                that(acceptedChanges.first()).isEqualTo(createChange(null))
+                that(acceptedChanges.first()).isEqualTo(change)
                 that(acceptedChanges.first().acceptNum).isEqualTo(null)
             }
-
         }
     }
 
@@ -515,10 +518,11 @@ class ConsensusSpec : IntegrationTestBase() {
         val peersToStop = peerAddresses.filter { it != firstLeaderAddress }.take(3)
         peersToStop.forEach { apps.getApp(it.globalPeerId).stop(0, 0) }
         val runningPeers = peerAddresses.filter { address -> address !in peersToStop }
+        val change = createChange(null)
 
 //      Start processing
         expectCatching {
-            executeChange("${runningPeers.first().address}/v2/change/async", createChange(null))
+            executeChange("${runningPeers.first().address}/v2/change/async", change)
         }.isSuccess()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -532,7 +536,7 @@ class ConsensusSpec : IntegrationTestBase() {
                 that(acceptedChanges.size).isEqualTo(0)
             }
             expect {
-                that(proposedChanges.first()).isEqualTo(createChange(null))
+                that(proposedChanges.first()).isEqualTo(change)
                 that(proposedChanges.first().acceptNum).isEqualTo(null)
             }
         }
@@ -644,12 +648,14 @@ class ConsensusSpec : IntegrationTestBase() {
         }
 
 //      Run change in both halfs
+        val change1 = createChange(1)
         expectCatching {
-            executeChange("${firstHalf.first().address}/v2/change/async", createChange(1))
+            executeChange("${firstHalf.first().address}/v2/change/async", change1)
         }.isSuccess()
 
+        val change2 = createChange(2)
         expectCatching {
-            executeChange("${secondHalf.first().address}/v2/change/sync", createChange(2))
+            executeChange("${secondHalf.first().address}/v2/change/sync", change2)
         }.isSuccess()
 
         change1Phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -657,31 +663,29 @@ class ConsensusSpec : IntegrationTestBase() {
         logger.info("After change 1")
 
         firstHalf.forEach {
-            logger.debug("Checking $it")
-
             val proposedChanges = askForProposedChanges(it)
             val acceptedChanges = askForAcceptedChanges(it)
+            logger.debug("Checking $it proposed: $proposedChanges accepted: $acceptedChanges")
             expect {
                 that(proposedChanges.size).isEqualTo(1)
                 that(acceptedChanges.size).isEqualTo(0)
             }
             expect {
-                that(proposedChanges.first()).isEqualTo(createChange(null))
+                that(proposedChanges.first()).isEqualTo(change1)
                 that(proposedChanges.first().acceptNum).isEqualTo(1)
             }
         }
 
         secondHalf.forEach {
-            logger.debug("Checking $it")
-
             val proposedChanges = askForProposedChanges(it)
             val acceptedChanges = askForAcceptedChanges(it)
+            logger.debug("Checking $it proposed: $proposedChanges accepted: $acceptedChanges")
             expect {
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
             }
             expect {
-                that(acceptedChanges.first()).isEqualTo(createChange(null))
+                that(acceptedChanges.first()).isEqualTo(change2)
                 that(acceptedChanges.first().acceptNum).isEqualTo(2)
             }
         }
@@ -698,16 +702,15 @@ class ConsensusSpec : IntegrationTestBase() {
         logger.info("After change 2")
 
         peerAddresses.forEach {
-            logger.debug("Checking $it")
-
             val proposedChanges = askForProposedChanges(it)
             val acceptedChanges = askForAcceptedChanges(it)
+            logger.debug("Checking $it proposed: $proposedChanges accepted: $acceptedChanges")
             expect {
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
             }
             expect {
-                that(acceptedChanges.first()).isEqualTo(createChange(null))
+                that(acceptedChanges.first()).isEqualTo(change2)
                 that(acceptedChanges.first().acceptNum).isEqualTo(2)
             }
         }
@@ -770,13 +773,11 @@ class ConsensusSpec : IntegrationTestBase() {
 
     private fun createChange(
         acceptNum: Int?,
-        peers: List<String> = listOf(),
         userName: String = "userName",
         parentId: String = InitialHistoryEntry.getId(),
     ) = AddUserChange(
-        parentId,
+        listOf(ChangePeersetInfo(0, parentId)),
         userName,
-        peers,
         acceptNum,
     )
 

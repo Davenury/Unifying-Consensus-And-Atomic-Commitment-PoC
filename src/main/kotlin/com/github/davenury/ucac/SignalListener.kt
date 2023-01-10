@@ -25,7 +25,7 @@ enum class Signal {
     ConsensusFollowerChangeProposed,
     ConsensusTryToBecomeLeader,
     TwoPCOnChangeApplied,
-    TwoPCOnHandleDecision
+    TwoPCOnHandleDecision,
 }
 
 
@@ -40,7 +40,7 @@ class SignalPublisher(
         signal: Signal,
         subject: SignalSubject,
         peers: List<List<PeerAddress>>,
-        transaction: Transaction?,
+        transaction: Transaction? = null,
         change: Change? = null,
         historyEntry: HistoryEntry? = null
     ) {

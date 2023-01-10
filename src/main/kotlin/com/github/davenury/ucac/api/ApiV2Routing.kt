@@ -4,6 +4,7 @@ import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeCreationResponse
 import com.github.davenury.common.ChangeCreationStatus
 import com.github.davenury.common.ChangeResult
+import com.github.davenury.ucac.common.GlobalPeerId
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
@@ -15,9 +16,9 @@ import java.util.concurrent.CompletableFuture
 
 fun Application.apiV2Routing(
     service: ApiV2Service,
+    currentPeer: GlobalPeerId,
 ) {
     val logger = LoggerFactory.getLogger("V2Routing")
-
 
     suspend fun respondChangeResult(result: ChangeResult?, call: ApplicationCall) {
         when (result?.status) {
@@ -67,12 +68,20 @@ fun Application.apiV2Routing(
         }
     }
 
-    suspend fun getProcessorJob(call: ApplicationCall): ProcessorJob {
+    suspend fun createProcessorJob(call: ApplicationCall): ProcessorJob {
         val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
         val useTwoPC: Boolean = call.request.queryParameters["use_2pc"]?.toBoolean() ?: false
         val change = call.receive<Change>()
 
-        val isOnePeersetChange = service.allPeersFromMyPeerset(change.peers)
+        val isOnePeersetChange = when (change.peersets.size) {
+            0 -> throw IllegalArgumentException("Change needs at least one peerset")
+            1 -> true
+            else -> false
+        }
+
+        if (change.peersets.find { it.peersetId == currentPeer.peersetId } == null) {
+            throw IllegalArgumentException("My peerset ID is not in the change")
+        }
 
         val processorJobType = when {
             isOnePeersetChange && !enforceGpac -> ProcessorJobType.CONSENSUS
@@ -87,13 +96,14 @@ fun Application.apiV2Routing(
 
     routing {
         post("/v2/change/async") {
-            val processorJob = getProcessorJob(call)
+            val processorJob = createProcessorJob(call)
             service.addChange(processorJob)
+
             call.respond(HttpStatusCode.Accepted)
         }
 
         post("/v2/change/sync") {
-            val processorJob = getProcessorJob(call)
+            val processorJob = createProcessorJob(call)
             val timeout = call.request.queryParameters["timeout"]?.let { Duration.parse(it) }
 
             val result: ChangeResult? = service.addChangeSync(processorJob, timeout)

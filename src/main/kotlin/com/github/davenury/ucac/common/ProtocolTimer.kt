@@ -2,6 +2,7 @@ package com.github.davenury.ucac.common
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.slf4j.MDCContext
+import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.*
 import kotlin.math.absoluteValue
@@ -22,6 +23,7 @@ class ProtocolTimerImpl(
 
     companion object {
         private val randomGenerator = Random()
+        private val logger = LoggerFactory.getLogger("protocolTimer")
     }
 
     override suspend fun startCounting(iteration: Int, action: suspend () -> Unit) {
@@ -43,6 +45,11 @@ class ProtocolTimerImpl(
     }
 
     override fun cancelCounting() {
-        this.task?.cancel()
+        try {
+            this.task?.cancel()
+        } catch (_: CancellationException) {
+            logger.info("Cancelation exception occured")
+        }
     }
+
 }

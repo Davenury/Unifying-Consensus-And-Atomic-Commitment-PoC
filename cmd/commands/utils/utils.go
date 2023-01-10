@@ -1,4 +1,4 @@
-package commands
+package utils
 
 import (
 	"context"
@@ -68,15 +68,15 @@ func StatefulSetName(config PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s", config.PeerId, config.PeersetId)
 }
 func DeploymentName(peerConfig PeerConfig) string {
-	return fmt.Sprintf("peer%s-peerset%s-dep", peerConfig.PeerId, peerConfig.PeersetId)
+	return fmt.Sprintf("peerset%s-peer%s-dep", peerConfig.PeersetId, peerConfig.PeerId)
 }
 
-func GenerateServicesForPeers(peersInPeerset []int, startPort int, addressFunc func(PeerConfig) string) string {
-	return generateServicesForPeers(peersInPeerset, startPort, true, addressFunc)
+func GenerateServicesForPeers(peersInPeerset []int, startPort int) string {
+	return generateServicesForPeers(peersInPeerset, startPort, true)
 }
 
-func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int, addressFunc func(PeerConfig) string) string {
-	return generateServicesForPeers(peersInPeerset, port, false, addressFunc)
+func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int) string {
+	return generateServicesForPeers(peersInPeerset, port, false)
 }
 
 func StatefulSetPodAddress(config PeerConfig) string {
@@ -86,7 +86,7 @@ func ServiceAddress(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
-func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool, addressFunc func(PeerConfig) string) string {
+func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool) string {
 
 	var resultSb strings.Builder
 	for idx, peersNumber := range peersInPeerset {
@@ -97,7 +97,7 @@ func generateServicesForPeers(peersInPeerset []int, startPort int, increment boo
 			if increment {
 				port = port + i
 			}
-			sb.WriteString(fmt.Sprintf("%s:%d,", addressFunc(PeerConfig{
+			sb.WriteString(fmt.Sprintf("%s:%d,", ServiceAddress(PeerConfig{
 				PeerId:    strconv.Itoa(i),
 				PeersetId: strconv.Itoa(idx),
 			}), port))

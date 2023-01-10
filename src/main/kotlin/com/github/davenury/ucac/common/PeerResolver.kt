@@ -17,7 +17,9 @@ class PeerResolver(
         return peers[globalPeerId]!!
     }
 
-    fun currentPeerAddress() = resolve(currentPeer)
+    fun currentPeer(): GlobalPeerId = currentPeer
+
+    fun currentPeerAddress(): PeerAddress = resolve(currentPeer)
 
     fun getPeersFromCurrentPeerset(): List<PeerAddress> {
         return getPeersFromPeerset(currentPeer.peersetId)

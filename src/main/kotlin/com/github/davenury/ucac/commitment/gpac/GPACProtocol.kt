@@ -2,7 +2,6 @@ package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.common.history.IntermediateHistoryEntry
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
@@ -25,18 +24,19 @@ abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) 
     abstract suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int = 1)
     abstract fun getTransaction(): Transaction
     abstract fun getBallotNumber(): Int
-
 }
 
 class GPACProtocolImpl(
     private val history: History,
-    private val gpacConfig: GpacConfig,
-    private val ctx: ExecutorCoroutineDispatcher,
+    gpacConfig: GpacConfig,
+    ctx: ExecutorCoroutineDispatcher,
     private val protocolClient: GPACProtocolClient,
     private val transactionBlocker: TransactionBlocker,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     peerResolver: PeerResolver,
 ) : GPACProtocolAbstract(peerResolver, logger) {
+    private val globalPeerId: GlobalPeerId = peerResolver.currentPeer()
+
     var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, Duration.ZERO, ctx)
     var retriesTimer: ProtocolTimer =
         ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
@@ -80,10 +80,10 @@ class GPACProtocolImpl(
             throw NotElectingYou(myBallotNumber, message.ballotNumber)
         }
 
-        val initVal =
-            if (!shouldCheckForCompatibility(message.change.peers) || history.isEntryCompatible(message.change.toHistoryEntry())) Accept.COMMIT else Accept.ABORT
+        val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
+        val initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
 
-        transaction = Transaction(ballotNumber = message.ballotNumber, initVal = initVal, change = message.change)
+        myBallotNumber = message.ballotNumber
 
         signal(Signal.OnHandlingElectEnd, transaction, message.change)
 
@@ -100,14 +100,20 @@ class GPACProtocolImpl(
 
         signal(Signal.OnHandlingAgreeBegin, transaction, message.change)
 
-        if (!checkBallotNumber(message.ballotNumber)) {
+        if (message.ballotNumber != myBallotNumber) {
             throw NotValidLeader(myBallotNumber, message.ballotNumber)
         }
         logger.info("Handling agree $message")
-        this.transaction =
-            this.transaction.copy(
+
+        val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
+        val initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
+
+        transaction =
+            Transaction(
                 ballotNumber = message.ballotNumber,
+                change = message.change,
                 acceptVal = message.acceptVal,
+                initVal = initVal,
                 acceptNum = message.acceptNum ?: message.ballotNumber
             )
 
@@ -143,10 +149,14 @@ class GPACProtocolImpl(
             if (message.acceptVal == Accept.COMMIT) {
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
             }
-            if (message.acceptVal == Accept.COMMIT && !transactionWasAppliedBefore()) {
+            if (message.acceptVal == Accept.COMMIT && !changeWasAppliedBefore(message.change)) {
                 addChangeToHistory(message.change)
+                changeSucceeded(message.change)
+            } else if (message.acceptVal == Accept.ABORT) {
+                changeConflicts(message.change, "Message was applied but state was ABORT")
+            } else {
+                changeSucceeded(message.change)
             }
-            changeSucceeded(message.change)
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
@@ -157,30 +167,23 @@ class GPACProtocolImpl(
     }
 
     private fun addChangeToHistory(change: Change) {
-        change.toHistoryEntry().let {
-            if (shouldCheckForCompatibility(change.peers)) {
-                it
-            } else {
-                IntermediateHistoryEntry(it.getContent(), history.getCurrentEntry().getId())
-            }
-        }.let {
+        change.toHistoryEntry(globalPeerId.peersetId).let {
             history.addEntry(it)
         }
     }
 
-    // This function determines if we should check for HistoryEntry compability
-    // TODO - change its implementation to one based on peersetsIds when change has peersetId
-    private fun shouldCheckForCompatibility(peers: List<String>): Boolean = peers.size == 1
-
     private fun transactionWasAppliedBefore() =
         Changes.fromHistory(history).any { it.acceptNum == this.transaction.acceptNum }
+
+    private fun changeWasAppliedBefore(change: Change) =
+        Changes.fromHistory(history).any { it.id == change.id }
 
     private suspend fun leaderFailTimeoutStart(change: Change) {
         logger.info("Start counting")
         leaderTimer.startCounting {
             logger.info("Recovery leader starts")
             transactionBlocker.releaseBlock()
-            performProtocolAsRecoveryLeader(change)
+            if (!changeWasAppliedBefore(change)) performProtocolAsRecoveryLeader(change)
         }
     }
 
@@ -194,6 +197,7 @@ class GPACProtocolImpl(
         iteration: Int
     ) {
         logger.info("Starting performing GPAC iteration: $iteration")
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
 
         val electMeResult =
             electMePhase(change, { responses -> superSet(responses, getPeersFromChange(change)) })
@@ -228,11 +232,19 @@ class GPACProtocolImpl(
             return
         }
 
-        applySignal(Signal.BeforeSendingApply, this.transaction, change)
+        try {
+            applySignal(Signal.BeforeSendingApply, this.transaction, change)
+        } catch (e: Exception) {
+            transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
+            transactionBlocker.releaseBlock()
+            throw e
+        }
         applyPhase(change, acceptVal)
     }
 
     override suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int) {
+        logger.info("Starting performing GPAC iteration: $iteration as recovery leader")
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         val electMeResult = electMePhase(
             change,
             { responses -> superMajority(responses, getPeersFromChange(change)) },
@@ -251,7 +263,8 @@ class GPACProtocolImpl(
 
         if (!electMeResult.success) {
             retriesTimer.startCounting(iteration) {
-                performProtocolAsRecoveryLeader(change, iteration + 1)
+                if (!changeWasAppliedBefore(change))
+                    performProtocolAsRecoveryLeader(change, iteration + 1)
             }
             return
         }
@@ -308,9 +321,9 @@ class GPACProtocolImpl(
         transaction: Transaction? = null,
         acceptNum: Int? = null
     ): ElectMeResult {
-        if (!history.isEntryCompatible(change.toHistoryEntry())) {
+        if (!history.isEntryCompatible(change.toHistoryEntry(globalPeerId.peersetId))) {
             signal(Signal.OnSendingElectBuildFail, this.transaction, change)
-            changeConflicts(change)
+            changeConflicts(change, "History entry not compatible, change: ${change}, expected: ${history.getCurrentEntry().getId()}")
             throw HistoryCannotBeBuildException()
         }
 
@@ -346,7 +359,7 @@ class GPACProtocolImpl(
             return false
         }
 
-        this.transaction = this.transaction.copy(decision = true)
+        this.transaction = this.transaction.copy(decision = true, acceptVal = acceptVal)
         return true
     }
 
@@ -412,7 +425,7 @@ class GPACProtocolImpl(
 
     private fun <T> superFunction(responses: List<List<T>>, divider: Int, peers: List<List<T>>): Boolean {
         val allShards = peers.size >= responses.size / divider.toDouble()
-        val myPeersetId = peerResolver.currentPeerAddress().globalPeerId.peersetId
+        val myPeersetId = globalPeerId.peersetId
 
         return responses.withIndex()
             .all { (index, value) ->
@@ -424,7 +437,7 @@ class GPACProtocolImpl(
             } && allShards
     }
 
-    private fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
+    private suspend fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
         try {
             signal(signal, transaction, change)
         } catch (e: Exception) {
@@ -435,18 +448,20 @@ class GPACProtocolImpl(
     }
 
     private fun changeSucceeded(change: Change, detailedMessage: String? = null) {
-        val changeId = change.toHistoryEntry().getId()
-        changeIdToCompletableFuture[changeId]?.complete(ChangeResult(ChangeResult.Status.SUCCESS, detailedMessage))
+        changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.SUCCESS, detailedMessage))
     }
 
     private fun changeConflicts(change: Change, detailedMessage: String? = null) {
-        val changeId = change.toHistoryEntry().getId()
-        changeIdToCompletableFuture[changeId]?.complete(ChangeResult(ChangeResult.Status.CONFLICT, detailedMessage))
+        changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.CONFLICT, detailedMessage))
     }
 
     private fun changeTimeout(change: Change, detailedMessage: String? = null) {
-        val changeId = change.toHistoryEntry().getId()
-        changeIdToCompletableFuture[changeId]!!.complete(ChangeResult(ChangeResult.Status.TIMEOUT, detailedMessage))
+        changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.TIMEOUT, detailedMessage))
+    }
+
+    private fun isCurrentProcessingChangeOrApplied(change: Change): Boolean {
+        val entry = change.toHistoryEntry(globalPeerId.peersetId)
+        return change.id == this.transaction.change?.id || this.history.containsEntry(entry.getId())
     }
 
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
