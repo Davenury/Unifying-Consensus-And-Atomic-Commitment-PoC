@@ -262,3 +262,255 @@ jobs:
           path: |
             build/reports/
             build/test-results/
+      
+
+      - name: Build with Gradle
+        run: ./gradlew build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports25
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports26
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports27
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports28
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports29
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports30
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports31
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports32
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports33
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports34
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports35
+          path: |
+            build/reports/
+            build/test-results/
+
+
+      - name: Build with Gradle
+        run: ./gradlew build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports36
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports37
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports38
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports39
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports40
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports41
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports42
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports43
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports44
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports45
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports46
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports47
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports48
+          path: |
+            build/reports/
+            build/test-results/
+
+      - name: Build with Gradle
+        run: ./gradlew clean build --no-daemon
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-reports49
+          path: |
+            build/reports/
+            build/test-results/
