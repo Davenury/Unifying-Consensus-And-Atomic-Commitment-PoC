@@ -137,7 +137,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
     @Test
     fun `should be able to execute transaction even if leader fails after first ft-agree`() {
         runBlocking {
-            val phaser = Phaser(2)
+            val phaser = Phaser(3)
             phaser.register()
 
             val firstLeaderAction = SignalListener {
@@ -150,14 +150,14 @@ class SinglePeersetSpec : IntegrationTestBase() {
                     throw RuntimeException("Stop")
                 }
             }
+            val afterHandlingApply = SignalListener {
+                phaser.arrive()
+            }
+
             val firstLeaderCallbacks: Map<Signal, SignalListener> = mapOf(
                 Signal.BeforeSendingAgree to firstLeaderAction,
+                Signal.OnHandlingApplyCommitted to afterHandlingApply
             )
-            val afterHandlingApply = SignalListener {
-                runBlocking {
-                    phaser.arriveAndAwaitAdvanceWithTimeout()
-                }
-            }
             val otherPeersCallbacks: Map<Signal, SignalListener> = mapOf(
                 Signal.OnHandlingApplyCommitted to afterHandlingApply,
             )
