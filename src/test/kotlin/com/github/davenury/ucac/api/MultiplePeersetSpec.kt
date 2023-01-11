@@ -253,7 +253,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             throw RuntimeException("Leader failed after ft-agree")
         }
 
-        val applyCommittedPhaser = Phaser(7)
+        val applyCommittedPhaser = Phaser(8)
         applyCommittedPhaser.register()
 
         val peerApplyCommitted = SignalListener {
@@ -263,6 +263,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
         val signalListenersForLeaders = mapOf(
             Signal.BeforeSendingApply to failAction,
+            Signal.OnHandlingApplyCommitted to peerApplyCommitted,
         )
         val signalListenersForCohort = mapOf(
             Signal.OnHandlingApplyCommitted to peerApplyCommitted,
