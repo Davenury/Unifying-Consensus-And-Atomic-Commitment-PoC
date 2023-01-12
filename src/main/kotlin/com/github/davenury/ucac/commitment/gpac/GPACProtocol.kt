@@ -146,13 +146,16 @@ class GPACProtocolImpl(
                     this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
             }
 
-            if (message.acceptVal == Accept.COMMIT) {
-                signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
-            }
+
             if (message.acceptVal == Accept.COMMIT && !changeWasAppliedBefore(message.change)) {
                 addChangeToHistory(message.change)
                 changeSucceeded(message.change)
-            } else if (message.acceptVal == Accept.ABORT) {
+                signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
+            }
+            else if (message.acceptVal == Accept.COMMIT) {
+                signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
+            }
+             else if (message.acceptVal == Accept.ABORT) {
                 changeConflicts(message.change, "Message was applied but state was ABORT")
             } else {
                 changeSucceeded(message.change)

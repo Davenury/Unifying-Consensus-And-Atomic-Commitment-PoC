@@ -144,17 +144,13 @@ class RaftConsensusProtocolImpl(
                 logger.info("Denying vote for $peerId due to an old term ($iteration vs $currentTerm), I voted for ${votedFor?.id ?: "null"}")
                 return denyVoteResponse
             }
-            currentTerm = iteration
+            if (amILeader()) stopBeingLeader(iteration)
+
             if (lastLogIndex < state.commitIndex && amILeader()) {
                 logger.info("Denying vote for $peerId due to an old index ($lastLogIndex vs ${state.commitIndex})")
-                stopBeingLeader(iteration)
-                restartTimer(RaftRole.Candidate)
                 return denyVoteResponse
             }
-            if (amILeader()) {
-                logger.info("Stop being a leader")
-                stopBeingLeader(iteration)
-            }
+            currentTerm = iteration
         }
         restartTimer()
         logger.info("Voted for $peerId in term $iteration")
