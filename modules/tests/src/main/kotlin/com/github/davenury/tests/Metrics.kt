@@ -21,8 +21,4 @@ object Metrics {
         meterRegistry.counter("sending_change_delay").increment()
     }
 
-    fun bumpConflictedChanges(message: String?) {
-        meterRegistry.counter("conflicted_changes", listOf(Tag.of("detailed_message", message ?: "null"))).increment()
-    }
-
 }
