@@ -140,19 +140,21 @@ class RaftConsensusProtocolImpl(
         logger.debug("Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogIndex, currentTerm=$currentTerm,lastApplied=${state.lastApplied}")
         mutex.withLock {
             val denyVoteResponse = ConsensusElectedYou(this.peerId, currentTerm, false)
-            if (amILeader()) {
-                logger.info("Denying vote for $peerId due to me being a leader")
-                return denyVoteResponse
-            }
             if (iteration <= currentTerm) {
                 logger.info("Denying vote for $peerId due to an old term ($iteration vs $currentTerm), I voted for ${votedFor?.id ?: "null"}")
                 return denyVoteResponse
             }
-            if (lastLogIndex < state.commitIndex) {
+            currentTerm = iteration
+            if (lastLogIndex < state.commitIndex && amILeader()) {
                 logger.info("Denying vote for $peerId due to an old index ($lastLogIndex vs ${state.commitIndex})")
+                stopBeingLeader(iteration)
+                restartTimer(RaftRole.Candidate)
                 return denyVoteResponse
             }
-            currentTerm = iteration
+            if (amILeader()) {
+                logger.info("Stop being a leader")
+                stopBeingLeader(iteration)
+            }
         }
         restartTimer()
         logger.info("Voted for $peerId in term $iteration")
@@ -204,7 +206,7 @@ class RaftConsensusProtocolImpl(
 //      Restart timer because we received heartbeat from proper leader
         logger.info("Timer restarted, because of receiving heartbeat")
         mutex.withLock {
-            if (role == RaftRole.Leader){
+            if (role == RaftRole.Leader) {
                 stopBeingLeader(term)
                 role = RaftRole.Follower
 
@@ -564,7 +566,7 @@ class RaftConsensusProtocolImpl(
         leaderRequestExecutorService.close()
     }
 
-    private fun stopExecutorService(){
+    private fun stopExecutorService() {
         executorService?.cancel()
         executorService?.close()
         executorService = null
