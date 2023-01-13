@@ -181,6 +181,13 @@ class ApplicationUcac constructor(
             )
         }
 
+        install(CORS) {
+            anyHost()
+            method(HttpMethod.Get)
+            method(HttpMethod.Post)
+            header(HttpHeaders.ContentType)
+        }
+
         install(StatusPages) {
             exception<MissingParameterException> { cause ->
                 call.respond(

@@ -128,11 +128,11 @@ fun Application.apiV2Routing(
 
         get("/v2/parent_id") {
             val peersetId = call.parameters["peersetId"]?.toInt() ?: 0
-            call.respond(ParentId(service.getChanges().last().toHistoryEntry(peersetId).getId()))
+            call.respond(ParentId(service.getChanges().lastOrNull()?.toHistoryEntry(peersetId)?.getId()))
         }
     }
 }
 
 private data class ParentId(
-    val parentId: String
+    val parentId: String?
 )

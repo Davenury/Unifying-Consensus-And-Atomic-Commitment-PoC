@@ -309,6 +309,7 @@ func deploySinglePeerService(namespace string, peerConfig utils.PeerConfig, curr
 			},
 		},
 		Spec: apiv1.ServiceSpec{
+			Type: "LoadBalancer",
 			Selector: map[string]string{
 				"app.name": fmt.Sprintf("peer%s-peerset%s-app", peerConfig.PeerId, peerConfig.PeersetId),
 			},
