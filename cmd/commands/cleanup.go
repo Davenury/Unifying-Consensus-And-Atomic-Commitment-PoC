@@ -36,6 +36,7 @@ func DoCleanup(namespace string) {
 	deleteConfigMaps(clientset, namespace)
 	deleteService(clientset, namespace)
 	deleteJob(clientset, namespace)
+	deleteStatefulSets(clientset, namespace)
 }
 
 func deleteDeployments(clientset *kubernetes.Clientset, namespace string) {
@@ -63,6 +64,11 @@ func deleteService(clientset *kubernetes.Clientset, namespace string) {
 
 }
 
+func deleteStatefulSets(clientset *kubernetes.Clientset, namespace string) {
+	clientset.AppsV1().StatefulSets(namespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
+		LabelSelector: "project=ucac",
+	})
+}
 func deleteJob(clientset *kubernetes.Clientset, cleanupNamespace string) {
 	policy := metav1.DeletePropagationForeground
 	clientset.BatchV1().Jobs(cleanupNamespace).DeleteCollection(context.Background(), metav1.DeleteOptions{

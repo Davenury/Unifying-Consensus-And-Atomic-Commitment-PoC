@@ -24,13 +24,14 @@ func CreateDeployCommand() *cobra.Command {
 	var deployCreateNamespace bool
 	var waitForReadiness bool
 	var imageName string
+	var deployAsStatefulSet bool
 
 
 	var deployCommand = &cobra.Command{
 		Use:   "deploy",
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
-			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName)
+			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, deployAsStatefulSet)
 		},
 	}
 
@@ -38,13 +39,14 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVarP(&deployCreateNamespace, "create-namespace", "", false, "Include if should create namespace")
 	deployCommand.Flags().StringVarP(&deployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
 	deployCommand.Flags().BoolVarP(&waitForReadiness, "wait-for-readiness", "", false, "Wait for deployment to be ready")
-	deployCommand.Flags().StringVarP(&imageName, "image", "", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
+	deployCommand.Flags().StringVarP(&imageName, "image", "", "davenury/ucac", "A Docker image to be used in the deployment")
+	deployCommand.Flags().BoolVarP(&deployAsStatefulSet, "as-statefulset", "", false, "Determines if pods should be deployed as StatefulSets, changes networking dns by pods, not services")
 
 	return deployCommand
 
 }
 
-func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string) {
+func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, asStatefulSet bool) {
 	ratisPeers := utils.GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort)
 	gpacPeers := utils.GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort)
 	ratisGroups := make([]string, len(numberOfPeersInPeersets))
@@ -73,7 +75,11 @@ func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace str
 
 			deploySinglePeerConfigMap(namespace, peerConfig, ratisPeers, gpacPeers)
 
-			deploySinglePeerDeployment(namespace, peerConfig, imageName)
+			if asStatefulSet {
+				deployStatefulSet(namespace, peerConfig, imageName)
+			} else {
+				deploySinglePeerDeployment(namespace, peerConfig, imageName)
+			}
 
 			fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
 		}
@@ -118,6 +124,43 @@ func anyPodNotReady(expectedPeers int, namespace string) bool {
 	fmt.Printf("Ready pods: %d/%d (expected %d)\n", totalCount-notReadyCount, totalCount, expectedPeers)
 
 	return totalCount != expectedPeers || notReadyCount > 0
+}
+
+func deployStatefulSet(namespace string, config utils.PeerConfig, imageName string) {
+	clientset, err := utils.GetClientset()
+	if err != nil {
+		panic(err)
+	}
+
+	statefulSetClient := clientset.AppsV1().StatefulSets(namespace)
+	oneReplicaPointer := int32(1)
+
+	statefulSet := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: utils.StatefulSetName(config),
+			Namespace: namespace,
+			Labels: map[string]string{
+				"project": "ucac",
+			},
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &oneReplicaPointer,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"peerId": config.PeerId,
+					"peersetId": config.PeersetId,
+				},
+			},
+			Template: createPodTemplate(config, imageName),
+		},
+	}
+
+	fmt.Println("Creating StatefulSet...")
+	result, err := statefulSetClient.Create(context.Background(), statefulSet, metav1.CreateOptions{})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Created StatefulSet: %q.\n", result.GetObjectMeta().GetName())
 }
 
 func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, imageName string) {
@@ -266,6 +309,7 @@ func deploySinglePeerService(namespace string, peerConfig utils.PeerConfig, curr
 			},
 		},
 		Spec: apiv1.ServiceSpec{
+			Type: "LoadBalancer",
 			Selector: map[string]string{
 				"app.name": fmt.Sprintf("peer%s-peerset%s-app", peerConfig.PeerId, peerConfig.PeersetId),
 			},

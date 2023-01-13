@@ -5,6 +5,8 @@ import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.features.*
 import io.ktor.client.features.json.*
+import okhttp3.ConnectionPool
+import java.util.concurrent.TimeUnit
 
 val httpClient = HttpClient(OkHttp) {
     install(JsonFeature) {
@@ -15,6 +17,11 @@ val httpClient = HttpClient(OkHttp) {
     }
 }
 val raftHttpClient = HttpClient(OkHttp) {
+    engine {
+        this.config {
+            this.connectionPool(ConnectionPool(0, 1, TimeUnit.MILLISECONDS))
+        }
+    }
     install(JsonFeature) {
         serializer = JacksonSerializer(objectMapper)
     }

@@ -64,6 +64,9 @@ func ServiceName(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
+func StatefulSetName(config PeerConfig) string {
+	return fmt.Sprintf("peer%s-peerset%s", config.PeerId, config.PeersetId)
+}
 func DeploymentName(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peerset%s-peer%s-dep", peerConfig.PeersetId, peerConfig.PeerId)
 }
@@ -76,6 +79,9 @@ func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int) string {
 	return generateServicesForPeers(peersInPeerset, port, false)
 }
 
+func StatefulSetPodAddress(config PeerConfig) string {
+	return fmt.Sprintf("%s-0", StatefulSetName(config))
+}
 func ServiceAddress(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
 }

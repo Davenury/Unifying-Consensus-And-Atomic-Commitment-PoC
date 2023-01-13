@@ -31,6 +31,7 @@ type Config struct {
 	consensusProtocol string
 	performanceTestTimeoutDeadline string
 	cleanupAfterWork bool
+	deployAsStatefulSet bool
 }
 
 func CreateWholeCommand() *cobra.Command {
@@ -64,6 +65,7 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.consensusProtocol, "consensus-protocol", "", "Consensus protocol to use. For now it's one protocol")
 	cmd.Flags().StringVar(&config.performanceTestTimeoutDeadline, "performance-test-timeout-deadline", "PT0S", "Additional duration after which test job should be force ended")
 	cmd.Flags().BoolVar(&config.cleanupAfterWork, "cleanup-after-work", true, "Determines if command should clean ucac resources after work (doesn't appy to grafana and prometheus)")
+	cmd.Flags().BoolVar(&config.deployAsStatefulSet, "as-statefulset", false, "Determines if pods should be deployed as statefulsets")
 
 	return cmd
 }
@@ -72,7 +74,7 @@ func perform(config Config) {
 	fmt.Println("Deploying monitoring...")
 	DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
 	fmt.Println("Deploying application...")
-	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName)
+	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.deployAsStatefulSet)
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
 	time.Sleep(10 * time.Second)
 	fmt.Println("Deploying performance test")
