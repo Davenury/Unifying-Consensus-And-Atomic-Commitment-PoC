@@ -287,17 +287,17 @@ class ConsensusSpec : IntegrationTestBase() {
             val name = it.subject.getPeerName()
             if (!peersTried.contains(name) && leaderElect) {
                 peersTried.add(name)
-                logger.info("Arrived ${it.subject.getPeerName()}")
+                logger.info("Arrived peerTryToBecomeLeader ${it.subject.getPeerName()}")
                 tryToBecomeLeaderPhaser.arrive()
             }
         }
 
         val peerLeaderFailed = SignalListener {
-            logger.info("Arrived ${it.subject.getPeerName()}")
+            logger.info("Arrived peerLeaderFailed ${it.subject.getPeerName()}")
             leaderFailedPhaser.arrive()
         }
         val peerLeaderElected = SignalListener {
-            logger.info("Arrived ${it.subject.getPeerName()}")
+            logger.info("Arrived peerLeaderElected ${it.subject.getPeerName()}")
             electionPhaser.arrive()
         }
 

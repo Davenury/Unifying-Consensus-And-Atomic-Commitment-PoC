@@ -557,6 +557,7 @@ class RaftConsensusProtocolImpl(
         changeIdToCompletableFuture[changeId]
 
     override fun stop() {
+        logger.info("Stop whole consensus")
         stopExecutorService()
         leaderRequestExecutorService.cancel()
         leaderRequestExecutorService.close()
