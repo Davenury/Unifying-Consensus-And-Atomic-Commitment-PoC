@@ -1,15 +1,11 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.ucac.*
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.httpClient
-import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.IntegrationTestBase
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
@@ -308,8 +304,10 @@ class MultiplePeersetSpec : IntegrationTestBase() {
     @Test
     fun `transaction should be processed and should be processed only once when one peerset applies its change and the other not`(): Unit =
         runBlocking {
-            val phaser = Phaser(8)
-            phaser.register()
+            val consensusLeaderElectedPhaser = Phaser(6)
+            val changePhaser = Phaser(8)
+            listOf(changePhaser, consensusLeaderElectedPhaser).forEach { it.register() }
+
 
             val leaderAction = SignalListener {
                 val url2 = "${it.peers[0][1]}/apply"
@@ -346,8 +344,11 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             val signalListenersForAll = mapOf(
                 Signal.OnHandlingApplyCommitted to SignalListener {
                     logger.info("Arrived on apply ${it.subject.getPeerName()}")
-                    phaser.arrive()
+                    changePhaser.arrive()
                 },
+                Signal.ConsensusLeaderElected to SignalListener {
+                    consensusLeaderElectedPhaser.arrive()
+                }
             )
             val signalListenersForLeader = mapOf(
                 Signal.BeforeSendingApply to leaderAction,
@@ -369,12 +370,14 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             val peers = apps.getPeers()
             val change = change(0, 1)
 
+            consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
             // when - executing transaction something should go wrong after ft-agree
             expectThrows<ServerResponseException> {
                 executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync", change)
             }
 
-            phaser.arriveAndAwaitAdvanceWithTimeout()
+            changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // waiting for consensus to propagate change is waste of time and fails CI
             askAllForChanges(peers.values).forEach { changes ->
