@@ -647,15 +647,16 @@ class ConsensusSpec : IntegrationTestBase() {
             }
         }
 
-//      Run change in both halfs
         val change1 = createChange(1)
+        val change2 = createChange(2)
+
+//      Run change in both halfs
         expectCatching {
             executeChange("${firstHalf.first().address}/v2/change/async", change1)
         }.isSuccess()
 
-        val change2 = createChange(2)
         expectCatching {
-            executeChange("${secondHalf.first().address}/v2/change/sync", change2)
+            executeChange("${secondHalf.first().address}/v2/change/async", change2)
         }.isSuccess()
 
         change1Phaser.arriveAndAwaitAdvanceWithTimeout()
