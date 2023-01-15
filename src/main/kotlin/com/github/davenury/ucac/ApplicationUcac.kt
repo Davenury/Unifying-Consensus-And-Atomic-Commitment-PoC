@@ -5,10 +5,7 @@ import com.github.davenury.common.history.History
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
-import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
-import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
-import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
-import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
+import com.github.davenury.ucac.commitment.gpac.*
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.common.GlobalPeerId
@@ -87,7 +84,7 @@ class ApplicationUcac constructor(
     private var consensusProtocol: RaftConsensusProtocol? = null
     private var twoPC: TwoPC? = null
     private val ctx: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
-    private lateinit var gpacProtocol: GPACProtocolAbstract
+    private lateinit var gpacFactory: GPACFactory
     private var service: ApiV2Service? = null
     private val peerResolver = config.newPeerResolver()
 
@@ -122,6 +119,8 @@ class ApplicationUcac constructor(
 
         val raftProtocolClientImpl = RaftProtocolClientImpl()
 
+        gpacFactory = GPACFactory(TransactionBlocker(), history, config.gpac, ctx, signalPublisher, peerResolver)
+
         consensusProtocol = RaftConsensusProtocolImpl(
             history,
             config.host + ":" + config.port,
@@ -133,16 +132,6 @@ class ApplicationUcac constructor(
             heartbeatDelay = config.raft.leaderTimeout,
         )
 
-        gpacProtocol =
-            GPACProtocolImpl(
-                history,
-                config.gpac,
-                ctx,
-                GPACProtocolClientImpl(),
-                TransactionBlocker(),
-                signalPublisher,
-                peerResolver,
-            )
         twoPC = TwoPC(
             history,
             config.twoPC,
@@ -154,7 +143,7 @@ class ApplicationUcac constructor(
         )
 
         service = ApiV2Service(
-            gpacProtocol,
+            gpacFactory,
             consensusProtocol as RaftConsensusProtocolImpl,
             twoPC!!,
             history,
@@ -259,7 +248,7 @@ class ApplicationUcac constructor(
         metaRouting()
         historyRouting(history)
         apiV2Routing(service!!, peerResolver.currentPeer())
-        gpacProtocolRouting(gpacProtocol)
+        gpacProtocolRouting(gpacFactory)
         consensusProtocolRouting(consensusProtocol!!)
         twoPCRouting(twoPC!!)
 

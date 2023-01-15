@@ -1,22 +1,22 @@
 package com.github.davenury.ucac.api
 
+import com.github.davenury.common.ChangeDoesntExist
+import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.Metrics
-import com.github.davenury.common.meterRegistry
-import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
+import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.consensus.ConsensusProtocol
-import io.micrometer.core.instrument.LongTaskTimer
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
-import java.util.*
+import java.util.concurrent.CompletableFuture
 
 
 class Worker(
     private val queue: Channel<ProcessorJob>,
-    private val gpacProtocol: GPACProtocolAbstract,
+    private val gpacFactory: GPACFactory,
     private val consensusProtocol: ConsensusProtocol,
     private val twoPC: TwoPC,
     passMdc: Boolean = true
@@ -26,6 +26,12 @@ class Worker(
     } else {
         null
     }
+
+    fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> =
+        consensusProtocol.getChangeResult(changeId)
+            ?: gpacFactory.getChangeStatus(changeId)
+            ?: twoPC.getChangeResult(changeId)
+            ?: throw ChangeDoesntExist(changeId)
 
     private suspend fun processingQueue() {
         try {
@@ -37,7 +43,7 @@ class Worker(
                     when (job.processorJobType) {
                         ProcessorJobType.CONSENSUS -> consensusProtocol.proposeChangeAsync(job.change)
                         ProcessorJobType.TWO_PC -> twoPC.proposeChangeAsync(job.change)
-                        ProcessorJobType.GPAC -> gpacProtocol.proposeChangeAsync(job.change)
+                        ProcessorJobType.GPAC -> gpacFactory.getOrCreateGPAC(job.change.id).proposeChangeAsync(job.change)
                     }
                 result.thenAccept {
                     job.completableFuture.complete(it)
