@@ -43,7 +43,7 @@ class Worker(
                     }
                 result.thenAccept {
                     job.completableFuture.complete(it)
-                    Metrics.stopTimer(job.change.id, job.processorJobType.name.lowercase(), it)
+                    Metrics.stopTimer(job.change.id, job.protocolName.name.lowercase(), it)
                     Metrics.bumpChangeProcessed(it)
                     runBlocking {
                         ChangeNotifier.notify(job.change, it)
