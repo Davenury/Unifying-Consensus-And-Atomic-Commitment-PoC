@@ -31,6 +31,12 @@ class TransactionBlocker {
 
     fun getProtocolName(): ProtocolName? = protocol
 
+    fun tryToReleaseBlockerAsProtocol(protocol: ProtocolName){
+        if (isAcquired() && getProtocolName() != protocol)
+            throw Exception("I tried to release TransactionBlocker from ${protocol.name} during being blocked by ${getProtocolName()?.name}")
+        releaseBlock()
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger("transaction-blocker")
     }

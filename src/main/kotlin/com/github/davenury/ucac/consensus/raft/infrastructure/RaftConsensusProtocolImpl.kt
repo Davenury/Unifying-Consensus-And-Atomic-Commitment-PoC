@@ -180,9 +180,7 @@ class RaftConsensusProtocolImpl(
             null
         )
 
-        //      Release block
-        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS)
-            transactionBlocker.releaseBlock()
+        transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
@@ -298,12 +296,12 @@ class RaftConsensusProtocolImpl(
                 "${updateResult.acceptedItems.size} accepted items"
         logger.debug(message)
 
-        if (transactionBlocker.isAcquired() && updateResult.acceptedItems.isNotEmpty()) {
-            transactionBlocker.releaseBlock()
-        }
-
         if (updateResult.proposedItems.isNotEmpty() || updateResult.acceptedItems.isNotEmpty()) {
             logger.info(message)
+        }
+
+        if (updateResult.acceptedItems.isNotEmpty()) {
+            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
         }
     }
 
@@ -404,7 +402,7 @@ class RaftConsensusProtocolImpl(
         val acceptedItems = state.getProposedItems(acceptedIndexes)
         if (acceptedItems.isNotEmpty()) {
             logger.info("Applying accepted changes: $acceptedItems")
-            transactionBlocker.releaseBlock()
+            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
         }
 
         acceptedItems.forEach {
@@ -579,7 +577,7 @@ class RaftConsensusProtocolImpl(
                     }"
                 )
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                transactionBlocker.releaseBlock()
+                transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
                 return
             }
 

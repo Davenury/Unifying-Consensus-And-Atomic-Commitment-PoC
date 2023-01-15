@@ -123,6 +123,7 @@ class GPACProtocolSpec {
         every { transactionBlockerMock.isAcquired() } returns false
         every { transactionBlockerMock.tryToBlock(ProtocolName.GPAC) } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
+        every { transactionBlockerMock.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC) } just Runs
         coEvery { timerMock.startCounting(action = any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
@@ -140,6 +141,7 @@ class GPACProtocolSpec {
         every { transactionBlockerMock.isAcquired() } returns false
         every { transactionBlockerMock.tryToBlock(ProtocolName.GPAC) } just Runs
         every { transactionBlockerMock.releaseBlock() } just Runs
+        every { transactionBlockerMock.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC) } just Runs
         coEvery { timerMock.startCounting(action = any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
 
