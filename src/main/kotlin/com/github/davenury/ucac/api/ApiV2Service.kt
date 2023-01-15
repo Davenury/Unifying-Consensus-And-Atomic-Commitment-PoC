@@ -3,6 +3,7 @@ package com.github.davenury.ucac.api
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
+import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolAbstract
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.consensus.ConsensusProtocol
@@ -21,17 +22,19 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 class ApiV2Service(
-    private val gpacProtocol: GPACProtocolAbstract,
+    private val gpacFactory: GPACFactory,
     private val consensusProtocol: ConsensusProtocol,
     private val twoPC: TwoPC,
     private val history: History,
     private var config: Config,
 ) {
+
     private val queue: Channel<ProcessorJob> = Channel(Channel.Factory.UNLIMITED)
-    private val worker: Thread = Thread(Worker(queue, gpacProtocol, consensusProtocol, twoPC))
+    private val worker = Worker(queue, gpacFactory, consensusProtocol, twoPC)
+    private val workerThread: Thread = Thread(worker)
 
     init {
-        worker.start()
+        workerThread.start()
     }
 
     fun getChanges(): Changes {
@@ -43,10 +46,7 @@ class ApiV2Service(
     }
 
     fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> =
-        consensusProtocol.getChangeResult(changeId)
-            ?: gpacProtocol.getChangeResult(changeId)
-            ?: twoPC.getChangeResult(changeId)
-            ?: throw ChangeDoesntExist(changeId)
+        worker.getChangeStatus(changeId)
 
     suspend fun addChange(job: ProcessorJob): CompletableFuture<ChangeResult> =
         job.also {
