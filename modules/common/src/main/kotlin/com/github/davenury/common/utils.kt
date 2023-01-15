@@ -38,10 +38,11 @@ object Metrics {
         meterRegistry.counter("incorrect_history_change").increment()
     }
 
-    fun bumpChangeProcessed(changeResult: ChangeResult) {
+    fun bumpChangeProcessed(changeResult: ChangeResult, protocol: String) {
         Counter
             .builder("change_processed")
             .tag("result", changeResult.status.name.lowercase())
+            .tag("protocol", protocol)
             .register(meterRegistry)
             .increment()
     }
@@ -51,9 +52,8 @@ object Metrics {
     }
     fun stopTimer(changeId: String, protocol: String, result: ChangeResult) {
         val timeElapsed = Duration.between(changeIdToTimer[changeId]!!, Instant.now())
-        logger.info("Time elapsed for change: $changeId is $timeElapsed")
+        logger.info("Time elapsed for change: $changeId: $timeElapsed")
         Timer
-            // call it delay of processing
             .builder("change_processing_time")
             .tag("protocol", protocol)
             .tag("result", result.status.name.lowercase())
