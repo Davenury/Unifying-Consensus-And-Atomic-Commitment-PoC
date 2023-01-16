@@ -12,11 +12,7 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
-import com.github.davenury.ucac.commitment.gpac.TransactionBlocker
-import com.github.davenury.ucac.common.GlobalPeerId
-import com.github.davenury.ucac.common.PeerAddress
-import com.github.davenury.ucac.common.PeerResolver
-import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
 import com.github.davenury.ucac.utils.TestLogExtension
@@ -117,10 +113,10 @@ class LeaderTest {
     }
 
     private val change = AddUserChange(
-        listOf(
+        "userName",
+        peersets = listOf(
             ChangePeersetInfo(0, InitialHistoryEntry.getId()),
             ChangePeersetInfo(1, InitialHistoryEntry.getId()),
         ),
-        "userName",
     )
 }

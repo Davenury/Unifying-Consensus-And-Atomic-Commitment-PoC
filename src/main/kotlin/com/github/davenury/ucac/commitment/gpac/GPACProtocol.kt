@@ -2,13 +2,15 @@ package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.*
+import com.github.davenury.ucac.GpacConfig
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.lang.Exception
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import kotlin.math.max
@@ -73,7 +75,7 @@ class GPACProtocolImpl(
 
         if (transactionBlocker.isAcquired()) {
             logger.info("Tried to respond to elect me when semaphore acquired!")
-            throw AlreadyLockedException()
+            throw AlreadyLockedException(ProtocolName.GPAC)
         }
 
         if (!checkBallotNumber(message.ballotNumber)) {
@@ -122,7 +124,7 @@ class GPACProtocolImpl(
         myBallotNumber = message.ballotNumber
 
         if (!message.decision) {
-            transactionBlocker.tryToBlock()
+            transactionBlocker.tryToBlock(ProtocolName.GPAC)
             logger.info("Lock aquired: ${message.ballotNumber}")
         }
 
@@ -139,6 +141,7 @@ class GPACProtocolImpl(
 
         if (isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
+
 
         try {
             if (isCurrentTransaction) {
@@ -160,10 +163,13 @@ class GPACProtocolImpl(
             } else {
                 changeSucceeded(message.change)
             }
+            println("handleApply releaseBlocker")
+            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
-            transactionBlocker.releaseBlock()
+            println("handleApply finally releaseBlocker")
+            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
         }
@@ -185,10 +191,12 @@ class GPACProtocolImpl(
         logger.info("Start counting")
         leaderTimer.startCounting {
             logger.info("Recovery leader starts")
-            transactionBlocker.releaseBlock()
+            println("leaderFailTimeout releaseBlocker")
+            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
             if (!changeWasAppliedBefore(change)) performProtocolAsRecoveryLeader(change)
         }
     }
+
 
     private fun leaderFailTimeoutStop() {
         logger.info("Stop counter")
@@ -239,7 +247,8 @@ class GPACProtocolImpl(
             applySignal(Signal.BeforeSendingApply, this.transaction, change)
         } catch (e: Exception) {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
-            transactionBlocker.releaseBlock()
+            println("performProtocolAsLeader releaseBlocker")
+            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
             throw e
         }
         applyPhase(change, acceptVal)
@@ -326,7 +335,10 @@ class GPACProtocolImpl(
     ): ElectMeResult {
         if (!history.isEntryCompatible(change.toHistoryEntry(globalPeerId.peersetId))) {
             signal(Signal.OnSendingElectBuildFail, this.transaction, change)
-            changeConflicts(change, "History entry not compatible, change: ${change}, expected: ${history.getCurrentEntry().getId()}")
+            changeConflicts(
+                change,
+                "History entry not compatible, change: ${change}, expected: ${history.getCurrentEntry().getId()}"
+            )
             throw HistoryCannotBeBuildException()
         }
 
@@ -354,7 +366,7 @@ class GPACProtocolImpl(
         decision: Boolean = false,
         acceptNum: Int? = null
     ): Boolean {
-        transactionBlocker.tryToBlock()
+        transactionBlocker.tryToBlock(ProtocolName.GPAC)
 
         val agreedResponses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
         if (!superSet(agreedResponses, getPeersFromChange(change))) {

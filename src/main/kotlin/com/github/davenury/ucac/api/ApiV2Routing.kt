@@ -1,9 +1,6 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeCreationResponse
-import com.github.davenury.common.ChangeCreationStatus
-import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.*
 import com.github.davenury.ucac.common.GlobalPeerId
 import io.ktor.application.*
 import io.ktor.http.*
@@ -83,15 +80,15 @@ fun Application.apiV2Routing(
             throw IllegalArgumentException("My peerset ID is not in the change")
         }
 
-        val processorJobType = when {
-            isOnePeersetChange && !enforceGpac -> ProcessorJobType.CONSENSUS
-            useTwoPC -> ProcessorJobType.TWO_PC
-            else -> ProcessorJobType.GPAC
+        val protocolName = when {
+            isOnePeersetChange && !enforceGpac -> ProtocolName.CONSENSUS
+            useTwoPC -> ProtocolName.TWO_PC
+            else -> ProtocolName.GPAC
         }
 
-        logger.info("Create ProcessorJob from parameters: (isOnePeersetChange=$isOnePeersetChange, enforceGPAC: $enforceGpac, 2PC: $useTwoPC), resultType: $processorJobType")
+        logger.info("Create ProcessorJob from parameters: (isOnePeersetChange=$isOnePeersetChange, enforceGPAC: $enforceGpac, 2PC: $useTwoPC), resultType: $protocolName")
 
-        return ProcessorJob(change, CompletableFuture(), processorJobType)
+        return ProcessorJob(change, CompletableFuture(), protocolName)
     }
 
     routing {
