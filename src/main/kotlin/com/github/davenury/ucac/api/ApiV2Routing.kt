@@ -118,7 +118,7 @@ fun Application.apiV2Routing(
 
         get("/v2/change_status/{id}") {
             val id = call.parameters["id"]!!
-            val result: ChangeResult = service.getChangeStatus(id).getNow(null)
+            val result: ChangeResult? = service.getChangeStatus(id).getNow(null)
             respondChangeResult(result, call)
         }
 
