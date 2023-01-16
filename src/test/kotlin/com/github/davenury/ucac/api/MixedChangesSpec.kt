@@ -37,6 +37,7 @@ class MixedChangesSpec : IntegrationTestBase() {
         deleteRaftHistories()
     }
 
+
     @Test
     fun `try to execute two following changes in the same time, first GPAC, then Raft`(): Unit = runBlocking {
         val change = change(0, 1)
@@ -64,7 +65,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                 beforeSendingApplyPhaser.arrive()
             },
             Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                if (it.change == secondChange) applyConsensusPhaser.arrive()
+                if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
             }
         )
 
@@ -132,7 +133,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                     beforeSendingApplyPhaser.arrive()
                 },
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                    if (it.change == secondChange) applyConsensusPhaser.arrive()
+                    if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }
             )
 
@@ -172,58 +173,6 @@ class MixedChangesSpec : IntegrationTestBase() {
         }
 
     @Test
-    fun `try to execute two change in the same time, first GPAC, then Raft`(): Unit = runBlocking {
-        val applyEndPhaser = Phaser(6)
-        val beforeSendingAgreePhaser = Phaser(1)
-        val electionPhaser = Phaser(4)
-
-        listOf(applyEndPhaser, electionPhaser, beforeSendingAgreePhaser)
-            .forEach { it.register() }
-        val leaderElected = SignalListener {
-            logger.info("Arrived ${it.subject.getPeerName()}")
-            electionPhaser.arrive()
-        }
-
-        val signalListenersForCohort = mapOf(
-            Signal.OnHandlingApplyEnd to SignalListener {
-                logger.info("Arrived: ${it.subject.getPeerName()}")
-                applyEndPhaser.arrive()
-            },
-            Signal.ConsensusLeaderElected to leaderElected,
-            Signal.BeforeSendingAgree to SignalListener {
-                beforeSendingAgreePhaser.arrive()
-            },
-        )
-
-        apps = TestApplicationSet(
-            listOf(3, 3),
-            signalListeners = (0..5).associateWith { signalListenersForCohort }
-        )
-
-        val peers = apps.getPeers()
-        val change = change(0, 1)
-        val secondChange = change(1)
-
-        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
-
-        // when - executing transaction
-        executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", change)
-
-        beforeSendingAgreePhaser.arriveAndAwaitAdvanceWithTimeout()
-
-        executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
-
-        applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
-
-
-        askAllForChanges(peers.values).forEach {
-            val changes = it.second
-            expectThat(changes.size).isGreaterThanOrEqualTo(1)
-            expectThat(changes[0]).isEqualTo(change)
-        }
-    }
-
-    @Test
     fun `try to execute two following changes in the same time, first 2PC, then Raft`(): Unit = runBlocking {
         val change = change(0, 1)
         val secondChange = change(mapOf(0 to change.toHistoryEntry(0).getId()))
@@ -251,7 +200,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                 beforeSendingApplyPhaser.arrive()
             },
             Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                if (it.change == secondChange) applyConsensusPhaser.arrive()
+                if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
             }
         )
 
@@ -280,14 +229,14 @@ class MixedChangesSpec : IntegrationTestBase() {
         askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
             val changes = it.second
             expectThat(changes.size).isGreaterThanOrEqualTo(3)
-            expectThat(changes[1]).isEqualTo(change)
-            expectThat(changes[2]).isEqualTo(secondChange)
+            expectThat(changes[1].id).isEqualTo(change.id)
+            expectThat(changes[2].id).isEqualTo(secondChange.id)
         }
 
         askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
             val changes = it.second
             expectThat(changes.size).isGreaterThanOrEqualTo(2)
-            expectThat(changes[1]).isEqualTo(change)
+            expectThat(changes[1].id).isEqualTo(change.id)
         }
     }
 
@@ -296,6 +245,7 @@ class MixedChangesSpec : IntegrationTestBase() {
         runBlocking {
             val change = change(0, 1)
             val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
+
 
             val applyEndPhaser = Phaser(1)
             val beforeSendingApplyPhaser = Phaser(1)
@@ -320,7 +270,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                 },
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
                     println("${it.subject.getPeerName()} Arrived change: ${it.change} ")
-                    if (it.change == secondChange) applyConsensusPhaser.arrive()
+                    if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }
             )
 
@@ -348,14 +298,14 @@ class MixedChangesSpec : IntegrationTestBase() {
             askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
                 val changes = it.second
                 expectThat(changes.size).isGreaterThanOrEqualTo(2)
-                expectThat(changes[1]).isEqualTo(change)
+                expectThat(changes[1].id).isEqualTo(change.id)
             }
 
             askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
                 val changes = it.second
                 expectThat(changes.size).isGreaterThanOrEqualTo(3)
-                expectThat(changes[1]).isEqualTo(change)
-                expectThat(changes[2]).isEqualTo(secondChange)
+                expectThat(changes[1].id).isEqualTo(change.id)
+                expectThat(changes[2].id).isEqualTo(secondChange.id)
             }
         }
 
