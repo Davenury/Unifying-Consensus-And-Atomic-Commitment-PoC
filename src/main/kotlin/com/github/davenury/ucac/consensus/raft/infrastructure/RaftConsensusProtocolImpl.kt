@@ -69,7 +69,10 @@ class RaftConsensusProtocolImpl(
     override fun getPeerName() = globalPeerId.toString()
 
     private suspend fun sendLeaderRequest() {
-        if (executorService != null) throw Exception("$globalPeerId Try become leader before cleaning")
+        if (executorService != null) {
+            restartTimer(RaftRole.Candidate)
+            throw Exception("$globalPeerId Try become leader before cleaning")
+        }
         signalPublisher.signal(
             Signal.ConsensusTryToBecomeLeader,
             this,
@@ -137,15 +140,13 @@ class RaftConsensusProtocolImpl(
         logger.debug("Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogIndex, currentTerm=$currentTerm,lastApplied=${state.lastApplied}")
         mutex.withLock {
             val denyVoteResponse = ConsensusElectedYou(this.peerId, currentTerm, false)
-            if (amILeader()) {
-                logger.info("Denying vote for $peerId due to me being a leader")
-                return denyVoteResponse
-            }
             if (iteration <= currentTerm) {
                 logger.info("Denying vote for $peerId due to an old term ($iteration vs $currentTerm), I voted for ${votedFor?.id ?: "null"}")
                 return denyVoteResponse
             }
-            if (lastLogIndex < state.commitIndex) {
+            if (amILeader()) stopBeingLeader(iteration)
+
+            if (lastLogIndex < state.commitIndex && amILeader()) {
                 logger.info("Denying vote for $peerId due to an old index ($lastLogIndex vs ${state.commitIndex})")
                 return denyVoteResponse
             }
@@ -193,9 +194,19 @@ class RaftConsensusProtocolImpl(
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
+        if (history.getCurrentEntry().getId() != heartbeat.currentHistoryEntryId && acceptedChanges.isEmpty()) {
+            logger.info("Received heartbeat from leader that has outdated history")
+            return ConsensusHeartbeatResponse(false, currentTerm)
+        }
+
 //      Restart timer because we received heartbeat from proper leader
         logger.info("Timer restarted, because of receiving heartbeat")
         mutex.withLock {
+            if (role == RaftRole.Leader) {
+                stopBeingLeader(term)
+                role = RaftRole.Follower
+
+            }
             lastHeartbeatTime = Instant.now()
         }
         restartTimer()
@@ -216,8 +227,6 @@ class RaftConsensusProtocolImpl(
 
         val updateResult: LedgerUpdateResult
         mutex.withLock {
-            if (role == RaftRole.Leader) stop()
-            role = RaftRole.Follower
             updateResult = state.updateLedger(acceptedChanges, proposedChanges)
         }
 
@@ -353,7 +362,7 @@ class RaftConsensusProtocolImpl(
         logger.info("Some peer is a new leader in new term: $newTerm, currentTerm $currentTerm")
 //       TODO: fix switch role and add test for it
         this.currentTerm = newTerm
-        stop()
+        stopExecutorService()
         restartTimer()
     }
 
@@ -399,7 +408,8 @@ class RaftConsensusProtocolImpl(
             newAcceptedChanges.map { it.toDto() },
             newProposedChanges.map { it.toDto() },
             lastAppliedChangeIdAndTerm?.first,
-            lastAppliedChangeIdAndTerm?.second
+            lastAppliedChangeIdAndTerm?.second,
+            history.getCurrentEntry().getId()
         )
     }
 
@@ -419,7 +429,8 @@ class RaftConsensusProtocolImpl(
             }
 
             else -> {
-                throw AssertionError()
+                restartTimer()
+                throw AssertionError("Leader restarted timer")
             }
         }
 
@@ -438,6 +449,8 @@ class RaftConsensusProtocolImpl(
                 )
                 logger.info(text)
                 sendLeaderRequest()
+            } else {
+                restartTimer(this.role)
             }
         }
     }
@@ -507,8 +520,10 @@ class RaftConsensusProtocolImpl(
                 sendRequestToLeader(result, change)
             }
 //              TODO: Change after queue
-            else ->
+            else -> {
+                result.complete(ChangeResult(ChangeResult.Status.TIMEOUT, "There should be always a leader"))
                 throw Exception("There should be always a leader")
+            }
         }
         return result
     }
@@ -542,11 +557,16 @@ class RaftConsensusProtocolImpl(
         changeIdToCompletableFuture[changeId]
 
     override fun stop() {
+        logger.info("Stop whole consensus")
+        stopExecutorService()
+        leaderRequestExecutorService.cancel()
+        leaderRequestExecutorService.close()
+    }
+
+    private fun stopExecutorService() {
         executorService?.cancel()
         executorService?.close()
         executorService = null
-        leaderRequestExecutorService.cancel()
-        leaderRequestExecutorService.close()
     }
 
     //    DONE: unit tests for this function
