@@ -160,10 +160,12 @@ class GPACProtocolImpl(
             } else {
                 changeSucceeded(message.change)
             }
+            println("handleApply releaseBlocker")
             transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
+            println("handleApply finally releaseBlocker")
             transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
@@ -186,6 +188,7 @@ class GPACProtocolImpl(
         logger.info("Start counting")
         leaderTimer.startCounting {
             logger.info("Recovery leader starts")
+            println("leaderFailTimeout releaseBlocker")
             transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
             if (!changeWasAppliedBefore(change)) performProtocolAsRecoveryLeader(change)
         }
@@ -241,6 +244,7 @@ class GPACProtocolImpl(
             applySignal(Signal.BeforeSendingApply, this.transaction, change)
         } catch (e: Exception) {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
+            println("performProtocolAsLeader releaseBlocker")
             transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
             throw e
         }

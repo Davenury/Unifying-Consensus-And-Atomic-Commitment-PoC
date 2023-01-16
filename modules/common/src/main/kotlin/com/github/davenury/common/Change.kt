@@ -1,6 +1,5 @@
 package com.github.davenury.common
 
-import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
@@ -103,7 +102,8 @@ data class AddRelationChange(
         if (other !is AddRelationChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(from, other.from) &&
+        return Objects.equals(peersets, other.peersets) &&
+                Objects.equals(from, other.from) &&
                 Objects.equals(to, other.to)
     }
 
@@ -136,7 +136,8 @@ data class DeleteRelationChange(
         if (other !is DeleteRelationChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(from, other.from) &&
+        return Objects.equals(peersets, other.peersets) &&
+                Objects.equals(from, other.from) &&
                 Objects.equals(to, other.to)
     }
 
@@ -167,7 +168,7 @@ data class AddUserChange(
         if (other !is AddUserChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(userName, other.userName)
+        return Objects.equals(peersets, other.peersets) && Objects.equals(userName, other.userName)
     }
 
     override fun hashCode(): Int {
@@ -198,7 +199,7 @@ data class AddGroupChange(
         if (other !is AddGroupChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(groupName, other.groupName)
+        return Objects.equals(peersets, other.peersets) && Objects.equals(groupName, other.groupName)
     }
 
     override fun hashCode(): Int {
@@ -238,7 +239,7 @@ data class TwoPCChange(
         if (other !is TwoPCChange || !super.doesEqual(other)) {
             return false
         }
-        return Objects.equals(twoPCStatus, other.twoPCStatus) &&
+        return Objects.equals(peersets, other.peersets) && Objects.equals(twoPCStatus, other.twoPCStatus) &&
                 Objects.equals(this.change, other.change)
     }
 

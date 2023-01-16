@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory
 import strikt.api.expectThat
 import strikt.assertions.*
 import java.io.File
+import java.time.Duration
 import java.util.concurrent.Phaser
 
 @Suppress("HttpUrlsUsage")
@@ -272,7 +273,7 @@ class MixedChangesSpec : IntegrationTestBase() {
 
         applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
+        applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
 
 //      First peerset
@@ -341,7 +342,7 @@ class MixedChangesSpec : IntegrationTestBase() {
 
             applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
+            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
 //      First peerset
             askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
