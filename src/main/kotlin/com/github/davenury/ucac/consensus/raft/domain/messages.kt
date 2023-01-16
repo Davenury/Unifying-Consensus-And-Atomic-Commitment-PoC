@@ -16,7 +16,8 @@ data class ConsensusHeartbeat(
     val acceptedChanges: List<LedgerItemDto>,
     val proposedChanges: List<LedgerItemDto>,
     val prevLogIndex: Int?,
-    val prevLogTerm: Int?
+    val prevLogTerm: Int?,
+    val currentHistoryEntryId: String
 )
 
 data class ConsensusHeartbeatResponse(

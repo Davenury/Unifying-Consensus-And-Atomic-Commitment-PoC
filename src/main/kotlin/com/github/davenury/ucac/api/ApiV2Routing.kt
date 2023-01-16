@@ -55,11 +55,11 @@ fun Application.apiV2Routing(
                 )
             }
 
-            else -> {
+             null -> {
                 call.respond(
                     HttpStatusCode.InternalServerError,
                     ChangeCreationResponse(
-                        "Timed out while waiting for change",
+                        "Timed out while waiting for change (changeResult is null)",
                         detailedMessage = null,
                         changeStatus = ChangeCreationStatus.UNKNOWN,
                     ),
