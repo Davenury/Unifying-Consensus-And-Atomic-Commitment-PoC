@@ -181,9 +181,6 @@ class GPACProtocolImpl(
         }
     }
 
-    private fun transactionWasAppliedBefore() =
-        Changes.fromHistory(history).any { it.acceptNum == this.transaction.acceptNum }
-
     private fun changeWasAppliedBefore(change: Change) =
         Changes.fromHistory(history).any { it.id == change.id }
 
@@ -472,11 +469,6 @@ class GPACProtocolImpl(
 
     private fun changeTimeout(change: Change, detailedMessage: String? = null) {
         changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.TIMEOUT, detailedMessage))
-    }
-
-    private fun isCurrentProcessingChangeOrApplied(change: Change): Boolean {
-        val entry = change.toHistoryEntry(globalPeerId.peersetId)
-        return change.id == this.transaction.change?.id || this.history.containsEntry(entry.getId())
     }
 
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
