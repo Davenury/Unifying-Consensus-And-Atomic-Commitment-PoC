@@ -57,6 +57,7 @@ class RaftConsensusProtocolImpl(
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
+//    TODO: Useless, it should use a worker queue.
     private val queuedChanges: MutableList<Change> = mutableListOf()
 
     private fun otherConsensusPeers(): List<PeerAddress> {
@@ -441,6 +442,7 @@ class RaftConsensusProtocolImpl(
     }
 
 
+//  TODO: Useless function
     private suspend fun checkIfQueuedChanges() {
         if (queuedChanges.isEmpty()) return
         val change = queuedChanges.removeAt(0)

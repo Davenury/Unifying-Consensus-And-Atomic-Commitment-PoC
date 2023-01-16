@@ -31,6 +31,7 @@ class TransactionBlocker {
 
     fun getProtocolName(): ProtocolName? = protocol
 
+//    TODO: Add changeId as parameter.
     fun tryToReleaseBlockerAsProtocol(protocol: ProtocolName){
         if (isAcquired() && getProtocolName() != protocol)
             throw Exception("I tried to release TransactionBlocker from ${protocol.name} during being blocked by ${getProtocolName()?.name}")
