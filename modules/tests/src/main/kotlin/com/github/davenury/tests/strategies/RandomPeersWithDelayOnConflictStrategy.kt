@@ -20,12 +20,12 @@ class RandomPeersWithDelayOnConflictStrategy(
             lateinit var ids: List<Int>
             var metricBumped = false
             while (true) {
-                if (!metricBumped) {
-                    Metrics.bumpDelayInSendingChange()
-                    metricBumped = true
-                }
                 ids = peersetsRange.filter { lockedPeersets[it] == false }.shuffled().take(numberOfPeersets)
                 if (ids.size < numberOfPeersets) {
+                    if (!metricBumped) {
+                        Metrics.bumpDelayInSendingChange()
+                        metricBumped = true
+                    }
                     condition.await()
                 } else {
                     break
