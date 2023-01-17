@@ -49,7 +49,7 @@ class GPACProtocolImpl(
     private var transaction: Transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
 
-    private fun checkBallotNumber(ballotNumber: Int): Boolean =
+    private fun isValidBallotNumber(ballotNumber: Int): Boolean =
         ballotNumber > myBallotNumber
 
     override fun getTransaction(): Transaction = this.transaction
@@ -78,7 +78,7 @@ class GPACProtocolImpl(
             throw AlreadyLockedException(ProtocolName.GPAC)
         }
 
-        if (!checkBallotNumber(message.ballotNumber)) {
+        if (!isValidBallotNumber(message.ballotNumber)) {
             throw NotElectingYou(myBallotNumber, message.ballotNumber)
         }
 
@@ -102,7 +102,7 @@ class GPACProtocolImpl(
 
         signal(Signal.OnHandlingAgreeBegin, transaction, message.change)
 
-        if (message.ballotNumber != myBallotNumber) {
+        if (!isValidBallotNumber(message.ballotNumber)) {
             throw NotValidLeader(myBallotNumber, message.ballotNumber)
         }
         logger.info("Handling agree $message")
