@@ -73,8 +73,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -166,8 +165,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -258,8 +256,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -314,13 +311,13 @@
     "list": []
   },
   "time": {
-    "from": "2023-01-15T19:21:24.049Z",
-    "to": "2023-01-15T19:22:31.269Z"
+    "from": "now-5m",
+    "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "New dashboard",
   "uid": "HSUzSq2Vk",
-  "version": 3,
+  "version": 2,
   "weekStart": ""
 }
