@@ -102,7 +102,7 @@ class GPACProtocolImpl(
 
         signal(Signal.OnHandlingAgreeBegin, transaction, message.change)
 
-        if (message.ballotNumber < myBallotNumber) {
+        if (message.ballotNumber != myBallotNumber) {
             throw NotValidLeader(myBallotNumber, message.ballotNumber)
         }
         logger.info("Handling agree $message")
