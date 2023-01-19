@@ -17,10 +17,13 @@ class AlreadyLockedException(protocol: ProtocolName) : Exception(
     }"
 )
 
+class TransactionNotBlockedOnThisChange(protocol: ProtocolName, changeId: String) :
+    Exception("Protocol ${protocol.name.lowercase()} is not blocked on this change: $changeId")
+
 class ChangeDoesntExist(changeId: String) : Exception("Change with id: $changeId doesn't exists")
 class TwoPCConflictException(msg: String) : Exception("During 2PC occurs error: $msg")
 class TwoPCHandleException(msg: String) : Exception("In 2PC occurs error: $msg")
-class GPACInstanceNotFoundException(changeId: String): Exception("GPAC instance for change $changeId wasn't found!")
+class GPACInstanceNotFoundException(changeId: String) : Exception("GPAC instance for change $changeId wasn't found!")
 
 data class ErrorMessage(val msg: String)
 enum class ChangeCreationStatus {

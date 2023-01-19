@@ -57,7 +57,7 @@ class RaftConsensusProtocolImpl(
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
-//    TODO: Useless, it should use a worker queue.
+    //    TODO: Useless, it should use a worker queue.
     private val queuedChanges: MutableList<Change> = mutableListOf()
 
     private fun otherConsensusPeers(): List<PeerAddress> {
@@ -239,7 +239,10 @@ class RaftConsensusProtocolImpl(
             proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) }
 
         when {
-            acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
+            transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() != ProtocolName.CONSENSUS ->
+                return ConsensusHeartbeatResponse(false, currentTerm, true)
+
+            acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired()  -> {
                 logger.debug("Received heartbeat when is blocked so only accepted changes")
                 updateLedger(heartbeat, acceptedChanges)
                 return ConsensusHeartbeatResponse(true, currentTerm, true)
@@ -451,7 +454,7 @@ class RaftConsensusProtocolImpl(
     }
 
 
-//  TODO: Useless function
+    //  TODO: Useless function
     private suspend fun checkIfQueuedChanges() {
         if (queuedChanges.isEmpty()) return
         val change = queuedChanges.removeAt(0)

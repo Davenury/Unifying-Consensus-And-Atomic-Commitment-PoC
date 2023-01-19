@@ -110,6 +110,13 @@ class GPACProtocolImpl(
         val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
         val initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
 
+        myBallotNumber = message.ballotNumber
+
+        if (!message.decision) {
+            transactionBlocker.tryToBlock(ProtocolName.GPAC)
+            logger.info("Lock aquired: ${message.ballotNumber}")
+        }
+
         transaction =
             Transaction(
                 ballotNumber = message.ballotNumber,
@@ -121,12 +128,6 @@ class GPACProtocolImpl(
 
         logger.info("State transaction state: ${this.transaction}")
 
-        myBallotNumber = message.ballotNumber
-
-        if (!message.decision) {
-            transactionBlocker.tryToBlock(ProtocolName.GPAC)
-            logger.info("Lock aquired: ${message.ballotNumber}")
-        }
 
         signal(Signal.OnHandlingAgreeEnd, transaction, message.change)
 
@@ -142,23 +143,20 @@ class GPACProtocolImpl(
         if (isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
 
+        if (!isCurrentTransaction) throw TransactionNotBlockedOnThisChange(ProtocolName.GPAC, message.change.id)
 
         try {
-            if (isCurrentTransaction) {
-                this.transaction =
-                    this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
-            }
+            this.transaction =
+                this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
 
             if (message.acceptVal == Accept.COMMIT && !changeWasAppliedBefore(message.change)) {
                 addChangeToHistory(message.change)
                 changeSucceeded(message.change)
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
-            }
-            else if (message.acceptVal == Accept.COMMIT) {
+            } else if (message.acceptVal == Accept.COMMIT) {
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
-            }
-             else if (message.acceptVal == Accept.ABORT) {
+            } else if (message.acceptVal == Accept.ABORT) {
                 changeConflicts(message.change, "Message was applied but state was ABORT")
             } else {
                 changeSucceeded(message.change)
