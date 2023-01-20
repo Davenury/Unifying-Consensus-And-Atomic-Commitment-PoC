@@ -143,6 +143,7 @@ class GPACProtocolImpl(
         if (isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
 
+        if (!isCurrentTransaction) throw TransactionNotBlockedOnThisChange(ProtocolName.GPAC, message.change.id)
 
         when {
             !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
@@ -200,12 +201,12 @@ class GPACProtocolImpl(
             } else {
                 changeSucceeded(message.change)
             }
-            println("handleApply releaseBlocker")
+            logger.info("handleApply releaseBlocker")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
-            println("handleApply finally releaseBlocker")
+            logger.info("handleApply finally releaseBlocker")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
@@ -225,7 +226,7 @@ class GPACProtocolImpl(
         logger.info("Start counting")
         leaderTimer.startCounting {
             logger.info("Recovery leader starts")
-            println("leaderFailTimeout releaseBlocker")
+            logger.info("leaderFailTimeout releaseBlocker")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             if (!changeWasAppliedBefore(change)) performProtocolAsRecoveryLeader(change)
         }
@@ -244,48 +245,52 @@ class GPACProtocolImpl(
         logger.info("Starting performing GPAC iteration: $iteration")
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
 
-        val electMeResult =
-            electMePhase(change, { responses -> superSet(responses, getPeersFromChange(change)) })
-
-        if (iteration == maxLeaderElectionTries) {
-            val message = "Transaction failed due to too many retries of becoming a leader."
-            logger.error(message)
-            signal(Signal.ReachedMaxRetries, transaction, change)
-            transaction = transaction.copy(change = null)
-            changeTimeout(change, message)
-            return
-        }
-
-        if (!electMeResult.success) {
-            retriesTimer.startCounting(iteration) {
-                performProtocolAsLeader(change, iteration + 1)
-            }
-            return
-        }
-
-        val electResponses = electMeResult.responses
-
-        val acceptVal =
-            if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
-
-        this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
-
-        applySignal(Signal.BeforeSendingAgree, this.transaction, change)
-
-        val agreed = ftAgreePhase(change, acceptVal)
-        if (!agreed) {
-            return
-        }
-
         try {
-            applySignal(Signal.BeforeSendingApply, this.transaction, change)
+            val electMeResult =
+                electMePhase(change, { responses -> superSet(responses, getPeersFromChange(change)) })
+
+            if (iteration == maxLeaderElectionTries) {
+                val message = "Transaction failed due to too many retries of becoming a leader."
+                logger.error(message)
+                signal(Signal.ReachedMaxRetries, transaction, change)
+                transaction = transaction.copy(change = null)
+                changeTimeout(change, message)
+                return
+            }
+
+            if (!electMeResult.success) {
+                retriesTimer.startCounting(iteration) {
+                    performProtocolAsLeader(change, iteration + 1)
+                }
+                return
+            }
+
+            val electResponses = electMeResult.responses
+
+            val acceptVal =
+                if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+
+            this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
+
+            applySignal(Signal.BeforeSendingAgree, this.transaction, change)
+
+            val agreed = ftAgreePhase(change, acceptVal)
+            if (!agreed) {
+                return
+            }
+
+            try {
+                applySignal(Signal.BeforeSendingApply, this.transaction, change)
+            } catch (e: Exception) {
+                transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
+                logger.info("performProtocolAsLeader releaseBlocker")
+                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
+                throw e
+            }
+            applyPhase(change, acceptVal)
         } catch (e: Exception) {
-            transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
-            println("performProtocolAsLeader releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
-            throw e
+            changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT, e.message))
         }
-        applyPhase(change, acceptVal)
     }
 
     override suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int) {
