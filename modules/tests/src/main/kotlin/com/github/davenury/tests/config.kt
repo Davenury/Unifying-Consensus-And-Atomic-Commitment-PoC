@@ -67,7 +67,7 @@ class StrategyDecoder: Decoder<Strategy> {
 
 enum class ACProtocol {
     TWO_PC {
-        override fun getParam(enforceUsage: Boolean): String = "use_2pc=$enforceUsage"
+        override fun getParam(enforceUsage: Boolean): String = "use_2pc=true"
     }, GPAC {
         override fun getParam(enforceUsage: Boolean): String = "enforce_gpac=$enforceUsage"
     };

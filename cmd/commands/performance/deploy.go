@@ -11,6 +11,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -124,6 +125,16 @@ func createJob(clientset *kubernetes.Clientset, config Config) {
 					Containers: []v1.Container{
 						{
 							Name:  "performance-test",
+							Resources: v1.ResourceRequirements{
+								Limits: v1.ResourceList{
+									"cpu": resource.MustParse("400m"),
+									"memory": resource.MustParse("800Mi"),
+								},
+								Requests: v1.ResourceList{
+									"cpu": resource.MustParse("200m"),
+									"memory": resource.MustParse("400Mi"),
+								},
+							},
 							Image: config.PerformanceImage,
 							Ports: []v1.ContainerPort{
 								{
