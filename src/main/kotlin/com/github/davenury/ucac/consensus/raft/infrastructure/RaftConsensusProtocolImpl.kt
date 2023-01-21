@@ -182,13 +182,7 @@ class RaftConsensusProtocolImpl(
             null
         )
 
-        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
-            println("handleLeaderElected release transactionBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.proposedItems.last().changeId)
-
-            changeIdToCompletableFuture[state.proposedItems.last().changeId]
-                ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
-        }
+        releaseBlockerFromPreviousTermChanges()
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
@@ -214,11 +208,18 @@ class RaftConsensusProtocolImpl(
         }
 
 //      Restart timer because we received heartbeat from proper leader
+
+        if (currentTerm < term) {
+            mutex.withLock {
+                currentTerm = term
+            }
+            releaseBlockerFromPreviousTermChanges()
+        }
+
         mutex.withLock {
             if (role == RaftRole.Leader) {
                 stopBeingLeader(term)
                 role = RaftRole.Follower
-
             }
             lastHeartbeatTime = Instant.now()
         }
@@ -653,6 +654,16 @@ class RaftConsensusProtocolImpl(
 
         return grandParentChange.change.toHistoryEntry(peersetId).getId() == change.toHistoryEntry(peersetId)
             .getParentId()
+    }
+
+    private fun releaseBlockerFromPreviousTermChanges() {
+        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS && transactionBlocker.getChangeId() == state.proposedItems.last().changeId) {
+            logger.info("Release blocker for changes from previous term")
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.proposedItems.last().changeId)
+
+            changeIdToCompletableFuture[state.proposedItems.last().changeId]
+                ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
+        }
     }
 
 

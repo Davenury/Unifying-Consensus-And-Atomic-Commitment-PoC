@@ -98,7 +98,7 @@ class TwoPC(
 
             change is TwoPCChange && change.twoPCStatus == TwoPCStatus.ABORTED && change.change == currentProcessedChange.change -> {
                 changeTimer.cancelCounting()
-                checkChangeAndProposeToConsensus(change)
+                checkChangeAndProposeToConsensus(change, currentProcessedChange.change.id)
             }
 
             change == currentProcessedChange.change -> {
@@ -107,7 +107,7 @@ class TwoPC(
                     peerResolver.currentPeer().peersetId,
                     history.getCurrentEntry().getId(),
                 )
-                checkChangeAndProposeToConsensus(updatedChange)
+                checkChangeAndProposeToConsensus(updatedChange, currentProcessedChange.change.id)
             }
 
             else -> throw TwoPCHandleException(
@@ -153,7 +153,7 @@ class TwoPC(
         mainChangeId: String,
         otherPeers: List<PeerAddress>
     ): Boolean {
-        val acceptResult = checkChangeAndProposeToConsensus(acceptChange).await()
+        val acceptResult = checkChangeAndProposeToConsensus(acceptChange, mainChangeId).await()
 
         if (acceptResult.status != ChangeResult.Status.SUCCESS) {
             changeConflict(mainChangeId, "failed during processing acceptChange in 2PC")
@@ -192,7 +192,8 @@ class TwoPC(
             commitChange.copyWithNewParentId(
                 peerResolver.currentPeer().peersetId,
                 acceptChangeId,
-            )
+            ),
+            acceptChange.change.id
         ).await()
 
         if (changeResult.status != ChangeResult.Status.SUCCESS) {
@@ -209,15 +210,16 @@ class TwoPC(
         )
     }
 
-    private fun checkChangeCompatibility(change: Change) {
+    private fun checkChangeCompatibility(change: Change, originalChangeId: String) {
         if (!history.isEntryCompatible(change.toHistoryEntry(peerResolver.currentPeer().peersetId))) {
             logger.info("Change is not compatible with history $change")
+            changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
             throw HistoryCannotBeBuildException()
         }
     }
 
-    private suspend fun checkChangeAndProposeToConsensus(change: Change): CompletableFuture<ChangeResult> = change
-        .also { checkChangeCompatibility(it) }
+    private suspend fun checkChangeAndProposeToConsensus(change: Change, originalChangeId: String): CompletableFuture<ChangeResult> = change
+        .also { checkChangeCompatibility(it, originalChangeId) }
         .let { consensusProtocol.proposeChangeAsync(change) }
 
 

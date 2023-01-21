@@ -32,6 +32,7 @@ class TransactionBlocker {
     }
 
     fun getProtocolName(): ProtocolName? = protocol
+    fun getChangeId(): String? = changeId
 
     //    TODO: Add changeId as parameter.
     fun tryToReleaseBlockerChange(protocol: ProtocolName, changeId: String) {
