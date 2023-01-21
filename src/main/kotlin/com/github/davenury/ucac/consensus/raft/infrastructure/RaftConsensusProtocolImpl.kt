@@ -256,7 +256,7 @@ class RaftConsensusProtocolImpl(
                 return ConsensusHeartbeatResponse(true, currentTerm)
             }
 
-            acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() && transactionBlocker.getChangeId() == proposedChanges.first().changeId -> {
+            acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() && transactionBlocker.getChangeId() == proposedChanges.firstOrNull()?.changeId -> {
                 logger.debug("Received again the same proposedChanges")
                 updateLedger(heartbeat, acceptedChanges)
                 return ConsensusHeartbeatResponse(true, currentTerm)
