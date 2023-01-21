@@ -185,6 +185,9 @@ class RaftConsensusProtocolImpl(
         if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
             println("handleLeaderElected release transactionBlocker")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.proposedItems.last().changeId)
+
+            changeIdToCompletableFuture[state.proposedItems.last().changeId]
+                ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
         }
     }
 
@@ -242,7 +245,7 @@ class RaftConsensusProtocolImpl(
             transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() != ProtocolName.CONSENSUS ->
                 return ConsensusHeartbeatResponse(false, currentTerm, true)
 
-            acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired()  -> {
+            acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
                 logger.debug("Received heartbeat when is blocked so only accepted changes")
                 updateLedger(heartbeat, acceptedChanges)
                 return ConsensusHeartbeatResponse(true, currentTerm, true)
@@ -318,7 +321,10 @@ class RaftConsensusProtocolImpl(
 
         if (updateResult.acceptedItems.isNotEmpty()) {
             println("updateLedger tryToReleaseBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, updateResult.acceptedItems.first().changeId)
+            transactionBlocker.tryToReleaseBlockerChange(
+                ProtocolName.CONSENSUS,
+                updateResult.acceptedItems.first().changeId
+            )
         }
     }
 
