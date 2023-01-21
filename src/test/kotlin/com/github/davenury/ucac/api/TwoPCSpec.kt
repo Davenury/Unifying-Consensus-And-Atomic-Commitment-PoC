@@ -79,6 +79,60 @@ class TwoPCSpec : IntegrationTestBase() {
     }
 
     @Test
+    fun `should be able to execute 2 transactions`(): Unit = runBlocking {
+        val changeAppliedPhaser = Phaser(4)
+        val changeSecondAppliedPhaser = Phaser(4)
+        val electionPhaser = Phaser(4)
+        listOf(changeAppliedPhaser, changeSecondAppliedPhaser, electionPhaser).forEach { it.register() }
+
+        val change = change(0, 1)
+
+        val historyEntryId = { peersetId: Int ->
+            change.toHistoryEntry(peersetId).getId()
+        }
+
+        val changeSecond = change(Pair(0, historyEntryId(0)), Pair(1, historyEntryId(1)))
+
+        val signalListenersForCohort = mapOf(
+            Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                if(it.change!!.id == change.id) changeAppliedPhaser.arrive()
+                if(it.change!!.id == changeSecond.id) changeSecondAppliedPhaser.arrive()
+            },
+            Signal.ConsensusLeaderElected to SignalListener { electionPhaser.arrive() }
+        )
+
+        apps = TestApplicationSet(
+            listOf(3, 3),
+            signalListeners = (0..5).associateWith { signalListenersForCohort }
+        )
+
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        // when - executing transaction
+        executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", change)
+
+        changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", changeSecond)
+
+        changeSecondAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        askAllForChanges(apps.getPeers().values).forEach { changes ->
+            expectThat(changes.size).isEqualTo(4)
+            expectThat(changes[0]).isA<TwoPCChange>()
+                .with(TwoPCChange::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
+                .with(TwoPCChange::change) { isEqualTo(change) }
+            expectThat(changes[1]).isA<AddUserChange>()
+                .with(AddUserChange::userName) { isEqualTo("userName") }
+            expectThat(changes[2]).isA<TwoPCChange>()
+                .with(TwoPCChange::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
+                .with(TwoPCChange::change) { isEqualTo(changeSecond) }
+            expectThat(changes[3]).isA<AddUserChange>()
+                .with(AddUserChange::userName) { isEqualTo("userName") }
+        }
+    }
+
+    @Test
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
         val changeAppliedPhaser = Phaser(4)
         val appliedChangesListener = SignalListener {
@@ -477,6 +531,13 @@ class TwoPCSpec : IntegrationTestBase() {
         "userName",
         peersets = peersetIds.map {
             ChangePeersetInfo(it, InitialHistoryEntry.getId())
+        },
+    )
+
+    private fun change(vararg peersetToChangeId: Pair<Int, String>) = AddUserChange(
+        "userName",
+        peersets = peersetToChangeId.map {
+            ChangePeersetInfo(it.first, it.second)
         },
     )
 

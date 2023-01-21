@@ -28,22 +28,26 @@ class TwoPC(
     private var changeTimer: ProtocolTimer = ProtocolTimerImpl(twoPCConfig.changeDelay, Duration.ZERO, ctx)
 
     override suspend fun performProtocol(change: Change) {
-        val mainChangeId = change.id
+
+        val updatedChange =
+            updateParentIdFor2PCCompatibility(change, history, peerResolver.currentPeer().peersetId)
+
+        val mainChangeId = updatedChange.id
 
         val acceptChange = TwoPCChange(
-            peersets = change.peersets,
+            peersets = updatedChange.peersets,
             twoPCStatus = TwoPCStatus.ACCEPTED,
             change = change,
         )
 
-        val otherPeers = change.peersets
+        val otherPeers = updatedChange.peersets
             .map { it.peersetId }
             .filter { it != peerResolver.currentPeer().peersetId }
             .map { peerResolver.resolve(GlobalPeerId(it, 0)) }
 
         signal(Signal.TwoPCBeforeProposePhase, change)
         val decision = proposePhase(acceptChange, mainChangeId, otherPeers)
-        signal(Signal.TwoPCOnChangeAccepted,change)
+        signal(Signal.TwoPCOnChangeAccepted, change)
         decisionPhase(acceptChange, decision, otherPeers)
 
         val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
@@ -211,14 +215,24 @@ class TwoPC(
     }
 
     private fun checkChangeCompatibility(change: Change, originalChangeId: String) {
-        if (!history.isEntryCompatible(change.toHistoryEntry(peerResolver.currentPeer().peersetId))) {
-            logger.info("Change is not compatible with history $change")
+        val peerset = peerResolver.currentPeer().peersetId
+        if (!history.isEntryCompatible(change.toHistoryEntry(peerset))) {
+            logger.info(
+                "Change $originalChangeId is not compatible with history expected: ${
+                    change.toHistoryEntry(
+                        peerset
+                    ).getParentId()
+                } is ${history.getCurrentEntry().getId()}"
+            )
             changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
             throw HistoryCannotBeBuildException()
         }
     }
 
-    private suspend fun checkChangeAndProposeToConsensus(change: Change, originalChangeId: String): CompletableFuture<ChangeResult> = change
+    private suspend fun checkChangeAndProposeToConsensus(
+        change: Change,
+        originalChangeId: String
+    ): CompletableFuture<ChangeResult> = change
         .also { checkChangeCompatibility(it, originalChangeId) }
         .let { consensusProtocol.proposeChangeAsync(change) }
 
@@ -229,5 +243,29 @@ class TwoPC(
 
     companion object {
         private val logger = LoggerFactory.getLogger("2pc")
+
+
+        fun updateParentIdFor2PCCompatibility(change: Change, history: History, peersetId: Int): Change {
+            val currentEntry = history.getCurrentEntry()
+
+            val grandParentChange: Change =
+                history.getEntryFromHistory(currentEntry.getParentId() ?: return change)
+                    ?.let { Change.fromHistoryEntry(it) }
+                    ?: return change
+
+            if (grandParentChange !is TwoPCChange) return change
+
+            val proposedChangeParentId = change.toHistoryEntry(peersetId)
+                .getParentId()
+
+            val grandParentChange2PCChangeId = grandParentChange.change.toHistoryEntry(peersetId).getId()
+
+            return if (grandParentChange2PCChangeId == proposedChangeParentId) change.copyWithNewParentId(
+                peersetId,
+                history.getCurrentEntry().getId()
+            )
+            else change
+        }
+
     }
 }

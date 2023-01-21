@@ -5,6 +5,7 @@ import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
+import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.*
@@ -593,14 +594,10 @@ class RaftConsensusProtocolImpl(
 
             val updatedChange: Change
 
+            val peersetId = peerResolver.currentPeer().peersetId
 
-            if (checkTwoPCHistoryCompatibility(change)) {
-                val peersetId = peerResolver.currentPeer().peersetId
-                updatedChange = change.copyWithNewParentId(peersetId, history.getCurrentEntry().getId())
-                entry = updatedChange.toHistoryEntry(peersetId)
-            } else {
-                updatedChange = change
-            }
+            updatedChange = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
+            entry = updatedChange.toHistoryEntry(peersetId)
 
 
 
@@ -643,23 +640,6 @@ class RaftConsensusProtocolImpl(
             )
 
         return isDuring2PC && !(changeIsAbortingOf2PC || changeIsApplyingOf2PC)
-    }
-
-    private fun checkTwoPCHistoryCompatibility(change: Change): Boolean {
-        val currentEntry = history.getCurrentEntry()
-
-        val grandParentChange: Change =
-            history.getEntryFromHistory(currentEntry.getParentId() ?: return false)
-                ?.let { Change.fromHistoryEntry(it) }
-                ?: return false
-
-        if (grandParentChange !is TwoPCChange) return false
-
-        val peersetId = peerResolver.currentPeer().peersetId
-
-
-        return grandParentChange.change.toHistoryEntry(peersetId).getId() == change.toHistoryEntry(peersetId)
-            .getParentId()
     }
 
     private fun releaseBlockerFromPreviousTermChanges() {
