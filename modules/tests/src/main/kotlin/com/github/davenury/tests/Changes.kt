@@ -48,8 +48,10 @@ class Changes(
                 peersets = ids.map { ChangePeersetInfo(it, changes[it]!!.getCurrentParentId()) }
             )
             val result = changes[ids[0]]!!.introduceChange(change)
-            logger.info("Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: ${ids.map { it to change.toHistoryEntry(it).getId() }}")
-            if (result == ChangeState.REJECTED) {
+            if (result == ChangeState.ACCEPTED) {
+                logger.info("Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: ${ids.map { it to change.toHistoryEntry(it).getId() }}")
+            } else {
+                logger.info("Change $change was rejected, freeing peersets $ids")
                 getPeersStrategy.freePeersets(ids)
             }
         }

@@ -199,7 +199,7 @@ class RaftConsensusProtocolImpl(
         val prevLogTerm = heartbeat.prevLogTerm
 
 //        logger.debug("Received heartbeat $heartbeat")
-        logger.info("Received heartbeat $heartbeat")
+        logger.debug("Received heartbeat $heartbeat")
         logger.debug("I have in state: ${state.acceptedItems.map { it.ledgerIndex }} ${state.proposedItems.map { it.ledgerIndex }} \n and should have: $prevLogIndex, message changes: ${acceptedChanges.map { it.ledgerIndex }} ${proposedChanges.map { it.ledgerIndex }}")
 
 
