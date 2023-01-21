@@ -143,7 +143,23 @@ class GPACProtocolImpl(
         if (isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
 
-        if (!isCurrentTransaction) throw TransactionNotBlockedOnThisChange(ProtocolName.GPAC, message.change.id)
+
+        when {
+            !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
+                transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+                transaction =
+                    Transaction(
+                        ballotNumber = message.ballotNumber,
+                        change = message.change,
+                        acceptVal = message.acceptVal,
+                        initVal = message.acceptVal,
+                        acceptNum = message.ballotNumber
+                    )
+            }
+
+            !isCurrentTransaction -> throw TransactionNotBlockedOnThisChange(ProtocolName.GPAC, message.change.id)
+        }
+
 
         when {
             !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
