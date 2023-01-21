@@ -157,7 +157,10 @@ class GPACProtocolImpl(
                     )
             }
 
-            !isCurrentTransaction -> throw TransactionNotBlockedOnThisChange(ProtocolName.GPAC, message.change.id)
+            !isCurrentTransaction -> {
+                changeConflicts(message.change, "Don't receive ft-agree and can't block on history")
+                throw TransactionNotBlockedOnThisChange(ProtocolName.GPAC, message.change.id)
+            }
         }
 
 
