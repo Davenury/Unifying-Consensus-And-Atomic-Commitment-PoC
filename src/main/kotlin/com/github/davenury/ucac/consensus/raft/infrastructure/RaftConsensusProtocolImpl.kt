@@ -655,6 +655,16 @@ class RaftConsensusProtocolImpl(
         }
     }
 
+    private fun releaseBlockerFromPreviousTermChanges() {
+        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS && transactionBlocker.getChangeId() == state.proposedItems.last().changeId) {
+            logger.info("Release blocker for changes from previous term")
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.proposedItems.last().changeId)
+
+            changeIdToCompletableFuture[state.proposedItems.last().changeId]
+                ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
+        }
+    }
+
 
     private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change) {
         with(CoroutineScope(leaderRequestExecutorService)) {
