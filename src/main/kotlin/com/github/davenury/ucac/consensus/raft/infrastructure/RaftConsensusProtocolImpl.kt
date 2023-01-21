@@ -184,7 +184,7 @@ class RaftConsensusProtocolImpl(
 
         if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
             println("handleLeaderElected release transactionBlocker")
-            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.proposedItems.last().changeId)
         }
     }
 
@@ -265,7 +265,7 @@ class RaftConsensusProtocolImpl(
             }
 
             proposedChanges.isNotEmpty() ->
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, proposedChanges.first().changeId)
         }
 
         updateLedger(heartbeat, acceptedChanges, proposedChanges)
@@ -318,7 +318,7 @@ class RaftConsensusProtocolImpl(
 
         if (updateResult.acceptedItems.isNotEmpty()) {
             println("updateLedger tryToReleaseBlocker")
-            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, updateResult.acceptedItems.first().changeId)
         }
     }
 
@@ -420,7 +420,7 @@ class RaftConsensusProtocolImpl(
         if (acceptedItems.isNotEmpty()) {
             logger.info("Applying accepted changes: $acceptedItems")
             println("applyAcceptedChanges tryToReleaseBlocker")
-            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, acceptedItems.first().changeId)
         }
 
         acceptedItems.forEach {
@@ -571,7 +571,7 @@ class RaftConsensusProtocolImpl(
             }
 
             try {
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, change.id)
             } catch (ex: AlreadyLockedException) {
                 logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
@@ -601,7 +601,7 @@ class RaftConsensusProtocolImpl(
                 )
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                 println("proposeChangeToLedger tryToReleaseBlocker")
-                transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
+                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, change.id)
                 return
             }
 

@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 class TransactionBlocker {
     private val semaphore = Semaphore(1)
     private var protocol: ProtocolName? = null
+    private var changeId: String? = null
 
     fun isAcquired() = semaphore.availablePermits < 1
 
@@ -21,20 +22,21 @@ class TransactionBlocker {
         }
     }
 
-    fun tryToBlock(protocol: ProtocolName) {
+    fun tryToBlock(protocol: ProtocolName, changeId: String) {
         if (!semaphore.tryAcquire()) {
             throw AlreadyLockedException(this.protocol!!)
         }
         logger.info("Transaction lock acquired")
         this.protocol = protocol
+        this.changeId = changeId
     }
 
     fun getProtocolName(): ProtocolName? = protocol
 
-//    TODO: Add changeId as parameter.
-    fun tryToReleaseBlockerAsProtocol(protocol: ProtocolName){
-        if (isAcquired() && getProtocolName() != protocol)
-            throw Exception("I tried to release TransactionBlocker from ${protocol.name} during being blocked by ${getProtocolName()?.name}")
+    //    TODO: Add changeId as parameter.
+    fun tryToReleaseBlockerChange(protocol: ProtocolName, changeId: String) {
+        if (isAcquired() && (getProtocolName() != protocol || changeId != this.changeId))
+            throw Exception("I tried to release TransactionBlocker from ${protocol.name} and change $changeId during being blocked by ${getProtocolName()?.name} and change ${this.changeId}")
         releaseBlock()
     }
 
