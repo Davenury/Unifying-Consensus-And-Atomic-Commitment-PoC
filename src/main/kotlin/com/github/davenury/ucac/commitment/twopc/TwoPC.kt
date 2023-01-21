@@ -28,30 +28,32 @@ class TwoPC(
     private var changeTimer: ProtocolTimer = ProtocolTimerImpl(twoPCConfig.changeDelay, Duration.ZERO, ctx)
 
     override suspend fun performProtocol(change: Change) {
-
         val updatedChange =
             updateParentIdFor2PCCompatibility(change, history, peerResolver.currentPeer().peersetId)
 
         val mainChangeId = updatedChange.id
+        try {
+            val acceptChange = TwoPCChange(
+                peersets = updatedChange.peersets,
+                twoPCStatus = TwoPCStatus.ACCEPTED,
+                change = change,
+            )
 
-        val acceptChange = TwoPCChange(
-            peersets = updatedChange.peersets,
-            twoPCStatus = TwoPCStatus.ACCEPTED,
-            change = change,
-        )
+            val otherPeers = updatedChange.peersets
+                .map { it.peersetId }
+                .filter { it != peerResolver.currentPeer().peersetId }
+                .map { peerResolver.resolve(GlobalPeerId(it, 0)) }
 
-        val otherPeers = updatedChange.peersets
-            .map { it.peersetId }
-            .filter { it != peerResolver.currentPeer().peersetId }
-            .map { peerResolver.resolve(GlobalPeerId(it, 0)) }
+            signal(Signal.TwoPCBeforeProposePhase, change)
+            val decision = proposePhase(acceptChange, mainChangeId, otherPeers)
+            signal(Signal.TwoPCOnChangeAccepted, change)
+            decisionPhase(acceptChange, decision, otherPeers)
 
-        signal(Signal.TwoPCBeforeProposePhase, change)
-        val decision = proposePhase(acceptChange, mainChangeId, otherPeers)
-        signal(Signal.TwoPCOnChangeAccepted, change)
-        decisionPhase(acceptChange, decision, otherPeers)
-
-        val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
-        changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(result))
+            val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
+            changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(result))
+        } catch (e: Exception) {
+            changeIdToCompletableFuture[mainChangeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+        }
     }
 
     suspend fun handleAccept(change: Change) {

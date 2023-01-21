@@ -74,7 +74,7 @@ func perform(config Config) {
 	fmt.Println("Deploying application...")
 	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName)
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
-	time.Sleep(10 * time.Second)
+	time.Sleep(30 * time.Second)
 	fmt.Println("Deploying performance test")
 	performance.DoPerformanceTest(performance.Config{
 		PerformanceNamespace: config.testNamespace,
