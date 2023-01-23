@@ -211,6 +211,9 @@ func createSingleContainer(containerName string, peerConfig utils.PeerConfig, im
 				"memory": resource.MustParse("500Mi"),
 			},
 		},
+		Command: []string{
+			"-Xmx500m",
+		},
 		Ports: []apiv1.ContainerPort{
 			{
 				ContainerPort: 8080,
