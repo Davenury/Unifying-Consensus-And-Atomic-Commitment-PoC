@@ -10,7 +10,7 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	//"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"strconv"
 	"time"
 )
@@ -201,16 +201,16 @@ func createSingleContainer(containerName string, peerConfig utils.PeerConfig, im
 	return apiv1.Container{
 		Name:  containerName,
 		Image: imageName,
-		//Resources: apiv1.ResourceRequirements{
-		//	Limits: apiv1.ResourceList{
-		//		"cpu": resource.MustParse("500m"),
-		//		"memory": resource.MustParse("1536Gi"),
-		//	},
-		//	Requests: apiv1.ResourceList{
-		//		"cpu": resource.MustParse("300m"),
-		//		"memory": resource.MustParse("1Gi"),
-		//	},
-		//},
+		Resources: apiv1.ResourceRequirements{
+			Limits: apiv1.ResourceList{
+				"cpu": resource.MustParse("700m"),
+				"memory": resource.MustParse("1Gi"),
+			},
+			Requests: apiv1.ResourceList{
+				"cpu": resource.MustParse("500m"),
+				"memory": resource.MustParse("500Mi"),
+			},
+		},
 		Ports: []apiv1.ContainerPort{
 			{
 				ContainerPort: 8080,

@@ -8,4 +8,4 @@ ADD build/distributions/PoC-*.tar /application
 
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "/application/PoC-*/bin/PoC"]
+ENTRYPOINT ["sh", "-c", "/application/PoC-*/bin/PoC", "-Xmx500m"]
