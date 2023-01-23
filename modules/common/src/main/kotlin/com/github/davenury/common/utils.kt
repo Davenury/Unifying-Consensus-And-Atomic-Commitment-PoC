@@ -31,6 +31,8 @@ val meterRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
 object Metrics {
 
     private val changeIdToTimer: MutableMap<String, Instant> = mutableMapOf()
+
+    private var lastHearbeat: Instant = Instant.now()
     fun bumpIncorrectHistory() {
         meterRegistry.counter("incorrect_history_change").increment()
     }
@@ -54,5 +56,18 @@ object Metrics {
             .tag("result", result.status.name.lowercase())
             .register(meterRegistry)
             .record(timeElapsed)
+    }
+
+    fun refreshLastHeartbeat() {
+        lastHearbeat = Instant.now()
+    }
+
+    fun registerTimerHeartbeat(){
+        val now = Instant.now()
+        Timer
+            .builder("heartbeat_processing_time")
+            .register(meterRegistry)
+            .record(Duration.between(lastHearbeat, now))
+        lastHearbeat = now
     }
 }

@@ -183,10 +183,13 @@ class RaftConsensusProtocolImpl(
             null
         )
 
+        Metrics.refreshLastHeartbeat()
+
         releaseBlockerFromPreviousTermChanges()
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
+        Metrics.registerTimerHeartbeat()
         val term = heartbeat.term
         val acceptedChanges = heartbeat.acceptedChanges.map { it.toLedgerItem() }
         val proposedChanges = heartbeat.proposedChanges.map { it.toLedgerItem() }
