@@ -17,8 +17,7 @@ WORKDIR /application
 
 COPY --from=builder /home/gradle/src/build/install/PoC .
 
-ENTRYPOINT ["sh", "-c", "/application/bin/PoC"]
-CMD ["-Xmx=500m", "-Dcom.sun.management.jmxremote.port=9999"]
+ENTRYPOINT ["sh", "-c", "/application/bin/PoC", "-Xmx=500m", "-Dcom.sun.management.jmxremote.port=9999"]
 
 ###
 

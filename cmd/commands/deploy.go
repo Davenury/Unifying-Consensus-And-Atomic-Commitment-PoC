@@ -204,11 +204,11 @@ func createSingleContainer(containerName string, peerConfig utils.PeerConfig, im
 		Resources: apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
 				"cpu": resource.MustParse("700m"),
-				"memory": resource.MustParse("1Gi"),
+				"memory": resource.MustParse("750Mi"),
 			},
 			Requests: apiv1.ResourceList{
 				"cpu": resource.MustParse("500m"),
-				"memory": resource.MustParse("500Mi"),
+				"memory": resource.MustParse("350Mi"),
 			},
 		},
 		Args: []string{
