@@ -185,6 +185,8 @@ class RaftConsensusProtocolImpl(
         
         Metrics.refreshLastHeartbeat()
 
+        Metrics.refreshLastHeartbeat()
+
         releaseBlockerFromPreviousTermChanges()
     }
 
