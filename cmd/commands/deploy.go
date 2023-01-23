@@ -211,8 +211,9 @@ func createSingleContainer(containerName string, peerConfig utils.PeerConfig, im
 				"memory": resource.MustParse("500Mi"),
 			},
 		},
-		Command: []string{
+		Args: []string{
 			"-Xmx500m",
+			"-Dcom.sun.management.jmxremote.port=9999",
 		},
 		Ports: []apiv1.ContainerPort{
 			{

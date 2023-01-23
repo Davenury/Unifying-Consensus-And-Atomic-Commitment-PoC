@@ -188,7 +188,7 @@ class GPACProtocolImpl(
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
 
-            if (message.acceptVal == Accept.COMMIT && !changeWasAppliedBefore(message.change)) {
+            if (message.acceptVal == Accept.COMMIT && !history.containsEntry(message.change.toHistoryEntry(globalPeerId.peersetId).getId())) {
                 addChangeToHistory(message.change)
                 changeSucceeded(message.change)
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
