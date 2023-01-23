@@ -64,6 +64,10 @@ dependencies {
     implementation("org.apache.ratis:ratis-client:$ratis_version")
     implementation("org.apache.ratis:ratis-thirdparty-misc:0.7.0")
 
+    // https://mvnrepository.com/artifact/javax.management/jmxremote_optional
+    implementation("javax.management:jmxremote_optional:1.0.1_04")
+
+
     testImplementation(platform("org.junit:junit-bom:5.9.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("io.strikt:strikt-core:0.34.1")
