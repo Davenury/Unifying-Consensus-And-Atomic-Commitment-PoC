@@ -88,7 +88,8 @@ class History {
     }
 
     fun containsEntry(entryId: String): Boolean {
-        return getEntryFromHistory(entryId) != null
+        return entries[entryId] != null
+//        return getEntryFromHistory(entryId) != null
     }
 
     fun isEntryCompatible(entry: HistoryEntry): Boolean {
