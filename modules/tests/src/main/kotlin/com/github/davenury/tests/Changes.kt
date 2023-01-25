@@ -29,7 +29,7 @@ class Changes(
         logger.info("Handling notification: $notification")
         if (!handledChanges.contains(notification.change.id)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
-                if (notification.result.status != ChangeResult.Status.CONFLICT) {
+                if (notification.result.status == ChangeResult.Status.SUCCESS) {
                     val parentId = notification.change.toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
                     logger.info("Setting new parent id for peerset $peersetId: $parentId, change was for ${(notification.change as AddUserChange).userName}")
