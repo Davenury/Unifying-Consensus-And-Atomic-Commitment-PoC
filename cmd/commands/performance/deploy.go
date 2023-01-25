@@ -29,6 +29,7 @@ type Config struct {
 	AcProtocol        string
 	ConsensusProtocol string
 	ConstantLoad string
+	FixedPeersetsInChange string
 }
 func createPerformanceDeployCommand() *cobra.Command {
 
@@ -46,6 +47,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 	var acProtocol string
 	var consensusProtocol string
 	var constantLoad string
+	var fixedPeersetsInChange string
 
 	var cmd = &cobra.Command{
 		Use:   "deploy",
@@ -65,6 +67,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 				AcProtocol:               acProtocol,
 				ConsensusProtocol:        consensusProtocol,
 				ConstantLoad:             constantLoad,
+				FixedPeersetsInChange:    fixedPeersetsInChange,
 			})
 		},
 	}
@@ -84,6 +87,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&acProtocol, "ac-protocol", "", "gpac", "AC protocol to use in case it's needed. two_pc or gpac")
 	cmd.Flags().StringVarP(&consensusProtocol, "consensus-protocol", "", "", "Consensus protocol to use. For now it's one protocol")
 	cmd.Flags().StringVar(&constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
+	cmd.Flags().StringVar(&fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
 
 	return cmd
 }
@@ -195,6 +199,7 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 			"AC_PROTOCOL":					   config.AcProtocol,
 			"CONSENSUS_PROTOCOL":			   config.ConsensusProtocol,
 			"CONSTANT_LOAD":                   config.ConstantLoad,
+			"FIXED_PEERSETS_IN_CHANGE":        config.FixedPeersetsInChange,
 		},
 	}
 

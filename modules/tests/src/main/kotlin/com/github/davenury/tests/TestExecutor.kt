@@ -15,7 +15,8 @@ class TestExecutor(
     // determines how many peersets can be included in one change
     private val maxPeersetsInChange: Int,
     private val changes: Changes,
-    private val constantLoad: String?
+    private val constantLoad: String?,
+    private val fixedNumberOfPeersets: String?,
 ) {
     private val overallNumberOfRequests =
         numberOfRequestsToSendToMultiplePeersets + numberOfRequestsToSendToSinglePeerset
@@ -64,6 +65,16 @@ class TestExecutor(
     }
 
     private fun determineNumberOfPeersets(): Int {
+
+        if (fixedNumberOfPeersets != null) {
+            return fixedNumberOfPeersets.toInt().also {
+                if (it == 1) {
+                    sentSinglePeersetChanges++
+                } else {
+                    sentMulitplePeersetChanges++
+                }
+            }
+        }
 
         if (sentSinglePeersetChanges < numberOfRequestsToSendToSinglePeerset && sentMulitplePeersetChanges < numberOfRequestsToSendToMultiplePeersets) {
             return (Random.nextInt(maxPeersetsInChange) + 1).also {

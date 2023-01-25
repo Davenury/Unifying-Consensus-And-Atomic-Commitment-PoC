@@ -34,6 +34,7 @@ type Config struct {
 	isMetricTest bool
 	deployMonitoring bool
 	constantLoad string
+	fixedPeersetsInChange string
 }
 
 func CreateWholeCommand() *cobra.Command {
@@ -70,6 +71,7 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&config.isMetricTest, "is-metric-test", false, "Metric tests adds multiple metrics for changes per id. DON'T USE WITH NORMAL TESTS!")
 	cmd.Flags().BoolVar(&config.deployMonitoring, "deploy-monitoring", true, "Determines whether deploy monitoring stack")
 	cmd.Flags().StringVar(&config.constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
+	cmd.Flags().StringVar(&config.fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
 
 	return cmd
 }
@@ -98,6 +100,7 @@ func perform(config Config) {
 		AcProtocol: config.acProtocol,
 		ConsensusProtocol: config.consensusProtocol,
 		ConstantLoad: config.constantLoad,
+		FixedPeersetsInChange: config.fixedPeersetsInChange,
 	})
 	fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
 	waitUntilJobPodCompleted(config)
