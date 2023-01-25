@@ -270,7 +270,6 @@ func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ra
 			"config_ratis_addresses": ratisPeers,
 			"config_peers":           gpacPeers,
 			"IS_METRIC_TEST":         strconv.FormatBool(isMetricTest),
-			"JAVA_OPTS":              "-Xmx500m -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.rmi.port=9990 -Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.host=0.0.0.0 -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote.ssl=false",
 		},
 	}
 
