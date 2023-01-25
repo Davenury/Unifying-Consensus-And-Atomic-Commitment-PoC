@@ -38,6 +38,7 @@ class GPACProtocolSpec {
                 GlobalPeerId(0, 2) to PeerAddress(GlobalPeerId(0, 2), "peer3"),
             )
         ),
+        isMetricTest = false
     ).also {
         it.leaderTimer = timerMock
         it.retriesTimer = timerMock

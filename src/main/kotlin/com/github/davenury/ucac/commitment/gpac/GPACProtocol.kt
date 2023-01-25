@@ -2,10 +2,7 @@ package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.GpacConfig
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalPublisher
-import com.github.davenury.ucac.SignalSubject
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -36,6 +33,7 @@ class GPACProtocolImpl(
     private val transactionBlocker: TransactionBlocker,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     peerResolver: PeerResolver,
+    private val isMetricTest: Boolean,
 ) : GPACProtocolAbstract(peerResolver, logger) {
     private val globalPeerId: GlobalPeerId = peerResolver.currentPeer()
 
@@ -89,6 +87,9 @@ class GPACProtocolImpl(
 
         signal(Signal.OnHandlingElectEnd, transaction, message.change)
 
+        if (isMetricTest) {
+            Metrics.bumpElectedGPACLeader(message.change.id, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+        }
         return ElectedYou(
             message.ballotNumber,
             initVal,
@@ -131,6 +132,9 @@ class GPACProtocolImpl(
 
         signal(Signal.OnHandlingAgreeEnd, transaction, message.change)
 
+        if (isMetricTest) {
+            Metrics.bumpGPACFTAgree(message.change.id, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+        }
         leaderFailTimeoutStart(message.change)
 
         return Agreed(transaction.ballotNumber, message.acceptVal)
@@ -208,6 +212,9 @@ class GPACProtocolImpl(
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
+            if (isMetricTest) {
+                Metrics.bumpGPACApply(message.change.id, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+            }
         }
     }
 

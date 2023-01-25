@@ -25,13 +25,14 @@ func CreateDeployCommand() *cobra.Command {
 	var deployCreateNamespace bool
 	var waitForReadiness bool
 	var imageName string
+	var isMetricTest bool
 
 
 	var deployCommand = &cobra.Command{
 		Use:   "deploy",
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
-			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName)
+			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, isMetricTest)
 		},
 	}
 
@@ -40,12 +41,13 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().StringVarP(&deployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
 	deployCommand.Flags().BoolVarP(&waitForReadiness, "wait-for-readiness", "", false, "Wait for deployment to be ready")
 	deployCommand.Flags().StringVarP(&imageName, "image", "", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
+	deployCommand.Flags().BoolVar(&isMetricTest, "is-metric-test", false, "Determines whether add additional change related metrics. DO NOT USE WITH NORMAL TESTS!")
 
 	return deployCommand
 
 }
 
-func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string) {
+func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, isMetricTest bool) {
 	ratisPeers := utils.GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort)
 	gpacPeers := utils.GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort)
 	ratisGroups := make([]string, len(numberOfPeersInPeersets))
@@ -72,7 +74,7 @@ func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace str
 
 			deploySinglePeerService(namespace, peerConfig, ratisPort+i)
 
-			deploySinglePeerConfigMap(namespace, peerConfig, ratisPeers, gpacPeers)
+			deploySinglePeerConfigMap(namespace, peerConfig, ratisPeers, gpacPeers, isMetricTest)
 
 			deploySinglePeerDeployment(namespace, peerConfig, imageName)
 
@@ -234,7 +236,7 @@ func createSingleContainer(containerName string, peerConfig utils.PeerConfig, im
 	}
 }
 
-func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ratisPeers string, gpacPeers string) {
+func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ratisPeers string, gpacPeers string, isMetricTest bool) {
 	clientset, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
@@ -260,6 +262,7 @@ func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ra
 			"config_peerId":          peerConfig.PeerId,
 			"config_ratis_addresses": ratisPeers,
 			"config_peers":           gpacPeers,
+			"IS_METRIC_TEST":         strconv.FormatBool(isMetricTest),
 			"JAVA_OPTS":              "-Xmx500m -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.rmi.port=9990 -Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.host=0.0.0.0 -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote.ssl=false",
 		},
 	}

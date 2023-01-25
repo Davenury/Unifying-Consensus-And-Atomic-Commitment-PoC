@@ -2,10 +2,7 @@ package com.github.davenury.ucac.commitment.twopc
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalPublisher
-import com.github.davenury.ucac.SignalSubject
-import com.github.davenury.ucac.TwoPCConfig
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
@@ -23,8 +20,9 @@ class TwoPC(
     private val consensusProtocol: ConsensusProtocol,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     peerResolver: PeerResolver,
+    private val isMetricTest: Boolean
 ) : SignalSubject, AbstractAtomicCommitmentProtocol(logger, peerResolver) {
-
+    
     private var changeTimer: ProtocolTimer = ProtocolTimerImpl(twoPCConfig.changeDelay, Duration.ZERO, ctx)
 
     override suspend fun performProtocol(change: Change) {
@@ -46,8 +44,14 @@ class TwoPC(
 
             signal(Signal.TwoPCBeforeProposePhase, change)
             val decision = proposePhase(acceptChange, mainChangeId, otherPeers)
+            if (isMetricTest) {
+                Metrics.bumpTwoPCChangeAcceptedLocal(mainChangeId, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+            }
             signal(Signal.TwoPCOnChangeAccepted, change)
             decisionPhase(acceptChange, decision, otherPeers)
+            if(isMetricTest) {
+                Metrics.bumpTwoPCChangeDecidedOnLocal(mainChangeId, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+            }
 
             val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(result))
@@ -193,6 +197,7 @@ class TwoPC(
             )
         }
 //      Asynchronous commit change to consensuses
+
         protocolClient.sendDecision(otherPeersets, commitChange)
         val changeResult = checkChangeAndProposeToConsensus(
             commitChange.copyWithNewParentId(
