@@ -121,7 +121,7 @@ class ApplicationUcac constructor(
         val raftProtocolClientImpl = RaftProtocolClientImpl()
 
         val transactionBlocker = TransactionBlocker()
-        gpacFactory = GPACFactory(transactionBlocker, history, config.gpac, ctx, signalPublisher, peerResolver)
+        gpacFactory = GPACFactory(transactionBlocker, history, config, ctx, signalPublisher, peerResolver)
 
         consensusProtocol = RaftConsensusProtocolImpl(
             history,
@@ -132,7 +132,8 @@ class ApplicationUcac constructor(
             raftProtocolClientImpl,
             heartbeatTimeout = config.raft.heartbeatTimeout,
             heartbeatDelay = config.raft.leaderTimeout,
-            transactionBlocker = transactionBlocker
+            transactionBlocker = transactionBlocker,
+            config.metricTest
         )
 
         twoPC = TwoPC(
@@ -142,7 +143,8 @@ class ApplicationUcac constructor(
             TwoPCProtocolClientImpl(config.peerId),
             consensusProtocol as RaftConsensusProtocolImpl,
             signalPublisher,
-            peerResolver
+            peerResolver,
+            config.metricTest
         )
 
         service = ApiV2Service(

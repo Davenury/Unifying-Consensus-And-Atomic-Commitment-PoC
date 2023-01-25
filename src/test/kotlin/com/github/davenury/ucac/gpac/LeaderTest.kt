@@ -5,10 +5,7 @@ import com.github.davenury.common.Change
 import com.github.davenury.common.ChangePeersetInfo
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.InitialHistoryEntry
-import com.github.davenury.ucac.GpacConfig
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalListener
-import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
@@ -17,9 +14,12 @@ import com.github.davenury.ucac.utils.PeerThree
 import com.github.davenury.ucac.utils.PeerTwo
 import com.github.davenury.ucac.utils.TestLogExtension
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import strikt.api.expectThat
@@ -106,7 +106,8 @@ class LeaderTest {
                     phaser.arrive()
                 }
             )
-        )
+        ),
+        isMetricTest = false
     ).also {
         it.leaderTimer = timer
         it.retriesTimer = timer

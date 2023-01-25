@@ -11,6 +11,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -27,6 +28,8 @@ type Config struct {
 	EnforceAcUsage    bool
 	AcProtocol        string
 	ConsensusProtocol string
+	ConstantLoad string
+	FixedPeersetsInChange string
 }
 func createPerformanceDeployCommand() *cobra.Command {
 
@@ -43,6 +46,8 @@ func createPerformanceDeployCommand() *cobra.Command {
 	var enforceAcUsage bool
 	var acProtocol string
 	var consensusProtocol string
+	var constantLoad string
+	var fixedPeersetsInChange string
 
 	var cmd = &cobra.Command{
 		Use:   "deploy",
@@ -56,11 +61,13 @@ func createPerformanceDeployCommand() *cobra.Command {
 				MultipleRequestsNumber:   multipleRequestsNumber,
 				TestDuration:             testDuration,
 				MaxPeersetsInChange:      maxPeersetsInChange,
-				TestsStrategy:            testDuration,
+				TestsStrategy:            testsStrategy,
 				PushgatewayAddress:       pushgatewayAddress,
 				EnforceAcUsage:           enforceAcUsage,
 				AcProtocol:               acProtocol,
 				ConsensusProtocol:        consensusProtocol,
+				ConstantLoad:             constantLoad,
+				FixedPeersetsInChange:    fixedPeersetsInChange,
 			})
 		},
 	}
@@ -79,6 +86,8 @@ func createPerformanceDeployCommand() *cobra.Command {
 	cmd.Flags().BoolVarP(&enforceAcUsage, "enforce-ac", "", false, "Determines if usage of AC protocol should be enforced even if it isn't required (GPAC)")
 	cmd.Flags().StringVarP(&acProtocol, "ac-protocol", "", "gpac", "AC protocol to use in case it's needed. two_pc or gpac")
 	cmd.Flags().StringVarP(&consensusProtocol, "consensus-protocol", "", "", "Consensus protocol to use. For now it's one protocol")
+	cmd.Flags().StringVar(&constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
+	cmd.Flags().StringVar(&fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
 
 	return cmd
 }
@@ -124,6 +133,16 @@ func createJob(clientset *kubernetes.Clientset, config Config) {
 					Containers: []v1.Container{
 						{
 							Name:  "performance-test",
+							Resources: v1.ResourceRequirements{
+								Limits: v1.ResourceList{
+									"cpu": resource.MustParse("400m"),
+									"memory": resource.MustParse("800Mi"),
+								},
+								Requests: v1.ResourceList{
+									"cpu": resource.MustParse("200m"),
+									"memory": resource.MustParse("400Mi"),
+								},
+							},
 							Image: config.PerformanceImage,
 							Ports: []v1.ContainerPort{
 								{
@@ -179,6 +198,8 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 			"ENFORCE_AC_USAGE":                strconv.FormatBool(config.EnforceAcUsage),
 			"AC_PROTOCOL":					   config.AcProtocol,
 			"CONSENSUS_PROTOCOL":			   config.ConsensusProtocol,
+			"CONSTANT_LOAD":                   config.ConstantLoad,
+			"FIXED_PEERSETS_IN_CHANGE":        config.FixedPeersetsInChange,
 		},
 	}
 

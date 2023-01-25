@@ -44,13 +44,15 @@ func DoInit(namespace string, createNamespace bool) {
 		},
 		"server": map[string]interface{}{
 			"global": map[string]interface{}{
-				"scrape_interval": "10s",
+				"scrape_interval": "5s",
+				"scrape_timeout": "2s",
 			},
 		},
 		"prometheus-node-exporter": map[string]interface{}{
 			"enabled": false,
 		},
 	}
+
 	// install prometheus
 	installChart(namespace, "prometheus-community", "prometheus", "prometheus", prometheusValues)
 
@@ -58,11 +60,11 @@ func DoInit(namespace string, createNamespace bool) {
 		"adminPassword": "admin123",
 		"resources": map[string]interface{}{
 			"limits": map[string]string{
-				"cpu": "512m",
+				"cpu":    "512m",
 				"memory": "512Mi",
 			},
 			"requests": map[string]string{
-				"cpu": "256m",
+				"cpu":    "256m",
 				"memory": "256Mi",
 			},
 		},
@@ -71,9 +73,9 @@ func DoInit(namespace string, createNamespace bool) {
 				"apiVersion": 1,
 				"datasources": []map[string]interface{}{
 					{
-						"name": "Prometheus",
-						"url": fmt.Sprintf("http://prometheus-server.%s", namespace),
-						"type": "prometheus",
+						"name":      "Prometheus",
+						"url":       fmt.Sprintf("http://prometheus-server.%s", namespace),
+						"type":      "prometheus",
 						"isDefault": true,
 					},
 				},
@@ -102,7 +104,6 @@ func installChart(namespace string, repoName string, chartName string, releaseNa
 	if err != nil {
 		log.Fatal(err)
 	}
-
 
 	client.Namespace = namespace
 	release, err := client.Run(cr, values)

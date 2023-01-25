@@ -22,6 +22,7 @@ import com.github.davenury.ucac.utils.TestLogExtension
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.request.*
 import io.ktor.http.*
+import io.mockk.mockk
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -735,7 +736,8 @@ class ConsensusSpec : IntegrationTestBase() {
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
             protocolClient = RaftProtocolClientImpl(),
-            transactionBlocker = TransactionBlocker()
+            transactionBlocker = TransactionBlocker(),
+            isMetricTest = false
         )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()

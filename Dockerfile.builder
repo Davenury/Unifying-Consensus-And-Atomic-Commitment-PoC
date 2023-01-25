@@ -10,18 +10,22 @@ RUN gradle installDist --no-daemon
 
 ###
 
-FROM adoptopenjdk:11-jre-hotspot as application
+FROM alpine:3.17.1 as application
+RUN apk add openjdk11 && apk add --no-cache jattach --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/
+
 WORKDIR /application
 
 COPY --from=builder /home/gradle/src/build/install/PoC .
 
-ENTRYPOINT ["bash", "-c", "/application/bin/PoC"]
+ENTRYPOINT ["sh", "-c", "/application/bin/PoC", "-Xmx=500m"]
 
 ###
 
-FROM adoptopenjdk:11-jre-hotspot as tests
+FROM alpine:3.17.1 as tests
+RUN apk add openjdk11 && apk add --no-cache jattach --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/
+
 WORKDIR /tests
 
 COPY --from=builder /home/gradle/src/modules/tests/build/install/tests .
 
-ENTRYPOINT ["bash", "-c", "/tests/bin/tests"]
+ENTRYPOINT ["sh", "-c", "/tests/bin/tests"]

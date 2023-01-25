@@ -2,6 +2,7 @@ package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.GPACInstanceNotFoundException
 import com.github.davenury.common.history.History
+import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.common.PeerResolver
@@ -13,7 +14,7 @@ import kotlinx.coroutines.sync.withLock
 class GPACFactory(
     private val transactionBlocker: TransactionBlocker,
     private val history: History,
-    private val gpacConfig: GpacConfig,
+    private val config: Config,
     private val context: ExecutorCoroutineDispatcher,
     private val signalPublisher: SignalPublisher,
     private val peerResolver: PeerResolver
@@ -27,12 +28,13 @@ class GPACFactory(
             changeIdToGpacInstance[changeId] ?:
             GPACProtocolImpl(
                 history,
-                gpacConfig,
+                config.gpac,
                 context,
                 GPACProtocolClientImpl(),
                 transactionBlocker,
                 signalPublisher,
-                peerResolver
+                peerResolver,
+                config.metricTest
             ).also {
                 changeIdToGpacInstance[changeId] = it
             }

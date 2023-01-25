@@ -2,14 +2,11 @@ package com.github.davenury.ucac.consensus.raft.infrastructure
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalPublisher
-import com.github.davenury.ucac.SignalSubject
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.*
-import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -35,7 +32,8 @@ class RaftConsensusProtocolImpl(
     private val protocolClient: RaftProtocolClient,
     private val heartbeatTimeout: Duration = Duration.ofSeconds(4),
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
-    private val transactionBlocker: TransactionBlocker
+    private val transactionBlocker: TransactionBlocker,
+    private val isMetricTest: Boolean
 ) : ConsensusProtocol, RaftConsensusProtocol, SignalSubject {
     private val globalPeerId = peerResolver.currentPeer()
     private val peerId = globalPeerId.peerId
@@ -197,7 +195,7 @@ class RaftConsensusProtocolImpl(
         val prevLogTerm = heartbeat.prevLogTerm
 
 //        logger.debug("Received heartbeat $heartbeat")
-        logger.info("Received heartbeat $heartbeat")
+        logger.debug("Received heartbeat $heartbeat")
         logger.debug("I have in state: ${state.acceptedItems.map { it.ledgerIndex }} ${state.proposedItems.map { it.ledgerIndex }} \n and should have: $prevLogIndex, message changes: ${acceptedChanges.map { it.ledgerIndex }} ${proposedChanges.map { it.ledgerIndex }}")
 
 
@@ -249,6 +247,12 @@ class RaftConsensusProtocolImpl(
         when {
             transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() != ProtocolName.CONSENSUS ->
                 return ConsensusHeartbeatResponse(false, currentTerm, true)
+            
+            acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() && transactionBlocker.getChangeId() == proposedChanges.firstOrNull()?.changeId -> {
+                logger.debug("Received again the same proposedChanges")
+                updateLedger(heartbeat, acceptedChanges)
+                return ConsensusHeartbeatResponse(true, currentTerm)
+            }
 
             acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() && transactionBlocker.getChangeId() == proposedChanges.firstOrNull()?.changeId -> {
                 logger.debug("Received again the same proposedChanges")
@@ -308,6 +312,9 @@ class RaftConsensusProtocolImpl(
         }
 
         updateResult.proposedItems.forEach { proposedItem ->
+            if (isMetricTest) {
+                Metrics.bumpRaftChangeInProposedItems(proposedItem.changeId, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+            }
             signalPublisher.signal(
                 signal = Signal.ConsensusFollowerChangeProposed,
                 subject = this,
@@ -318,6 +325,9 @@ class RaftConsensusProtocolImpl(
         }
 
         updateResult.acceptedItems.forEach {
+            if (isMetricTest) {
+                Metrics.bumpRaftChangeAccepted(it.changeId, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+            }
             changeIdToCompletableFuture[it.changeId]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
         }
 

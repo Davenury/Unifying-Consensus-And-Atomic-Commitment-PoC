@@ -29,11 +29,10 @@ class Changes(
         logger.info("Handling notification: $notification")
         if (!handledChanges.contains(notification.change.id)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
-                if (notification.result.status != ChangeResult.Status.CONFLICT) {
+                if (notification.result.status == ChangeResult.Status.SUCCESS) {
                     val parentId = notification.change.toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
-                } else {
-                    Metrics.bumpConflictedChanges(notification.result.detailedMessage)
+                    logger.info("Setting new parent id for peerset $peersetId: $parentId, change was for ${(notification.change as AddUserChange).userName}")
                 }
                 getPeersStrategy.handleNotification(peersetId)
                 handledChanges.add(notification.change.id)
@@ -49,8 +48,10 @@ class Changes(
                 peersets = ids.map { ChangePeersetInfo(it, changes[it]!!.getCurrentParentId()) }
             )
             val result = changes[ids[0]]!!.introduceChange(change)
-            logger.info("Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: ${ids.map { it to change.toHistoryEntry(it).getId() }}")
-            if (result == ChangeState.REJECTED) {
+            if (result == ChangeState.ACCEPTED) {
+                logger.info("Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: ${ids.map { it to change.toHistoryEntry(it).getId() }}")
+            } else {
+                logger.info("Change $change was rejected, freeing peersets $ids")
                 getPeersStrategy.freePeersets(ids)
             }
         }

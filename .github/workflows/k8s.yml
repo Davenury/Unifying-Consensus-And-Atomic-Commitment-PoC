@@ -54,7 +54,7 @@ jobs:
         run: go get && go build -o cmd
       - name: deploy pods
         working-directory: ./cmd
-        run: ./cmd deploy -n test --create-namespace --peers=3,1 --wait-for-readiness --image ghcr.io/davenury/ucac:${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}
+        run: ./cmd deploy -n test --create-namespace --peers=3,1 --wait-for-readiness --create-resources=false --image ghcr.io/davenury/ucac:${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}
       - name: test command
         working-directory: ./cmd
         run: ./cmd test -n test

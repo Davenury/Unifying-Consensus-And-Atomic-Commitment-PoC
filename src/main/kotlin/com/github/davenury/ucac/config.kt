@@ -31,6 +31,7 @@ data class Config(
     val gpac: GpacConfig = GpacConfig(),
     val twoPC: TwoPCConfig = TwoPCConfig(),
     val rest: RestConfig = RestConfig(),
+    val metricTest: Boolean
 ) {
     fun globalPeerId() = GlobalPeerId(peersetId, peerId)
     fun newPeerResolver() = PeerResolver(globalPeerId(), parsePeers(peers))

@@ -43,7 +43,9 @@ class TestNotificationService {
         config.numberOfRequestsToSendToMultiplePeersets,
         config.durationOfTest,
         config.maxPeersetsInChange,
-        changes
+        changes,
+        config.constantLoad,
+        config.fixedPeersetsInChange
     )
 
     private val server: NettyApplicationEngine = embeddedServer(Netty, port=8080, host = "0.0.0.0") {

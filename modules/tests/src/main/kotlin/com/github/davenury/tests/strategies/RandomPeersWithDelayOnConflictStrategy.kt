@@ -18,10 +18,14 @@ class RandomPeersWithDelayOnConflictStrategy(
     override suspend fun getPeersets(numberOfPeersets: Int): List<Int> =
         lock.withLock {
             lateinit var ids: List<Int>
+            var metricBumped = false
             while (true) {
                 ids = peersetsRange.filter { lockedPeersets[it] == false }.shuffled().take(numberOfPeersets)
                 if (ids.size < numberOfPeersets) {
-                    Metrics.bumpDelayInSendingChange()
+                    if (!metricBumped) {
+                        Metrics.bumpDelayInSendingChange()
+                        metricBumped = true
+                    }
                     condition.await()
                 } else {
                     break

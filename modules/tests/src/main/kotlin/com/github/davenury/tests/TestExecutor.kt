@@ -14,7 +14,9 @@ class TestExecutor(
     private val timeOfSimulation: Duration,
     // determines how many peersets can be included in one change
     private val maxPeersetsInChange: Int,
-    private val changes: Changes
+    private val changes: Changes,
+    private val constantLoad: String?,
+    private val fixedNumberOfPeersets: String?,
 ) {
     private val overallNumberOfRequests =
         numberOfRequestsToSendToMultiplePeersets + numberOfRequestsToSendToSinglePeerset
@@ -22,11 +24,35 @@ class TestExecutor(
     private var sentSinglePeersetChanges = 0
     private var sentMulitplePeersetChanges = 0
 
-    private val channel: ReceiveChannel<Unit> = ticker(sendRequestBreak.toMillis(), 0)
+    private val channel: ReceiveChannel<Unit> = if (constantLoad != null) {
+        ticker(calculateTickerFromLoad(constantLoad), 0)
+    } else {
+        ticker(sendRequestBreak.toMillis(), 0)
+    }
 
     suspend fun startTest() {
         logger.info("Test starts. Number of singlePeerset requests: $numberOfRequestsToSendToSinglePeerset, number of multiplePeersets requests: $numberOfRequestsToSendToMultiplePeersets\n" +
                 "time of simulation: ${timeOfSimulation.toSeconds()}s. Requests are sent in ${sendRequestBreak.toMillis()}ms breaks.")
+        if (constantLoad != null) {
+            executeUnboundTest()
+        } else {
+            executeBoundedTest()
+        }
+        logger.info("Test Executor sent ended it's work.")
+    }
+
+    private fun calculateTickerFromLoad(load: String) = (1.0 / load.toInt() * 1000).toLong()
+    private suspend fun executeUnboundTest() {
+        withContext(ctx) {
+            while (true) {
+                channel.receive()
+                launch {
+                    changes.introduceChange(determineNumberOfPeersets())
+                }
+            }
+        }
+    }
+    private suspend fun executeBoundedTest() {
         withContext(ctx) {
             for (i in (1..overallNumberOfRequests)) {
                 channel.receive()
@@ -36,10 +62,19 @@ class TestExecutor(
             }
             channel.cancel()
         }
-        logger.info("Test Executor sent ended it's work.")
     }
 
     private fun determineNumberOfPeersets(): Int {
+
+        if (fixedNumberOfPeersets != null) {
+            return fixedNumberOfPeersets.toInt().also {
+                if (it == 1) {
+                    sentSinglePeersetChanges++
+                } else {
+                    sentMulitplePeersetChanges++
+                }
+            }
+        }
 
         if (sentSinglePeersetChanges < numberOfRequestsToSendToSinglePeerset && sentMulitplePeersetChanges < numberOfRequestsToSendToMultiplePeersets) {
             return (Random.nextInt(maxPeersetsInChange) + 1).also {
