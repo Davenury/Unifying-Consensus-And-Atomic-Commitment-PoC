@@ -113,7 +113,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(ktor_http_server_requests_seconds_count{route=\"/v2/change/async\"}[1m]))",
+          "expr": "sum(rate(ktor_http_server_requests_seconds_count{route=\"/v2/change/async\", namespace=\"$namespace\"}[1m]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -176,7 +176,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "reqps"
         },
         "overrides": []
       },
@@ -206,7 +207,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(change_processed_total[1m]))",
+          "expr": "sum(rate(change_processed_total{namespace=\"$namespace\"}[1m]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -298,7 +299,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "(sum(change_processed_total{result=\"conflict\"}) by (protocol)) or vector(0)",
+          "expr": "(sum(change_processed_total{result=\"conflict\", namespace=\"$namespace\"}) by (protocol)) or vector(0)",
           "legendFormat": "{{protocol}}",
           "range": true,
           "refId": "A"
@@ -363,7 +364,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "(sum(change_processed_total{result=\"conflict\"}) / sum(change_processed_total)) or vector(0)",
+          "expr": "(sum(change_processed_total{result=\"conflict\", namespace=\"$namespace\"}) / sum(change_processed_total{namespace=\"$namespace\"})) or vector(0)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -457,7 +458,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "avg(rate(change_processing_time_seconds_sum{result=\"success\"}[125s]) / rate(change_processing_time_seconds_count{result=\"success\"}[125s]))",
+          "expr": "avg(rate(change_processing_time_seconds_sum{result=\"success\", namespace=\"$namespace\"}[125s]) / rate(change_processing_time_seconds_count{result=\"success\", namespace=\"$namespace\"}[125s]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -549,22 +550,10 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "avg(rate(container_cpu_usage_seconds_total{container=~\"peer.*\"}[30s]))",
+          "expr": "avg(rate(container_cpu_usage_seconds_total{container=~\"peer.*\", namespace=\"$namespace\"}[30s]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "",
-          "hide": false,
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "B"
         }
       ],
       "title": "Container CPU usage",
@@ -653,7 +642,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"peer.*\"}[30s]))",
+          "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"peer.*\", namespace=\"$namespace\"}[30s]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -664,7 +653,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"performance-test.*\"}[30s]))",
+          "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"performance-test.*\", namespace=\"$namespace\"}[30s]))",
           "hide": false,
           "legendFormat": "performance tests",
           "range": true,
@@ -719,8 +708,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -758,7 +746,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "container_memory_usage_bytes{pod=~\"peer.*\"}",
+          "expr": "container_memory_usage_bytes{pod=~\"peer.*\", namespace=\"$namespace\"}",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -820,7 +808,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "kube_pod_container_status_restarts_total{namespace=\"ddebowski\"}",
+          "expr": "kube_pod_container_status_restarts_total{namespace=\"$namespace\"}",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -835,7 +823,34 @@
   "style": "dark",
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "ddebowski",
+          "value": "ddebowski"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "definition": "label_values(ktor_http_server_requests_active, namespace)",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "namespace",
+        "options": [],
+        "query": {
+          "query": "label_values(ktor_http_server_requests_active, namespace)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-15m",
