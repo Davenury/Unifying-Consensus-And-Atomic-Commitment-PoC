@@ -25,6 +25,7 @@ data class Config(
     val acProtocol: ACProtocolConfig,
     // TODO - after implementing multiple consensus this might come in handy
     val consensusProtocol: String? = null,
+    val constantLoad: String? = null
 ) {
     fun peerAddresses(): Map<Int, List<String>> =
         parsePeers(peers)

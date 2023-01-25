@@ -32,6 +32,8 @@ type Config struct {
 	performanceTestTimeoutDeadline string
 	cleanupAfterWork bool
 	isMetricTest bool
+	deployMonitoring bool
+	constantLoad string
 }
 
 func CreateWholeCommand() *cobra.Command {
@@ -66,13 +68,17 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.performanceTestTimeoutDeadline, "performance-test-timeout-deadline", "PT0S", "Additional duration after which test job should be force ended")
 	cmd.Flags().BoolVar(&config.cleanupAfterWork, "cleanup-after-work", true, "Determines if command should clean ucac resources after work (doesn't appy to grafana and prometheus)")
 	cmd.Flags().BoolVar(&config.isMetricTest, "is-metric-test", false, "Metric tests adds multiple metrics for changes per id. DON'T USE WITH NORMAL TESTS!")
+	cmd.Flags().BoolVar(&config.deployMonitoring, "deploy-monitoring", true, "Determines whether deploy monitoring stack")
+	cmd.Flags().StringVar(&config.constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
 
 	return cmd
 }
 
 func perform(config Config) {
-	fmt.Println("Deploying monitoring...")
-	DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
+	if config.deployMonitoring {
+		fmt.Println("Deploying monitoring...")
+		DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
+	}
 	fmt.Println("Deploying application...")
 	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.isMetricTest)
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
@@ -91,6 +97,7 @@ func perform(config Config) {
 		EnforceAcUsage: config.enforceAcUsage,
 		AcProtocol: config.acProtocol,
 		ConsensusProtocol: config.consensusProtocol,
+		ConstantLoad: config.constantLoad,
 	})
 	fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
 	waitUntilJobPodCompleted(config)

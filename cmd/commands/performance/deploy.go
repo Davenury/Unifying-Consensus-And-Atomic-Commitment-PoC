@@ -28,6 +28,7 @@ type Config struct {
 	EnforceAcUsage    bool
 	AcProtocol        string
 	ConsensusProtocol string
+	ConstantLoad string
 }
 func createPerformanceDeployCommand() *cobra.Command {
 
@@ -44,6 +45,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 	var enforceAcUsage bool
 	var acProtocol string
 	var consensusProtocol string
+	var constantLoad string
 
 	var cmd = &cobra.Command{
 		Use:   "deploy",
@@ -62,6 +64,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 				EnforceAcUsage:           enforceAcUsage,
 				AcProtocol:               acProtocol,
 				ConsensusProtocol:        consensusProtocol,
+				ConstantLoad:             constantLoad,
 			})
 		},
 	}
@@ -80,6 +83,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 	cmd.Flags().BoolVarP(&enforceAcUsage, "enforce-ac", "", false, "Determines if usage of AC protocol should be enforced even if it isn't required (GPAC)")
 	cmd.Flags().StringVarP(&acProtocol, "ac-protocol", "", "gpac", "AC protocol to use in case it's needed. two_pc or gpac")
 	cmd.Flags().StringVarP(&consensusProtocol, "consensus-protocol", "", "", "Consensus protocol to use. For now it's one protocol")
+	cmd.Flags().StringVar(&constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
 
 	return cmd
 }
@@ -190,6 +194,7 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 			"ENFORCE_AC_USAGE":                strconv.FormatBool(config.EnforceAcUsage),
 			"AC_PROTOCOL":					   config.AcProtocol,
 			"CONSENSUS_PROTOCOL":			   config.ConsensusProtocol,
+			"CONSTANT_LOAD":                   config.ConstantLoad,
 		},
 	}
 
