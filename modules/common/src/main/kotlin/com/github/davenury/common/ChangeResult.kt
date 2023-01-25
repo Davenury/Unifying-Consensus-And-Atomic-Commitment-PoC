@@ -20,6 +20,6 @@ data class ChangeResult(
          * For instance, there was not enough peers to accept the change
          * within the time limit.
          */
-        TIMEOUT,
+        TIMEOUT;
     }
 }
