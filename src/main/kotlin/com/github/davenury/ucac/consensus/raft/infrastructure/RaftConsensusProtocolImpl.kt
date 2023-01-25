@@ -180,8 +180,6 @@ class RaftConsensusProtocolImpl(
             listOf(otherConsensusPeers()),
             null
         )
-        
-        Metrics.refreshLastHeartbeat()
 
         Metrics.refreshLastHeartbeat()
 

@@ -24,7 +24,7 @@ class TestExecutor(
     private var sentMulitplePeersetChanges = 0
 
     private val channel: ReceiveChannel<Unit> = if (constantLoad != null) {
-        ticker((1.0 / constantLoad.toInt() * 1000).toLong(), 0)
+        ticker(calculateTickerFromLoad(constantLoad), 0)
     } else {
         ticker(sendRequestBreak.toMillis(), 0)
     }
@@ -40,6 +40,7 @@ class TestExecutor(
         logger.info("Test Executor sent ended it's work.")
     }
 
+    private fun calculateTickerFromLoad(load: String) = (1.0 / load.toInt() * 1000).toLong()
     private suspend fun executeUnboundTest() {
         withContext(ctx) {
             while (true) {

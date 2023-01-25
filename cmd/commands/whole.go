@@ -80,7 +80,7 @@ func perform(config Config) {
 		DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
 	}
 	fmt.Println("Deploying application...")
-	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.isMetricTest)
+	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.isMetricTest, true)
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
 	time.Sleep(30 * time.Second)
 	fmt.Println("Deploying performance test")

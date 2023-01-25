@@ -26,13 +26,14 @@ func CreateDeployCommand() *cobra.Command {
 	var waitForReadiness bool
 	var imageName string
 	var isMetricTest bool
+	var createResources bool
 
 
 	var deployCommand = &cobra.Command{
 		Use:   "deploy",
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
-			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, isMetricTest)
+			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, isMetricTest, createResources)
 		},
 	}
 
@@ -42,12 +43,13 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVarP(&waitForReadiness, "wait-for-readiness", "", false, "Wait for deployment to be ready")
 	deployCommand.Flags().StringVarP(&imageName, "image", "", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
 	deployCommand.Flags().BoolVar(&isMetricTest, "is-metric-test", false, "Determines whether add additional change related metrics. DO NOT USE WITH NORMAL TESTS!")
+	deployCommand.Flags().BoolVar(&createResources, "create-resources", true, "Determines if pods should have limits and requests")
 
 	return deployCommand
 
 }
 
-func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, isMetricTest bool) {
+func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, isMetricTest bool, createResources bool) {
 	ratisPeers := utils.GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort)
 	gpacPeers := utils.GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort)
 	ratisGroups := make([]string, len(numberOfPeersInPeersets))
@@ -76,7 +78,7 @@ func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace str
 
 			deploySinglePeerConfigMap(namespace, peerConfig, ratisPeers, gpacPeers, isMetricTest)
 
-			deploySinglePeerDeployment(namespace, peerConfig, imageName)
+			deploySinglePeerDeployment(namespace, peerConfig, imageName, createResources)
 
 			fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
 		}
@@ -123,7 +125,7 @@ func anyPodNotReady(expectedPeers int, namespace string) bool {
 	return totalCount != expectedPeers || notReadyCount > 0
 }
 
-func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, imageName string) {
+func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, imageName string, createResources bool) {
 
 	clientset, err := utils.GetClientset()
 	if err != nil {
@@ -150,7 +152,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 					"peersetId": peerConfig.PeersetId,
 				},
 			},
-			Template: createPodTemplate(peerConfig, imageName),
+			Template: createPodTemplate(peerConfig, imageName, createResources),
 		},
 	}
 
@@ -163,7 +165,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 
 }
 
-func createPodTemplate(peerConfig utils.PeerConfig, imageName string) apiv1.PodTemplateSpec {
+func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool) apiv1.PodTemplateSpec {
 	containerName := utils.ContainerName(peerConfig)
 
 	return apiv1.PodTemplateSpec{
@@ -183,13 +185,13 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string) apiv1.PodT
 		},
 		Spec: apiv1.PodSpec{
 			Containers: []apiv1.Container{
-				createSingleContainer(containerName, peerConfig, imageName),
+				createSingleContainer(containerName, peerConfig, imageName, createResources),
 			},
 		},
 	}
 }
 
-func createSingleContainer(containerName string, peerConfig utils.PeerConfig, imageName string) apiv1.Container {
+func createSingleContainer(containerName string, peerConfig utils.PeerConfig, imageName string, createResources bool) apiv1.Container {
 
 	probe := &apiv1.Probe{
 		ProbeHandler: apiv1.ProbeHandler{
@@ -200,10 +202,9 @@ func createSingleContainer(containerName string, peerConfig utils.PeerConfig, im
 		},
 	}
 
-	return apiv1.Container{
-		Name:  containerName,
-		Image: imageName,
-		Resources: apiv1.ResourceRequirements{
+	resources := apiv1.ResourceRequirements{}
+	if createResources {
+		resources = apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
 				"cpu": resource.MustParse("700m"),
 				"memory": resource.MustParse("750Mi"),
@@ -212,7 +213,13 @@ func createSingleContainer(containerName string, peerConfig utils.PeerConfig, im
 				"cpu": resource.MustParse("500m"),
 				"memory": resource.MustParse("350Mi"),
 			},
-		},
+		}
+	}
+
+	return apiv1.Container{
+		Name:  containerName,
+		Image: imageName,
+		Resources: resources,
 		Args: []string{
 			"-Xmx500m",
 			"-Dcom.sun.management.jmxremote.port=9999",
