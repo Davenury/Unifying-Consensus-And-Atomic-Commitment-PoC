@@ -166,45 +166,28 @@ class GPACProtocolImpl(
             }
         }
 
-
-        when {
-            !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
-                transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
-                transaction =
-                    Transaction(
-                        ballotNumber = message.ballotNumber,
-                        change = message.change,
-                        acceptVal = message.acceptVal,
-                        initVal = message.acceptVal,
-                        acceptNum = message.ballotNumber
-                    )
-            }
-
-            !isCurrentTransaction -> {
-                changeConflicts(message.change, "Don't receive ft-agree and can't block on history")
-                throw TransactionNotBlockedOnThisChange(ProtocolName.GPAC, message.change.id)
-            }
-        }
-
-
         try {
             this.transaction =
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
 
-            if (message.acceptVal == Accept.COMMIT && !history.containsEntry(message.change.toHistoryEntry(globalPeerId.peersetId).getId())) {
+            val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(message.change.toHistoryEntry(globalPeerId.peersetId).getId())) {
                 addChangeToHistory(message.change)
-                changeSucceeded(message.change)
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
+                Pair(ChangeResult.Status.SUCCESS, null)
             } else if (message.acceptVal == Accept.COMMIT) {
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
+                Pair(null, null)
             } else if (message.acceptVal == Accept.ABORT) {
-                changeConflicts(message.change, "Message was applied but state was ABORT")
+                Pair(ChangeResult.Status.CONFLICT, "Message was applied but state was ABORT")
             } else {
-                changeSucceeded(message.change)
+                Pair(ChangeResult.Status.SUCCESS, null)
             }
+
             logger.info("handleApply releaseBlocker")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
+
+            changeResult?.resolveChange(message.change.id, resultMessage)
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
@@ -525,6 +508,10 @@ class GPACProtocolImpl(
 
     companion object {
         private val logger = LoggerFactory.getLogger("gpac")
+    }
+
+    private fun ChangeResult.Status.resolveChange(changeId: String, detailedMessage: String? = null) {
+        changeIdToCompletableFuture[changeId]?.complete(ChangeResult(this, detailedMessage))
     }
 
 }
