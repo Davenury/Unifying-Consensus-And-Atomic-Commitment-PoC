@@ -5,6 +5,7 @@ import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
+import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.*
@@ -57,7 +58,7 @@ class RaftConsensusProtocolImpl(
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
-//    TODO: Useless, it should use a worker queue.
+    //    TODO: Useless, it should use a worker queue.
     private val queuedChanges: MutableList<Change> = mutableListOf()
 
     private fun otherConsensusPeers(): List<PeerAddress> {
@@ -182,13 +183,13 @@ class RaftConsensusProtocolImpl(
             null
         )
 
-        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
-            println("handleLeaderElected release transactionBlocker")
-            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
-        }
+        Metrics.refreshLastHeartbeat()
+
+        releaseBlockerFromPreviousTermChanges()
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
+        Metrics.registerTimerHeartbeat()
         val term = heartbeat.term
         val acceptedChanges = heartbeat.acceptedChanges.map { it.toLedgerItem() }
         val proposedChanges = heartbeat.proposedChanges.map { it.toLedgerItem() }
@@ -211,11 +212,18 @@ class RaftConsensusProtocolImpl(
         }
 
 //      Restart timer because we received heartbeat from proper leader
+
+        if (currentTerm < term) {
+            mutex.withLock {
+                currentTerm = term
+            }
+            releaseBlockerFromPreviousTermChanges()
+        }
+
         mutex.withLock {
             if (role == RaftRole.Leader) {
                 stopBeingLeader(term)
                 role = RaftRole.Follower
-
             }
             lastHeartbeatTime = Instant.now()
         }
@@ -239,6 +247,15 @@ class RaftConsensusProtocolImpl(
             proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) }
 
         when {
+            transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() != ProtocolName.CONSENSUS ->
+                return ConsensusHeartbeatResponse(false, currentTerm, true)
+
+            acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() && transactionBlocker.getChangeId() == proposedChanges.firstOrNull()?.changeId -> {
+                logger.debug("Received again the same proposedChanges")
+                updateLedger(heartbeat, acceptedChanges)
+                return ConsensusHeartbeatResponse(true, currentTerm)
+            }
+
             acceptedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
                 logger.debug("Received heartbeat when is blocked so only accepted changes")
                 updateLedger(heartbeat, acceptedChanges)
@@ -262,7 +279,7 @@ class RaftConsensusProtocolImpl(
             }
 
             proposedChanges.isNotEmpty() ->
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, proposedChanges.first().changeId)
         }
 
         updateLedger(heartbeat, acceptedChanges, proposedChanges)
@@ -315,7 +332,10 @@ class RaftConsensusProtocolImpl(
 
         if (updateResult.acceptedItems.isNotEmpty()) {
             println("updateLedger tryToReleaseBlocker")
-            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
+            transactionBlocker.tryToReleaseBlockerChange(
+                ProtocolName.CONSENSUS,
+                updateResult.acceptedItems.first().changeId
+            )
         }
     }
 
@@ -417,7 +437,7 @@ class RaftConsensusProtocolImpl(
         if (acceptedItems.isNotEmpty()) {
             logger.info("Applying accepted changes: $acceptedItems")
             println("applyAcceptedChanges tryToReleaseBlocker")
-            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, acceptedItems.first().changeId)
         }
 
         acceptedItems.forEach {
@@ -451,7 +471,7 @@ class RaftConsensusProtocolImpl(
     }
 
 
-//  TODO: Useless function
+    //  TODO: Useless function
     private suspend fun checkIfQueuedChanges() {
         if (queuedChanges.isEmpty()) return
         val change = queuedChanges.removeAt(0)
@@ -568,7 +588,7 @@ class RaftConsensusProtocolImpl(
             }
 
             try {
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS)
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, change.id)
             } catch (ex: AlreadyLockedException) {
                 logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
@@ -577,14 +597,10 @@ class RaftConsensusProtocolImpl(
 
             val updatedChange: Change
 
+            val peersetId = peerResolver.currentPeer().peersetId
 
-            if (checkTwoPCHistoryCompatibility(change)) {
-                val peersetId = peerResolver.currentPeer().peersetId
-                updatedChange = change.copyWithNewParentId(peersetId, history.getCurrentEntry().getId())
-                entry = updatedChange.toHistoryEntry(peersetId)
-            } else {
-                updatedChange = change
-            }
+            updatedChange = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
+            entry = updatedChange.toHistoryEntry(peersetId)
 
 
 
@@ -598,7 +614,7 @@ class RaftConsensusProtocolImpl(
                 )
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                 println("proposeChangeToLedger tryToReleaseBlocker")
-                transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.CONSENSUS)
+                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, change.id)
                 return
             }
 
@@ -629,21 +645,14 @@ class RaftConsensusProtocolImpl(
         return isDuring2PC && !(changeIsAbortingOf2PC || changeIsApplyingOf2PC)
     }
 
-    private fun checkTwoPCHistoryCompatibility(change: Change): Boolean {
-        val currentEntry = history.getCurrentEntry()
+    private fun releaseBlockerFromPreviousTermChanges() {
+        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS && transactionBlocker.getChangeId() == state.proposedItems.last().changeId) {
+            logger.info("Release blocker for changes from previous term")
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.proposedItems.last().changeId)
 
-        val grandParentChange: Change =
-            history.getEntryFromHistory(currentEntry.getParentId() ?: return false)
-                ?.let { Change.fromHistoryEntry(it) }
-                ?: return false
-
-        if (grandParentChange !is TwoPCChange) return false
-
-        val peersetId = peerResolver.currentPeer().peersetId
-
-
-        return grandParentChange.change.toHistoryEntry(peersetId).getId() == change.toHistoryEntry(peersetId)
-            .getParentId()
+            changeIdToCompletableFuture[state.proposedItems.last().changeId]
+                ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
+        }
     }
 
 

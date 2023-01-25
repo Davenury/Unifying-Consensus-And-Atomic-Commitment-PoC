@@ -110,6 +110,13 @@ class GPACProtocolImpl(
         val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
         val initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
 
+        myBallotNumber = message.ballotNumber
+
+        if (!message.decision) {
+            transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+            logger.info("Lock aquired: ${message.ballotNumber}")
+        }
+
         transaction =
             Transaction(
                 ballotNumber = message.ballotNumber,
@@ -121,12 +128,6 @@ class GPACProtocolImpl(
 
         logger.info("State transaction state: ${this.transaction}")
 
-        myBallotNumber = message.ballotNumber
-
-        if (!message.decision) {
-            transactionBlocker.tryToBlock(ProtocolName.GPAC)
-            logger.info("Lock aquired: ${message.ballotNumber}")
-        }
 
         signal(Signal.OnHandlingAgreeEnd, transaction, message.change)
 
@@ -143,33 +144,49 @@ class GPACProtocolImpl(
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
 
 
-        try {
-            if (isCurrentTransaction) {
-                this.transaction =
-                    this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
+        when {
+            !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
+                transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+                transaction =
+                    Transaction(
+                        ballotNumber = message.ballotNumber,
+                        change = message.change,
+                        acceptVal = message.acceptVal,
+                        initVal = message.acceptVal,
+                        acceptNum = message.ballotNumber
+                    )
             }
+
+            !isCurrentTransaction -> {
+                changeConflicts(message.change, "Don't receive ft-agree and can't block on history")
+                throw TransactionNotBlockedOnThisChange(ProtocolName.GPAC, message.change.id)
+            }
+        }
+
+
+        try {
+            this.transaction =
+                this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
 
             if (message.acceptVal == Accept.COMMIT && !changeWasAppliedBefore(message.change)) {
                 addChangeToHistory(message.change)
                 changeSucceeded(message.change)
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
-            }
-            else if (message.acceptVal == Accept.COMMIT) {
+            } else if (message.acceptVal == Accept.COMMIT) {
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
-            }
-             else if (message.acceptVal == Accept.ABORT) {
+            } else if (message.acceptVal == Accept.ABORT) {
                 changeConflicts(message.change, "Message was applied but state was ABORT")
             } else {
                 changeSucceeded(message.change)
             }
             println("handleApply releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
             println("handleApply finally releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
         }
@@ -189,7 +206,7 @@ class GPACProtocolImpl(
         leaderTimer.startCounting {
             logger.info("Recovery leader starts")
             println("leaderFailTimeout releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             if (!changeWasAppliedBefore(change)) performProtocolAsRecoveryLeader(change)
         }
     }
@@ -245,7 +262,7 @@ class GPACProtocolImpl(
         } catch (e: Exception) {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
             println("performProtocolAsLeader releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerAsProtocol(ProtocolName.GPAC)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             throw e
         }
         applyPhase(change, acceptVal)
@@ -363,7 +380,7 @@ class GPACProtocolImpl(
         decision: Boolean = false,
         acceptNum: Int? = null
     ): Boolean {
-        transactionBlocker.tryToBlock(ProtocolName.GPAC)
+        transactionBlocker.tryToBlock(ProtocolName.GPAC, change.id)
 
         val agreedResponses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
         if (!superSet(agreedResponses, getPeersFromChange(change))) {

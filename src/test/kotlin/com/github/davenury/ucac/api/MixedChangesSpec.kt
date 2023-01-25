@@ -309,6 +309,70 @@ class MixedChangesSpec : IntegrationTestBase() {
             }
         }
 
+
+    @Test
+    fun `try to execute two following changes, first 2PC, then Raft`(): Unit =
+        runBlocking {
+            val change = change(0, 1)
+            val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
+
+
+            val applyEndPhaser = Phaser(1)
+            val electionPhaser = Phaser(4)
+            val applyConsensusPhaser = Phaser(3)
+
+            listOf(applyEndPhaser, electionPhaser)
+                .forEach { it.register() }
+            val leaderElected = SignalListener {
+                logger.info("Arrived ${it.subject.getPeerName()}")
+                electionPhaser.arrive()
+            }
+
+            val signalListenersForCohort = mapOf(
+                Signal.TwoPCOnChangeApplied to SignalListener {
+                    logger.info("Arrived: ${it.subject.getPeerName()}")
+                    applyEndPhaser.arrive()
+                },
+                Signal.ConsensusLeaderElected to leaderElected,
+                Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                    println("${it.subject.getPeerName()} Arrived change: ${it.change} ")
+                    if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
+                }
+            )
+
+            apps = TestApplicationSet(
+                listOf(3, 3),
+                signalListeners = (0..5).associateWith { signalListenersForCohort }
+            )
+
+            val peers = apps.getPeers()
+
+            electionPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+            // when - executing transaction
+            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", change)
+
+            applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+            executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
+
+            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+
+//      First peerset
+            askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
+                val changes = it.second
+                expectThat(changes.size).isGreaterThanOrEqualTo(2)
+                expectThat(changes[1].id).isEqualTo(change.id)
+            }
+
+            askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
+                val changes = it.second
+                expectThat(changes.size).isGreaterThanOrEqualTo(3)
+                expectThat(changes[1].id).isEqualTo(change.id)
+                expectThat(changes[2].id).isEqualTo(secondChange.id)
+            }
+        }
+
     private suspend fun executeChange(uri: String, change: Change): HttpResponse =
         testHttpClient.post(uri) {
             contentType(ContentType.Application.Json)
