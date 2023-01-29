@@ -224,37 +224,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "mappings": [],
           "thresholds": {
@@ -269,7 +239,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "none"
         },
         "overrides": []
       },
@@ -281,17 +252,18 @@
       },
       "id": 6,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
       },
+      "pluginVersion": "9.3.1",
       "targets": [
         {
           "datasource": {
@@ -306,7 +278,7 @@
         }
       ],
       "title": "Conflicted changes (count)",
-      "type": "timeseries"
+      "type": "gauge"
     },
     {
       "datasource": {
@@ -316,7 +288,8 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-GrYlRd"
+            "fixedColor": "green",
+            "mode": "fixed"
           },
           "mappings": [],
           "thresholds": {
@@ -332,7 +305,7 @@
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "none"
         },
         "overrides": []
       },
@@ -364,13 +337,13 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "(sum(change_processed_total{result=\"conflict\", namespace=\"$namespace\"}) / sum(change_processed_total{namespace=\"$namespace\"})) or vector(0)",
+          "expr": "(sum(change_processed_total{result=\"success\", namespace=\"$namespace\"})) or vector(0)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "% of confliced changes",
+      "title": "Number of successfully processed changes",
       "type": "gauge"
     },
     {
@@ -458,7 +431,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "avg(rate(change_processing_time_seconds_sum{result=\"success\", namespace=\"$namespace\"}[125s]) / rate(change_processing_time_seconds_count{result=\"success\", namespace=\"$namespace\"}[125s]))",
+          "expr": "avg(rate(change_processing_time_seconds_sum{result=\"success\", namespace=\"$namespace\"}[1m]) / rate(change_processing_time_seconds_count{result=\"success\", namespace=\"$namespace\"}[1m]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -708,7 +681,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -770,7 +744,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -860,6 +835,6 @@
   "timezone": "",
   "title": "New dashboard",
   "uid": "HSUzSq2Vk",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }
