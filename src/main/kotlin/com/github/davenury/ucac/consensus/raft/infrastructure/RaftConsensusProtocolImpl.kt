@@ -103,6 +103,7 @@ class RaftConsensusProtocolImpl(
         val positiveResponses = responses.filterNotNull().count { it.voteGranted }
 
 //      DONE: ConsensusPeers should include yourself -> renamed to otherConsensusPeers
+//      FIXME: it shouldn't become a follower
         if (!isMoreThanHalf(positiveResponses) || otherConsensusPeers().isEmpty()) {
             mutex.withLock {
                 if (role == RaftRole.Candidate) {

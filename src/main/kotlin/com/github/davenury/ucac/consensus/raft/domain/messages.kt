@@ -7,9 +7,11 @@ data class ConsensusElectMe(val peerId: Int, val term: Int, val lastLogIndex: In
 
 data class ConsensusElectedYou(val peerId: Int, val myTerm: Int, val voteGranted: Boolean)
 
+// FIXME: Remove it and send first heartbeat instead
 data class ConsensusImTheLeader(val peerId: Int, val peerAddress: String, val leaderIteration: Int)
 
 
+// FIXME: Remove acceptedChanges, add leaderCommit
 data class ConsensusHeartbeat(
     val leaderId: Int,
     val term: Int,
