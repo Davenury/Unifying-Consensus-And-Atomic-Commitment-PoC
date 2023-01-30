@@ -44,16 +44,32 @@ class TwoPC(
 
             signal(Signal.TwoPCBeforeProposePhase, change)
             val decision = proposePhase(acceptChange, mainChangeId, otherPeers)
+
             if (isMetricTest) {
-                Metrics.bumpTwoPCChangeAcceptedLocal(mainChangeId, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
-            }
-            signal(Signal.TwoPCOnChangeAccepted, change)
-            decisionPhase(acceptChange, decision, otherPeers)
-            if(isMetricTest) {
-                Metrics.bumpTwoPCChangeDecidedOnLocal(mainChangeId, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+                Metrics.bumpChangeMetric(
+                    changeId = mainChangeId,
+                    peerId = peerResolver.currentPeer().peerId,
+                    peersetId = peerResolver.currentPeer().peersetId,
+                    protocolName = ProtocolName.TWO_PC,
+                    state = "proposed_decision_$decision"
+                )
             }
 
+            signal(Signal.TwoPCOnChangeAccepted, change)
+            decisionPhase(acceptChange, decision, otherPeers)
+
             val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
+
+            if (isMetricTest) {
+                Metrics.bumpChangeMetric(
+                    changeId = mainChangeId,
+                    peerId = peerResolver.currentPeer().peerId,
+                    peersetId = peerResolver.currentPeer().peersetId,
+                    protocolName = ProtocolName.TWO_PC,
+                    state = result.name.lowercase()
+                )
+            }
+
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(result))
         } catch (e: Exception) {
             changeIdToCompletableFuture[mainChangeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))

@@ -74,42 +74,13 @@ object Metrics {
         lastHearbeat = now
     }
 
-    fun bumpElectedGPACLeader(changeId: String, peerId: Int, peersetId: Int) {
-        bumpChangeMetric(changeId, peerId, peersetId, "gpac_leader_elected")
-    }
-
-    fun bumpGPACFTAgree(changeId: String, peerId: Int, peersetId: Int) {
-        bumpChangeMetric(changeId, peerId, peersetId, "gpac_ft_agree_processed")
-    }
-
-    fun bumpGPACApply(changeId: String, peerId: Int, peersetId: Int) {
-        bumpChangeMetric(changeId, peerId, peersetId, "gpac_apply_processed")
-    }
-
-    fun bumpTwoPCChangeAcceptedLocal(changeId: String, peerId: Int, peersetId: Int) {
-        bumpChangeMetric(changeId, peerId, peersetId, "two_pc_change_accepted_local")
-    }
-    fun bumpTwoPCChangeDecidedOnLocal(changeId: String, peerId: Int, peersetId: Int) {
-        bumpChangeMetric(changeId, peerId, peersetId, "two_pc_change_decided_on_local")
-    }
-
-    fun bumpRaftChangeSentToLeader(changeId: String, peerId: Int, peersetId: Int) {
-        bumpChangeMetric(changeId, peerId, peersetId, "raft_proposed_to_leader")
-    }
-
-    fun bumpRaftChangeInProposedItems(changeId: String, peerId: Int, peersetId: Int) {
-        bumpChangeMetric(changeId, peerId, peersetId, "raft_change_in_proposed_items")
-    }
-
-    fun bumpRaftChangeAccepted(changeId: String, peerId: Int, peersetId: Int) {
-        bumpChangeMetric(changeId, peerId, peersetId, "raft_change_accepted")
-    }
-
-    private fun bumpChangeMetric(changeId: String, peerId: Int, peersetId: Int, metricName: String) {
-        Counter.builder(metricName)
+    fun bumpChangeMetric(changeId: String, peerId: Int, peersetId: Int, protocolName: ProtocolName, state: String) {
+        Counter.builder("change_state_changed")
             .tag("change_id", changeId)
             .tag("peer_id", peerId.toString())
             .tag("peerset_id", peersetId.toString())
+            .tag("protocol", protocolName.name.lowercase())
+            .tag("state", state)
             .register(meterRegistry)
             .increment()
     }

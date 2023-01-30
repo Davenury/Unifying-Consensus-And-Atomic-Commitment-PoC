@@ -313,7 +313,13 @@ class RaftConsensusProtocolImpl(
 
         updateResult.proposedItems.forEach { proposedItem ->
             if (isMetricTest) {
-                Metrics.bumpRaftChangeInProposedItems(proposedItem.changeId, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+                Metrics.bumpChangeMetric(
+                    changeId = proposedItem.changeId,
+                    peerId = peerResolver.currentPeer().peerId,
+                    peersetId = peerResolver.currentPeer().peersetId,
+                    protocolName = ProtocolName.CONSENSUS,
+                    state = "proposed"
+                )
             }
             signalPublisher.signal(
                 signal = Signal.ConsensusFollowerChangeProposed,
@@ -326,7 +332,13 @@ class RaftConsensusProtocolImpl(
 
         updateResult.acceptedItems.forEach {
             if (isMetricTest) {
-                Metrics.bumpRaftChangeAccepted(it.changeId, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+                Metrics.bumpChangeMetric(
+                    changeId = it.changeId,
+                    peerId = peerResolver.currentPeer().peerId,
+                    peersetId = peerResolver.currentPeer().peersetId,
+                    protocolName = ProtocolName.CONSENSUS,
+                    state = "accepted"
+                )
             }
             changeIdToCompletableFuture[it.changeId]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
         }

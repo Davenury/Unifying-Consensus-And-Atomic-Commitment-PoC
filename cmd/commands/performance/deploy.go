@@ -178,6 +178,29 @@ func createJob(clientset *kubernetes.Clientset, config Config) {
 }
 
 func createConfigmap(clientset *kubernetes.Clientset, config Config) {
+
+	data := map[string]string{
+		"TEST_PEERS":                      utils.GenerateServicesForPeersStaticPort(config.PerformanceNumberOfPeers, 8080),
+		"NOTIFICATION_SERVICE_ADDRESS":    "http://notification-service:8080",
+		"SINGLE_PEERSET_CHANGES_NUMBER":   fmt.Sprintf("%d", config.SingleRequestsNumber),
+		"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", config.MultipleRequestsNumber),
+		"TEST_DURATION":                   config.TestDuration,
+		"MAX_PEERSETS_IN_CHANGE":          fmt.Sprintf("%d", config.MaxPeersetsInChange),
+		"TESTS_SENDING_STRATEGY":          config.TestsSendingStrategy,
+		"TESTS_CREATING_CHANGES_STRATEGY": config.TestsCreatingChangeStrategy,
+		"PUSHGATEWAY_ADDRESS":             config.PushgatewayAddress,
+		"ENFORCE_AC_USAGE":                strconv.FormatBool(config.EnforceAcUsage),
+		"AC_PROTOCOL":                     config.AcProtocol,
+		"CONSENSUS_PROTOCOL":              config.ConsensusProtocol,
+	}
+
+	if config.FixedPeersetsInChange != "" {
+		data["FIXED_PEERSETS_IN_CHANGE"] = config.FixedPeersetsInChange
+	}
+	if config.ConstantLoad != "" {
+		data["CONSTANT_LOAD"] = config.ConstantLoad
+	}
+
 	configMap := &v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -191,22 +214,7 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 				"app.name": "performanceTest",
 			},
 		},
-		Data: map[string]string{
-			"TEST_PEERS":                      utils.GenerateServicesForPeersStaticPort(config.PerformanceNumberOfPeers, 8080),
-			"NOTIFICATION_SERVICE_ADDRESS":    "http://notification-service:8080",
-			"SINGLE_PEERSET_CHANGES_NUMBER":   fmt.Sprintf("%d", config.SingleRequestsNumber),
-			"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", config.MultipleRequestsNumber),
-			"TEST_DURATION":                   config.TestDuration,
-			"MAX_PEERSETS_IN_CHANGE":          fmt.Sprintf("%d", config.MaxPeersetsInChange),
-			"TESTS_SENDING_STRATEGY":          config.TestsSendingStrategy,
-			"TESTS_CREATING_CHANGES_STRATEGY": config.TestsCreatingChangeStrategy,
-			"PUSHGATEWAY_ADDRESS":             config.PushgatewayAddress,
-			"ENFORCE_AC_USAGE":                strconv.FormatBool(config.EnforceAcUsage),
-			"AC_PROTOCOL":                     config.AcProtocol,
-			"CONSENSUS_PROTOCOL":              config.ConsensusProtocol,
-			"CONSTANT_LOAD":                   config.ConstantLoad,
-			"FIXED_PEERSETS_IN_CHANGE":        config.FixedPeersetsInChange,
-		},
+		Data: data,
 	}
 
 	clientset.CoreV1().ConfigMaps(config.PerformanceNamespace).Create(context.Background(), configMap, metav1.CreateOptions{})
