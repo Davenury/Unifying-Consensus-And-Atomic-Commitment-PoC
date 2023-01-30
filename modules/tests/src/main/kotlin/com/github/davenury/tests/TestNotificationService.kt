@@ -30,14 +30,14 @@ fun main() {
 
 class TestNotificationService {
 
-    private val config = loadConfig<Config>(decoders = listOf(StrategyDecoder(), ACProtocolDecoder()))
+    private val config = loadConfig<Config>(decoders = listOf(StrategyDecoder(), ACProtocolDecoder(), CreatingChangeStrategyDecoder()))
 
     init {
         logger.info("Starting performance tests with config: $config")
     }
 
     private val peers = config.peerAddresses()
-    private val changes = Changes(peers, HttpSender(config.acProtocol), config.getStrategy(), config.notificationServiceAddress)
+    private val changes = Changes(peers, HttpSender(config.acProtocol), config.getSendingStrategy(), config.getCreateChangeStrategy())
     private val testExecutor = TestExecutor(
         config.numberOfRequestsToSendToSinglePeerset,
         config.numberOfRequestsToSendToMultiplePeersets,

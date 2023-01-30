@@ -1,9 +1,12 @@
 package com.github.davenury.tests
 
 import com.github.davenury.common.parsePeers
-import com.github.davenury.tests.strategies.GetPeersStrategy
-import com.github.davenury.tests.strategies.RandomPeersStrategy
-import com.github.davenury.tests.strategies.RandomPeersWithDelayOnConflictStrategy
+import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
+import com.github.davenury.tests.strategies.changes.DefaultChangeStrategy
+import com.github.davenury.tests.strategies.changes.OnlyProcessableConflictsChangeStrategy
+import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
+import com.github.davenury.tests.strategies.peersets.RandomPeersStrategy
+import com.github.davenury.tests.strategies.peersets.RandomPeersWithDelayOnConflictStrategy
 import com.sksamuel.hoplite.*
 import com.sksamuel.hoplite.decoder.Decoder
 import com.sksamuel.hoplite.fp.invalid
@@ -20,7 +23,8 @@ data class Config(
     val numberOfRequestsToSendToMultiplePeersets: Int,
     val durationOfTest: Duration,
     val maxPeersetsInChange: Int,
-    val strategy: Strategy,
+    val sendingStrategy: SendingStrategy,
+    val createChangeStrategy: CreatingChangeStrategy,
     val pushGatewayAddress: String,
     val acProtocol: ACProtocolConfig,
     // TODO - after implementing multiple consensus this might come in handy
@@ -33,13 +37,17 @@ data class Config(
             .withIndex()
             .associate { it.index to it.value }
 
-    fun getStrategy(): GetPeersStrategy {
+    fun getSendingStrategy(): GetPeersStrategy {
         val range = (0 until peerAddresses().size)
-        return strategy.getStrategy(range)
+        return sendingStrategy.getStrategy(range)
+    }
+
+    fun getCreateChangeStrategy(): CreateChangeStrategy {
+        return createChangeStrategy.getStrategy(this.notificationServiceAddress)
     }
 }
 
-enum class Strategy {
+enum class SendingStrategy {
     RANDOM {
         override fun getStrategy(range: IntRange): GetPeersStrategy =
             RandomPeersStrategy(range)
@@ -52,19 +60,47 @@ enum class Strategy {
     abstract fun getStrategy(range: IntRange): GetPeersStrategy
 }
 
-class StrategyDecoder: Decoder<Strategy> {
-    override fun decode(node: Node, type: KType, context: DecoderContext): ConfigResult<Strategy>
+class StrategyDecoder: Decoder<SendingStrategy> {
+    override fun decode(node: Node, type: KType, context: DecoderContext): ConfigResult<SendingStrategy>
         = when (node) {
             is StringNode ->
                 try {
-                    Strategy.valueOf(node.value.uppercase(Locale.getDefault())).valid()
-                } catch (e: java.lang.IllegalArgumentException) {
-                    ConfigFailure.Generic("Invalid enum value: ${node.value}. Expected one of ${Strategy.values().map { it.toString() }}").invalid()
+                    SendingStrategy.valueOf(node.value.uppercase(Locale.getDefault())).valid()
+                } catch (e: IllegalArgumentException) {
+                    ConfigFailure.Generic("Invalid enum value: ${node.value}. Expected one of ${SendingStrategy.values().map { it.toString() }}").invalid()
                 }
             else -> ConfigFailure.DecodeError(node, type).invalid()
         }
 
-    override fun supports(type: KType): Boolean = type.classifier == Strategy::class
+    override fun supports(type: KType): Boolean = type.classifier == SendingStrategy::class
+}
+
+enum class CreatingChangeStrategy {
+    DEFAULT {
+        override fun getStrategy(ownAddress: String): CreateChangeStrategy =
+            DefaultChangeStrategy(ownAddress)
+    },
+    PROCESSABLE_CONFLICTS {
+        override fun getStrategy(ownAddress: String): CreateChangeStrategy =
+            OnlyProcessableConflictsChangeStrategy(ownAddress)
+    };
+
+    abstract fun getStrategy(ownAddress: String): CreateChangeStrategy
+}
+
+class CreatingChangeStrategyDecoder: Decoder<CreatingChangeStrategy> {
+    override fun decode(node: Node, type: KType, context: DecoderContext): ConfigResult<CreatingChangeStrategy>
+        = when (node) {
+            is StringNode ->
+            try {
+                CreatingChangeStrategy.valueOf(node.value.uppercase(Locale.getDefault())).valid()
+            } catch (e: IllegalArgumentException) {
+                ConfigFailure.Generic("Invalid enum value: ${node.value}. Expected one of ${CreatingChangeStrategy.values().map { it.toString() }}").invalid()
+            }
+            else -> ConfigFailure.DecodeError(node, type).invalid()
+        }
+
+    override fun supports(type: KType): Boolean = type.classifier == CreatingChangeStrategy::class
 }
 
 enum class ACProtocol {

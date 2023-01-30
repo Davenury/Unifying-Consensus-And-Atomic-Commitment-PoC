@@ -3,8 +3,8 @@ package com.github.davenury.test
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.Changes
-import com.github.davenury.tests.strategies.GetPeersStrategy
-import com.github.davenury.tests.strategies.RandomPeersWithDelayOnConflictStrategy
+import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
+import com.github.davenury.tests.strategies.peersets.RandomPeersWithDelayOnConflictStrategy
 import io.mockk.*
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.Test
