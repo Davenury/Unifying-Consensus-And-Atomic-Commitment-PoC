@@ -17,13 +17,6 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             call.respond(response)
         }
 
-        // potwierdzenie że mamy leadera
-        post("/consensus/leader") {
-            val message: ConsensusImTheLeader = call.receive()
-            protocol.handleLeaderElected(message.peerId, message.peerAddress, message.leaderIteration)
-            call.respond("OK")
-        }
-
         post("/consensus/heartbeat") {
             val message: ConsensusHeartbeat = call.receive()
             val heartbeatResult = protocol.handleHeartbeat(message)
