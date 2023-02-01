@@ -102,16 +102,8 @@ class RaftConsensusProtocolImpl(
 
         val positiveResponses = responses.filterNotNull().count { it.voteGranted }
 
-//      DONE: ConsensusPeers should include yourself -> renamed to otherConsensusPeers
-//      FIXME: it shouldn't become a follower
         if (!isMoreThanHalf(positiveResponses) || otherConsensusPeers().isEmpty()) {
-            mutex.withLock {
-                if (role == RaftRole.Candidate) {
-                    role = RaftRole.Follower
-                    votedFor = null
-                    restartTimer(RaftRole.Candidate)
-                }
-            }
+            restartTimer(RaftRole.Candidate)
             return
         }
 
@@ -197,7 +189,7 @@ class RaftConsensusProtocolImpl(
         }
 
 
-        if (currentTerm < term || (votedFor?.id == heartbeat.leaderId && votedFor?.elected == false))
+        if (currentTerm < term || votedFor?.elected == false )
             newLeaderElected(heartbeat.leaderId, term)
 
 
