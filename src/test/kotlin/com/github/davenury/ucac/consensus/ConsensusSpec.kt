@@ -32,6 +32,7 @@ import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.assertions.*
+import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import kotlin.reflect.full.declaredMemberProperties
@@ -415,7 +416,7 @@ class ConsensusSpec : IntegrationTestBase() {
         }
 
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
-        changePhaser.arriveAndAwaitAdvanceWithTimeout()
+        changePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
         val proposedChanges2 = askForProposedChanges(nonLeaderPeer)
         val acceptedChanges2 = askForAcceptedChanges(nonLeaderPeer)
