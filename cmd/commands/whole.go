@@ -23,9 +23,10 @@ type Config struct {
 	singleRequestsNumber int
 	multipleRequestsNumber int
 	testDuration string
-	maxPeersetsInChange int
-	testsStrategy string
-	pushgatewayAddress string
+	maxPeersetsInChange  int
+	testsSendingStrategy string
+	testsCreatingChangeStrategy string
+	pushgatewayAddress   string
 	enforceAcUsage bool
 	acProtocol string
 	consensusProtocol string
@@ -61,7 +62,8 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().IntVar(&config.multipleRequestsNumber, "multiple-requests-number", 0, "Determines number of requests to send to multiple peersets at once")
 	cmd.Flags().StringVar(&config.testDuration, "test-duration", "PT1S", "Duration of test (in java-like duration format)")
 	cmd.Flags().IntVar(&config.maxPeersetsInChange, "max-peersets-in-change", 2, "Determines maximum number of peersets that can take part in one change")
-	cmd.Flags().StringVar(&config.testsStrategy, "tests-strategy", "delay_on_conflicts", "Determines tests strategy - either random or delay_on_conflicts")
+	cmd.Flags().StringVar(&config.testsSendingStrategy, "tests-sending-strategy", "delay_on_conflicts", "Determines tests strategy - either random or delay_on_conflicts")
+	cmd.Flags().StringVar(&config.testsCreatingChangeStrategy, "tests-creating-change-strategy", "default", "Determines creating changes strategy - either default or processable_conflicts")
 	cmd.Flags().StringVar(&config.pushgatewayAddress, "pushgateway-address", "prometheus-prometheus-pushgateway:9091", "Pushgateway address")
 	cmd.Flags().BoolVar(&config.enforceAcUsage, "enforce-ac", false, "Determines if usage of AC protocol should be enforced even if it isn't required (GPAC)")
 	cmd.Flags().StringVar(&config.acProtocol, "ac-protocol", "gpac", "AC protocol to use in case it's needed. two_pc or gpac")
@@ -94,7 +96,8 @@ func perform(config Config) {
 		MultipleRequestsNumber: config.multipleRequestsNumber,
 		TestDuration: config.testDuration,
 		MaxPeersetsInChange: config.maxPeersetsInChange,
-		TestsStrategy: config.testsStrategy,
+		TestsSendingStrategy: config.testsSendingStrategy,
+		TestsCreatingChangeStrategy: config.testsCreatingChangeStrategy,
 		PushgatewayAddress: config.pushgatewayAddress,
 		EnforceAcUsage: config.enforceAcUsage,
 		AcProtocol: config.acProtocol,

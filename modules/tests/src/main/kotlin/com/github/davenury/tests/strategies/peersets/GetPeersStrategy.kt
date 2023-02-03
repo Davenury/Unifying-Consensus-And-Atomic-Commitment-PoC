@@ -1,4 +1,4 @@
-package com.github.davenury.tests.strategies
+package com.github.davenury.tests.strategies.peersets
 
 interface GetPeersStrategy {
     suspend fun getPeersets(numberOfPeersets: Int): List<Int>

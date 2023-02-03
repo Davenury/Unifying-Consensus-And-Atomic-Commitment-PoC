@@ -3,8 +3,9 @@ package com.github.davenury.test
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.Changes
-import com.github.davenury.tests.strategies.GetPeersStrategy
-import com.github.davenury.tests.strategies.RandomPeersWithDelayOnConflictStrategy
+import com.github.davenury.tests.strategies.changes.DefaultChangeStrategy
+import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
+import com.github.davenury.tests.strategies.peersets.RandomPeersWithDelayOnConflictStrategy
 import io.mockk.*
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.Test
@@ -43,7 +44,7 @@ class ChangesTest {
             peers,
             sender,
             RandomPeersWithDelayOnConflictStrategy((0 until peers.size), lockMock, conditionMock),
-            ownAddress
+            DefaultChangeStrategy(ownAddress)
         )
         sender.setChanges(subject)
         val phaser = Phaser(peers.keys.size)
@@ -99,7 +100,12 @@ class ChangesTest {
     @Test
     fun `should be able to unlock peersets`(): Unit = runBlocking {
         val sender = DummySender(peers, shouldNotify = false)
-        val subject = Changes(peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size)), ownAddress)
+        val subject = Changes(
+            peers,
+            sender,
+            RandomPeersWithDelayOnConflictStrategy((0 until peers.size)),
+            DefaultChangeStrategy(ownAddress)
+        )
         sender.setChanges(subject)
 
         val phaser = Phaser(2)
@@ -134,7 +140,11 @@ class ChangesTest {
         val phaser = Phaser(changesToExecute)
         phaser.register()
         val sender = DummySender(peers, shouldNotify = true, phaser = phaser)
-        val subject = Changes(peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size)), ownAddress)
+        val subject = Changes(
+            peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size)), DefaultChangeStrategy(
+                ownAddress
+            )
+        )
         sender.setChanges(subject)
 
         // max 3 threads as we have 6 possible peersets and we cannot execute change to all of them plus 1
@@ -167,7 +177,11 @@ class ChangesTest {
             }
         }
 
-        val changes = Changes(peers, DummySender(peers, shouldNotify = false), strategy, ownAddress)
+        val changes = Changes(
+            peers, DummySender(peers, shouldNotify = false), strategy, DefaultChangeStrategy(
+                ownAddress
+            )
+        )
 
         val singleChange = AddUserChange(
             "userName",

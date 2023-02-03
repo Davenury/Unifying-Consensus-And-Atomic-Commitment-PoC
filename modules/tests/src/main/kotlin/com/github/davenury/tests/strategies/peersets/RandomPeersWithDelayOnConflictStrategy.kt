@@ -1,4 +1,4 @@
-package com.github.davenury.tests.strategies
+package com.github.davenury.tests.strategies.peersets
 
 import com.github.davenury.tests.Metrics
 import java.util.concurrent.ConcurrentHashMap

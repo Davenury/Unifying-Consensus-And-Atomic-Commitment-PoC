@@ -1,4 +1,4 @@
-package com.github.davenury.tests.strategies
+package com.github.davenury.tests.strategies.peersets
 
 
 class RandomPeersStrategy(

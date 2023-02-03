@@ -16,21 +16,23 @@ import (
 )
 
 type Config struct {
-	PerformanceNamespace     string
-	PerformanceNumberOfPeers []int
-	PerformanceImage       string
-	SingleRequestsNumber   int
-	MultipleRequestsNumber int
-	TestDuration        string
-	MaxPeersetsInChange int
-	TestsStrategy      string
-	PushgatewayAddress string
-	EnforceAcUsage    bool
-	AcProtocol        string
-	ConsensusProtocol string
-	ConstantLoad string
-	FixedPeersetsInChange string
+	PerformanceNamespace        string
+	PerformanceNumberOfPeers    []int
+	PerformanceImage            string
+	SingleRequestsNumber        int
+	MultipleRequestsNumber      int
+	TestDuration                string
+	MaxPeersetsInChange         int
+	TestsSendingStrategy        string
+	TestsCreatingChangeStrategy string
+	PushgatewayAddress          string
+	EnforceAcUsage              bool
+	AcProtocol                  string
+	ConsensusProtocol           string
+	ConstantLoad                string
+	FixedPeersetsInChange       string
 }
+
 func createPerformanceDeployCommand() *cobra.Command {
 
 	var performanceNamespace string
@@ -42,6 +44,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 	var testDuration string
 	var maxPeersetsInChange int
 	var testsStrategy string
+	var testsCreatingChangeStrategy string
 	var pushgatewayAddress string
 	var enforceAcUsage bool
 	var acProtocol string
@@ -54,20 +57,21 @@ func createPerformanceDeployCommand() *cobra.Command {
 		Short: "Execute performance test",
 		Run: func(cmd *cobra.Command, args []string) {
 			DoPerformanceTest(Config{
-				PerformanceNamespace:     performanceNamespace,
-				PerformanceNumberOfPeers: performanceNumberOfPeers,
-				PerformanceImage:         performanceImage,
-				SingleRequestsNumber:     singleRequestsNumber,
-				MultipleRequestsNumber:   multipleRequestsNumber,
-				TestDuration:             testDuration,
-				MaxPeersetsInChange:      maxPeersetsInChange,
-				TestsStrategy:            testsStrategy,
-				PushgatewayAddress:       pushgatewayAddress,
-				EnforceAcUsage:           enforceAcUsage,
-				AcProtocol:               acProtocol,
-				ConsensusProtocol:        consensusProtocol,
-				ConstantLoad:             constantLoad,
-				FixedPeersetsInChange:    fixedPeersetsInChange,
+				PerformanceNamespace:        performanceNamespace,
+				PerformanceNumberOfPeers:    performanceNumberOfPeers,
+				PerformanceImage:            performanceImage,
+				SingleRequestsNumber:        singleRequestsNumber,
+				MultipleRequestsNumber:      multipleRequestsNumber,
+				TestDuration:                testDuration,
+				MaxPeersetsInChange:         maxPeersetsInChange,
+				TestsSendingStrategy:        testsStrategy,
+				TestsCreatingChangeStrategy: testsCreatingChangeStrategy,
+				PushgatewayAddress:          pushgatewayAddress,
+				EnforceAcUsage:              enforceAcUsage,
+				AcProtocol:                  acProtocol,
+				ConsensusProtocol:           consensusProtocol,
+				ConstantLoad:                constantLoad,
+				FixedPeersetsInChange:       fixedPeersetsInChange,
 			})
 		},
 	}
@@ -80,7 +84,8 @@ func createPerformanceDeployCommand() *cobra.Command {
 	cmd.Flags().IntVarP(&multipleRequestsNumber, "multiple-requests-number", "", 0, "Determines number of requests to send to multiple peersets at once")
 	cmd.Flags().StringVarP(&testDuration, "test-duration", "d", "PT1S", "Duration of test (in java-like duration format)")
 	cmd.Flags().IntVarP(&maxPeersetsInChange, "max-peersets-in-change", "", 2, "Determines maximum number of peersets that can take part in one change")
-	cmd.Flags().StringVarP(&testsStrategy, "tests-strategy", "", "delay_on_conflicts", "Determines tests strategy - either random or delay_on_conflicts")
+	cmd.Flags().StringVarP(&testsStrategy, "tests-sending-strategy", "", "delay_on_conflicts", "Determines tests strategy - either random or delay_on_conflicts")
+	cmd.Flags().StringVarP(&testsCreatingChangeStrategy, "tests-creating-change-strategy", "", "delay_on_conflicts", "Determines tests strategy - either random or delay_on_conflicts")
 	cmd.Flags().StringVarP(&pushgatewayAddress, "pushgateway-address", "", "prometheus-prometheus-pushgateway.default:9091", "Pushgateway address")
 
 	cmd.Flags().BoolVarP(&enforceAcUsage, "enforce-ac", "", false, "Determines if usage of AC protocol should be enforced even if it isn't required (GPAC)")
@@ -132,14 +137,14 @@ func createJob(clientset *kubernetes.Clientset, config Config) {
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{
 						{
-							Name:  "performance-test",
+							Name: "performance-test",
 							Resources: v1.ResourceRequirements{
 								Limits: v1.ResourceList{
-									"cpu": resource.MustParse("400m"),
+									"cpu":    resource.MustParse("400m"),
 									"memory": resource.MustParse("800Mi"),
 								},
 								Requests: v1.ResourceList{
-									"cpu": resource.MustParse("200m"),
+									"cpu":    resource.MustParse("200m"),
 									"memory": resource.MustParse("400Mi"),
 								},
 							},
@@ -173,6 +178,29 @@ func createJob(clientset *kubernetes.Clientset, config Config) {
 }
 
 func createConfigmap(clientset *kubernetes.Clientset, config Config) {
+
+	data := map[string]string{
+		"TEST_PEERS":                      utils.GenerateServicesForPeersStaticPort(config.PerformanceNumberOfPeers, 8080),
+		"NOTIFICATION_SERVICE_ADDRESS":    "http://notification-service:8080",
+		"SINGLE_PEERSET_CHANGES_NUMBER":   fmt.Sprintf("%d", config.SingleRequestsNumber),
+		"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", config.MultipleRequestsNumber),
+		"TEST_DURATION":                   config.TestDuration,
+		"MAX_PEERSETS_IN_CHANGE":          fmt.Sprintf("%d", config.MaxPeersetsInChange),
+		"TESTS_SENDING_STRATEGY":          config.TestsSendingStrategy,
+		"TESTS_CREATING_CHANGES_STRATEGY": config.TestsCreatingChangeStrategy,
+		"PUSHGATEWAY_ADDRESS":             config.PushgatewayAddress,
+		"ENFORCE_AC_USAGE":                strconv.FormatBool(config.EnforceAcUsage),
+		"AC_PROTOCOL":                     config.AcProtocol,
+		"CONSENSUS_PROTOCOL":              config.ConsensusProtocol,
+	}
+
+	if config.FixedPeersetsInChange != "" {
+		data["FIXED_PEERSETS_IN_CHANGE"] = config.FixedPeersetsInChange
+	}
+	if config.ConstantLoad != "" {
+		data["CONSTANT_LOAD"] = config.ConstantLoad
+	}
+
 	configMap := &v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -186,21 +214,7 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 				"app.name": "performanceTest",
 			},
 		},
-		Data: map[string]string{
-			"TEST_PEERS":                      utils.GenerateServicesForPeersStaticPort(config.PerformanceNumberOfPeers, 8080),
-			"NOTIFICATION_SERVICE_ADDRESS":    "http://notification-service:8080",
-			"SINGLE_PEERSET_CHANGES_NUMBER":   fmt.Sprintf("%d", config.SingleRequestsNumber),
-			"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", config.MultipleRequestsNumber),
-			"TEST_DURATION":                   config.TestDuration,
-			"MAX_PEERSETS_IN_CHANGE":          fmt.Sprintf("%d", config.MaxPeersetsInChange),
-			"TESTS_STRATEGY":                  config.TestsStrategy,
-			"PUSHGATEWAY_ADDRESS":             config.PushgatewayAddress,
-			"ENFORCE_AC_USAGE":                strconv.FormatBool(config.EnforceAcUsage),
-			"AC_PROTOCOL":					   config.AcProtocol,
-			"CONSENSUS_PROTOCOL":			   config.ConsensusProtocol,
-			"CONSTANT_LOAD":                   config.ConstantLoad,
-			"FIXED_PEERSETS_IN_CHANGE":        config.FixedPeersetsInChange,
-		},
+		Data: data,
 	}
 
 	clientset.CoreV1().ConfigMaps(config.PerformanceNamespace).Create(context.Background(), configMap, metav1.CreateOptions{})

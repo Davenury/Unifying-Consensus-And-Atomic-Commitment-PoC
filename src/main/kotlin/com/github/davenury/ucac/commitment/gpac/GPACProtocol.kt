@@ -88,7 +88,13 @@ class GPACProtocolImpl(
         signal(Signal.OnHandlingElectEnd, transaction, message.change)
 
         if (isMetricTest) {
-            Metrics.bumpElectedGPACLeader(message.change.id, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+            Metrics.bumpChangeMetric(
+                changeId = message.change.id,
+                peerId = peerResolver.currentPeer().peerId,
+                peersetId = peerResolver.currentPeer().peersetId,
+                protocolName = ProtocolName.GPAC,
+                state = "leader_elected"
+            )
         }
         return ElectedYou(
             message.ballotNumber,
@@ -133,7 +139,13 @@ class GPACProtocolImpl(
         signal(Signal.OnHandlingAgreeEnd, transaction, message.change)
 
         if (isMetricTest) {
-            Metrics.bumpGPACFTAgree(message.change.id, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
+            Metrics.bumpChangeMetric(
+                changeId = message.change.id,
+                peerId = peerResolver.currentPeer().peerId,
+                peersetId = peerResolver.currentPeer().peersetId,
+                protocolName = ProtocolName.GPAC,
+                state = "agreed"
+            )
         }
         leaderFailTimeoutStart(message.change)
 
@@ -188,6 +200,15 @@ class GPACProtocolImpl(
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
             changeResult?.resolveChange(message.change.id, resultMessage)
+            if (isMetricTest) {
+                Metrics.bumpChangeMetric(
+                    changeId = message.change.id,
+                    peerId = peerResolver.currentPeer().peerId,
+                    peersetId = peerResolver.currentPeer().peersetId,
+                    protocolName = ProtocolName.GPAC,
+                    state = changeResult?.name?.lowercase() ?: "applied_before"
+                )
+            }
         } finally {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
@@ -195,9 +216,6 @@ class GPACProtocolImpl(
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
-            if (isMetricTest) {
-                Metrics.bumpGPACApply(message.change.id, peerResolver.currentPeer().peerId, peerResolver.currentPeer().peersetId)
-            }
         }
     }
 
