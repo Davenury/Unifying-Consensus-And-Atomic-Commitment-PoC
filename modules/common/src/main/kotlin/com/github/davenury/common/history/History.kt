@@ -110,6 +110,20 @@ class History {
         return containsEntry(entry.getId()) || getCurrentEntry().getId() == entry.getParentId()
     }
 
+    fun getAllEntriesUntilHistoryEntryId(historyEntryId: String): List<HistoryEntry> =
+        if(containsEntry(historyEntryId)){
+            val resultList: MutableList<HistoryEntry> = mutableListOf()
+            var entry = getCurrentEntry()
+            while(entry.getId() != historyEntryId){
+                resultList.add(entry)
+                entry = getEntry(entry.getParentId()!!)
+            }
+
+            resultList.reversed()
+        }else{
+            listOf<HistoryEntry>()
+        }
+
     companion object {
         private val logger = LoggerFactory.getLogger("history")
     }

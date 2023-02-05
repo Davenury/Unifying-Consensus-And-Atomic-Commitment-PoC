@@ -13,7 +13,7 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         // głosujemy na leadera
         post("/consensus/request_vote") {
             val message: ConsensusElectMe = call.receive()
-            val response = protocol.handleRequestVote(message.peerId, message.term, message.lastLogIndex)
+            val response = protocol.handleRequestVote(message.peerId, message.term, message.lastEntryId)
             call.respond(response)
         }
 

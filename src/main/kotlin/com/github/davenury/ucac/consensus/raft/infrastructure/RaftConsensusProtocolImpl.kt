@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus.raft.infrastructure
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
+import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.*
@@ -123,19 +124,27 @@ class RaftConsensusProtocolImpl(
         scheduleHeartbeatToPeers()
     }
 
-    override suspend fun handleRequestVote(peerId: Int, iteration: Int, lastLogIndex: Int): ConsensusElectedYou {
-        logger.debug("Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogIndex, currentTerm=$currentTerm,lastApplied=${state.lastApplied}")
+    override suspend fun handleRequestVote(peerId: Int, iteration: Int, lastLogId: String): ConsensusElectedYou {
+        logger.debug(
+            "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogId, " +
+                    "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
+        )
 
         mutex.withLock {
             val denyVoteResponse = ConsensusElectedYou(this.peerId, currentTerm, false)
             if (iteration < currentTerm || (iteration == currentTerm && votedFor != null)) {
-                logger.info("Denying vote for $peerId due to an old term ($iteration vs $currentTerm), I voted for ${votedFor?.id ?: "null"}")
+                logger.info(
+                    "Denying vote for $peerId due to an old term ($iteration vs $currentTerm), " +
+                            "I voted for ${votedFor?.id ?: "null"}"
+                )
                 return denyVoteResponse
             }
             if (amILeader()) stopBeingLeader(iteration)
 
-            if (lastLogIndex < state.commitIndex && amILeader()) {
-                logger.info("Denying vote for $peerId due to an old index ($lastLogIndex vs ${state.commitIndex})")
+            val candidateIsUpToDate: Boolean = lastLogId == state.commitIndex || !state.checkIfItemExist(lastLogId)
+
+            if (!candidateIsUpToDate && amILeader()) {
+                logger.info("Denying vote for $peerId due to an old index ($lastLogId vs ${state.commitIndex})")
                 return denyVoteResponse
             }
             currentTerm = iteration
@@ -146,7 +155,6 @@ class RaftConsensusProtocolImpl(
         logger.info("Voted for $peerId in term $iteration")
         return ConsensusElectedYou(this.peerId, currentTerm, true)
     }
-
 
     private suspend fun newLeaderElected(leaderId: Int, term: Int) {
         logger.info("A leader has been elected: $leaderId (in term $term)")
@@ -169,19 +177,26 @@ class RaftConsensusProtocolImpl(
         Metrics.refreshLastHeartbeat()
 
         releaseBlockerFromPreviousTermChanges()
+
+        state.removeNotAcceptedItems()
+
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
         Metrics.registerTimerHeartbeat()
         val term = heartbeat.term
-        val leaderCommitIndex = heartbeat.leaderCommitIndex
-        val isUpdatedCommitIndex = leaderCommitIndex > state.commitIndex
+        val leaderCommitId = heartbeat.leaderCommitId
+        val isUpdatedCommitIndex = state.isNotApplied(leaderCommitId)
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
-        val prevLogIndex = heartbeat.prevLogIndex
-        val prevLogTerm = heartbeat.prevLogTerm
+        val prevEntryId = heartbeat.prevEntryId
 
-        logger.debug("Received heartbeat $heartbeat")
-        logger.debug("I have in state: ${state.logEntries.map { it.ledgerIndex }} \n and should have: $prevLogIndex, leaderCommit: $leaderCommitIndex message changes: ${proposedChanges.map { it.ledgerIndex }}")
+        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex \n ${heartbeat.logEntries.map { it.toLedgerItem().entry.getId() }} \n leadercommitIndex: $leaderCommitId \n ${state.lastApplied}")
+        logger.debug(
+            """I have in state: ${state.logEntries.map { it.entry.getId() }} \n and 
+            |should have: $prevEntryId, 
+            |leaderCommit: $leaderCommitId 
+            |message changes: ${proposedChanges.map { it.entry.getId() }}""".trimMargin()
+        )
 
         if (term < currentTerm) {
             logger.info("The received heartbeat has an old term ($term vs $currentTerm)")
@@ -192,7 +207,7 @@ class RaftConsensusProtocolImpl(
             newLeaderElected(heartbeat.leaderId, term)
 
         if (history.getCurrentEntry().getId() != heartbeat.currentHistoryEntryId && !isUpdatedCommitIndex) {
-            logger.info("Received heartbeat from leader that has outdated history ${state.commitIndex}  ${leaderCommitIndex}")
+            logger.info("Received heartbeat from leader that has outdated history ${state.commitIndex}  $leaderCommitId")
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
 
@@ -215,18 +230,25 @@ class RaftConsensusProtocolImpl(
 
         restartTimer()
 
-        val prevLogEntryExists = !(prevLogIndex != null && prevLogTerm != null && !state.checkIfItemExist(
-            prevLogIndex,
-            prevLogTerm
-        ))
+        val notAppliedProposedChanges = proposedChanges.filter { state.isNotApplied(it.entry.getId()) }
 
-        val commitIndexEntryExists =
-            leaderCommitIndex <= ((state.logEntries + proposedChanges).maxOfOrNull { it.ledgerIndex } ?: -1)
+        val prevLogEntryExists = prevEntryId == null || state.checkIfItemExist(prevEntryId)
+
+        val commitIndexEntryExists = notAppliedProposedChanges
+            .find { it.entry.getId() == leaderCommitId }
+            ?.let { true } ?: state.checkIfItemExist(leaderCommitId)
+
 
         val areProposedChangesIncompatible =
-            proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) }
+            notAppliedProposedChanges.isNotEmpty() && notAppliedProposedChanges.any { !history.isEntryCompatible(it.entry) }
 
-        val acceptedChangesFromProposed = proposedChanges.filter { it.ledgerIndex <= leaderCommitIndex }
+        val acceptedChangesFromProposed = notAppliedProposedChanges
+            .indexOfFirst { it.entry.getId() == leaderCommitId }
+            .let {
+                if (it > 0) notAppliedProposedChanges.take(it + 1)
+                else listOf()
+            }
+
 
         when {
             !commitIndexEntryExists -> {
@@ -236,24 +258,24 @@ class RaftConsensusProtocolImpl(
 
             !prevLogEntryExists -> {
                 logger.info("The received heartbeat is missing some changes (I am behind)")
-                state.removeNotAcceptedItems(prevLogIndex!!, prevLogTerm!!)
+                state.removeNotAcceptedItems()
                 return ConsensusHeartbeatResponse(false, currentTerm)
             }
 
             isUpdatedCommitIndex && transactionBlocker.isAcquired() -> {
                 logger.info("Received heartbeat when is blocked so only accepted changes")
-                updateLedger(heartbeat, leaderCommitIndex, acceptedChangesFromProposed)
+                updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
                 return ConsensusHeartbeatResponse(true, currentTerm, true)
             }
 
-            proposedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
+            notAppliedProposedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
                 logger.info("Received heartbeat but is blocked, so can't accept proposed changes")
                 return ConsensusHeartbeatResponse(false, currentTerm, true)
             }
 
             isUpdatedCommitIndex && areProposedChangesIncompatible -> {
                 logger.info("Received heartbeat but changes are incompatible, updated accepted changes")
-                updateLedger(heartbeat, leaderCommitIndex, acceptedChangesFromProposed)
+                updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
                 return ConsensusHeartbeatResponse(true, currentTerm, incompatibleWithHistory = true)
             }
 
@@ -262,25 +284,25 @@ class RaftConsensusProtocolImpl(
                 return ConsensusHeartbeatResponse(false, currentTerm, incompatibleWithHistory = true)
             }
 
-            proposedChanges.isNotEmpty() -> {
+            notAppliedProposedChanges.isNotEmpty() -> {
                 logger.info("Introduce new changes")
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, proposedChanges.first().changeId)
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, notAppliedProposedChanges.first().changeId)
             }
         }
 
-        updateLedger(heartbeat, leaderCommitIndex, proposedChanges)
+        updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
 
         return ConsensusHeartbeatResponse(true, currentTerm)
     }
 
     private suspend fun updateLedger(
         heartbeat: ConsensusHeartbeat,
-        leaderCommitIndex: Int,
+        leaderCommitId: String,
         proposedChanges: List<LedgerItem> = listOf()
     ) {
         val updateResult: LedgerUpdateResult
         mutex.withLock {
-            updateResult = state.updateLedger(leaderCommitIndex, proposedChanges)
+            updateResult = state.updateLedger(leaderCommitId, proposedChanges)
         }
 
         updateResult.acceptedItems.forEach { acceptedItem ->
@@ -362,13 +384,17 @@ class RaftConsensusProtocolImpl(
         }
 
     override suspend fun getProposedChanges(): List<Change> = state.getLogEntries()
-        .filter { it.ledgerIndex > state.lastApplied }
+        .reversed()
+        .takeWhile { it.entry.getId() != state.lastApplied }
         .mapNotNull { Change.fromHistoryEntry(it.entry) }
 
 
-    override suspend fun getAcceptedChanges(): List<Change> = state.getLogEntries()
-        .filter { it.ledgerIndex <= state.lastApplied }
-        .mapNotNull { Change.fromHistoryEntry(it.entry) }
+    override suspend fun getAcceptedChanges(): List<Change> =
+        state.getLogEntries()
+            .let { entries ->
+                val index = entries.indexOfFirst { it.entry.getId() == state.lastApplied }
+                history.toEntryList() + entries.take(index + 1).map { it.entry }
+            }.mapNotNull { Change.fromHistoryEntry(it) }
 
     private suspend fun sendHeartbeatToPeer(peer: GlobalPeerId) {
         val peerAddress = peerResolver.resolve(peer)
@@ -390,12 +416,12 @@ class RaftConsensusProtocolImpl(
 
             response.message.transactionBlocked && response.message.success -> {
                 logger.info("Peer $peer has transaction blocker on but accepted changes was applied")
-                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.leaderCommitIndex)
+                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.leaderCommitId)
             }
 
             response.message.success && response.message.incompatibleWithHistory -> {
                 logger.info("Peer $peer's history is incompatible with proposed change but accepted some changes so retry proposing")
-                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.leaderCommitIndex)
+                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.leaderCommitId)
             }
 
             response.message.transactionBlocked -> {
@@ -411,7 +437,7 @@ class RaftConsensusProtocolImpl(
                 logger.debug("Heartbeat sent successfully to ${peerAddress.globalPeerId}")
                 handleSuccessHeartbeatResponseFromPeer(
                     peerAddress,
-                    peerMessage.leaderCommitIndex,
+                    peerMessage.leaderCommitId,
                     peerMessage.logEntries
                 )
             }
@@ -430,7 +456,7 @@ class RaftConsensusProtocolImpl(
                 val oldValues = peerUrlToNextIndex[peerAddress.globalPeerId]
 //                Done: Add decrement method for PeerIndices
                 peerUrlToNextIndex[peerAddress.globalPeerId] = oldValues
-                    ?.decrement()
+                    ?.decrement(state)
                     ?: PeerIndices()
             }
         }
@@ -445,18 +471,19 @@ class RaftConsensusProtocolImpl(
         val acceptedItems: List<LedgerItem>
 
         mutex.withLock {
-            val acceptedIndexes: List<Int> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
+            val acceptedIds: List<String> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
 
-            acceptedItems = state.getLogEntries(acceptedIndexes)
+
+            acceptedItems = state.getLogEntries(acceptedIds)
+
             if (acceptedItems.isNotEmpty()) {
                 logger.info("Applying accepted changes: $acceptedItems")
                 logger.debug("In applyAcceptedChanges should tryToReleaseBlocker")
                 transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, acceptedItems.first().changeId)
             }
 
-
-            state.acceptItems(acceptedIndexes)
-            voteContainer.removeChanges(acceptedIndexes)
+            state.acceptItems(acceptedIds)
+            voteContainer.removeChanges(acceptedIds)
 
         }
 
@@ -497,7 +524,7 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun handleSuccessHeartbeatResponseFromPeer(
         peerAddress: PeerAddress,
-        leaderCommitIndex: Int,
+        leaderCommitId: String,
         newProposedChanges: List<LedgerItemDto> = listOf()
     ) {
         val globalPeerId = peerAddress.globalPeerId
@@ -505,20 +532,20 @@ class RaftConsensusProtocolImpl(
         val peerIndices = peerUrlToNextIndex.getOrDefault(globalPeerId, PeerIndices())
 
         if (newProposedChanges.isNotEmpty()) {
-            newProposedChanges
-                .filter { it.ledgerIndex > state.lastApplied }
-                .forEach {
-//              Done: increment number of peers which accept this ledgerIndex
-                voteContainer.voteForChange(it.ledgerIndex)
-            }
+            val proposedChanges = newProposedChanges.map { it.toLedgerItem() }
+
+            proposedChanges
+                .filter { state.isNotApplied(it.entry.getId()) }
+                .also { println("Peer: ${globalPeerId} changes sent: ${it}") }
+                .forEach { voteContainer.voteForChange(it.entry.getId()) }
             peerUrlToNextIndex[globalPeerId] =
-                peerIndices.copy(acknowledgedIndex = newProposedChanges.maxOf { it.ledgerIndex })
+                peerIndices.copy(acknowledgedEntryId = proposedChanges.last().entry.getId())
         }
 
-        if (peerIndices.acceptedIndex < leaderCommitIndex) {
+        if (peerIndices.acceptedEntryId != leaderCommitId) {
             val newPeerIndices = peerUrlToNextIndex.getOrDefault(globalPeerId, PeerIndices())
             peerUrlToNextIndex[globalPeerId] =
-                newPeerIndices.copy(acceptedIndex = leaderCommitIndex)
+                newPeerIndices.copy(acceptedEntryId = leaderCommitId)
         }
 
         applyAcceptedChanges()
@@ -526,19 +553,21 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun getMessageForPeer(peerAddress: PeerAddress): ConsensusHeartbeat {
         val peerIndices = peerUrlToNextIndex.getOrDefault(peerAddress.globalPeerId, PeerIndices()) // TODO
-        val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedIndex)
-        val lastAppliedChangeIdAndTerm = state.getLastAppliedChangeIdAndTermBeforeIndex(peerIndices.acceptedIndex)
+        val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
+        val lastAppliedChangeId = state.getLastAppliedChangeIdBeforeChangeId(peerIndices.acceptedEntryId)
+
+        state.checkCommitIndex()
+
+
+        println("For peer ${peerAddress.globalPeerId} \n changes: ${newProposedChanges.map { it.entry.getId() }} \n from change ${peerIndices.acknowledgedEntryId}")
 
         return ConsensusHeartbeat(
             peerId,
             currentTerm,
             newProposedChanges.map { it.toDto() },
-            lastAppliedChangeIdAndTerm?.first,
-            lastAppliedChangeIdAndTerm?.second,
+            lastAppliedChangeId,
             history.getCurrentEntry().getId(),
-            minOf(
-                state.commitIndex,
-                newProposedChanges.maxOfOrNull { it.ledgerIndex } ?: peerIndices.acknowledgedIndex),
+            state.commitIndex
         )
     }
 
@@ -639,8 +668,8 @@ class RaftConsensusProtocolImpl(
             }
 
             logger.info("Propose change to ledger: $updatedChange")
-            id = state.proposeEntry(entry, currentTerm, updatedChange.id)
-            voteContainer.initializeChange(id)
+            state.proposeEntry(entry, updatedChange.id)
+            voteContainer.initializeChange(entry.getId())
         }
     }
 
@@ -666,7 +695,9 @@ class RaftConsensusProtocolImpl(
     }
 
     private fun releaseBlockerFromPreviousTermChanges() {
-        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS && transactionBlocker.getChangeId() == state.logEntries.last().changeId) {
+        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS
+            && transactionBlocker.getChangeId() == state.logEntries.lastOrNull()?.changeId
+        ) {
             logger.info("Release blocker for changes from previous term")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.logEntries.last().changeId)
 
@@ -779,11 +810,13 @@ class RaftConsensusProtocolImpl(
     }
 }
 
-data class PeerIndices(val acceptedIndex: Int = -1, val acknowledgedIndex: Int = -1) {
-    fun decrement(): PeerIndices =
-        maxOf(acceptedIndex - 1, -1).let {
-            PeerIndices(it, it)
-        }
+data class PeerIndices(
+    val acceptedEntryId: String = InitialHistoryEntry.getId(),
+    val acknowledgedEntryId: String = InitialHistoryEntry.getId()
+) {
+    fun decrement(ledger: Ledger): PeerIndices = ledger
+        .getPreviousEntryId(acceptedEntryId)
+        .let { PeerIndices(it, it) }
 }
 
 data class VotedFor(val id: Int, val address: String, val elected: Boolean = false)

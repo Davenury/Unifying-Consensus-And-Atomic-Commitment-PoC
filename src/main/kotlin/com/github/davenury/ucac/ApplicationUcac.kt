@@ -5,7 +5,7 @@ import com.github.davenury.common.history.History
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
-import com.github.davenury.ucac.commitment.gpac.*
+import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.common.GlobalPeerId
@@ -265,7 +265,7 @@ class ApplicationUcac constructor(
         twoPCRouting(twoPC!!)
 
         runBlocking {
-            consensusProtocol!!.begin()
+            if (config.raft.isRunning) consensusProtocol!!.begin()
         }
     }
 
