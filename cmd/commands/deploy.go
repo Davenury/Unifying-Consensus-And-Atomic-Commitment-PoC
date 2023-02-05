@@ -8,9 +8,9 @@ import (
 	"github.com/spf13/cobra"
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"strconv"
 	"time"
 )
@@ -27,13 +27,14 @@ func CreateDeployCommand() *cobra.Command {
 	var imageName string
 	var isMetricTest bool
 	var createResources bool
-
+	var proxyResolver string
+	var proxyDelay string
 
 	var deployCommand = &cobra.Command{
 		Use:   "deploy",
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
-			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, isMetricTest, createResources)
+			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, isMetricTest, createResources, proxyResolver, proxyDelay)
 		},
 	}
 
@@ -44,12 +45,14 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().StringVarP(&imageName, "image", "", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
 	deployCommand.Flags().BoolVar(&isMetricTest, "is-metric-test", false, "Determines whether add additional change related metrics. DO NOT USE WITH NORMAL TESTS!")
 	deployCommand.Flags().BoolVar(&createResources, "create-resources", true, "Determines if pods should have limits and requests")
+	deployCommand.Flags().StringVar(&proxyResolver, "proxy-resolver", "8.8.8.8", "Proxy resolver - dns resolver from cluster")
+	deployCommand.Flags().StringVar(&proxyDelay, "proxy-delay", "2", "Delay in seconds for proxy")
 
 	return deployCommand
 
 }
 
-func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, isMetricTest bool, createResources bool) {
+func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, isMetricTest bool, createResources bool, proxyResolver string, proxyDelay string) {
 	ratisPeers := utils.GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort)
 	gpacPeers := utils.GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort)
 	ratisGroups := make([]string, len(numberOfPeersInPeersets))
@@ -78,7 +81,7 @@ func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace str
 
 			deploySinglePeerConfigMap(namespace, peerConfig, ratisPeers, gpacPeers, isMetricTest)
 
-			deploySinglePeerDeployment(namespace, peerConfig, imageName, createResources)
+			deploySinglePeerDeployment(namespace, peerConfig, imageName, createResources, proxyResolver, proxyDelay)
 
 			fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
 		}
@@ -125,7 +128,7 @@ func anyPodNotReady(expectedPeers int, namespace string) bool {
 	return totalCount != expectedPeers || notReadyCount > 0
 }
 
-func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, imageName string, createResources bool) {
+func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, imageName string, createResources bool, proxyResolver string, proxyDelay string) {
 
 	clientset, err := utils.GetClientset()
 	if err != nil {
@@ -152,7 +155,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 					"peersetId": peerConfig.PeersetId,
 				},
 			},
-			Template: createPodTemplate(peerConfig, imageName, createResources),
+			Template: createPodTemplate(peerConfig, imageName, createResources, proxyResolver, proxyDelay),
 		},
 	}
 
@@ -165,7 +168,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 
 }
 
-func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool) apiv1.PodTemplateSpec {
+func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool, proxyResolver string, proxyDelay string) apiv1.PodTemplateSpec {
 	containerName := utils.ContainerName(peerConfig)
 
 	return apiv1.PodTemplateSpec{
@@ -186,18 +189,44 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 		Spec: apiv1.PodSpec{
 			Containers: []apiv1.Container{
 				createSingleContainer(containerName, peerConfig, imageName, createResources),
+				createProxyContainer(proxyResolver, proxyDelay),
 			},
 		},
 	}
 }
 
+func createProxyContainer(resolver string, delay string) apiv1.Container {
+	return apiv1.Container{
+		Name:  "proxy",
+		Image: "lovelysystems/throttling-proxy-docker:latest",
+		Ports: []apiv1.ContainerPort{
+			{
+				ContainerPort: 8080,
+			},
+		},
+		Env: []apiv1.EnvVar{
+			{
+				Name:  "UPSTREAM",
+				Value: "http://localhost:8081",
+			},
+			{
+				Name:  "DELAY",
+				Value: delay,
+			},
+			{
+				Name:  "RESOLVER",
+				Value: resolver,
+			},
+		},
+	}
+}
 func createSingleContainer(containerName string, peerConfig utils.PeerConfig, imageName string, createResources bool) apiv1.Container {
 
 	probe := &apiv1.Probe{
 		ProbeHandler: apiv1.ProbeHandler{
 			HTTPGet: &apiv1.HTTPGetAction{
 				Path: "/_meta/health",
-				Port: intstr.FromInt(8080),
+				Port: intstr.FromInt(8081),
 			},
 		},
 	}
@@ -206,19 +235,19 @@ func createSingleContainer(containerName string, peerConfig utils.PeerConfig, im
 	if createResources {
 		resources = apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
-				"cpu": resource.MustParse("700m"),
+				"cpu":    resource.MustParse("700m"),
 				"memory": resource.MustParse("750Mi"),
 			},
 			Requests: apiv1.ResourceList{
-				"cpu": resource.MustParse("500m"),
+				"cpu":    resource.MustParse("500m"),
 				"memory": resource.MustParse("350Mi"),
 			},
 		}
 	}
 
 	return apiv1.Container{
-		Name:  containerName,
-		Image: imageName,
+		Name:      containerName,
+		Image:     imageName,
 		Resources: resources,
 		Args: []string{
 			"-Xmx500m",
@@ -226,7 +255,7 @@ func createSingleContainer(containerName string, peerConfig utils.PeerConfig, im
 		},
 		Ports: []apiv1.ContainerPort{
 			{
-				ContainerPort: 8080,
+				ContainerPort: 8081,
 			},
 		},
 		EnvFrom: []apiv1.EnvFromSource{
@@ -264,7 +293,7 @@ func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ra
 		Data: map[string]string{
 			"CONFIG_FILE":            "application-kubernetes.conf",
 			"config_host":            utils.ServiceAddress(peerConfig),
-			"config_port":            "8080",
+			"config_port":            "8081",
 			"config_peersetId":       peerConfig.PeersetId,
 			"config_peerId":          peerConfig.PeerId,
 			"config_ratis_addresses": ratisPeers,

@@ -13,36 +13,38 @@ import (
 )
 
 type Config struct {
-	monitoringNamespace string
-	createMonitoringNamespace bool
-	numberOfPeersInPeersets []int
-	createTestNamespace bool
-	testNamespace string
-	applicationImageName string
-	performanceImage string
-	singleRequestsNumber int
-	multipleRequestsNumber int
-	testDuration string
-	maxPeersetsInChange  int
-	testsSendingStrategy string
-	testsCreatingChangeStrategy string
-	pushgatewayAddress   string
-	enforceAcUsage bool
-	acProtocol string
-	consensusProtocol string
+	monitoringNamespace            string
+	createMonitoringNamespace      bool
+	numberOfPeersInPeersets        []int
+	createTestNamespace            bool
+	testNamespace                  string
+	applicationImageName           string
+	performanceImage               string
+	singleRequestsNumber           int
+	multipleRequestsNumber         int
+	testDuration                   string
+	maxPeersetsInChange            int
+	testsSendingStrategy           string
+	testsCreatingChangeStrategy    string
+	pushgatewayAddress             string
+	enforceAcUsage                 bool
+	acProtocol                     string
+	consensusProtocol              string
 	performanceTestTimeoutDeadline string
-	cleanupAfterWork bool
-	isMetricTest bool
-	deployMonitoring bool
-	constantLoad string
-	fixedPeersetsInChange string
+	cleanupAfterWork               bool
+	isMetricTest                   bool
+	deployMonitoring               bool
+	constantLoad                   string
+	fixedPeersetsInChange          string
+	proxyResolver                  string
+	proxyDelay                     string
 }
 
 func CreateWholeCommand() *cobra.Command {
 
 	var config Config
 	var cmd = &cobra.Command{
-		Use: "perform",
+		Use:   "perform",
 		Short: "whole command - deploys monitoring, peers, executes performance, cleanup",
 		Run: func(cmd *cobra.Command, args []string) {
 			perform(config)
@@ -74,6 +76,8 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&config.deployMonitoring, "deploy-monitoring", true, "Determines whether deploy monitoring stack")
 	cmd.Flags().StringVar(&config.constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
 	cmd.Flags().StringVar(&config.fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
+	cmd.Flags().StringVar(&config.proxyResolver, "proxy-resolver", "8.8.8.8", "Proxy resolver - dns resolver from cluster")
+	cmd.Flags().StringVar(&config.proxyDelay, "proxy-delay", "2", "Delay in seconds for proxy")
 
 	return cmd
 }
@@ -84,26 +88,26 @@ func perform(config Config) {
 		DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
 	}
 	fmt.Println("Deploying application...")
-	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.isMetricTest, true)
+	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.isMetricTest, true, config.proxyResolver, config.proxyDelay)
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
 	time.Sleep(30 * time.Second)
 	fmt.Println("Deploying performance test")
 	performance.DoPerformanceTest(performance.Config{
-		PerformanceNamespace: config.testNamespace,
-		PerformanceNumberOfPeers: config.numberOfPeersInPeersets,
-		PerformanceImage: config.performanceImage,
-		SingleRequestsNumber: config.singleRequestsNumber,
-		MultipleRequestsNumber: config.multipleRequestsNumber,
-		TestDuration: config.testDuration,
-		MaxPeersetsInChange: config.maxPeersetsInChange,
-		TestsSendingStrategy: config.testsSendingStrategy,
+		PerformanceNamespace:        config.testNamespace,
+		PerformanceNumberOfPeers:    config.numberOfPeersInPeersets,
+		PerformanceImage:            config.performanceImage,
+		SingleRequestsNumber:        config.singleRequestsNumber,
+		MultipleRequestsNumber:      config.multipleRequestsNumber,
+		TestDuration:                config.testDuration,
+		MaxPeersetsInChange:         config.maxPeersetsInChange,
+		TestsSendingStrategy:        config.testsSendingStrategy,
 		TestsCreatingChangeStrategy: config.testsCreatingChangeStrategy,
-		PushgatewayAddress: config.pushgatewayAddress,
-		EnforceAcUsage: config.enforceAcUsage,
-		AcProtocol: config.acProtocol,
-		ConsensusProtocol: config.consensusProtocol,
-		ConstantLoad: config.constantLoad,
-		FixedPeersetsInChange: config.fixedPeersetsInChange,
+		PushgatewayAddress:          config.pushgatewayAddress,
+		EnforceAcUsage:              config.enforceAcUsage,
+		AcProtocol:                  config.acProtocol,
+		ConsensusProtocol:           config.consensusProtocol,
+		ConstantLoad:                config.constantLoad,
+		FixedPeersetsInChange:       config.fixedPeersetsInChange,
 	})
 	fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
 	waitUntilJobPodCompleted(config)

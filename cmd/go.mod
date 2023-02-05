@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/goccy/kpoward v0.1.0
 	github.com/google/uuid v1.3.0
+	github.com/senseyeio/duration v0.0.0-20180430131211-7c2a214ada46
 	github.com/spf13/cobra v1.5.0
 	helm.sh/helm/v3 v3.10.3
 	k8s.io/api v0.25.3
@@ -95,7 +96,6 @@ require (
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/rubenv/sql-migrate v1.1.2 // indirect
 	github.com/russross/blackfriday v1.5.2 // indirect
-	github.com/senseyeio/duration v0.0.0-20180430131211-7c2a214ada46 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/cast v1.4.1 // indirect
