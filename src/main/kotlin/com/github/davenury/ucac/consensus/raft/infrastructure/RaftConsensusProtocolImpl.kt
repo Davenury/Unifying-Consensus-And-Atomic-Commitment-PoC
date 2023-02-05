@@ -226,6 +226,8 @@ class RaftConsensusProtocolImpl(
         val areProposedChangesIncompatible =
             proposedChanges.isNotEmpty() && proposedChanges.any { !history.isEntryCompatible(it.entry) }
 
+        val acceptedChangesFromProposed = proposedChanges.filter { it.ledgerIndex <= leaderCommitIndex }
+
         when {
             !commitIndexEntryExists -> {
                 logger.info("I miss some entries to commit (I am behind)")
@@ -240,7 +242,7 @@ class RaftConsensusProtocolImpl(
 
             isUpdatedCommitIndex && transactionBlocker.isAcquired() -> {
                 logger.info("Received heartbeat when is blocked so only accepted changes")
-                updateLedger(heartbeat, leaderCommitIndex)
+                updateLedger(heartbeat, leaderCommitIndex, acceptedChangesFromProposed)
                 return ConsensusHeartbeatResponse(true, currentTerm, true)
             }
 
@@ -251,7 +253,7 @@ class RaftConsensusProtocolImpl(
 
             isUpdatedCommitIndex && areProposedChangesIncompatible -> {
                 logger.info("Received heartbeat but changes are incompatible, updated accepted changes")
-                updateLedger(heartbeat, leaderCommitIndex)
+                updateLedger(heartbeat, leaderCommitIndex, acceptedChangesFromProposed)
                 return ConsensusHeartbeatResponse(true, currentTerm, incompatibleWithHistory = true)
             }
 
