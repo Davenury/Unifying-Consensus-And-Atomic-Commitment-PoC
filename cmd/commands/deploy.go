@@ -118,7 +118,7 @@ func anyPodNotReady(expectedPeers int, namespace string) bool {
 	notReadyCount := 0
 	for _, pod := range pods.Items {
 		containerStatuses := pod.Status.ContainerStatuses
-		if len(containerStatuses) != 1 || !containerStatuses[0].Ready {
+		if len(containerStatuses) < 1 || !containerStatuses[0].Ready {
 			notReadyCount += 1
 		}
 	}
