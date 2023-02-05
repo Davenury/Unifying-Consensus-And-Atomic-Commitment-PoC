@@ -182,7 +182,7 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 			},
 			Annotations: map[string]string{
 				"prometheus.io/scrape": "true",
-				"prometheus.io/port":   "8080",
+				"prometheus.io/port":   "8081",
 				"prometheus.io/path":   "/_meta/metrics",
 			},
 		},
