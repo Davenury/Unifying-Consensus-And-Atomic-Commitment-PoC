@@ -438,14 +438,30 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun applyAcceptedChanges() {
 //      DONE: change name of ledgerIndexToMatchIndex
-        val acceptedIndexes: List<Int> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
 
-        val acceptedItems = state.getLogEntries(acceptedIndexes)
-        if (acceptedItems.isNotEmpty()) {
-            logger.info("Applying accepted changes: $acceptedItems")
-            logger.debug("In applyAcceptedChanges should tryToReleaseBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, acceptedItems.first().changeId)
+
+        val acceptedItems: List<LedgerItem>
+
+        mutex.withLock {
+            val acceptedIndexes: List<Int> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
+
+            acceptedItems = state.getLogEntries(acceptedIndexes)
+            if (acceptedItems.isNotEmpty()) {
+                logger.info("Applying accepted changes: $acceptedItems")
+                logger.debug("In applyAcceptedChanges should tryToReleaseBlocker")
+                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, acceptedItems.first().changeId)
+            }
+
+
+            state.acceptItems(acceptedIndexes)
+            voteContainer.removeChanges(acceptedIndexes)
+
         }
+
+        acceptedItems.forEach {
+            changeIdToCompletableFuture.putIfAbsent(it.changeId, CompletableFuture())
+        }
+
 
         acceptedItems.forEach {
             signalPublisher.signal(
@@ -456,14 +472,6 @@ class RaftConsensusProtocolImpl(
                 historyEntry = it.entry,
             )
         }
-
-        state.acceptItems(acceptedIndexes)
-        voteContainer.removeChanges(acceptedIndexes)
-
-        acceptedItems.forEach {
-            changeIdToCompletableFuture.putIfAbsent(it.changeId, CompletableFuture())
-        }
-
         acceptedItems
             .map { changeIdToCompletableFuture[it.changeId] }
             .forEach { it!!.complete(ChangeResult(ChangeResult.Status.SUCCESS)) }
@@ -495,7 +503,9 @@ class RaftConsensusProtocolImpl(
         val peerIndices = peerUrlToNextIndex.getOrDefault(globalPeerId, PeerIndices())
 
         if (newProposedChanges.isNotEmpty()) {
-            newProposedChanges.forEach {
+            newProposedChanges
+                .filter { it.ledgerIndex > state.lastApplied }
+                .forEach {
 //              Done: increment number of peers which accept this ledgerIndex
                 voteContainer.voteForChange(it.ledgerIndex)
             }
@@ -654,11 +664,11 @@ class RaftConsensusProtocolImpl(
     }
 
     private fun releaseBlockerFromPreviousTermChanges() {
-        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS && transactionBlocker.getChangeId() == state.proposedItems.last().changeId) {
+        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS && transactionBlocker.getChangeId() == state.logEntries.last().changeId) {
             logger.info("Release blocker for changes from previous term")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.proposedItems.last().changeId)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.logEntries.last().changeId)
 
-            changeIdToCompletableFuture[state.proposedItems.last().changeId]
+            changeIdToCompletableFuture[state.logEntries.last().changeId]
                 ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
         }
     }

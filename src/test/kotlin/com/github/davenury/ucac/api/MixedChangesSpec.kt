@@ -292,7 +292,7 @@ class MixedChangesSpec : IntegrationTestBase() {
 
             applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset
             askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
