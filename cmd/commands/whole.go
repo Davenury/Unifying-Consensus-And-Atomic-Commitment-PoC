@@ -36,7 +36,6 @@ type Config struct {
 	deployMonitoring               bool
 	constantLoad                   string
 	fixedPeersetsInChange          string
-	proxyResolver                  string
 	proxyDelay                     string
 }
 
@@ -76,7 +75,6 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&config.deployMonitoring, "deploy-monitoring", true, "Determines whether deploy monitoring stack")
 	cmd.Flags().StringVar(&config.constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
 	cmd.Flags().StringVar(&config.fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
-	cmd.Flags().StringVar(&config.proxyResolver, "proxy-resolver", "8.8.8.8", "Proxy resolver - dns resolver from cluster")
 	cmd.Flags().StringVar(&config.proxyDelay, "proxy-delay", "0.2", "Delay in seconds for proxy")
 
 	return cmd
@@ -88,7 +86,7 @@ func perform(config Config) {
 		DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
 	}
 	fmt.Println("Deploying application...")
-	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.isMetricTest, true, config.proxyResolver, config.proxyDelay)
+	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.isMetricTest, true, config.proxyDelay)
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
 	time.Sleep(30 * time.Second)
 	fmt.Println("Deploying performance test")

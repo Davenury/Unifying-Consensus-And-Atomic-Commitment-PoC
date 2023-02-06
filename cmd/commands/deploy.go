@@ -27,14 +27,13 @@ func CreateDeployCommand() *cobra.Command {
 	var imageName string
 	var isMetricTest bool
 	var createResources bool
-	var proxyResolver string
 	var proxyDelay string
 
 	var deployCommand = &cobra.Command{
 		Use:   "deploy",
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
-			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, isMetricTest, createResources, proxyResolver, proxyDelay)
+			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, isMetricTest, createResources, proxyDelay)
 		},
 	}
 
@@ -45,14 +44,13 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().StringVarP(&imageName, "image", "", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
 	deployCommand.Flags().BoolVar(&isMetricTest, "is-metric-test", false, "Determines whether add additional change related metrics. DO NOT USE WITH NORMAL TESTS!")
 	deployCommand.Flags().BoolVar(&createResources, "create-resources", true, "Determines if pods should have limits and requests")
-	deployCommand.Flags().StringVar(&proxyResolver, "proxy-resolver", "8.8.8.8", "Proxy resolver - dns resolver from cluster")
 	deployCommand.Flags().StringVar(&proxyDelay, "proxy-delay", "0.2", "Delay in seconds for proxy")
 
 	return deployCommand
 
 }
 
-func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, isMetricTest bool, createResources bool, proxyResolver string, proxyDelay string) {
+func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, isMetricTest bool, createResources bool, proxyDelay string) {
 	ratisPeers := utils.GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort)
 	gpacPeers := utils.GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort)
 	ratisGroups := make([]string, len(numberOfPeersInPeersets))
@@ -81,7 +79,7 @@ func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace str
 
 			deploySinglePeerConfigMap(namespace, peerConfig, ratisPeers, gpacPeers, isMetricTest)
 
-			deploySinglePeerDeployment(namespace, peerConfig, imageName, createResources, proxyResolver, proxyDelay)
+			deploySinglePeerDeployment(namespace, peerConfig, imageName, createResources, proxyDelay)
 
 			fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
 		}
@@ -118,7 +116,7 @@ func anyPodNotReady(expectedPeers int, namespace string) bool {
 	notReadyCount := 0
 	for _, pod := range pods.Items {
 		containerStatuses := pod.Status.ContainerStatuses
-		if len(containerStatuses) < 1 || !containerStatuses[0].Ready {
+		if (len(containerStatuses) < 1) || !areContainersReady(containerStatuses) {
 			notReadyCount += 1
 		}
 	}
@@ -128,7 +126,16 @@ func anyPodNotReady(expectedPeers int, namespace string) bool {
 	return totalCount != expectedPeers || notReadyCount > 0
 }
 
-func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, imageName string, createResources bool, proxyResolver string, proxyDelay string) {
+func areContainersReady(containerStatuses []apiv1.ContainerStatus) bool {
+	for _, status := range containerStatuses {
+		if !status.Ready {
+			return false
+		}
+	}
+	return true
+}
+
+func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string) {
 
 	clientset, err := utils.GetClientset()
 	if err != nil {
@@ -155,7 +162,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 					"peersetId": peerConfig.PeersetId,
 				},
 			},
-			Template: createPodTemplate(peerConfig, imageName, createResources, proxyResolver, proxyDelay),
+			Template: createPodTemplate(peerConfig, imageName, createResources, proxyDelay),
 		},
 	}
 
@@ -168,7 +175,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 
 }
 
-func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool, proxyResolver string, proxyDelay string) apiv1.PodTemplateSpec {
+func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string) apiv1.PodTemplateSpec {
 	containerName := utils.ContainerName(peerConfig)
 
 	return apiv1.PodTemplateSpec{
@@ -189,13 +196,13 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 		Spec: apiv1.PodSpec{
 			Containers: []apiv1.Container{
 				createSingleContainer(containerName, peerConfig, imageName, createResources),
-				createProxyContainer(proxyResolver, proxyDelay),
+				createProxyContainer(proxyDelay),
 			},
 		},
 	}
 }
 
-func createProxyContainer(resolver string, delay string) apiv1.Container {
+func createProxyContainer(delay string) apiv1.Container {
 	return apiv1.Container{
 		Name:  "proxy",
 		Image: "lovelysystems/throttling-proxy-docker:latest",
@@ -212,10 +219,6 @@ func createProxyContainer(resolver string, delay string) apiv1.Container {
 			{
 				Name:  "DELAY",
 				Value: delay,
-			},
-			{
-				Name:  "RESOLVER",
-				Value: resolver,
 			},
 		},
 	}
