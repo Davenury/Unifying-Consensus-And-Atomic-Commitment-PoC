@@ -46,7 +46,7 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVar(&isMetricTest, "is-metric-test", false, "Determines whether add additional change related metrics. DO NOT USE WITH NORMAL TESTS!")
 	deployCommand.Flags().BoolVar(&createResources, "create-resources", true, "Determines if pods should have limits and requests")
 	deployCommand.Flags().StringVar(&proxyResolver, "proxy-resolver", "8.8.8.8", "Proxy resolver - dns resolver from cluster")
-	deployCommand.Flags().StringVar(&proxyDelay, "proxy-delay", "2", "Delay in seconds for proxy")
+	deployCommand.Flags().StringVar(&proxyDelay, "proxy-delay", "0.2", "Delay in seconds for proxy")
 
 	return deployCommand
 
