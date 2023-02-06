@@ -24,7 +24,7 @@ abstract class BaseWiremock {
             .willReturn(
                 aResponse().withStatus(200)
                     .withHeader("Content-Type", "application/json")
-                    .withBody("""{"ballotNumber":$ballotNumber,"initVal":"$initVal","acceptNum":$acceptNum,"acceptVal":${acceptVal?.let { "$acceptVal" } ?: "null"},"decision":$decision}""")
+                    .withBody("""{"ballotNumber":$ballotNumber,"initVal":"$initVal","acceptNum":$acceptNum,"acceptVal":${acceptVal?.let { "$acceptVal" }},"decision":$decision}""")
             ))
     }
 

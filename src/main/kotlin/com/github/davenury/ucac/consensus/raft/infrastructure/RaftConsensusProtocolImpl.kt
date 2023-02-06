@@ -135,7 +135,7 @@ class RaftConsensusProtocolImpl(
             if (iteration < currentTerm || (iteration == currentTerm && votedFor != null)) {
                 logger.info(
                     "Denying vote for $peerId due to an old term ($iteration vs $currentTerm), " +
-                            "I voted for ${votedFor?.id ?: "null"}"
+                            "I voted for ${votedFor?.id}"
                 )
                 return denyVoteResponse
             }
@@ -192,7 +192,7 @@ class RaftConsensusProtocolImpl(
 
         logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex \n $heartbeat")
         logger.debug(
-            """I have in state: ${state.logEntries.map { it.entry.getId() }} \n and 
+            """I have in state: ${state.proposedEntries.map { it.entry.getId() }} \n and 
             | should have: $prevEntryId, 
             | leaderCommit: $leaderCommitId 
             | message changes: ${proposedChanges.map { it.entry.getId() }}""".trimMargin()
@@ -683,12 +683,12 @@ class RaftConsensusProtocolImpl(
 
     private fun releaseBlockerFromPreviousTermChanges() {
         if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS
-            && transactionBlocker.getChangeId() == state.logEntries.lastOrNull()?.changeId
+            && transactionBlocker.getChangeId() == state.proposedEntries.lastOrNull()?.changeId
         ) {
             logger.info("Release blocker for changes from previous term")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.logEntries.last().changeId)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.proposedEntries.last().changeId)
 
-            changeIdToCompletableFuture[state.logEntries.last().changeId]
+            changeIdToCompletableFuture[state.proposedEntries.last().changeId]
                 ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
         }
     }
