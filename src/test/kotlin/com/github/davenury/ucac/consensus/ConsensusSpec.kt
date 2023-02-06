@@ -840,7 +840,7 @@ class ConsensusSpec : IntegrationTestBase() {
             mapOf(
                 Signal.ConsensusLeaderElected to leaderElectedAction,
                 Signal.ConsensusFollowerChangeAccepted to raftPeersAction,
-                Signal.OnHandlingElectBegin to SignalListener { if(isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") }
+                Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") }
             )
 
         val peer1Signals =

@@ -3,7 +3,6 @@ package com.github.davenury.ucac.commitment.gpac
 import com.github.davenury.common.GPACInstanceNotFoundException
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
-import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.TransactionBlocker
@@ -25,8 +24,7 @@ class GPACFactory(
 
     suspend fun getOrCreateGPAC(changeId: String): GPACProtocolAbstract =
         mutex.withLock {
-            changeIdToGpacInstance[changeId] ?:
-            GPACProtocolImpl(
+            changeIdToGpacInstance[changeId] ?: GPACProtocolImpl(
                 history,
                 config.gpac,
                 context,
@@ -44,10 +42,12 @@ class GPACFactory(
         getOrCreateGPAC(message.change.id).handleElect(message)
 
     suspend fun handleAgree(message: Agree) =
-        changeIdToGpacInstance[message.change.id]?.handleAgree(message) ?: throw GPACInstanceNotFoundException(message.change.id)
+        changeIdToGpacInstance[message.change.id]?.handleAgree(message)
+            ?: throw GPACInstanceNotFoundException(message.change.id)
 
     suspend fun handleApply(message: Apply) =
-        changeIdToGpacInstance[message.change.id]?.handleApply(message) ?: throw GPACInstanceNotFoundException(message.change.id)
+        changeIdToGpacInstance[message.change.id]?.handleApply(message)
+            ?: throw GPACInstanceNotFoundException(message.change.id)
 
     fun getChangeStatus(changeId: String) =
         changeIdToGpacInstance[changeId]?.getChangeResult(changeId)

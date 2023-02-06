@@ -1,6 +1,9 @@
 package com.github.davenury.ucac.routing
 
-import com.github.davenury.ucac.commitment.gpac.*
+import com.github.davenury.ucac.commitment.gpac.Agree
+import com.github.davenury.ucac.commitment.gpac.Apply
+import com.github.davenury.ucac.commitment.gpac.ElectMe
+import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*

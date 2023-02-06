@@ -95,8 +95,8 @@ class TwoPCSpec : IntegrationTestBase() {
 
         val signalListenersForCohort = mapOf(
             Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                if(it.change!!.id == change.id) changeAppliedPhaser.arrive()
-                if(it.change!!.id == changeSecond.id) changeSecondAppliedPhaser.arrive()
+                if (it.change!!.id == change.id) changeAppliedPhaser.arrive()
+                if (it.change!!.id == changeSecond.id) changeSecondAppliedPhaser.arrive()
             },
             Signal.ConsensusLeaderElected to SignalListener { electionPhaser.arrive() }
         )

@@ -1,7 +1,10 @@
 package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
-import com.github.davenury.ucac.consensus.raft.domain.*
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusHeartbeat
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusProposeChange
+import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import io.ktor.application.*
 import io.ktor.request.*
 import io.ktor.response.*

@@ -145,7 +145,7 @@ data class Ledger(
     suspend fun checkCommitIndex() {
         mutex.withLock {
             val currentEntryId = this.history.getCurrentEntry().getId()
-            if ( currentEntryId != commitIndex){
+            if (currentEntryId != commitIndex) {
                 commitIndex = currentEntryId
                 lastApplied = currentEntryId
             }
