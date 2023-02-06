@@ -190,7 +190,7 @@ class RaftConsensusProtocolImpl(
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
         val prevEntryId = heartbeat.prevEntryId
 
-        logger.info("Received heartbeat isUpdatedCommitIndex $heartbeat")
+        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex \n $heartbeat")
         logger.debug(
             """I have in state: ${state.logEntries.map { it.entry.getId() }} \n and 
             | should have: $prevEntryId, 
@@ -212,7 +212,6 @@ class RaftConsensusProtocolImpl(
         }
 
 //      Restart timer because we received heartbeat from proper leader
-
         if (currentTerm < term) {
             mutex.withLock {
                 currentTerm = term
@@ -221,10 +220,6 @@ class RaftConsensusProtocolImpl(
         }
 
         mutex.withLock {
-//            if (role == RaftRole.Leader) {
-//                stopBeingLeader(term)
-//                role = RaftRole.Follower
-//        }
             lastHeartbeatTime = Instant.now()
         }
 
@@ -501,7 +496,7 @@ class RaftConsensusProtocolImpl(
             .map { changeIdToCompletableFuture[it.changeId] }
             .forEach { it!!.complete(ChangeResult(ChangeResult.Status.SUCCESS)) }
 
-        if(acceptedItems.isNotEmpty()) scheduleHeartbeatToPeers()
+        if (acceptedItems.isNotEmpty()) scheduleHeartbeatToPeers()
     }
 
     private suspend fun stopBeingLeader(newTerm: Int) {

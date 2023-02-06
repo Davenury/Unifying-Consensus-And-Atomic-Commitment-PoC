@@ -46,16 +46,19 @@ data class Ledger(
 
         }
 
-    private fun updateCommitIndex(commitHistoryEntryId: String): List<LedgerItem> {
+    private suspend fun updateCommitIndex(commitHistoryEntryId: String): List<LedgerItem> {
         this.commitIndex = commitHistoryEntryId
-        if (lastApplied == this.commitIndex) return listOf()
+        if (lastApplied == commitIndex) return listOf()
 
         val index = logEntries.indexOfFirst { it.entry.getId() == commitIndex }
         val newAcceptedItems = logEntries.take(index + 1)
 
-        newAcceptedItems.forEach { history.addEntry(it.entry) }
-        logEntries.removeAll(newAcceptedItems)
-        lastApplied = commitIndex
+        newAcceptedItems.forEach {
+            history.addEntry(it.entry)
+            logEntries.remove(it)
+            lastApplied = it.entry.getId()
+        }
+
         return newAcceptedItems
     }
 
