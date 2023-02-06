@@ -58,7 +58,7 @@ class TwoPC(
             signal(Signal.TwoPCOnChangeAccepted, change)
             decisionPhase(acceptChange, decision, otherPeers)
 
-            val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.CONFLICT
+            val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.ABORTED
 
             if (isMetricTest) {
                 Metrics.bumpChangeMetric(
@@ -247,7 +247,7 @@ class TwoPC(
                     ).getParentId()
                 } is ${history.getCurrentEntry().getId()}"
             )
-            changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+            changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.REJECTED))
             throw HistoryCannotBeBuildException()
         }
     }

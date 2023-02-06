@@ -721,8 +721,8 @@ class RaftConsensusProtocolImpl(
             }
 //              TODO: Change after queue
             else -> {
-                result.complete(ChangeResult(ChangeResult.Status.TIMEOUT, "There should be always a leader"))
-                throw Exception("There should be always a leader")
+                result.complete(ChangeResult(ChangeResult.Status.TIMEOUT, "There should always be a leader"))
+                throw Exception("There should always be a leader")
             }
         }
         return result
