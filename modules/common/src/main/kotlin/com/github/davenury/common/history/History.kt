@@ -12,6 +12,7 @@ class History {
     private val initialEntry: InitialHistoryEntry = InitialHistoryEntry
     private val currentEntryId: AtomicReference<String> = AtomicReference(initialEntry.getId())
     private val entries: ConcurrentHashMap<String, HistoryEntry> = ConcurrentHashMap()
+    private val ancestors: ConcurrentHashMap<String, Set<String>> = ConcurrentHashMap()
 
     init {
         entries[initialEntry.getId()] = initialEntry
@@ -21,8 +22,22 @@ class History {
         return getEntry(currentEntryId.get())
     }
 
+    @Throws(EntryNotFoundException::class)
+    private fun getAncestors(entryId: String): Set<String> {
+        return ancestors.computeIfAbsent(entryId) { id ->
+            val entry = getEntry(id)
+            val parentId = entry.getParentId()
+            return@computeIfAbsent if (parentId == null) {
+                setOf(id)
+            } else {
+                getAncestors(parentId).union(setOf(id))
+            }
+        };
+    }
+
+    @Throws(EntryNotFoundException::class)
     private fun getEntry(id: String): HistoryEntry {
-        return entries[id] ?: throw AssertionError(
+        return entries[id] ?: throw EntryNotFoundException(
             "Entry from history not present in entries: $id"
         )
     }
@@ -88,8 +103,7 @@ class History {
     }
 
     fun containsEntry(entryId: String): Boolean {
-        return entries[entryId] != null
-//        return getEntryFromHistory(entryId) != null
+        return getAncestors(currentEntryId.get()).contains(entryId)
     }
 
     fun isEntryCompatible(entry: HistoryEntry): Boolean {
