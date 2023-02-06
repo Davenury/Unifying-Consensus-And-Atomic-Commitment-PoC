@@ -497,10 +497,6 @@ class GPACProtocolImpl(
             } && allShards
     }
 
-    private fun changeSucceeded(change: Change, detailedMessage: String? = null) {
-        changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.SUCCESS, detailedMessage))
-    }
-
     private suspend fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
         try {
             signal(signal, transaction, change)
