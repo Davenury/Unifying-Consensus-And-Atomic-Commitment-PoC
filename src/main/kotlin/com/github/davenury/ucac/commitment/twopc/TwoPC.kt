@@ -247,7 +247,7 @@ class TwoPC(
                     ).getParentId()
                 } is ${history.getCurrentEntry().getId()}"
             )
-            changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+            changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.REJECTED))
             throw HistoryCannotBeBuildException()
         }
     }

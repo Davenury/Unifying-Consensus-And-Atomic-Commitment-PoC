@@ -380,7 +380,7 @@ class GPACProtocolImpl(
     ): ElectMeResult {
         if (!history.isEntryCompatible(change.toHistoryEntry(globalPeerId.peersetId))) {
             signal(Signal.OnSendingElectBuildFail, this.transaction, change)
-            changeConflicts(
+            changeRejects(
                 change,
                 "History entry not compatible, change: ${change}, expected: ${history.getCurrentEntry().getId()}"
             )
@@ -497,6 +497,10 @@ class GPACProtocolImpl(
             } && allShards
     }
 
+    private fun changeSucceeded(change: Change, detailedMessage: String? = null) {
+        changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.SUCCESS, detailedMessage))
+    }
+
     private suspend fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
         try {
             signal(signal, transaction, change)
@@ -507,10 +511,9 @@ class GPACProtocolImpl(
         }
     }
 
-    private fun changeSucceeded(change: Change, detailedMessage: String? = null) {
-        changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.SUCCESS, detailedMessage))
+    private fun changeRejects(change: Change, detailedMessage: String? = null) {
+        changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.REJECTED, detailedMessage))
     }
-
     private fun changeConflicts(change: Change, detailedMessage: String? = null) {
         changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.CONFLICT, detailedMessage))
     }
