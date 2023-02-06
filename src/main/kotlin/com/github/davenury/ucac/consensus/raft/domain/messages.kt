@@ -6,8 +6,6 @@ import com.github.davenury.common.Change
 data class ConsensusElectMe(val peerId: Int, val term: Int, val lastEntryId: String)
 
 data class ConsensusElectedYou(val peerId: Int, val myTerm: Int, val voteGranted: Boolean)
-
-// FIXME: Remove acceptedChanges, add leaderCommit
 data class ConsensusHeartbeat(
     val leaderId: Int,
     val term: Int,
