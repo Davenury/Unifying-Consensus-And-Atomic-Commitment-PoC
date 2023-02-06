@@ -459,7 +459,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 )
             }.isSuccess()
 
-            firstChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            firstChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // and - change in second peerset
             expectCatching {
@@ -474,7 +474,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 )
             }.isSuccess()
 
-            secondChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            secondChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
             val lastChange0 = askForChanges(apps.getPeer(0, 0)).last()
             val lastChange1 = askForChanges(apps.getPeer(1, 0)).last()
@@ -496,7 +496,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 )
             }.isSuccess()
 
-            finalChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            finalChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
             askAllForChanges(peers.values).let {
                 it.forEach {

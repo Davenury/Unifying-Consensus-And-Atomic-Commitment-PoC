@@ -352,7 +352,6 @@ class RaftConsensusProtocolImpl(
         }
 
         if (updateResult.acceptedItems.isNotEmpty()) {
-            println("updateLedger tryToReleaseBlocker")
             transactionBlocker.tryToReleaseBlockerChange(
                 ProtocolName.CONSENSUS,
                 updateResult.acceptedItems.first().changeId
@@ -651,7 +650,6 @@ class RaftConsensusProtocolImpl(
                     }"
                 )
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                println("proposeChangeToLedger tryToReleaseBlocker")
                 transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, change.id)
                 return
             }

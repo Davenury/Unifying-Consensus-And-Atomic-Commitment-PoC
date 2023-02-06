@@ -222,7 +222,7 @@ class MixedChangesSpec : IntegrationTestBase() {
 
         applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+        applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 
 //      First peerset
@@ -270,7 +270,6 @@ class MixedChangesSpec : IntegrationTestBase() {
                     beforeSendingApplyPhaser.arrive()
                 },
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                    println("${it.subject.getPeerName()} Arrived change: ${it.change} ")
                     if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }
             )
@@ -336,7 +335,6 @@ class MixedChangesSpec : IntegrationTestBase() {
                 },
                 Signal.ConsensusLeaderElected to leaderElected,
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                    println("${it.subject.getPeerName()} Arrived change: ${it.change} ")
                     if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }
             )
@@ -357,7 +355,7 @@ class MixedChangesSpec : IntegrationTestBase() {
 
             executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
 
-            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset
             askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {

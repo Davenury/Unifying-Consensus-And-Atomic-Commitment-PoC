@@ -115,7 +115,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
                 executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true", change)
             }.isSuccess()
 
-            changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             try {
                 testHttpClient.get<HttpResponse>(

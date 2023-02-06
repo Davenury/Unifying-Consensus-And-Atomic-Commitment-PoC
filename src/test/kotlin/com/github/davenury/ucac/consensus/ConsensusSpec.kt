@@ -417,7 +417,7 @@ class ConsensusSpec : IntegrationTestBase() {
         }
 
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
-        changePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+        changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
         val proposedChanges2 = askForProposedChanges(nonLeaderPeer)
         val acceptedChanges2 = askForAcceptedChanges(nonLeaderPeer)
@@ -816,11 +816,9 @@ class ConsensusSpec : IntegrationTestBase() {
 
 
         val peerGPACAction = SignalListener {
-            println("Arrived GPAC")
             phaserGPACPeer.arrive()
         }
         val raftPeersAction = SignalListener {
-            println("Arrived Raft")
             phaserRaftPeers.arrive()
         }
         val leaderElectedAction = SignalListener { leaderElectedPhaser.arrive() }
