@@ -46,7 +46,7 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVar(&isMetricTest, "is-metric-test", false, "Determines whether add additional change related metrics. DO NOT USE WITH NORMAL TESTS!")
 	deployCommand.Flags().BoolVar(&createResources, "create-resources", true, "Determines if pods should have limits and requests")
 	deployCommand.Flags().StringVar(&proxyDelay, "proxy-delay", "0.2", "Delay in seconds for proxy")
-	deployCommand.Flags().StringVar(&proxyLimit, "proxy-limit", "0", "Bandwidth limit")
+	deployCommand.Flags().StringVar(&proxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
 
 	return deployCommand
 
@@ -118,7 +118,7 @@ func anyPodNotReady(expectedPeers int, namespace string) bool {
 	notReadyCount := 0
 	for _, pod := range pods.Items {
 		containerStatuses := pod.Status.ContainerStatuses
-		if (len(containerStatuses) < 1) || !areContainersReady(containerStatuses) {
+		if len(containerStatuses) != 2 || !areContainersReady(containerStatuses) {
 			notReadyCount += 1
 		}
 	}

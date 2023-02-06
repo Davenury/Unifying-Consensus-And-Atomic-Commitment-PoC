@@ -77,7 +77,7 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
 	cmd.Flags().StringVar(&config.fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
 	cmd.Flags().StringVar(&config.proxyDelay, "proxy-delay", "0.2", "Delay in seconds for proxy")
-	cmd.Flags().StringVar(&config.proxyDelay, "proxy-limit", "0", "Bandwidth limit")
+	cmd.Flags().StringVar(&config.proxyDelay, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
 
 	return cmd
 }
