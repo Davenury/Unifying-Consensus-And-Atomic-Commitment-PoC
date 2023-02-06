@@ -263,7 +263,7 @@ class RaftConsensusProtocolImpl(
             }
 
             isUpdatedCommitIndex && transactionBlocker.isAcquired() -> {
-                logger.info("Received heartbeat when is blocked so only accepted changes")
+                logger.info("Received heartbeat when is blocked so only accepted changes, blocked on ${transactionBlocker.getChangeId()}")
                 updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
                 return ConsensusHeartbeatResponse(true, currentTerm, true)
             }

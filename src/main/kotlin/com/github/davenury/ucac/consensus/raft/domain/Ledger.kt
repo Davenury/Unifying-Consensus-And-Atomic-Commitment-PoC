@@ -47,15 +47,15 @@ data class Ledger(
         }
 
     private fun updateCommitIndex(commitHistoryEntryId: String): List<LedgerItem> {
-        var newAcceptedItems = listOf<LedgerItem>()
         this.commitIndex = commitHistoryEntryId
-        if (lastApplied != this.commitIndex) {
-            val index = logEntries.indexOfFirst { it.entry.getId() == commitIndex }
-            newAcceptedItems = logEntries.take(index + 1)
-            newAcceptedItems.forEach { history.addEntry(it.entry) }
-            logEntries.removeAll(newAcceptedItems)
-            lastApplied = commitIndex
-        }
+        if (lastApplied == this.commitIndex) return listOf()
+
+        val index = logEntries.indexOfFirst { it.entry.getId() == commitIndex }
+        val newAcceptedItems = logEntries.take(index + 1)
+
+        newAcceptedItems.forEach { history.addEntry(it.entry) }
+        logEntries.removeAll(newAcceptedItems)
+        lastApplied = commitIndex
         return newAcceptedItems
     }
 
@@ -79,15 +79,12 @@ data class Ledger(
 
     suspend fun getLogEntries(): List<LedgerItem> =
         mutex.withLock {
-            logEntries.map { it }.toList()
+            logEntries
         }
 
     suspend fun getLogEntries(historyEntryIds: List<String>): List<LedgerItem> =
         mutex.withLock {
-            logEntries
-                .filter { historyEntryIds.contains(it.entry.getId()) }
-                .map { it }
-                .toList()
+            logEntries.filter { historyEntryIds.contains(it.entry.getId()) }
         }
 
     suspend fun checkIfItemExist(historyEntryId: String): Boolean =
@@ -112,19 +109,9 @@ data class Ledger(
 
     suspend fun removeNotAcceptedItems() {
         mutex.withLock {
-            logEntries.removeAll { true }
+            logEntries.clear()
         }
     }
-
-    suspend fun getLastAppliedChangeIdBeforeChangeId(historyEntryId: String): String =
-        mutex.withLock {
-            logEntries.find { it.entry.getId() == historyEntryId }
-                ?.entry
-                ?.getParentId()
-                ?: history.getEntryFromHistory(historyEntryId)
-                    ?.getParentId()
-                ?: InitialHistoryEntry.getId()
-        }
 
     suspend fun entryAlreadyProposed(entry: HistoryEntry): Boolean =
         mutex.withLock {
