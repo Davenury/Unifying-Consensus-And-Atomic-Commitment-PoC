@@ -857,6 +857,12 @@ class ConsensusSpec : IntegrationTestBase() {
                 2 to peerSignals,
                 3 to peerSignals,
                 4 to peerSignals,
+            ), configOverrides = mapOf(
+                0 to mapOf("gpac.maxLeaderElectionTries" to 2),
+                1 to mapOf("gpac.maxLeaderElectionTries" to 2),
+                2 to mapOf("gpac.maxLeaderElectionTries" to 2),
+                3 to mapOf("gpac.maxLeaderElectionTries" to 2),
+                4 to mapOf("gpac.maxLeaderElectionTries" to 2),
             )
         )
 

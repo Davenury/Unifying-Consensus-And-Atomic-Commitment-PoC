@@ -193,9 +193,9 @@ class RaftConsensusProtocolImpl(
         logger.info("Received heartbeat isUpdatedCommitIndex $heartbeat")
         logger.debug(
             """I have in state: ${state.logEntries.map { it.entry.getId() }} \n and 
-            |should have: $prevEntryId, 
-            |leaderCommit: $leaderCommitId 
-            |message changes: ${proposedChanges.map { it.entry.getId() }}""".trimMargin()
+            | should have: $prevEntryId, 
+            | leaderCommit: $leaderCommitId 
+            | message changes: ${proposedChanges.map { it.entry.getId() }}""".trimMargin()
         )
 
         if (term < currentTerm) {
