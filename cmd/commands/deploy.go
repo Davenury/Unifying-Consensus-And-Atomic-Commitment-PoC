@@ -28,12 +28,13 @@ func CreateDeployCommand() *cobra.Command {
 	var isMetricTest bool
 	var createResources bool
 	var proxyDelay string
+	var proxyLimit string
 
 	var deployCommand = &cobra.Command{
 		Use:   "deploy",
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
-			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, isMetricTest, createResources, proxyDelay)
+			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, isMetricTest, createResources, proxyDelay, proxyLimit)
 		},
 	}
 
@@ -45,12 +46,13 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVar(&isMetricTest, "is-metric-test", false, "Determines whether add additional change related metrics. DO NOT USE WITH NORMAL TESTS!")
 	deployCommand.Flags().BoolVar(&createResources, "create-resources", true, "Determines if pods should have limits and requests")
 	deployCommand.Flags().StringVar(&proxyDelay, "proxy-delay", "0.2", "Delay in seconds for proxy")
+	deployCommand.Flags().StringVar(&proxyLimit, "proxy-limit", "0", "Bandwidth limit")
 
 	return deployCommand
 
 }
 
-func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, isMetricTest bool, createResources bool, proxyDelay string) {
+func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, isMetricTest bool, createResources bool, proxyDelay string, proxyLimit string) {
 	ratisPeers := utils.GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort)
 	gpacPeers := utils.GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort)
 	ratisGroups := make([]string, len(numberOfPeersInPeersets))
@@ -79,7 +81,7 @@ func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace str
 
 			deploySinglePeerConfigMap(namespace, peerConfig, ratisPeers, gpacPeers, isMetricTest)
 
-			deploySinglePeerDeployment(namespace, peerConfig, imageName, createResources, proxyDelay)
+			deploySinglePeerDeployment(namespace, peerConfig, imageName, createResources, proxyDelay, proxyLimit)
 
 			fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
 		}
@@ -135,8 +137,7 @@ func areContainersReady(containerStatuses []apiv1.ContainerStatus) bool {
 	return true
 }
 
-func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string) {
-
+func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string, proxyLimit string) {
 	clientset, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
@@ -162,7 +163,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 					"peersetId": peerConfig.PeersetId,
 				},
 			},
-			Template: createPodTemplate(peerConfig, imageName, createResources, proxyDelay),
+			Template: createPodTemplate(peerConfig, imageName, createResources, proxyDelay, proxyLimit),
 		},
 	}
 
@@ -175,7 +176,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 
 }
 
-func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string) apiv1.PodTemplateSpec {
+func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string, proxyLimit string) apiv1.PodTemplateSpec {
 	containerName := utils.ContainerName(peerConfig)
 
 	return apiv1.PodTemplateSpec{
@@ -196,13 +197,13 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 		Spec: apiv1.PodSpec{
 			Containers: []apiv1.Container{
 				createSingleContainer(containerName, peerConfig, imageName, createResources),
-				createProxyContainer(proxyDelay),
+				createProxyContainer(proxyDelay, proxyLimit),
 			},
 		},
 	}
 }
 
-func createProxyContainer(delay string) apiv1.Container {
+func createProxyContainer(delay string, limit string) apiv1.Container {
 	return apiv1.Container{
 		Name:  "proxy",
 		Image: "lovelysystems/throttling-proxy-docker:latest",
@@ -219,6 +220,10 @@ func createProxyContainer(delay string) apiv1.Container {
 			{
 				Name:  "DELAY",
 				Value: delay,
+			},
+			{
+				Name:  "LIMIT",
+				Value: limit,
 			},
 		},
 	}

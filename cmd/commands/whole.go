@@ -37,6 +37,7 @@ type Config struct {
 	constantLoad                   string
 	fixedPeersetsInChange          string
 	proxyDelay                     string
+	proxyLimit                     string
 }
 
 func CreateWholeCommand() *cobra.Command {
@@ -76,6 +77,7 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
 	cmd.Flags().StringVar(&config.fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
 	cmd.Flags().StringVar(&config.proxyDelay, "proxy-delay", "0.2", "Delay in seconds for proxy")
+	cmd.Flags().StringVar(&config.proxyDelay, "proxy-limit", "0", "Bandwidth limit")
 
 	return cmd
 }
@@ -86,7 +88,7 @@ func perform(config Config) {
 		DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
 	}
 	fmt.Println("Deploying application...")
-	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.isMetricTest, true, config.proxyDelay)
+	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.isMetricTest, true, config.proxyDelay, config.proxyLimit)
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
 	time.Sleep(30 * time.Second)
 	fmt.Println("Deploying performance test")
