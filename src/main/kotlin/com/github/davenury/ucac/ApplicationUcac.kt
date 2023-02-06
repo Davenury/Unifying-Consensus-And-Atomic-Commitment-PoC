@@ -265,7 +265,7 @@ class ApplicationUcac constructor(
         twoPCRouting(twoPC!!)
 
         runBlocking {
-            if (config.raft.isRunning) consensusProtocol!!.begin()
+            if (config.raft.isEnabled) consensusProtocol!!.begin()
         }
     }
 
