@@ -190,7 +190,7 @@ class RaftConsensusProtocolImpl(
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
         val prevEntryId = heartbeat.prevEntryId
 
-        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex \n ${heartbeat.logEntries.map { it.toLedgerItem().entry.getId() }} \n leadercommitIndex: $leaderCommitId \n ${state.lastApplied}")
+        logger.info("Received heartbeat isUpdatedCommitIndex $heartbeat")
         logger.debug(
             """I have in state: ${state.logEntries.map { it.entry.getId() }} \n and 
             |should have: $prevEntryId, 
@@ -536,7 +536,6 @@ class RaftConsensusProtocolImpl(
 
             proposedChanges
                 .filter { state.isNotApplied(it.entry.getId()) }
-                .also { println("Peer: ${globalPeerId} changes sent: ${it}") }
                 .forEach { voteContainer.voteForChange(it.entry.getId()) }
             peerUrlToNextIndex[globalPeerId] =
                 peerIndices.copy(acknowledgedEntryId = proposedChanges.last().entry.getId())
@@ -557,9 +556,6 @@ class RaftConsensusProtocolImpl(
         val lastAppliedChangeId = state.getLastAppliedChangeIdBeforeChangeId(peerIndices.acceptedEntryId)
 
         state.checkCommitIndex()
-
-
-        println("For peer ${peerAddress.globalPeerId} \n changes: ${newProposedChanges.map { it.entry.getId() }} \n from change ${peerIndices.acknowledgedEntryId}")
 
         return ConsensusHeartbeat(
             peerId,
