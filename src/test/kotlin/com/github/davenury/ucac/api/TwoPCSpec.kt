@@ -195,7 +195,7 @@ class TwoPCSpec : IntegrationTestBase() {
             }
             fail("executing change didn't fail")
         } catch (e: ClientRequestException) {
-            expectThat(e.message).contains("Change conflicted")
+            expectThat(e.response.status).isEqualTo(HttpStatusCode.NotFound)
         }
     }
 
