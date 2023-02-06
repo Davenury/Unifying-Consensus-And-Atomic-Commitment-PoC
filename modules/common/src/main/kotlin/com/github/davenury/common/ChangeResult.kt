@@ -25,6 +25,11 @@ data class ChangeResult(
         /**
          * Change was not applied due to invalid parent id - protocol was not used
          */
-        REJECTED;
+        REJECTED,
+
+        /**
+         * Change was applied with ABORT result
+         */
+        ABORTED;
     }
 }

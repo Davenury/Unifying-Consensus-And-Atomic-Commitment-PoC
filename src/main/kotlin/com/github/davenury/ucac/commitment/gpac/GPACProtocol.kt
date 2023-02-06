@@ -191,7 +191,7 @@ class GPACProtocolImpl(
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
                 Pair(null, null)
             } else if (message.acceptVal == Accept.ABORT) {
-                Pair(ChangeResult.Status.CONFLICT, "Message was applied but state was ABORT")
+                Pair(ChangeResult.Status.ABORTED, "Message was applied but state was ABORT")
             } else {
                 Pair(ChangeResult.Status.SUCCESS, null)
             }
