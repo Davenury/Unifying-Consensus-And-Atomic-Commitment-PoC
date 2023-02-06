@@ -467,13 +467,10 @@ class RaftConsensusProtocolImpl(
     private suspend fun applyAcceptedChanges() {
 //      DONE: change name of ledgerIndexToMatchIndex
 
-
         val acceptedItems: List<LedgerItem>
 
         mutex.withLock {
             val acceptedIds: List<String> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
-
-
             acceptedItems = state.getLogEntries(acceptedIds)
 
             if (acceptedItems.isNotEmpty()) {
@@ -484,13 +481,11 @@ class RaftConsensusProtocolImpl(
 
             state.acceptItems(acceptedIds)
             voteContainer.removeChanges(acceptedIds)
-
         }
 
         acceptedItems.forEach {
             changeIdToCompletableFuture.putIfAbsent(it.changeId, CompletableFuture())
         }
-
 
         acceptedItems.forEach {
             signalPublisher.signal(
@@ -501,9 +496,12 @@ class RaftConsensusProtocolImpl(
                 historyEntry = it.entry,
             )
         }
+
         acceptedItems
             .map { changeIdToCompletableFuture[it.changeId] }
             .forEach { it!!.complete(ChangeResult(ChangeResult.Status.SUCCESS)) }
+
+        if(acceptedItems.isNotEmpty()) scheduleHeartbeatToPeers()
     }
 
     private suspend fun stopBeingLeader(newTerm: Int) {

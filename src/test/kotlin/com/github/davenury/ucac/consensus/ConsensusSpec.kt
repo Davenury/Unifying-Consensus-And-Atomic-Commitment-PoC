@@ -893,7 +893,6 @@ class ConsensusSpec : IntegrationTestBase() {
             that((change as AddGroupChange).groupName).isEqualTo(proposedChange.groupName)
         }
 
-        // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
         phaserRaftPeers.arriveAndAwaitAdvanceWithTimeout()
 
         apps.getPeers(0).forEach { (_, peerAddress) ->
