@@ -551,11 +551,11 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun getMessageForPeer(peerAddress: PeerAddress): ConsensusHeartbeat {
+        state.checkCommitIndex()
+
         val peerIndices = peerUrlToNextIndex.getOrDefault(peerAddress.globalPeerId, PeerIndices()) // TODO
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
-        val lastAppliedChangeId = state.getLastAppliedChangeIdBeforeChangeId(peerIndices.acceptedEntryId)
-
-        state.checkCommitIndex()
+        val lastAppliedChangeId = peerIndices.acceptedEntryId
 
         return ConsensusHeartbeat(
             peerId,

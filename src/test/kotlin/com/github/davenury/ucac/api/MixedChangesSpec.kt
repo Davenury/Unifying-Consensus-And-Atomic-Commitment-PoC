@@ -247,13 +247,14 @@ class MixedChangesSpec : IntegrationTestBase() {
             val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
 
 
-            val applyEndPhaser = Phaser(1)
+
             val beforeSendingApplyPhaser = Phaser(1)
+            val applyEndPhaser = Phaser(1)
             val electionPhaser = Phaser(4)
             val applyConsensusPhaser = Phaser(3)
-
             listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser)
                 .forEach { it.register() }
+
             val leaderElected = SignalListener {
                 logger.info("Arrived ${it.subject.getPeerName()}")
                 electionPhaser.arrive()
