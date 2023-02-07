@@ -1,7 +1,7 @@
 package com.github.davenury.ucac.consensus
 
 import com.github.davenury.common.*
-import com.github.davenury.common.history.History
+import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
@@ -32,7 +32,6 @@ import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.assertions.*
-import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
@@ -733,7 +732,7 @@ class ConsensusSpec : IntegrationTestBase() {
 
         val peerResolver = PeerResolver(GlobalPeerId(0, 0), peers)
         val consensus = RaftConsensusProtocolImpl(
-            History(),
+            InMemoryHistory(),
             "1",
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,

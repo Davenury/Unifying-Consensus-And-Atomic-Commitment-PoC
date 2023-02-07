@@ -31,6 +31,7 @@ data class Config(
     val gpac: GpacConfig = GpacConfig(),
     val twoPC: TwoPCConfig = TwoPCConfig(),
     val rest: RestConfig = RestConfig(),
+    val persistence: PersistenceConfig = PersistenceConfig(),
     val metricTest: Boolean
 ) {
     fun globalPeerId() = GlobalPeerId(peersetId, peerId)
@@ -60,4 +61,15 @@ data class RaftConfig(
 
 data class RestConfig(
     val defaultSyncTimeout: Duration = Duration.ofMinutes(1)
+)
+
+enum class PersistenceType {
+    IN_MEMORY,
+    REDIS,
+}
+
+data class PersistenceConfig(
+    val type: PersistenceType = PersistenceType.IN_MEMORY,
+    val redisHost: String? = null,
+    val redisPort: Int? = null,
 )

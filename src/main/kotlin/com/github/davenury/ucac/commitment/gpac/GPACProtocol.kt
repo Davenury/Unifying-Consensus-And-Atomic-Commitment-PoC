@@ -204,14 +204,14 @@ class GPACProtocolImpl(
             logger.info("handleApply releaseBlocker")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
-            changeResult?.resolveChange(message.change.id, resultMessage)
+            changeResult.resolveChange(message.change.id, resultMessage)
             if (isMetricTest) {
                 Metrics.bumpChangeMetric(
                     changeId = message.change.id,
                     peerId = peerResolver.currentPeer().peerId,
                     peersetId = peerResolver.currentPeer().peersetId,
                     protocolName = ProtocolName.GPAC,
-                    state = changeResult?.name?.lowercase() ?: "applied_before"
+                    state = changeResult.name.lowercase()
                 )
             }
         } finally {

@@ -14,13 +14,13 @@ import strikt.api.expectThrows
 internal class HistoryTest {
     @Test
     fun `initial entry`(): Unit = runBlocking {
-        val history = History()
+        val history = InMemoryHistory()
         assert(history.getCurrentEntry() == InitialHistoryEntry)
     }
 
     @Test
     fun `add entry`(): Unit = runBlocking {
-        val history = History()
+        val history = InMemoryHistory()
 
         val parentId = history.getCurrentEntry().getId()
         val entry = IntermediateHistoryEntry("test", parentId)
@@ -31,7 +31,7 @@ internal class HistoryTest {
 
     @Test
     fun `add wrong entry`(): Unit = runBlocking {
-        val history = History()
+        val history = InMemoryHistory()
 
         val entry = IntermediateHistoryEntry("test", "non existent id")
         expectThrows<HistoryException> {
@@ -41,7 +41,7 @@ internal class HistoryTest {
 
     @Test
     fun `add the same entry multiple times`(): Unit = runBlocking {
-        val history = History()
+        val history = InMemoryHistory()
 
         val parentId = history.getCurrentEntry().getId()
         val entry1 = IntermediateHistoryEntry("test1", parentId)
@@ -54,7 +54,7 @@ internal class HistoryTest {
 
     @Test
     fun `get entry from history`(): Unit = runBlocking {
-        val history = History()
+        val history = InMemoryHistory()
 
         val parentId = history.getCurrentEntry().getId()
         val entry1 = IntermediateHistoryEntry("test1", parentId)
