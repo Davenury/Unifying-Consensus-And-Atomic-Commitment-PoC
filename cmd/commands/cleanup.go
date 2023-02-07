@@ -2,8 +2,8 @@ package commands
 
 import (
 	"context"
-	"github.com/spf13/cobra"
 	"github.com/davenury/ucac/cmd/commands/utils"
+	"github.com/spf13/cobra"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -36,6 +36,8 @@ func DoCleanup(namespace string) {
 	deleteConfigMaps(clientset, namespace)
 	deleteService(clientset, namespace)
 	deleteJob(clientset, namespace)
+	deletePVC(clientset, namespace)
+	deletePV(clientset)
 }
 
 func deleteDeployments(clientset *kubernetes.Clientset, namespace string) {
@@ -68,6 +70,18 @@ func deleteJob(clientset *kubernetes.Clientset, cleanupNamespace string) {
 	clientset.BatchV1().Jobs(cleanupNamespace).DeleteCollection(context.Background(), metav1.DeleteOptions{
 		PropagationPolicy: &policy,
 	}, metav1.ListOptions{
+		LabelSelector: "project=ucac",
+	})
+}
+
+func deletePV(clientset *kubernetes.Clientset) {
+	clientset.CoreV1().PersistentVolumes().DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
+		LabelSelector: "project=ucac",
+	})
+}
+
+func deletePVC(clientset *kubernetes.Clientset, cleanupNamespace string) {
+	clientset.CoreV1().PersistentVolumeClaims(cleanupNamespace).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{
 		LabelSelector: "project=ucac",
 	})
 }
