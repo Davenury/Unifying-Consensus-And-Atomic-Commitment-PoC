@@ -190,7 +190,7 @@ class RaftConsensusProtocolImpl(
 
         logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex \n $heartbeat")
         logger.debug(
-            """I have in state: ${state.proposedEntries.map { it.entry.getId() }} \n and 
+            """I have in state: ${state.proposedEntries.map { it.entry.getId() }}
             | should have: $prevEntryId, 
             | leaderCommit: $leaderCommitId 
             | message changes: ${proposedChanges.map { it.entry.getId() }}""".trimMargin()
@@ -595,7 +595,6 @@ class RaftConsensusProtocolImpl(
         var entry = change.toHistoryEntry(globalPeerId.peersetId)
         changeIdToCompletableFuture[change.id] = result
 
-        val id: Int
         mutex.withLock {
             if (state.entryAlreadyProposed(entry)) {
                 logger.info("Already proposed that change: $change")

@@ -1,8 +1,9 @@
-package com.github.davenury.ucac.api
+package com.github.davenury.ucac.testcontainers
 
 
 import com.github.davenury.common.AddUserChange
 import com.github.davenury.common.ChangePeersetInfo
+import com.github.davenury.common.Changes
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.common.objectMapper
 import com.github.davenury.ucac.utils.ApplicationTestcontainersEnvironment
@@ -15,17 +16,18 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
+import strikt.api.expectThat
+import strikt.assertions.hasSize
+import strikt.assertions.isEqualTo
 
 /**
  * @author Kamil Jarosz
  */
-@Disabled
 @Testcontainers
 @ExtendWith(TestLogExtension::class)
 class SinglePeersetApiSpec {
@@ -61,6 +63,12 @@ class SinglePeersetApiSpec {
             contentType(ContentType.Application.Json)
             body = change
         }
-        TODO("finish this test")
+        expectThat(response.status.value).isEqualTo(201)
+
+        val changes = http.post<Changes>("http://${peer0Address}/v2/change") {
+            contentType(ContentType.Application.Json)
+            body = change
+        }
+        expectThat(changes).hasSize(1)
     }
 }
