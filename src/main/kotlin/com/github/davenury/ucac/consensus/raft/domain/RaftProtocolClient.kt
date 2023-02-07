@@ -18,10 +18,6 @@ interface RaftProtocolClient {
         message: ConsensusElectMe
     ): List<RaftResponse<ConsensusElectedYou?>>
 
-    suspend fun sendConsensusImTheLeader(
-        otherPeers: List<PeerAddress>,
-        message: ConsensusImTheLeader
-    ): List<RaftResponse<String?>>
 
     suspend fun sendConsensusHeartbeat(
         peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>,
@@ -44,14 +40,6 @@ class RaftProtocolClientImpl : RaftProtocolClient {
             .map { Pair(it, message) }
             .let { sendRequests(it, "consensus/request_vote") }
     }
-
-    override suspend fun sendConsensusImTheLeader(
-        otherPeers: List<PeerAddress>,
-        message: ConsensusImTheLeader
-    ): List<RaftResponse<String?>> =
-        otherPeers
-            .map { Pair(it, message) }
-            .let { sendRequests(it, "consensus/leader") }
 
     override suspend fun sendConsensusHeartbeat(
         peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>

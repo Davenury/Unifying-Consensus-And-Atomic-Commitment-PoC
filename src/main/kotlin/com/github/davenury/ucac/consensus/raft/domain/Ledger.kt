@@ -1,68 +1,78 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
+import com.github.davenury.common.Change
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
+import com.github.davenury.common.history.InitialHistoryEntry
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 
 data class Ledger(
     private val history: History,
-    val acceptedItems: MutableList<LedgerItem> = mutableListOf(),
-    val proposedItems: MutableList<LedgerItem> = mutableListOf(),
+    val proposedEntries: MutableList<LedgerItem> = mutableListOf(),
     private val mutex: Mutex = Mutex(),
 ) {
 
-    var commitIndex: Int = 0
-    var lastApplied = -1
+    var commitIndex: String = InitialHistoryEntry.getId()
+    var lastApplied: String = InitialHistoryEntry.getId()
 
-    suspend fun updateLedger(acceptedItems: List<LedgerItem>, proposedItems: List<LedgerItem>): LedgerUpdateResult {
+    suspend fun updateLedger(leaderCommitHistoryEntryId: String, proposedItems: List<LedgerItem>): LedgerUpdateResult {
         mutex.withLock {
-            val newAcceptedItems = acceptedItems - this.acceptedItems.toSet()
-            this.acceptedItems.addAll(newAcceptedItems)
-            val acceptedIds = acceptedItems.map { it.ledgerIndex }
-            lastApplied = acceptedIds.maxOrDefault(lastApplied)
+            this.proposedEntries.addAll(proposedItems)
 
-            val newProposedItems = proposedItems - this.proposedItems.toSet()
-            this.proposedItems.removeAll { acceptedIds.contains(it.ledgerIndex) }
-            val newProposedLedgerIndex = proposedItems.map { it.ledgerIndex }
-            this.proposedItems.removeAll { newProposedLedgerIndex.contains(it.ledgerIndex) }
-            this.proposedItems.addAll(newProposedItems)
-            commitIndex = newProposedItems.maxOrDefault(commitIndex)
+            val newAcceptedItems = updateCommitIndex(leaderCommitHistoryEntryId)
 
-            newAcceptedItems.forEach { history.addEntry(it.entry) }
             return LedgerUpdateResult(
                 acceptedItems = newAcceptedItems,
-                proposedItems = newProposedItems,
+                proposedItems = proposedItems,
             )
         }
     }
 
-    suspend fun getNewAcceptedItems(ledgerIndex: Int) =
+    suspend fun getNewProposedItems(historyEntryId: String): List<LedgerItem> =
         mutex.withLock {
-            acceptedItems.filter { it.ledgerIndex > ledgerIndex }
+            val entries =
+                history.getAllEntriesUntilHistoryEntryId(historyEntryId)
+                    .map {
+                        val change = Change.fromHistoryEntry(it)
+                        LedgerItem(it, change?.id ?: it.getId())
+                    }
+
+            if (history.containsEntry(historyEntryId))
+                entries + proposedEntries
+            else
+                proposedEntries.dropWhile { it.entry.getId() != historyEntryId }.drop(1)
+
         }
 
-    suspend fun getNewProposedItems(ledgerIndex: Int) =
-        mutex.withLock {
-            proposedItems.filter { it.ledgerIndex > ledgerIndex }
+    private suspend fun updateCommitIndex(commitHistoryEntryId: String): List<LedgerItem> {
+        this.commitIndex = commitHistoryEntryId
+        if (lastApplied == commitIndex) return listOf()
+
+        val index = proposedEntries.indexOfFirst { it.entry.getId() == commitIndex }
+        val newAcceptedItems = proposedEntries.take(index + 1)
+
+        newAcceptedItems.forEach {
+            history.addEntry(it.entry)
+            proposedEntries.remove(it)
+            lastApplied = it.entry.getId()
         }
 
-    suspend fun acceptItems(acceptedIndexes: List<Int>) =
+        return newAcceptedItems
+    }
+
+    suspend fun acceptItems(acceptedEntriesIds: List<String>) =
         mutex.withLock {
-            val newAcceptedItems = proposedItems.filter { acceptedIndexes.contains(it.ledgerIndex) }
-            acceptedItems.addAll(newAcceptedItems)
-            newAcceptedItems.forEach { history.addEntry(it.entry) }
-            proposedItems.removeAll(newAcceptedItems)
-            lastApplied = newAcceptedItems.maxOrDefault(lastApplied)
+            acceptedEntriesIds
+                .map { entryId -> proposedEntries.indexOfFirst { it.entry.getId() == entryId } }
+                .maxOfOrNull { it }
+                ?.let { updateCommitIndex(proposedEntries.elementAt(it).entry.getId()) }
         }
 
-    suspend fun proposeEntry(entry: HistoryEntry, term: Int, changeId: String): Int {
+    suspend fun proposeEntry(entry: HistoryEntry, changeId: String) {
         mutex.withLock {
-            val newId = commitIndex
-            proposedItems.add(LedgerItem(newId, term, entry, changeId))
-            commitIndex++
-            return newId
+            proposedEntries.add(LedgerItem(entry, changeId))
         }
     }
 
@@ -70,74 +80,76 @@ data class Ledger(
         return history
     }
 
-    suspend fun getAcceptedItems(): List<LedgerItem> =
+    suspend fun getLogEntries(): List<LedgerItem> =
         mutex.withLock {
-            acceptedItems.map { it }.toList()
+            proposedEntries
         }
 
-    suspend fun getProposedItems(): List<LedgerItem> =
+    suspend fun getLogEntries(historyEntryIds: List<String>): List<LedgerItem> =
         mutex.withLock {
-            proposedItems.map { it }.toList()
+            proposedEntries.filter { historyEntryIds.contains(it.entry.getId()) }
         }
 
-    suspend fun getProposedItems(ids: List<Int>): List<LedgerItem> =
+    suspend fun checkIfItemExist(historyEntryId: String): Boolean =
         mutex.withLock {
-            proposedItems
-                .filter { ids.contains(it.ledgerIndex) }
-                .map { it }.toList()
-        }
-
-    suspend fun checkIfItemExist(logIndex: Int, logTerm: Int): Boolean =
-        mutex.withLock {
-            acceptedItems
-                .lastOrNull()
-                ?.let { it.ledgerIndex == logIndex && it.term == logTerm } ?: false
+            proposedEntries
+                .find { it.entry.getId() == historyEntryId }
+                ?.let { true }
+                ?: history.containsEntry(historyEntryId)
         }
 
     suspend fun checkIfProposedItemsAreStillValid() =
         mutex.withLock {
-            val newProposedItems = proposedItems.fold(listOf<LedgerItem>()) { acc, ledgerItem ->
+            val newProposedItems = proposedEntries.fold(listOf<LedgerItem>()) { acc, ledgerItem ->
                 if (acc.isEmpty() && history.isEntryCompatible(ledgerItem.entry)) acc.plus(ledgerItem)
-                else if (acc.isNotEmpty() && acc.last().entry.getId() == ledgerItem.entry.getParentId()) acc.plus(ledgerItem)
+                else if (acc.isNotEmpty() && acc.last().entry.getId() == ledgerItem.entry.getParentId()) acc.plus(
+                    ledgerItem
+                )
                 else acc
             }
-            proposedItems.removeAll { newProposedItems.contains(it) }
+            proposedEntries.removeAll { newProposedItems.contains(it) }
         }
 
-    suspend fun removeNotAcceptedItems(logIndex: Int, logTerm: Int) {
+    suspend fun removeNotAcceptedItems() {
         mutex.withLock {
-            proposedItems.removeAll { it.ledgerIndex > logIndex || it.term > logTerm }
-            acceptedItems.removeAll { it.ledgerIndex > logIndex || it.term > logTerm }
+            proposedEntries.clear()
         }
     }
 
-    suspend fun getLastAppliedChangeIdAndTermBeforeIndex(index: Int): Pair<Int, Int>? =
-        mutex.withLock {
-            acceptedItems
-                .sortedBy { it.ledgerIndex }
-                .lastOrNull { it.ledgerIndex <= index }
-                ?.let { Pair(it.ledgerIndex, it.term) }
-        }
-
     suspend fun entryAlreadyProposed(entry: HistoryEntry): Boolean =
         mutex.withLock {
-            (acceptedItems + proposedItems)
-                .any { it.entry == entry }
+            proposedEntries.any { it.entry == entry }
         }
 
-    private fun List<LedgerItem>.maxOrDefault(defaultValue: Int): Int =
-        this.maxOfOrNull { it.ledgerIndex } ?: defaultValue
+    fun getPreviousEntryId(entryId: String): String =
+        if (history.containsEntry(entryId))
+            history.getEntryFromHistory(entryId)?.getParentId() ?: InitialHistoryEntry.getId()
+        else {
+            proposedEntries
+                .find { it.entry.getId() == entryId }
+                ?.entry
+                ?.getParentId()!!
+        }
 
-    @JvmName("maxOrDefaultInt")
-    private fun List<Int>.maxOrDefault(defaultValue: Int): Int = this.maxOfOrNull { it } ?: defaultValue
+    fun isNotApplied(entryId: String): Boolean = !history.containsEntry(entryId)
+    suspend fun checkCommitIndex() {
+        mutex.withLock {
+            val currentEntryId = this.history.getCurrentEntry().getId()
+            if (currentEntryId != commitIndex) {
+                commitIndex = currentEntryId
+                lastApplied = currentEntryId
+            }
+        }
+
+    }
 }
 
-data class LedgerItemDto(val ledgerIndex: Int, val term: Int, val serializedEntry: String, val changeId: String) {
-    fun toLedgerItem(): LedgerItem = LedgerItem(ledgerIndex, term, HistoryEntry.deserialize(serializedEntry), changeId)
+data class LedgerItemDto(val serializedEntry: String, val changeId: String) {
+    fun toLedgerItem(): LedgerItem = LedgerItem(HistoryEntry.deserialize(serializedEntry), changeId)
 }
 
-data class LedgerItem(val ledgerIndex: Int, val term: Int, val entry: HistoryEntry, val changeId: String) {
-    fun toDto(): LedgerItemDto = LedgerItemDto(ledgerIndex, term, entry.serialize(), changeId)
+data class LedgerItem(val entry: HistoryEntry, val changeId: String) {
+    fun toDto(): LedgerItemDto = LedgerItemDto(entry.serialize(), changeId)
 }
 
 data class LedgerUpdateResult(val acceptedItems: List<LedgerItem>, val proposedItems: List<LedgerItem>)

@@ -1,6 +1,7 @@
 <configuration>
     <timestamp key="timestamp" datePattern="yyyyMMdd-HHmmss.SSS"/>
-    <variable name="pattern" value="%d{YYYY-MM-dd HH:mm:ss.SSS} %-5level [%-16logger{36}] \(%mdc{test:-?}, %mdc{peer:-?}\) %-80msg   \(%thread\)%n"/>
+    <variable name="pattern"
+              value="%d{YYYY-MM-dd HH:mm:ss.SSS} %-5level [%-16logger{36}] \(%mdc{test:-?}, %mdc{peer:-?}\) %-80msg   \(%thread\)%n"/>
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
         <append>false</append>
         <file>build/test-results/logs/test-run-${timestamp}.log</file>

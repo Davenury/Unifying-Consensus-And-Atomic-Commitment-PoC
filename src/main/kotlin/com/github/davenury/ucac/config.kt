@@ -55,6 +55,7 @@ data class GpacConfig(
 data class RaftConfig(
     val heartbeatTimeout: Duration = Duration.ofSeconds(2),
     val leaderTimeout: Duration = Duration.ofSeconds(1),
+    val isEnabled: Boolean = true
 )
 
 data class RestConfig(

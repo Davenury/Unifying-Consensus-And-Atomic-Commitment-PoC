@@ -115,7 +115,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
                 executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true", change)
             }.isSuccess()
 
-            changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             try {
                 testHttpClient.get<HttpResponse>(
@@ -198,7 +198,6 @@ class SinglePeersetSpec : IntegrationTestBase() {
     fun `should be able to execute transaction even if leader fails after first apply`(): Unit = runBlocking {
         val phaserPeer1 = Phaser(2)
         val phaserAllPeers = Phaser(5)
-        val leaderElectedPhaser = Phaser(4)
 
         val proposedChange = AddGroupChange(
             "name",
@@ -228,19 +227,17 @@ class SinglePeersetSpec : IntegrationTestBase() {
 
         val peer1Action = SignalListener { phaserPeer1.arrive() }
         val peersAction = SignalListener { phaserAllPeers.arrive() }
-        val peerLeaderElected = SignalListener { leaderElectedPhaser.arrive() }
 
         val firstPeerSignals = mapOf(
             Signal.BeforeSendingApply to firstLeaderAction,
             Signal.OnHandlingApplyCommitted to peersAction,
-            Signal.ConsensusLeaderElected to peerLeaderElected,
         )
 
         val peerSignals =
-            mapOf(Signal.OnHandlingApplyCommitted to peersAction, Signal.ConsensusLeaderElected to peerLeaderElected)
+            mapOf(Signal.OnHandlingApplyCommitted to peersAction)
 
         val peer1Signals =
-            mapOf(Signal.OnHandlingApplyCommitted to peer1Action, Signal.ConsensusLeaderElected to peerLeaderElected)
+            mapOf(Signal.OnHandlingApplyCommitted to peer1Action)
 
         apps = TestApplicationSet(
             listOf(5),
@@ -250,10 +247,15 @@ class SinglePeersetSpec : IntegrationTestBase() {
                 2 to peerSignals,
                 3 to peerSignals,
                 4 to peerSignals,
+            ),
+            configOverrides = mapOf(
+                0 to mapOf("raft.isEnabled" to false),
+                1 to mapOf("raft.isEnabled" to false),
+                2 to mapOf("raft.isEnabled" to false),
+                3 to mapOf("raft.isEnabled" to false),
+                4 to mapOf("raft.isEnabled" to false),
             )
         )
-
-        leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // change that will cause leader to fall according to action
         try {
