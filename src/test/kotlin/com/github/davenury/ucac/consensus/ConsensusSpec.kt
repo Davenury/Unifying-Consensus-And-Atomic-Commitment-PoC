@@ -124,6 +124,47 @@ class ConsensusSpec : IntegrationTestBase() {
     }
 
     @Test
+    fun `change should be applied without waiting for election`(): Unit = runBlocking {
+        val peersWithoutLeader = 4
+
+        val phaser = Phaser(peersWithoutLeader)
+        phaser.register()
+
+        val peerApplyChange = SignalListener {
+            expectThat(phaser.phase).isEqualTo(0)
+            logger.info("Arrived ${it.subject.getPeerName()}")
+            phaser.arrive()
+        }
+
+        apps = TestApplicationSet(
+            listOf(5),
+            signalListeners = (0..4).associateWith {
+                mapOf(
+                    Signal.ConsensusFollowerChangeAccepted to peerApplyChange
+                )
+            }
+        )
+        val peerAddresses = apps.getPeers(0)
+
+        logger.info("Sending change")
+
+        val change = createChange(null)
+        expectCatching {
+            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change)
+        }.isSuccess()
+
+        phaser.arriveAndAwaitAdvanceWithTimeout()
+        logger.info("Change 1 applied")
+
+        askAllForChanges(peerAddresses.values).forEach { changes ->
+            expectThat(changes.size).isEqualTo(1)
+            expect {
+                that(changes[0]).isEqualTo(change)
+            }
+        }
+    }
+
+    @Test
     fun `less than half of peers respond on ConsensusElectMe`(): Unit = runBlocking {
         val activePeers = 2
         val triesToBecomeLeader = 2
