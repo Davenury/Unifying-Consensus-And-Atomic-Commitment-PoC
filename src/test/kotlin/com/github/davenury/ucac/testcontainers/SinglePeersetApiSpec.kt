@@ -6,6 +6,7 @@ import com.github.davenury.common.ChangePeersetInfo
 import com.github.davenury.common.Changes
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.common.objectMapper
+import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.ApplicationTestcontainersEnvironment
 import com.github.davenury.ucac.utils.TestLogExtension
 import io.ktor.client.*
@@ -59,13 +60,13 @@ class SinglePeersetApiSpec {
         logger.info("Sending change $change")
 
         val peer0Address = environment.getAddress(0, 0)
-        val response = http.post<HttpResponse>("http://${peer0Address}/v2/change/sync") {
+        val response = testHttpClient.post<HttpResponse>("http://${peer0Address}/v2/change/sync") {
             contentType(ContentType.Application.Json)
             body = change
         }
         expectThat(response.status.value).isEqualTo(201)
 
-        val changes = http.post<Changes>("http://${peer0Address}/v2/change") {
+        val changes = testHttpClient.post<Changes>("http://${peer0Address}/v2/change") {
             contentType(ContentType.Application.Json)
             body = change
         }
