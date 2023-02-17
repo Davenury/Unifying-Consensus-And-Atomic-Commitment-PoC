@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory
 import strikt.api.expectThat
 import strikt.assertions.*
 import java.io.File
-import java.time.Duration
 import java.util.concurrent.Phaser
 
 @Suppress("HttpUrlsUsage")

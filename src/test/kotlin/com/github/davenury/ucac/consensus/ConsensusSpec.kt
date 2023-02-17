@@ -752,7 +752,6 @@ class ConsensusSpec : IntegrationTestBase() {
         val peerResolver = PeerResolver(GlobalPeerId(0, 0), peers)
         val consensus = RaftConsensusProtocolImpl(
             InMemoryHistory(),
-            "1",
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
             protocolClient = RaftProtocolClientImpl(),
@@ -981,7 +980,7 @@ class ConsensusSpec : IntegrationTestBase() {
         try {
             consensusProperty.isAccessible = true
             val consensusProtocol = consensusProperty.get(app) as RaftConsensusProtocolImpl
-            return consensusProtocol.getLeaderAddress()
+            return consensusProtocol.getLeaderAddress()?.address
         } finally {
             consensusProperty.isAccessible = consensusOldAccessible
         }

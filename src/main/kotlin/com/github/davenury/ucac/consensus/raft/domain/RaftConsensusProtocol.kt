@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus.raft.domain
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
+import com.github.davenury.ucac.common.PeerAddress
 import java.util.concurrent.CompletableFuture
 
 interface RaftConsensusProtocol {
@@ -9,8 +10,7 @@ interface RaftConsensusProtocol {
     suspend fun handleRequestVote(peerId: Int, iteration: Int, lastLogId: String): ConsensusElectedYou
     suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse
     suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult>
-    fun setPeerAddress(address: String)
-    suspend fun getLeaderAddress(): String?
+    suspend fun getLeaderAddress(): PeerAddress?
     suspend fun getProposedChanges(): List<Change>
     suspend fun getAcceptedChanges(): List<Change>
 
