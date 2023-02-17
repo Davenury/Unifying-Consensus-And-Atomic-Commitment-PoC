@@ -108,17 +108,23 @@ class RaftConsensusProtocolImpl(
             return
         }
 
+        val requests: List<PropagationRequest>
+
         mutex.withLock {
             role = RaftRole.Leader
-            leader.elect(globalPeerId)
             assert(executorService == null)
             executorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+            requests = leader.elect(globalPeerId)
         }
 
         logger.info("I have been selected as a leader (in term $currentTerm)")
 
         peerUrlToNextIndex.keys.forEach {
             peerUrlToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
+        }
+
+        requests.forEach {
+            proposeChangeToLedger(it.cf,it.change)
         }
 
         scheduleHeartbeatToPeers()

@@ -8,9 +8,9 @@ import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
@@ -31,6 +31,7 @@ class RaftLeader(
     private val mutex: Mutex = Mutex()
     private var id: GlobalPeerId? = null
     private var elected: Boolean = false
+    private var currentTask: Job? = null
 
     suspend fun reset() = mutex.withLock {
         this.id = null
@@ -42,11 +43,21 @@ class RaftLeader(
         this.elected = false
     }
 
-    suspend fun elect(id: GlobalPeerId) = mutex.withLock {
+    suspend fun elect(id: GlobalPeerId): List<PropagationRequest> = mutex.withLock {
         this.id = id
         this.elected = true
 
-        propagateChanges(id)
+        logger.info("${id.peerId}  ${peerResolver.currentPeer().peerId}")
+
+        if(currentTask?.isActive == true)
+            currentTask?.cancel()
+
+        return@withLock if (id.peerId != peerResolver.currentPeer().peerId) {
+            currentTask = propagateChanges(id)
+            listOf()
+        } else {
+            propagationRequests.toList()
+        }
     }
 
     suspend fun votedFor(): GlobalPeerId? = mutex.withLock {
@@ -70,27 +81,30 @@ class RaftLeader(
         propagationRequests.add(PropagationRequest(change, cf))
 
         val leaderId = elected()
-        if (leaderId != null) {
-            propagateChanges(leaderId)
+        if (leaderId != null && currentTask?.isCompleted == false) {
+            currentTask = propagateChanges(leaderId)
         } else {
-            logger.info("Change cannot be propagated to the leader, " +
-                    "as it is not elected yet, queueing: $change")
+            logger.info(
+                "Change cannot be propagated to the leader, " +
+                        "as it is not elected yet, queueing: $change"
+            )
         }
         return cf
     }
 
-    private fun propagateChanges(leaderId: GlobalPeerId) {
-        while (propagationRequests.isNotEmpty()) {
-            val req = propagationRequests.pop()
-            with(CoroutineScope(leaderRequestExecutorService)) {
-                launch(MDCContext()) {
-                    req.cf.complete(propagateChange(leaderId, req.change))
+    private fun propagateChanges(leaderId: GlobalPeerId): Job =
+        with(CoroutineScope(leaderRequestExecutorService)) {
+            launch {
+                while (propagationRequests.isNotEmpty()) {
+                    val req = propagationRequests.pop()
+                    logger.info("Size: ${propagationRequests.size}")
+                    req.cf.complete(sendChange(leaderId, req.change))
                 }
             }
         }
-    }
 
-    private suspend fun propagateChange(
+
+    private suspend fun sendChange(
         leaderId: GlobalPeerId,
         change: Change,
     ): ChangeResult {
