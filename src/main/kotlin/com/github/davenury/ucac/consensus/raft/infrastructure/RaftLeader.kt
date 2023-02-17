@@ -3,6 +3,7 @@ package com.github.davenury.ucac.consensus.raft.infrastructure
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
@@ -49,14 +50,14 @@ class RaftLeader(
 
         logger.info("${id.peerId}  ${peerResolver.currentPeer().peerId}")
 
-        if(currentTask?.isActive == true)
+        if (currentTask?.isActive == true)
             currentTask?.cancel()
 
-        return@withLock if (id.peerId != peerResolver.currentPeer().peerId) {
+        return@withLock if (id == peerResolver.currentPeer()) {
+            propagationRequests.toList()
+        } else {
             currentTask = propagateChanges(id)
             listOf()
-        } else {
-            propagationRequests.toList()
         }
     }
 
@@ -96,6 +97,7 @@ class RaftLeader(
         with(CoroutineScope(leaderRequestExecutorService)) {
             launch {
                 while (propagationRequests.isNotEmpty()) {
+                    if (leaderId == peerResolver.currentPeer()) break
                     val req = propagationRequests.pop()
                     logger.info("Size: ${propagationRequests.size}")
                     req.cf.complete(sendChange(leaderId, req.change))
@@ -109,7 +111,7 @@ class RaftLeader(
         change: Change,
     ): ChangeResult {
         logger.info("Propagating change to leader ($leaderId): $change")
-        val leaderAddress = peerResolver.resolve(leaderId)
+        val leaderAddress: PeerAddress = peerResolver.resolve(leaderId)
         return try {
             val url = "http://${leaderAddress.address}/consensus/request_apply_change"
             val response = httpClient.post<ChangeResult>(url) {

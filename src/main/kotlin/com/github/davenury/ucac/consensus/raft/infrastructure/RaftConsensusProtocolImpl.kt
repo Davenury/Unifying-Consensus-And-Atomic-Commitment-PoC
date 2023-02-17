@@ -351,9 +351,9 @@ class RaftConsensusProtocolImpl(
                 "${updateResult.acceptedItems.size} accepted items"
         logger.debug(message)
 
-        if (updateResult.proposedItems.isNotEmpty() || updateResult.acceptedItems.isNotEmpty()) {
+//        if (updateResult.proposedItems.isNotEmpty() || updateResult.acceptedItems.isNotEmpty()) {
             logger.info(message)
-        }
+//        }
 
         if (updateResult.acceptedItems.isNotEmpty()) {
             transactionBlocker.tryToReleaseBlockerChange(
@@ -388,6 +388,7 @@ class RaftConsensusProtocolImpl(
     private suspend fun sendHeartbeatToPeer(peer: GlobalPeerId) {
         val peerAddress = peerResolver.resolve(peer)
         val peerMessage = getMessageForPeer(peerAddress)
+        logger.info("Send heartbeat to peer $peer")
         val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
 
         // We should schedule heartbeat even if something failed during handling response
@@ -632,7 +633,6 @@ class RaftConsensusProtocolImpl(
 
             updatedChange = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
             entry = updatedChange.toHistoryEntry(peersetId)
-
 
 
             if (!history.isEntryCompatible(entry)) {
