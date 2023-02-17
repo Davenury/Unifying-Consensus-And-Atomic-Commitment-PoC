@@ -125,7 +125,6 @@ class ApplicationUcac constructor(
 
         consensusProtocol = RaftConsensusProtocolImpl(
             history,
-            config.host + ":" + config.port,
             ctx,
             peerResolver,
             signalPublisher,
@@ -281,8 +280,6 @@ class ApplicationUcac constructor(
     fun startNonblocking() {
         withMdc {
             engine.start(wait = false)
-            val address = "${config.host}:${getBoundPort()}"
-            consensusProtocol?.setPeerAddress(address)
         }
     }
 
