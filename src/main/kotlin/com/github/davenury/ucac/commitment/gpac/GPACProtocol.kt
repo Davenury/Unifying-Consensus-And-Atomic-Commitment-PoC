@@ -74,7 +74,7 @@ class GPACProtocolImpl(
 
         signal(Signal.OnHandlingElectBegin, null, message.change)
 
-        if (transactionBlocker.isAcquired()) {
+        if (transactionBlocker.isAcquired() && transactionBlocker.getChangeId() != message.change.id) {
             logger.info("Tried to respond to elect me when semaphore acquired!")
             throw AlreadyLockedException(ProtocolName.GPAC)
         }
@@ -122,10 +122,8 @@ class GPACProtocolImpl(
 
         myBallotNumber = message.ballotNumber
 
-        if (!message.decision) {
-            transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
-            logger.info("Lock aquired: ${message.ballotNumber}")
-        }
+        transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+        logger.info("Lock aquired: ${message.ballotNumber}")
 
         transaction =
             Transaction(
@@ -202,7 +200,6 @@ class GPACProtocolImpl(
             }
 
             logger.info("handleApply releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
             changeResult.resolveChange(message.change.id, resultMessage)
             if (isMetricTest) {
@@ -238,7 +235,6 @@ class GPACProtocolImpl(
         leaderTimer.startCounting {
             logger.info("Recovery leader starts")
             logger.info("leaderFailTimeout releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             if (!changeWasAppliedBefore(change)) performProtocolAsRecoveryLeader(change)
         }
     }
@@ -515,6 +511,7 @@ class GPACProtocolImpl(
     private fun changeRejected(change: Change, detailedMessage: String? = null) {
         changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.REJECTED, detailedMessage))
     }
+
     private fun changeConflicts(change: Change, detailedMessage: String? = null) {
         changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.CONFLICT, detailedMessage))
     }

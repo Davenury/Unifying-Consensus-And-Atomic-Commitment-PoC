@@ -23,7 +23,8 @@ class TransactionBlocker {
     }
 
     fun tryToBlock(protocol: ProtocolName, changeId: String) {
-        if (!semaphore.tryAcquire()) {
+        val sameChange = changeId == this.changeId && protocol == this.protocol
+        if (!semaphore.tryAcquire() && !sameChange) {
             throw AlreadyLockedException(this.protocol!!)
         }
         logger.info("Transaction lock acquired")

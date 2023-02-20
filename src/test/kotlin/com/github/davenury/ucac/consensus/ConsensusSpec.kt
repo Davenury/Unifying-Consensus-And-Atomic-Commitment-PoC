@@ -840,6 +840,14 @@ class ConsensusSpec : IntegrationTestBase() {
                 Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") }
             )
 
+        val peerRaftSignals =
+            mapOf(
+                Signal.ConsensusLeaderElected to leaderElectedAction,
+                Signal.ConsensusFollowerChangeAccepted to raftPeersAction,
+                Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") },
+                Signal.OnHandlingAgreeBegin to SignalListener { throw Exception("Ignore GPAC") }
+            )
+
         val peer1Signals =
             mapOf(
                 Signal.OnHandlingApplyCommitted to peerGPACAction,
@@ -852,8 +860,8 @@ class ConsensusSpec : IntegrationTestBase() {
                 0 to firstPeerSignals,
                 1 to peer1Signals,
                 2 to peerSignals,
-                3 to peerSignals,
-                4 to peerSignals,
+                3 to peerRaftSignals,
+                4 to peerRaftSignals,
             ), configOverrides = mapOf(
                 0 to mapOf("gpac.maxLeaderElectionTries" to 2),
                 1 to mapOf("gpac.maxLeaderElectionTries" to 2),

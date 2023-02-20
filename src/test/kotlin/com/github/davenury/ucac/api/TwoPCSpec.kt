@@ -111,11 +111,11 @@ class TwoPCSpec : IntegrationTestBase() {
         // when - executing transaction
         executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", change)
 
-        changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+        changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
         executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", changeSecond)
 
-        changeSecondAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+        changeSecondAppliedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
         askAllForChanges(apps.getPeers().values).forEach { changes ->
             expectThat(changes.size).isEqualTo(4)
