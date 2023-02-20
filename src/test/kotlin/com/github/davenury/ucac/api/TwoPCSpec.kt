@@ -95,8 +95,8 @@ class TwoPCSpec : IntegrationTestBase() {
 
         val signalListenersForCohort = mapOf(
             Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                if(it.change!!.id == change.id) changeAppliedPhaser.arrive()
-                if(it.change!!.id == changeSecond.id) changeSecondAppliedPhaser.arrive()
+                if (it.change!!.id == change.id) changeAppliedPhaser.arrive()
+                if (it.change!!.id == changeSecond.id) changeSecondAppliedPhaser.arrive()
             },
             Signal.ConsensusLeaderElected to SignalListener { electionPhaser.arrive() }
         )
@@ -485,7 +485,7 @@ class TwoPCSpec : IntegrationTestBase() {
                 executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync?use_2pc=true", lastChange)
             }.isSuccess()
 
-            finalChangePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            finalChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //          First peerset
             askAllForChanges(apps.getPeers(0).values).forEach {

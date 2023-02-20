@@ -2,7 +2,10 @@ package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.*
+import com.github.davenury.ucac.GpacConfig
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -183,13 +186,15 @@ class GPACProtocolImpl(
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
 
-            val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(message.change.toHistoryEntry(globalPeerId.peersetId).getId())) {
+            val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(
+                    message.change.toHistoryEntry(
+                        globalPeerId.peersetId
+                    ).getId()
+                )
+            ) {
                 addChangeToHistory(message.change)
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
                 Pair(ChangeResult.Status.SUCCESS, null)
-            } else if (message.acceptVal == Accept.COMMIT) {
-                signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
-                Pair(null, null)
             } else if (message.acceptVal == Accept.ABORT) {
                 Pair(ChangeResult.Status.ABORTED, "Message was applied but state was ABORT")
             } else {
@@ -199,14 +204,14 @@ class GPACProtocolImpl(
             logger.info("handleApply releaseBlocker")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
-            changeResult?.resolveChange(message.change.id, resultMessage)
+            changeResult.resolveChange(message.change.id, resultMessage)
             if (isMetricTest) {
                 Metrics.bumpChangeMetric(
                     changeId = message.change.id,
                     peerId = peerResolver.currentPeer().peerId,
                     peersetId = peerResolver.currentPeer().peersetId,
                     protocolName = ProtocolName.GPAC,
-                    state = changeResult?.name?.lowercase() ?: "applied_before"
+                    state = changeResult.name.lowercase()
                 )
             }
         } finally {

@@ -52,7 +52,7 @@ fun Application.apiV2Routing(
                 )
             }
 
-             null -> {
+            null -> {
                 call.respond(
                     HttpStatusCode.InternalServerError,
                     ChangeCreationResponse(

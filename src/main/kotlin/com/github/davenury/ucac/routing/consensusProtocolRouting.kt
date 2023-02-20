@@ -1,7 +1,10 @@
 package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
-import com.github.davenury.ucac.consensus.raft.domain.*
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusHeartbeat
+import com.github.davenury.ucac.consensus.raft.domain.ConsensusProposeChange
+import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import io.ktor.application.*
 import io.ktor.request.*
 import io.ktor.response.*
@@ -13,15 +16,8 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         // głosujemy na leadera
         post("/consensus/request_vote") {
             val message: ConsensusElectMe = call.receive()
-            val response = protocol.handleRequestVote(message.peerId, message.term, message.lastLogIndex)
+            val response = protocol.handleRequestVote(message.peerId, message.term, message.lastEntryId)
             call.respond(response)
-        }
-
-        // potwierdzenie że mamy leadera
-        post("/consensus/leader") {
-            val message: ConsensusImTheLeader = call.receive()
-            protocol.handleLeaderElected(message.peerId, message.peerAddress, message.leaderIteration)
-            call.respond("OK")
         }
 
         post("/consensus/heartbeat") {

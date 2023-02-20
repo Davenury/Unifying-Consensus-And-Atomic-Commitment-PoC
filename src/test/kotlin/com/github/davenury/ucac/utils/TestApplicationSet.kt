@@ -8,7 +8,6 @@ import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.createApplication
 import org.slf4j.LoggerFactory
 import java.util.*
-import kotlin.collections.HashMap
 import kotlin.random.Random
 
 class TestApplicationSet(

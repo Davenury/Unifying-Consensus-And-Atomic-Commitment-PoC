@@ -222,7 +222,7 @@ class MixedChangesSpec : IntegrationTestBase() {
 
         applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+        applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 
 //      First peerset
@@ -247,13 +247,14 @@ class MixedChangesSpec : IntegrationTestBase() {
             val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
 
 
-            val applyEndPhaser = Phaser(1)
+
             val beforeSendingApplyPhaser = Phaser(1)
+            val applyEndPhaser = Phaser(1)
             val electionPhaser = Phaser(4)
             val applyConsensusPhaser = Phaser(3)
-
             listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser)
                 .forEach { it.register() }
+
             val leaderElected = SignalListener {
                 logger.info("Arrived ${it.subject.getPeerName()}")
                 electionPhaser.arrive()
@@ -269,7 +270,6 @@ class MixedChangesSpec : IntegrationTestBase() {
                     beforeSendingApplyPhaser.arrive()
                 },
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                    println("${it.subject.getPeerName()} Arrived change: ${it.change} ")
                     if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }
             )
@@ -292,7 +292,7 @@ class MixedChangesSpec : IntegrationTestBase() {
 
             applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset
             askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
@@ -335,7 +335,6 @@ class MixedChangesSpec : IntegrationTestBase() {
                 },
                 Signal.ConsensusLeaderElected to leaderElected,
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                    println("${it.subject.getPeerName()} Arrived change: ${it.change} ")
                     if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }
             )
@@ -356,7 +355,7 @@ class MixedChangesSpec : IntegrationTestBase() {
 
             executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
 
-            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset
             askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {

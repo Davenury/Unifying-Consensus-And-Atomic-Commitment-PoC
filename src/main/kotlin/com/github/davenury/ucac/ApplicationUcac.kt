@@ -1,11 +1,11 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.common.*
-import com.github.davenury.common.history.History
+import com.github.davenury.ucac.common.HistoryFactory
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
-import com.github.davenury.ucac.commitment.gpac.*
+import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.common.GlobalPeerId
@@ -115,7 +115,7 @@ class ApplicationUcac constructor(
     }
 
     private fun createServer() = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
-        val history = History()
+        val history = HistoryFactory().createForConfig(config)
         val signalPublisher = SignalPublisher(signalListeners)
 
         val raftProtocolClientImpl = RaftProtocolClientImpl()
@@ -265,7 +265,7 @@ class ApplicationUcac constructor(
         twoPCRouting(twoPC!!)
 
         runBlocking {
-            consensusProtocol!!.begin()
+            if (config.raft.isEnabled) consensusProtocol!!.begin()
         }
     }
 

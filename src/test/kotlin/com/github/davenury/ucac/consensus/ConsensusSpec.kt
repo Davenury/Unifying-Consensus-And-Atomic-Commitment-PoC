@@ -1,14 +1,13 @@
 package com.github.davenury.ucac.consensus
 
-import com.github.davenury.common.AddUserChange
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangePeersetInfo
-import com.github.davenury.common.Changes
-import com.github.davenury.common.history.History
+import com.github.davenury.common.*
+import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.commitment.gpac.Accept
+import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.GlobalPeerId
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
@@ -21,12 +20,13 @@ import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestLogExtension
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.mockk.mockk
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.fail
 import org.slf4j.LoggerFactory
 import strikt.api.expect
 import strikt.api.expectCatching
@@ -34,6 +34,7 @@ import strikt.api.expectThat
 import strikt.assertions.*
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -731,7 +732,7 @@ class ConsensusSpec : IntegrationTestBase() {
 
         val peerResolver = PeerResolver(GlobalPeerId(0, 0), peers)
         val consensus = RaftConsensusProtocolImpl(
-            History(),
+            InMemoryHistory(),
             "1",
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
@@ -773,6 +774,137 @@ class ConsensusSpec : IntegrationTestBase() {
             that(consensus.isMoreThanHalf(3)).isTrue()
             that(consensus.isMoreThanHalf(4)).isTrue()
             that(consensus.isMoreThanHalf(5)).isTrue()
+        }
+    }
+
+    @Test
+    fun `should synchronize on history if it was added outside of raft`(): Unit = runBlocking {
+        val phaserGPACPeer = Phaser(1)
+        val phaserRaftPeers = Phaser(4)
+        val leaderElectedPhaser = Phaser(4)
+
+        val isSecondGPAC = AtomicBoolean(false)
+
+        listOf(phaserGPACPeer, phaserRaftPeers, leaderElectedPhaser).forEach { it.register() }
+
+        val proposedChange = AddGroupChange(
+            "name",
+            peersets = listOf(
+                ChangePeersetInfo(0, InitialHistoryEntry.getId())
+            ),
+        )
+
+        val firstLeaderAction = SignalListener { signalData ->
+            val url = "http://${signalData.peers[0][0].address}/apply"
+            runBlocking {
+                testHttpClient.post<HttpResponse>(url) {
+                    contentType(ContentType.Application.Json)
+                    accept(ContentType.Application.Json)
+                    body = Apply(
+                        signalData.transaction!!.ballotNumber,
+                        true,
+                        Accept.COMMIT,
+                        signalData.change!!
+                    )
+                }.also {
+                    logger.info("Got response ${it.status.value}")
+                }
+            }
+            throw RuntimeException("Stop leader after apply")
+        }
+
+
+        val peerGPACAction = SignalListener {
+            phaserGPACPeer.arrive()
+        }
+        val raftPeersAction = SignalListener {
+            phaserRaftPeers.arrive()
+        }
+        val leaderElectedAction = SignalListener { leaderElectedPhaser.arrive() }
+
+        val firstPeerSignals = mapOf(
+            Signal.BeforeSendingApply to firstLeaderAction,
+            Signal.ConsensusFollowerChangeAccepted to raftPeersAction,
+            Signal.ConsensusLeaderElected to leaderElectedAction,
+            Signal.OnHandlingElectBegin to SignalListener {
+                if (isSecondGPAC.get()) {
+                    throw Exception("Ignore restarting GPAC")
+                }
+            }
+        )
+
+        val peerSignals =
+            mapOf(
+                Signal.ConsensusLeaderElected to leaderElectedAction,
+                Signal.ConsensusFollowerChangeAccepted to raftPeersAction,
+                Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") }
+            )
+
+        val peer1Signals =
+            mapOf(
+                Signal.OnHandlingApplyCommitted to peerGPACAction,
+                Signal.ConsensusLeaderElected to leaderElectedAction
+            )
+
+        apps = TestApplicationSet(
+            listOf(5),
+            signalListeners = mapOf(
+                0 to firstPeerSignals,
+                1 to peer1Signals,
+                2 to peerSignals,
+                3 to peerSignals,
+                4 to peerSignals,
+            ), configOverrides = mapOf(
+                0 to mapOf("gpac.maxLeaderElectionTries" to 2),
+                1 to mapOf("gpac.maxLeaderElectionTries" to 2),
+                2 to mapOf("gpac.maxLeaderElectionTries" to 2),
+                3 to mapOf("gpac.maxLeaderElectionTries" to 2),
+                4 to mapOf("gpac.maxLeaderElectionTries" to 2),
+            )
+        )
+
+        leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        // change that will cause leader to fall according to action
+        try {
+            executeChange(
+                "${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true",
+                proposedChange
+            )
+            fail("Change passed")
+        } catch (e: Exception) {
+            logger.info("Leader 1 fails", e)
+        }
+
+        // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
+        phaserGPACPeer.arriveAndAwaitAdvanceWithTimeout()
+        isSecondGPAC.set(true)
+
+        val change = testHttpClient.get<Change>("http://${apps.getPeer(0, 1).address}/change") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+        }
+
+        expect {
+            that(change).isA<AddGroupChange>()
+            that((change as AddGroupChange).groupName).isEqualTo(proposedChange.groupName)
+        }
+
+        phaserRaftPeers.arriveAndAwaitAdvanceWithTimeout()
+
+        apps.getPeers(0).forEach { (_, peerAddress) ->
+            // and should not execute this change couple of times
+            val changes = testHttpClient.get<Changes>("http://${peerAddress.address}/changes") {
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+            }
+
+            // only one change and this change shouldn't be applied two times
+            expectThat(changes.size).isGreaterThanOrEqualTo(1)
+            expect {
+                that(changes[0]).isA<AddGroupChange>()
+                that((changes[0] as AddGroupChange).groupName).isEqualTo(proposedChange.groupName)
+            }
         }
     }
 
