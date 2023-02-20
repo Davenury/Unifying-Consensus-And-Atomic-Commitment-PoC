@@ -192,9 +192,9 @@ class RaftConsensusProtocolImpl(
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
         val prevEntryId = heartbeat.prevEntryId
 
-        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex")
-        logger.info("Lastapplied: ${state.lastApplied} commitIndex: ${state.commitIndex}")
-        logger.info("PrevEntry: ${prevEntryId},  leaderCommitId: ${leaderCommitId} logEntries: ${proposedChanges.map { it.entry.getId() }}")
+//        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex")
+//        logger.info("Lastapplied: ${state.lastApplied} commitIndex: ${state.commitIndex}")
+//        logger.info("PrevEntry: ${prevEntryId},  leaderCommitId: ${leaderCommitId} logEntries: ${proposedChanges.map { it.entry.getId() }}")
 
         if (term < currentTerm) {
             logger.info("The received heartbeat has an old term ($term vs $currentTerm)")
