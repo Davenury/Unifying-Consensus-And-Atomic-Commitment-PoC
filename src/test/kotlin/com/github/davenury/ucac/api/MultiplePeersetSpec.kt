@@ -445,7 +445,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             )
             val peers = apps.getPeers()
 
-            consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(15))
+            consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // given - change in first peerset
             expectCatching {

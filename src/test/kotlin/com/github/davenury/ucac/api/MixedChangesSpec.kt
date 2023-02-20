@@ -149,13 +149,13 @@ class MixedChangesSpec : IntegrationTestBase() {
             // when - executing transaction
             executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", change)
 
-            beforeSendingApplyPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            beforeSendingApplyPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
 
-            applyEndPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset
             askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
