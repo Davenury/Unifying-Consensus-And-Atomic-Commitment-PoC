@@ -237,7 +237,7 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 func createRedisContainer() apiv1.Container {
 	return apiv1.Container{
 		Name:  "redis",
-		Image: "redis:5.0.4",
+		Image: "redis:7.0-alpine",
 		Command: []string{
 			"redis-server",
 			"/redis-master/redis.conf",
@@ -370,6 +370,9 @@ func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ra
 			"config_ratis_addresses": ratisPeers,
 			"config_peers":           gpacPeers,
 			"IS_METRIC_TEST":         strconv.FormatBool(isMetricTest),
+			"PERSISTENCE_TYPE":       "REDIS",
+			"REDIS_HOST":             "localhost",
+			"REDIS_PORT":             "6379",
 		},
 	}
 
@@ -431,7 +434,7 @@ func createPV(namespace string, peerConfig utils.PeerConfig) {
 		Spec: apiv1.PersistentVolumeSpec{
 			StorageClassName: "",
 			Capacity: apiv1.ResourceList{
-				"storage": resource.MustParse("10Mi"),
+				"storage": resource.MustParse("50Mi"),
 			},
 			AccessModes: []apiv1.PersistentVolumeAccessMode{
 				"ReadWriteOnce",
@@ -474,7 +477,7 @@ func createPVC(namespace string, config utils.PeerConfig) {
 			},
 			Resources: apiv1.ResourceRequirements{
 				Requests: apiv1.ResourceList{
-					"storage": resource.MustParse("5Mi"),
+					"storage": resource.MustParse("50Mi"),
 				},
 			},
 		},
