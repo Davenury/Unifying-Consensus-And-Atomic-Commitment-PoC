@@ -1,7 +1,7 @@
 package com.github.davenury.common
 
 import com.sksamuel.hoplite.ConfigLoaderBuilder
-import com.sksamuel.hoplite.MapPropertySource
+import com.sksamuel.hoplite.sources.MapPropertySource
 import com.sksamuel.hoplite.addResourceSource
 import com.sksamuel.hoplite.decoder.Decoder
 

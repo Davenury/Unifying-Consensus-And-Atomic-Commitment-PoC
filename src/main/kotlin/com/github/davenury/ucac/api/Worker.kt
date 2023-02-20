@@ -35,42 +35,47 @@ class Worker(
             ?: twoPC.getChangeResult(changeId)
             ?: throw ChangeDoesntExist(changeId)
 
-    private suspend fun processingQueue() {
+    override fun run() = runBlocking {
+        mdc?.let { MDC.setContextMap(it) }
+        processQueue()
+    }
+
+    private suspend fun processQueue() {
         try {
             while (!Thread.interrupted()) {
-                val job = queue.receive()
-                logger.info("Worker receive job: $job")
-                Metrics.startTimer(job.change.id)
-                val result =
-                    when (job.protocolName) {
-                        ProtocolName.CONSENSUS -> consensusProtocol.proposeChangeAsync(job.change)
-                        ProtocolName.TWO_PC -> twoPC.proposeChangeAsync(job.change)
-                        ProtocolName.GPAC -> gpacFactory.getOrCreateGPAC(job.change.id).proposeChangeAsync(job.change)
-                    }
-                result.thenAccept {
-                    job.completableFuture.complete(it)
-                    Metrics.stopTimer(job.change.id, job.protocolName.name.lowercase(), it)
-                    Metrics.bumpChangeProcessed(it, job.protocolName.name.lowercase())
-                    runBlocking {
-                        ChangeNotifier.notify(job.change, it)
-                    }
-                }.await()
+                try {
+                    processQueueElement()
+                } catch (e: Exception) {
+                    logger.error("Error while processing queue, ignoring", e)
+                }
             }
-        } catch (e: Exception) {
-            if (e is InterruptedException) {
-                logger.debug("Worker interrupted")
-            }
-            processingQueue()
+        } catch (e: InterruptedException) {
+            logger.info("Worker interrupted")
         }
     }
 
-    override fun run() = runBlocking {
-        mdc?.let { MDC.setContextMap(it) }
-        processingQueue()
+    private suspend fun processQueueElement() {
+        val job = queue.receive()
+        logger.info("Received a job: $job")
+        Metrics.startTimer(job.change.id)
+        val result =
+            when (job.protocolName) {
+                ProtocolName.CONSENSUS -> consensusProtocol.proposeChangeAsync(job.change)
+                ProtocolName.TWO_PC -> twoPC.proposeChangeAsync(job.change)
+                ProtocolName.GPAC -> gpacFactory.getOrCreateGPAC(job.change.id)
+                    .proposeChangeAsync(job.change)
+            }
+        result.thenAccept {
+            job.completableFuture.complete(it)
+            Metrics.stopTimer(job.change.id, job.protocolName.name.lowercase(), it)
+            Metrics.bumpChangeProcessed(it, job.protocolName.name.lowercase())
+            runBlocking {
+                ChangeNotifier.notify(job.change, it)
+            }
+        }.await()
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger("worker")
     }
 }
-

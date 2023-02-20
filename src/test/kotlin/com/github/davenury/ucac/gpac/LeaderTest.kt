@@ -3,7 +3,7 @@ package com.github.davenury.ucac.gpac
 import com.github.davenury.common.AddUserChange
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangePeersetInfo
-import com.github.davenury.common.history.History
+import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.gpac.Accept
@@ -77,7 +77,7 @@ class LeaderTest {
             .isEqualTo(change)
     }
 
-    private val history = History()
+    private val history = InMemoryHistory()
     private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)
     private val client = GPACProtocolClientImpl()
     private val transactionBlocker = TransactionBlocker()
