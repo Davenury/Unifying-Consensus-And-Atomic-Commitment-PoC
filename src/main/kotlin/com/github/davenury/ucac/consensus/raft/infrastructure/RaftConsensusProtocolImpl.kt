@@ -73,7 +73,9 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendLeaderRequest() {
         if (executorService != null) {
-            restartTimer(RaftRole.Candidate)
+            mutex.withLock {
+                restartTimer(RaftRole.Candidate)
+            }
             throw Exception("$globalPeerId Try become leader before cleaning")
         }
         signalPublisher.signal(
@@ -104,7 +106,9 @@ class RaftConsensusProtocolImpl(
         val positiveResponses = responses.filterNotNull().count { it.voteGranted }
 
         if (!isMoreThanHalf(positiveResponses) || otherConsensusPeers().isEmpty()) {
-            restartTimer(RaftRole.Candidate)
+            mutex.withLock {
+                restartTimer(RaftRole.Candidate)
+            }
             return
         }
 
@@ -150,8 +154,8 @@ class RaftConsensusProtocolImpl(
             currentTerm = iteration
             val peerAddress = peerResolver.resolve(GlobalPeerId(globalPeerId.peersetId, peerId)).address
             votedFor = VotedFor(peerId, peerAddress)
+            restartTimer()
         }
-        restartTimer()
         logger.info("Voted for $peerId in term $iteration")
         return ConsensusElectedYou(this.peerId, currentTerm, true)
     }
@@ -159,14 +163,12 @@ class RaftConsensusProtocolImpl(
     private suspend fun newLeaderElected(leaderId: Int, term: Int) {
         logger.info("A leader has been elected: $leaderId (in term $term)")
         val leaderAddress = peerResolver.resolve(GlobalPeerId(globalPeerId.peersetId, leaderId)).address
-        mutex.withLock {
-            votedFor = VotedFor(peerId, leaderAddress, true)
+        votedFor = VotedFor(peerId, leaderAddress, true)
 //          DONE: Check if stop() function make sure if you need to wait to all job finish ->
 //          fixed by setting executor to null and adding null condition in if
-            if (role == RaftRole.Leader) stopBeingLeader(term)
-            role = RaftRole.Follower
-            currentTerm = term
-        }
+        if (role == RaftRole.Leader) stopBeingLeader(term)
+        role = RaftRole.Follower
+        currentTerm = term
         signalPublisher.signal(
             Signal.ConsensusLeaderElected,
             this,
@@ -182,7 +184,7 @@ class RaftConsensusProtocolImpl(
 
     }
 
-    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
+    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse = mutex.withLock {
         Metrics.registerTimerHeartbeat()
         val term = heartbeat.term
         val leaderCommitId = heartbeat.leaderCommitId
@@ -190,9 +192,9 @@ class RaftConsensusProtocolImpl(
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
         val prevEntryId = heartbeat.prevEntryId
 
-//        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex")
-//        logger.info("Lastapplied: ${state.lastApplied} commitIndex: ${state.commitIndex}")
-//        logger.info("PrevEntry: ${prevEntryId},  leaderCommitId: ${leaderCommitId} logEntries: ${proposedChanges.map { it.entry.getId() }}")
+        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex")
+        logger.info("Lastapplied: ${state.lastApplied} commitIndex: ${state.commitIndex}")
+        logger.info("PrevEntry: ${prevEntryId},  leaderCommitId: ${leaderCommitId} logEntries: ${proposedChanges.map { it.entry.getId() }}")
 
         if (term < currentTerm) {
             logger.info("The received heartbeat has an old term ($term vs $currentTerm)")
@@ -209,15 +211,11 @@ class RaftConsensusProtocolImpl(
 
 //      Restart timer because we received heartbeat from proper leader
         if (currentTerm < term) {
-            mutex.withLock {
-                currentTerm = term
-            }
+            currentTerm = term
             releaseBlockerFromPreviousTermChanges()
         }
 
-        mutex.withLock {
-            lastHeartbeatTime = Instant.now()
-        }
+        lastHeartbeatTime = Instant.now()
 
         restartTimer()
 
@@ -289,10 +287,7 @@ class RaftConsensusProtocolImpl(
         leaderCommitId: String,
         proposedChanges: List<LedgerItem> = listOf()
     ) {
-        val updateResult: LedgerUpdateResult
-        mutex.withLock {
-            updateResult = state.updateLedger(leaderCommitId, proposedChanges)
-        }
+        val updateResult: LedgerUpdateResult = state.updateLedger(leaderCommitId, proposedChanges)
 
         updateResult.acceptedItems.forEach { acceptedItem ->
             signalPublisher.signal(
@@ -432,8 +427,8 @@ class RaftConsensusProtocolImpl(
 
             response.message.term > currentTerm -> {
                 logger.info("Based on info from $peer, someone else is currently leader")
-                stopBeingLeader(response.message.term)
                 mutex.withLock {
+                    stopBeingLeader(response.message.term)
                     votedFor = null
                 }
             }

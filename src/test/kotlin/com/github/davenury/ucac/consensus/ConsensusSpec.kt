@@ -391,7 +391,7 @@ class ConsensusSpec : IntegrationTestBase() {
 //      Start processing
         val change = createChange(null)
         expectCatching {
-            executeChange("${firstLeaderAddress.address}/v2/change/sync?timeout=PT0.1S", change)
+            executeChange("${firstLeaderAddress.address}/v2/change/sync?timeout=PT0.01S", change)
         }.isFailure()
 
         failurePhaser.arriveAndAwaitAdvanceWithTimeout()
