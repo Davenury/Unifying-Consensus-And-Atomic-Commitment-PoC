@@ -77,6 +77,10 @@ func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace str
 				PeersetsConfig: numberOfPeersInPeersets,
 			}
 
+			createPV(namespace, peerConfig)
+			createPVC(namespace, peerConfig)
+			createRedisConfigmap(namespace, peerConfig)
+
 			deploySinglePeerService(namespace, peerConfig, ratisPort+i)
 
 			deploySinglePeerConfigMap(namespace, peerConfig, ratisPeers, gpacPeers, isMetricTest)
@@ -118,7 +122,7 @@ func anyPodNotReady(expectedPeers int, namespace string) bool {
 	notReadyCount := 0
 	for _, pod := range pods.Items {
 		containerStatuses := pod.Status.ContainerStatuses
-		if len(containerStatuses) != 2 || !areContainersReady(containerStatuses) {
+		if len(containerStatuses) != 3 || !areContainersReady(containerStatuses) {
 			notReadyCount += 1
 		}
 	}
@@ -198,6 +202,65 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 			Containers: []apiv1.Container{
 				createSingleContainer(containerName, peerConfig, imageName, createResources),
 				createProxyContainer(proxyDelay, proxyLimit),
+				createRedisContainer(),
+			},
+			Volumes: []apiv1.Volume{
+				{
+					Name: "redis-data",
+					VolumeSource: apiv1.VolumeSource{
+						PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
+							ClaimName: utils.PVCName(peerConfig),
+						},
+					},
+				},
+				{
+					Name: "config",
+					VolumeSource: apiv1.VolumeSource{
+						ConfigMap: &apiv1.ConfigMapVolumeSource{
+							LocalObjectReference: apiv1.LocalObjectReference{
+								Name: utils.RedisConfigmapName(peerConfig),
+							},
+							Items: []apiv1.KeyToPath{
+								{
+									Key:  "redis-config",
+									Path: "redis.conf",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createRedisContainer() apiv1.Container {
+	return apiv1.Container{
+		Name:  "redis",
+		Image: "redis:7.0-alpine",
+		Command: []string{
+			"redis-server",
+			"/redis-master/redis.conf",
+		},
+		Env: []apiv1.EnvVar{
+			{
+				Name:  "MASTER",
+				Value: "true",
+			},
+		},
+		Ports: []apiv1.ContainerPort{
+			{
+				ContainerPort: 6379,
+			},
+		},
+		VolumeMounts: []apiv1.VolumeMount{
+			{
+				Name:      "redis-data",
+				MountPath: "/data",
+			},
+			{
+				Name:      "config",
+				MountPath: "/redis-master",
 			},
 		},
 	}
@@ -299,14 +362,17 @@ func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ra
 			},
 		},
 		Data: map[string]string{
-			"CONFIG_FILE":            "application-kubernetes.conf",
-			"config_host":            utils.ServiceAddress(peerConfig),
-			"config_port":            "8081",
-			"config_peersetId":       peerConfig.PeersetId,
-			"config_peerId":          peerConfig.PeerId,
-			"config_ratis_addresses": ratisPeers,
-			"config_peers":           gpacPeers,
-			"IS_METRIC_TEST":         strconv.FormatBool(isMetricTest),
+			"CONFIG_FILE":                  "application-kubernetes.conf",
+			"config_host":                  utils.ServiceAddress(peerConfig),
+			"config_port":                  "8081",
+			"config_peersetId":             peerConfig.PeersetId,
+			"config_peerId":                peerConfig.PeerId,
+			"config_ratis_addresses":       ratisPeers,
+			"config_peers":                 gpacPeers,
+			"IS_METRIC_TEST":               strconv.FormatBool(isMetricTest),
+			"config_persistence_type":      "REDIS",
+			"config_persistence_redisHost": "localhost",
+			"config_persistence_redisPort": "6379",
 		},
 	}
 
@@ -347,4 +413,101 @@ func deploySinglePeerService(namespace string, peerConfig utils.PeerConfig, curr
 	}
 
 	clientset.CoreV1().Services(namespace).Create(context.Background(), service, metav1.CreateOptions{})
+}
+
+func createPV(namespace string, peerConfig utils.PeerConfig) {
+	clientset, err := utils.GetClientset()
+	if err != nil {
+		panic(err)
+	}
+
+	hostPathType := apiv1.HostPathUnset
+
+	pv := &apiv1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.PVName(peerConfig),
+			Namespace: namespace,
+			Labels: map[string]string{
+				"project": "ucac",
+			},
+		},
+		Spec: apiv1.PersistentVolumeSpec{
+			StorageClassName: "",
+			Capacity: apiv1.ResourceList{
+				"storage": resource.MustParse("50Mi"),
+			},
+			AccessModes: []apiv1.PersistentVolumeAccessMode{
+				"ReadWriteOnce",
+			},
+			PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimRetain,
+			PersistentVolumeSource: apiv1.PersistentVolumeSource{
+				HostPath: &apiv1.HostPathVolumeSource{
+					Path: "/mnt/ucac/redis/data",
+					Type: &hostPathType,
+				},
+			},
+		},
+	}
+
+	if _, err = clientset.CoreV1().PersistentVolumes().Create(context.Background(), pv, metav1.CreateOptions{}); err != nil {
+		panic(err)
+	}
+}
+
+func createPVC(namespace string, config utils.PeerConfig) {
+	clientset, err := utils.GetClientset()
+	if err != nil {
+		panic(err)
+	}
+
+	storageClass := ""
+
+	pvc := &apiv1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.PVCName(config),
+			Namespace: namespace,
+			Labels: map[string]string{
+				"project": "ucac",
+			},
+		},
+		Spec: apiv1.PersistentVolumeClaimSpec{
+			StorageClassName: &storageClass,
+			AccessModes: []apiv1.PersistentVolumeAccessMode{
+				"ReadWriteOnce",
+			},
+			Resources: apiv1.ResourceRequirements{
+				Requests: apiv1.ResourceList{
+					"storage": resource.MustParse("50Mi"),
+				},
+			},
+		},
+	}
+
+	clientset.CoreV1().PersistentVolumeClaims(namespace).Create(context.Background(), pvc, metav1.CreateOptions{})
+}
+
+func createRedisConfigmap(namespace string, config utils.PeerConfig) {
+	clientset, err := utils.GetClientset()
+	if err != nil {
+		panic(err)
+	}
+
+	configMap := &apiv1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.RedisConfigmapName(config),
+			Namespace: namespace,
+			Labels: map[string]string{
+				"project": "ucac",
+			},
+		},
+		Data: map[string]string{
+			"redis-config": "appendonly yes",
+		},
+	}
+
+	clientset.CoreV1().ConfigMaps(namespace).Create(context.Background(), configMap, metav1.CreateOptions{})
 }

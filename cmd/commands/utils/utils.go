@@ -80,6 +80,16 @@ func ServiceAddress(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
+func PVName(config PeerConfig) string {
+	return fmt.Sprintf("peerset%s-peer%s-pv", config.PeersetId, config.PeerId)
+}
+func PVCName(config PeerConfig) string {
+	return fmt.Sprintf("peerset%s-peer%s-claim", config.PeersetId, config.PeerId)
+}
+func RedisConfigmapName(config PeerConfig) string {
+	return fmt.Sprintf("peerset%s-peer%s-rediscf", config.PeersetId, config.PeerId)
+}
+
 func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool) string {
 
 	var resultSb strings.Builder
