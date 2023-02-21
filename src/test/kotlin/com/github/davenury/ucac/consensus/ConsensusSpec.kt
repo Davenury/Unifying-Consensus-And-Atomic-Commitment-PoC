@@ -346,7 +346,7 @@ class ConsensusSpec : IntegrationTestBase() {
         val election1Phaser = Phaser(peersWithoutLeader)
         peersWithoutLeader -= 1
         val election2Phaser = Phaser(peersWithoutLeader)
-        val changePhaser = Phaser(peersWithoutLeader)
+        val changePhaser = Phaser(3)
         var shouldElection2Starts = false
         listOf(election1Phaser, election2Phaser, changePhaser).forEach { it.register() }
         var firstLeader = true
@@ -370,18 +370,25 @@ class ConsensusSpec : IntegrationTestBase() {
 
                     shouldElection2Starts -> {
                         logger.info("Arrived at election 2 ${it.subject.getPeerName()}")
+                        firstLeader = false
                         election2Phaser.arrive()
                     }
                 }
             }
 
-        val peerApplyChange = SignalListener { changePhaser.arrive() }
+        val peerApplyChange = SignalListener {
+            logger.info("Arrived peer apply change")
+            changePhaser.arrive()
+        }
         val ignoreHeartbeatAfterProposingChange = SignalListener {
             when {
-                it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> proposedPeers[it.subject.getPeerName()] =
-                    true
+                it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> {
+                    proposedPeers[it.subject.getPeerName()] = true
+                }
 
                 proposedPeers.contains(it.subject.getPeerName()) && firstLeader -> throw Exception("Ignore heartbeat from old leader")
+                proposedPeers.size > 2 && firstLeader -> throw Exception("Ignore heartbeat from old leader")
+
             }
         }
 
@@ -409,8 +416,6 @@ class ConsensusSpec : IntegrationTestBase() {
         failurePhaser.arriveAndAwaitAdvanceWithTimeout()
 
         apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
-        firstLeader = false
-        shouldElection2Starts = true
 
         val nonLeaderPeer = apps.getRunningPeers(0)
             .values
@@ -427,6 +432,7 @@ class ConsensusSpec : IntegrationTestBase() {
             that(proposedChanges1.first().acceptNum).isEqualTo(null)
         }
 
+        shouldElection2Starts = true
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
