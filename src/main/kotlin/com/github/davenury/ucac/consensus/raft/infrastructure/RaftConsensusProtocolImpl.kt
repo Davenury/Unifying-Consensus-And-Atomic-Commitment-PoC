@@ -146,7 +146,10 @@ class RaftConsensusProtocolImpl(
             }
             if (amILeader()) stopBeingLeader(iteration)
 
-            val candidateIsUpToDate: Boolean = lastLogId == state.commitIndex || !state.checkIfItemExist(lastLogId)
+            val candidateIsUpToDate: Boolean =
+                if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS)
+                    state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId() == lastLogId
+                else lastLogId == state.commitIndex || !state.checkIfItemExist(lastLogId)
 
             if (!candidateIsUpToDate && amILeader()) {
                 logger.info("Denying vote for $peerId due to an old index ($lastLogId vs ${state.commitIndex})")
@@ -262,7 +265,7 @@ class RaftConsensusProtocolImpl(
                 return ConsensusHeartbeatResponse(false, currentTerm)
             }
 
-            isUpdatedCommitIndex && transactionBlocker.isAcquired() -> {
+            isUpdatedCommitIndex && transactionBlocker.isAcquiredByProtocol(ProtocolName.CONSENSUS) -> {
                 logger.info("Received heartbeat when is blocked so only accepted changes, blocked on ${transactionBlocker.getChangeId()}")
                 updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
                 return ConsensusHeartbeatResponse(true, currentTerm, true)
