@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus.raft.infrastructure
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
+import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.twopc.TwoPC
@@ -185,6 +186,18 @@ class RaftConsensusProtocolImpl(
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse = mutex.withLock {
+
+        heartbeat.logEntries.forEach {
+            val entry = HistoryEntry.deserialize(it.serializedEntry)
+            signalPublisher.signal(
+                signal = Signal.ConsensusFollowerHeartbeatReceived,
+                subject = this,
+                peers = listOf(otherConsensusPeers()),
+                change = Change.fromHistoryEntry(entry),
+                historyEntry = entry,
+            )
+        }
+
         Metrics.registerTimerHeartbeat()
         val term = heartbeat.term
         val leaderCommitId = heartbeat.leaderCommitId

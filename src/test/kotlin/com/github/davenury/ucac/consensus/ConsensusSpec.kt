@@ -22,6 +22,7 @@ import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.util.collections.*
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -32,6 +33,7 @@ import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.assertions.*
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
@@ -337,6 +339,7 @@ class ConsensusSpec : IntegrationTestBase() {
 
     @Test
     fun `leader fails during processing change`(): Unit = runBlocking {
+        val change = createChange(null)
         var peersWithoutLeader = 4
 
         val failurePhaser = Phaser(2)
@@ -347,6 +350,7 @@ class ConsensusSpec : IntegrationTestBase() {
         var shouldElection2Starts = false
         listOf(election1Phaser, election2Phaser, changePhaser).forEach { it.register() }
         var firstLeader = true
+        val proposedPeers = ConcurrentHashMap<String, Boolean>()
 
         val leaderAction = SignalListener {
             if (firstLeader) {
@@ -372,11 +376,20 @@ class ConsensusSpec : IntegrationTestBase() {
             }
 
         val peerApplyChange = SignalListener { changePhaser.arrive() }
+        val ignoreHeartbeatAfterProposingChange = SignalListener {
+            when {
+                it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> proposedPeers[it.subject.getPeerName()] =
+                    true
+
+                proposedPeers.contains(it.subject.getPeerName()) && firstLeader -> throw Exception("Ignore heartbeat from old leader")
+            }
+        }
 
         val signalListener = mapOf(
             Signal.ConsensusAfterProposingChange to leaderAction,
             Signal.ConsensusLeaderElected to peerLeaderElected,
-            Signal.ConsensusFollowerChangeAccepted to peerApplyChange
+            Signal.ConsensusFollowerChangeAccepted to peerApplyChange,
+            Signal.ConsensusFollowerHeartbeatReceived to ignoreHeartbeatAfterProposingChange
         )
 
         apps = TestApplicationSet(
@@ -389,15 +402,14 @@ class ConsensusSpec : IntegrationTestBase() {
         val firstLeaderAddress = getLeaderAddress(apps.getRunningApps()[0])
 
 //      Start processing
-        val change = createChange(null)
         expectCatching {
-            executeChange("${firstLeaderAddress.address}/v2/change/sync?timeout=PT0.01S", change)
+            executeChange("${firstLeaderAddress.address}/v2/change/sync?timeout=PT0.5S", change)
         }.isFailure()
 
         failurePhaser.arriveAndAwaitAdvanceWithTimeout()
-        firstLeader = false
 
         apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
+        firstLeader = false
         shouldElection2Starts = true
 
         val nonLeaderPeer = apps.getRunningPeers(0)
