@@ -11,13 +11,13 @@ RUN gradle installDist --no-daemon
 ###
 
 FROM alpine:3.17.1 as application
-RUN apk add openjdk11 && apk add --no-cache jattach --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/
+RUN apk add openjdk11 && apk add --no-cache jattach --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/ && apk add redis
 
 WORKDIR /application
 
 COPY --from=builder /home/gradle/src/build/install/PoC .
 
-ENTRYPOINT ["sh", "-c", "/application/bin/PoC", "-Xmx=500m"]
+ENTRYPOINT ["sh", "-c", "while ! redis-cli ping; do sleep 1 ; done && sh /application/bin/PoC"]
 
 ###
 

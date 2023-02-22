@@ -324,11 +324,6 @@ func createSingleContainer(peerConfig utils.PeerConfig, imageName string, create
 			"-Xmx500m",
 			"-Dcom.sun.management.jmxremote.port=9999",
 		},
-		Command: []string{
-			"sh",
-			"-c",
-			"sleep 2 && /application/bin/PoC -Xmx=500m",
-		},
 		Ports: []apiv1.ContainerPort{
 			{
 				ContainerPort: 8081,
