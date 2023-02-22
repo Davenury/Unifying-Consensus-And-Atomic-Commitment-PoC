@@ -93,9 +93,12 @@ class RaftConsensusProtocolImpl(
 
         logger.info("Trying to become a leader in term $currentTerm")
 
+        val lastIndex = state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId()
+            ?: state.commitIndex
+
         val responses = protocolClient.sendConsensusElectMe(
             otherConsensusPeers(),
-            ConsensusElectMe(peerId, currentTerm, state.commitIndex)
+            ConsensusElectMe(peerId, currentTerm, lastIndex)
         ).map { it.message }
 
         logger.debug("Responses from leader request: $responses in iteration $currentTerm")
@@ -129,37 +132,38 @@ class RaftConsensusProtocolImpl(
         scheduleHeartbeatToPeers()
     }
 
-    override suspend fun handleRequestVote(peerId: Int, iteration: Int, lastLogId: String): ConsensusElectedYou {
+    override suspend fun handleRequestVote(peerId: Int, iteration: Int, candidateLastLogId: String): ConsensusElectedYou {
         logger.debug(
-            "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogId, " +
+            "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$candidateLastLogId, " +
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
         )
 
         mutex.withLock {
-            val denyVoteResponse = ConsensusElectedYou(this.peerId, currentTerm, false)
             if (iteration < currentTerm || (iteration == currentTerm && votedFor != null)) {
                 logger.info(
                     "Denying vote for $peerId due to an old term ($iteration vs $currentTerm), " +
                             "I voted for ${votedFor?.id}"
                 )
-                return denyVoteResponse
-            }
-            if (amILeader()) stopBeingLeader(iteration)
-
-            val candidateIsUpToDate: Boolean =
-                if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS)
-                    state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId() == lastLogId
-                else lastLogId == state.commitIndex || !state.checkIfItemExist(lastLogId)
-
-            if (!candidateIsUpToDate && amILeader()) {
-                logger.info("Denying vote for $peerId due to an old index ($lastLogId vs ${state.commitIndex})")
-                return denyVoteResponse
+                return ConsensusElectedYou(this.peerId, currentTerm, false)
             }
             currentTerm = iteration
+            if (amILeader()) stopBeingLeader(iteration)
+
+
+            val lastEntryId =
+                state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId()
+                    ?: state.lastApplied
+
+            val candidateIsUpToDate: Boolean = state.isNotApplied(candidateLastLogId) || candidateLastLogId == lastEntryId
+
+            if (!candidateIsUpToDate) {
+                logger.info("Denying vote for $peerId due to an old index ($candidateLastLogId vs $lastEntryId)")
+                return ConsensusElectedYou(this.peerId, currentTerm, false)
+            }
             val peerAddress = peerResolver.resolve(GlobalPeerId(globalPeerId.peersetId, peerId)).address
             votedFor = VotedFor(peerId, peerAddress)
-            restartTimer()
         }
+        restartTimer()
         logger.info("Voted for $peerId in term $iteration")
         return ConsensusElectedYou(this.peerId, currentTerm, true)
     }
@@ -235,7 +239,7 @@ class RaftConsensusProtocolImpl(
 
         restartTimer()
 
-        val notAppliedProposedChanges = proposedChanges.filter { state.isNotAppliedOrProposed(it.entry.getId()) }
+        val notAppliedProposedChanges = proposedChanges.filter { state.isNotAppliedNorProposed(it.entry.getId()) }
 
         val prevLogEntryExists = prevEntryId == null || state.checkIfItemExist(prevEntryId)
 
@@ -350,10 +354,11 @@ class RaftConsensusProtocolImpl(
         val message = "Received heartbeat from ${heartbeat.leaderId} with " +
                 "${updateResult.proposedItems.size} proposed and " +
                 "${updateResult.acceptedItems.size} accepted items"
-        logger.debug(message)
 
         if (updateResult.proposedItems.isNotEmpty() || updateResult.acceptedItems.isNotEmpty()) {
             logger.info(message)
+        } else {
+            logger.debug(message)
         }
 
         updateResult.acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {

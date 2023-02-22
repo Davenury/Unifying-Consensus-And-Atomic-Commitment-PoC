@@ -351,10 +351,12 @@ class ConsensusSpec : IntegrationTestBase() {
         listOf(election1Phaser, election2Phaser, changePhaser).forEach { it.register() }
         var firstLeader = true
         val proposedPeers = ConcurrentHashMap<String, Boolean>()
+        var changePeers: (() -> Unit?)? = null
 
         val leaderAction = SignalListener {
             if (firstLeader) {
                 logger.info("Arrived ${it.subject.getPeerName()}")
+                changePeers?.invoke()
                 failurePhaser.arrive()
                 throw RuntimeException("Failed after proposing change")
             }
@@ -362,13 +364,12 @@ class ConsensusSpec : IntegrationTestBase() {
 
         val peerLeaderElected =
             SignalListener {
-                when {
-                    election1Phaser.phase == 0 -> {
+                when (election1Phaser.phase) {
+                    0 -> {
                         logger.info("Arrived at election 1 ${it.subject.getPeerName()}")
                         election1Phaser.arrive()
                     }
-
-                    shouldElection2Starts -> {
+                    else -> {
                         logger.info("Arrived at election 2 ${it.subject.getPeerName()}")
                         firstLeader = false
                         election2Phaser.arrive()
@@ -408,6 +409,15 @@ class ConsensusSpec : IntegrationTestBase() {
 
         val firstLeaderAddress = getLeaderAddress(apps.getRunningApps()[0])
 
+        changePeers = {
+            val peers = apps.getRunningPeers(0).mapValues { entry ->
+                val peer = entry.value
+                peer.copy(address = peer.address.replace(knownPeerIp, unknownPeerIp))
+            }
+            apps.getApp(firstLeaderAddress.globalPeerId).setPeers(peers)
+        }
+
+
 //      Start processing
         expectCatching {
             executeChange("${firstLeaderAddress.address}/v2/change/sync?timeout=PT0.5S", change)
@@ -417,35 +427,26 @@ class ConsensusSpec : IntegrationTestBase() {
 
         apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
 
-        val nonLeaderPeer = apps.getRunningPeers(0)
-            .values
-            .first { it != firstLeaderAddress }
-
-        val proposedChanges1 = askForProposedChanges(nonLeaderPeer)
-        val acceptedChanges1 = askForAcceptedChanges(nonLeaderPeer)
-        expect {
-            that(proposedChanges1.size).isEqualTo(1)
-            that(acceptedChanges1.size).isEqualTo(0)
-        }
-        expect {
-            that(proposedChanges1.first()).isEqualTo(change)
-            that(proposedChanges1.first().acceptNum).isEqualTo(null)
-        }
-
-        shouldElection2Starts = true
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        val proposedChanges2 = askForProposedChanges(nonLeaderPeer)
-        val acceptedChanges2 = askForAcceptedChanges(nonLeaderPeer)
-        expect {
-            that(proposedChanges2.size).isEqualTo(0)
-            that(acceptedChanges2.size).isEqualTo(1)
+
+        apps.getRunningPeers(0)
+            .values
+            .filter { it != firstLeaderAddress  }
+            .forEach {
+            val proposedChanges2 = askForProposedChanges(it)
+            val acceptedChanges2 = askForAcceptedChanges(it)
+            expect {
+                that(proposedChanges2.size).isEqualTo(0)
+                that(acceptedChanges2.size).isEqualTo(1)
+            }
+            expect {
+                that(acceptedChanges2.first()).isEqualTo(change)
+                that(acceptedChanges2.first().acceptNum).isEqualTo(null)
+            }
         }
-        expect {
-            that(acceptedChanges2.first()).isEqualTo(change)
-            that(acceptedChanges2.first().acceptNum).isEqualTo(null)
-        }
+
     }
 
     @Test
