@@ -17,7 +17,7 @@ data class Ledger(
     var commitIndex: String = InitialHistoryEntry.getId()
     var lastApplied: String = InitialHistoryEntry.getId()
 
-    suspend fun updateLedger(leaderCommitHistoryEntryId: String, proposedItems: List<LedgerItem>): LedgerUpdateResult {
+    suspend fun updateLedger(leaderCommitHistoryEntryId: String, proposedItems: List<LedgerItem>): LedgerUpdateResult =
         mutex.withLock {
             this.proposedEntries.addAll(proposedItems)
 
@@ -28,7 +28,7 @@ data class Ledger(
                 proposedItems = proposedItems,
             )
         }
-    }
+
 
     suspend fun getNewProposedItems(historyEntryId: String): List<LedgerItem> =
         mutex.withLock {
@@ -50,6 +50,7 @@ data class Ledger(
         this.commitIndex = commitHistoryEntryId
         if (lastApplied == commitIndex) return listOf()
 
+
         val index = proposedEntries.indexOfFirst { it.entry.getId() == commitIndex }
         val newAcceptedItems = proposedEntries.take(index + 1)
 
@@ -62,13 +63,12 @@ data class Ledger(
         return newAcceptedItems
     }
 
-    suspend fun acceptItems(acceptedEntriesIds: List<String>) =
-        mutex.withLock {
-            acceptedEntriesIds
-                .map { entryId -> proposedEntries.indexOfFirst { it.entry.getId() == entryId } }
-                .maxOfOrNull { it }
-                ?.let { updateCommitIndex(proposedEntries.elementAt(it).entry.getId()) }
-        }
+    suspend fun acceptItems(acceptedEntriesIds: List<String>) = mutex.withLock {
+        acceptedEntriesIds
+            .map { entryId -> proposedEntries.indexOfFirst { it.entry.getId() == entryId } }
+            .maxOfOrNull { it }
+            ?.let { updateCommitIndex(proposedEntries.elementAt(it).entry.getId()) }
+    }
 
     suspend fun proposeEntry(entry: HistoryEntry, changeId: String) {
         mutex.withLock {
@@ -132,6 +132,7 @@ data class Ledger(
         }
 
     fun isNotApplied(entryId: String): Boolean = !history.containsEntry(entryId)
+    fun isNotAppliedNorProposed(entryId: String): Boolean = !history.containsEntry(entryId) && !proposedEntries.any{it.entry.getId()==entryId}
     suspend fun checkCommitIndex() {
         mutex.withLock {
             val currentEntryId = this.history.getCurrentEntry().getId()

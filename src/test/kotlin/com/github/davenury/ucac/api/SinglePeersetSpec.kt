@@ -78,14 +78,15 @@ class SinglePeersetSpec : IntegrationTestBase() {
             val changeAbortedPhaser = Phaser(1)
             changeAbortedPhaser.register()
 
-            val change = change(0)
+            val change1 = change(0)
+            val change2 = change(0)
 
             val signalListenersForLeader = mapOf(
                 Signal.BeforeSendingApply to SignalListener {
                     expectCatching {
                         executeChange(
                             "http://${it.peers[0][1].address}/v2/change/sync?enforce_gpac=true",
-                            change,
+                            change2,
                         )
                     }
                 },
@@ -112,14 +113,14 @@ class SinglePeersetSpec : IntegrationTestBase() {
             )
 
             expectCatching {
-                executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true", change)
+                executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true", change1)
             }.isSuccess()
 
             changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             try {
                 testHttpClient.get<HttpResponse>(
-                    "http://${apps.getPeer(0, 2).address}/v2/change_status/${change.id}"
+                    "http://${apps.getPeer(0, 2).address}/v2/change_status/${change2.id}"
                 ) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)

@@ -74,7 +74,7 @@ class GPACProtocolImpl(
 
         signal(Signal.OnHandlingElectBegin, null, message.change)
 
-        if (transactionBlocker.isAcquired()) {
+        if (transactionBlocker.isAcquired() && transactionBlocker.getChangeId() != message.change.id) {
             logger.info("Tried to respond to elect me when semaphore acquired!")
             throw AlreadyLockedException(ProtocolName.GPAC)
         }
@@ -112,7 +112,7 @@ class GPACProtocolImpl(
 
         signal(Signal.OnHandlingAgreeBegin, transaction, message.change)
 
-        if (message.ballotNumber != myBallotNumber) {
+        if (message.ballotNumber < myBallotNumber) {
             throw NotValidLeader(myBallotNumber, message.ballotNumber)
         }
         logger.info("Handling agree $message")
@@ -122,10 +122,8 @@ class GPACProtocolImpl(
 
         myBallotNumber = message.ballotNumber
 
-        if (!message.decision) {
-            transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
-            logger.info("Lock aquired: ${message.ballotNumber}")
-        }
+        transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+        logger.info("Lock aquired: ${message.ballotNumber}")
 
         transaction =
             Transaction(
@@ -157,7 +155,8 @@ class GPACProtocolImpl(
 
     override suspend fun handleApply(message: Apply) {
         logger.info("HandleApply message: $message")
-        val isCurrentTransaction = message.ballotNumber == this.myBallotNumber
+        val isCurrentTransaction =
+            message.ballotNumber >= this.myBallotNumber
 
         if (isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
@@ -176,6 +175,7 @@ class GPACProtocolImpl(
             }
 
             !isCurrentTransaction -> {
+                logger.info(" is not blocked")
                 changeConflicts(message.change, "Don't receive ft-agree and can't block on history")
                 throw TransactionNotBlockedOnThisChange(ProtocolName.GPAC, message.change.id)
             }
@@ -202,7 +202,6 @@ class GPACProtocolImpl(
             }
 
             logger.info("handleApply releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
             changeResult.resolveChange(message.change.id, resultMessage)
             if (isMetricTest) {
@@ -238,7 +237,6 @@ class GPACProtocolImpl(
         leaderTimer.startCounting {
             logger.info("Recovery leader starts")
             logger.info("leaderFailTimeout releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             if (!changeWasAppliedBefore(change)) performProtocolAsRecoveryLeader(change)
         }
     }
@@ -320,6 +318,7 @@ class GPACProtocolImpl(
             signal(Signal.ReachedMaxRetries, transaction, change)
             changeTimeout(change, message)
             transaction = transaction.copy(change = null)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             return
         }
 
@@ -421,6 +420,7 @@ class GPACProtocolImpl(
         val agreedResponses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
         if (!superSet(agreedResponses, getPeersFromChange(change))) {
             changeTimeout(change, "Transaction failed due to too few responses of ft phase.")
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             return false
         }
 
@@ -515,6 +515,7 @@ class GPACProtocolImpl(
     private fun changeRejected(change: Change, detailedMessage: String? = null) {
         changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.REJECTED, detailedMessage))
     }
+
     private fun changeConflicts(change: Change, detailedMessage: String? = null) {
         changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.CONFLICT, detailedMessage))
     }

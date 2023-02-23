@@ -246,23 +246,20 @@ class MixedChangesSpec : IntegrationTestBase() {
             val change = change(0, 1)
             val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
 
-
-
             val beforeSendingApplyPhaser = Phaser(1)
             val applyEndPhaser = Phaser(1)
             val electionPhaser = Phaser(4)
-            val applyConsensusPhaser = Phaser(3)
-            listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser)
+            val applyConsensusPhaser = Phaser(2)
+            val apply2PCPhaser = Phaser(4)
+            listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser, applyConsensusPhaser, apply2PCPhaser)
                 .forEach { it.register() }
 
             val leaderElected = SignalListener {
-                logger.info("Arrived ${it.subject.getPeerName()}")
                 electionPhaser.arrive()
             }
 
             val signalListenersForCohort = mapOf(
                 Signal.TwoPCOnChangeApplied to SignalListener {
-                    logger.info("Arrived: ${it.subject.getPeerName()}")
                     applyEndPhaser.arrive()
                 },
                 Signal.ConsensusLeaderElected to leaderElected,
@@ -270,7 +267,12 @@ class MixedChangesSpec : IntegrationTestBase() {
                     beforeSendingApplyPhaser.arrive()
                 },
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                    if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
+                    if (it.change?.id == change.id){
+                        apply2PCPhaser.arrive()
+                    }
+                    if (it.change?.id == secondChange.id) {
+                        applyConsensusPhaser.arrive()
+                    }
                 }
             )
 
@@ -293,6 +295,8 @@ class MixedChangesSpec : IntegrationTestBase() {
             applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+            apply2PCPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset
             askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
