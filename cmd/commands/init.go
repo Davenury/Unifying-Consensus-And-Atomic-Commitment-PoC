@@ -45,7 +45,7 @@ func DoInit(namespace string, createNamespace bool) {
 		"server": map[string]interface{}{
 			"global": map[string]interface{}{
 				"scrape_interval": "5s",
-				"scrape_timeout": "2s",
+				"scrape_timeout":  "2s",
 			},
 		},
 		"prometheus-node-exporter": map[string]interface{}{

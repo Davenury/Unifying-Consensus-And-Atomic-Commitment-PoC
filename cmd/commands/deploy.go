@@ -200,7 +200,7 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 		},
 		Spec: apiv1.PodSpec{
 			Containers: []apiv1.Container{
-				createSingleContainer(containerName, peerConfig, imageName, createResources),
+				createSingleContainer(peerConfig, imageName, createResources),
 				createProxyContainer(proxyDelay, proxyLimit),
 				createRedisContainer(),
 			},
@@ -291,7 +291,7 @@ func createProxyContainer(delay string, limit string) apiv1.Container {
 		},
 	}
 }
-func createSingleContainer(containerName string, peerConfig utils.PeerConfig, imageName string, createResources bool) apiv1.Container {
+func createSingleContainer(peerConfig utils.PeerConfig, imageName string, createResources bool) apiv1.Container {
 
 	probe := &apiv1.Probe{
 		ProbeHandler: apiv1.ProbeHandler{
@@ -317,7 +317,7 @@ func createSingleContainer(containerName string, peerConfig utils.PeerConfig, im
 	}
 
 	return apiv1.Container{
-		Name:      containerName,
+		Name:      "application",
 		Image:     imageName,
 		Resources: resources,
 		Args: []string{
