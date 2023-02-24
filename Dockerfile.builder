@@ -17,7 +17,7 @@ WORKDIR /application
 
 COPY --from=builder /home/gradle/src/build/install/PoC .
 
-ENTRYPOINT ["sh", "-c", "while ! redis-cli ping; do sleep 1 ; done && sh /application/bin/PoC"]
+ENTRYPOINT ["sh", "-c", "/application/bin/PoC"]
 
 ###
 
