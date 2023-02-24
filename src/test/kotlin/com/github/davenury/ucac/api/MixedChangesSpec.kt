@@ -323,9 +323,10 @@ class MixedChangesSpec : IntegrationTestBase() {
 
             val applyEndPhaser = Phaser(1)
             val electionPhaser = Phaser(4)
+            val applyFirstChangePhaser = Phaser(3)
             val applyConsensusPhaser = Phaser(3)
 
-            listOf(applyEndPhaser, electionPhaser)
+            listOf(applyEndPhaser,applyFirstChangePhaser, electionPhaser)
                 .forEach { it.register() }
             val leaderElected = SignalListener {
                 logger.info("Arrived ${it.subject.getPeerName()}")
@@ -339,6 +340,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                 },
                 Signal.ConsensusLeaderElected to leaderElected,
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                    if (it.change?.id == change.id) applyFirstChangePhaser.arrive()
                     if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }
             )
@@ -355,10 +357,10 @@ class MixedChangesSpec : IntegrationTestBase() {
             // when - executing transaction
             executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", change)
 
+            applyFirstChangePhaser.arriveAndAwaitAdvanceWithTimeout()
             applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
-
             applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset

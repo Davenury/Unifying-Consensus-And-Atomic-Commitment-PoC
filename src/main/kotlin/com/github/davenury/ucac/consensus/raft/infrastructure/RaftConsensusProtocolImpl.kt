@@ -663,6 +663,7 @@ class RaftConsensusProtocolImpl(
             logger.info("Propose change to ledger: $updatedChange")
             state.proposeEntry(entry, updatedChange.id)
             voteContainer.initializeChange(entry.getId())
+            scheduleHeartbeatToPeers()
         }
     }
 
