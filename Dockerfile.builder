@@ -17,7 +17,7 @@ WORKDIR /application
 
 COPY --from=builder /home/gradle/src/build/install/PoC .
 
-ENTRYPOINT ["sh", "-c", "/application/bin/PoC"]
+ENTRYPOINT ["sh", "-c", "if [ \"$config_persistence_type\" = \"REDIS\" ] ; then while ! redis-cli ping; do sleep 1 ; done ; fi && sh /application/bin/PoC"]
 
 ###
 
