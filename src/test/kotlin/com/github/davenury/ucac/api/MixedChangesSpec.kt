@@ -340,6 +340,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                 },
                 Signal.ConsensusLeaderElected to leaderElected,
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                    logger.info("Arrived raft change ${it.change}")
                     if (it.change?.id == change.id) applyFirstChangePhaser.arrive()
                     if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }

@@ -131,8 +131,10 @@ data class Ledger(
                 ?.getParentId()!!
         }
 
-    fun isNotApplied(entryId: String): Boolean = !history.containsEntry(entryId)
-    fun isNotAppliedNorProposed(entryId: String): Boolean = !history.containsEntry(entryId) && !proposedEntries.any{it.entry.getId()==entryId}
+    suspend fun isNotApplied(entryId: String): Boolean = mutex.withLock { !history.containsEntry(entryId) }
+    suspend fun isNotAppliedNorProposed(entryId: String): Boolean =
+        mutex.withLock { !history.containsEntry(entryId) && !proposedEntries.any { it.entry.getId() == entryId } }
+
     suspend fun checkCommitIndex() {
         mutex.withLock {
             val currentEntryId = this.history.getCurrentEntry().getId()
