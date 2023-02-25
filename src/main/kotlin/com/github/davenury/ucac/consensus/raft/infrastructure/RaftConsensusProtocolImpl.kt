@@ -477,7 +477,7 @@ class RaftConsensusProtocolImpl(
             acceptedItems = state.getLogEntries(acceptedIds)
 
             acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
-                logger.info("Applying accepted changes: $acceptedItems")
+                logger.info("Applying accepted changes: $acceptedItems votes: ${voteContainer.getVotes(it.entry.getId())}")
                 logger.debug("In applyAcceptedChanges should tryToReleaseBlocker")
                 transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, it.changeId)
             }
@@ -537,7 +537,7 @@ class RaftConsensusProtocolImpl(
 
             proposedChanges
                 .filter { state.isNotApplied(it.entry.getId()) }
-                .forEach { voteContainer.voteForChange(it.entry.getId()) }
+                .forEach { voteContainer.voteForChange(it.entry.getId(), peerAddress) }
             peerUrlToNextIndex[globalPeerId] =
                 peerIndices.copy(acknowledgedEntryId = proposedChanges.last().entry.getId())
         }
