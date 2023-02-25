@@ -812,7 +812,7 @@ data class PeerIndices(
     val acceptedEntryId: String = InitialHistoryEntry.getId(),
     val acknowledgedEntryId: String = InitialHistoryEntry.getId()
 ) {
-    fun decrement(ledger: Ledger): PeerIndices = ledger
+    suspend fun decrement(ledger: Ledger): PeerIndices = ledger
         .getPreviousEntryId(acceptedEntryId)
         .let { PeerIndices(it, it) }
 }

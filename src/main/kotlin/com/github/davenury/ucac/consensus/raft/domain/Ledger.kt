@@ -70,11 +70,10 @@ data class Ledger(
             ?.let { updateCommitIndex(proposedEntries.elementAt(it).entry.getId()) }
     }
 
-    suspend fun proposeEntry(entry: HistoryEntry, changeId: String) {
+    suspend fun proposeEntry(entry: HistoryEntry, changeId: String) =
         mutex.withLock {
             proposedEntries.add(LedgerItem(entry, changeId))
         }
-    }
 
     fun getHistory(): History {
         return history
@@ -110,18 +109,17 @@ data class Ledger(
             proposedEntries.removeAll { newProposedItems.contains(it) }
         }
 
-    suspend fun removeNotAcceptedItems() {
+    suspend fun removeNotAcceptedItems() =
         mutex.withLock {
             proposedEntries.clear()
         }
-    }
 
     suspend fun entryAlreadyProposed(entry: HistoryEntry): Boolean =
         mutex.withLock {
             proposedEntries.any { it.entry == entry }
         }
 
-    fun getPreviousEntryId(entryId: String): String =
+    suspend fun getPreviousEntryId(entryId: String): String = mutex.withLock {
         if (history.containsEntry(entryId))
             history.getEntryFromHistory(entryId)?.getParentId() ?: InitialHistoryEntry.getId()
         else {
@@ -130,21 +128,21 @@ data class Ledger(
                 ?.entry
                 ?.getParentId()!!
         }
+    }
 
     suspend fun isNotApplied(entryId: String): Boolean = mutex.withLock { !history.containsEntry(entryId) }
     suspend fun isNotAppliedNorProposed(entryId: String): Boolean =
         mutex.withLock { !history.containsEntry(entryId) && !proposedEntries.any { it.entry.getId() == entryId } }
 
-    suspend fun checkCommitIndex() {
-        mutex.withLock {
-            val currentEntryId = this.history.getCurrentEntry().getId()
-            if (currentEntryId != commitIndex) {
-                commitIndex = currentEntryId
-                lastApplied = currentEntryId
-            }
+    suspend fun checkCommitIndex() = mutex.withLock {
+        val currentEntryId = this.history.getCurrentEntry().getId()
+        if (currentEntryId != commitIndex) {
+            commitIndex = currentEntryId
+            lastApplied = currentEntryId
         }
-
     }
+
+
 }
 
 data class LedgerItemDto(val serializedEntry: String, val changeId: String) {
