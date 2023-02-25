@@ -476,13 +476,14 @@ class RaftConsensusProtocolImpl(
             val acceptedIds: List<String> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
             acceptedItems = state.getLogEntries(acceptedIds)
 
+            state.acceptItems(acceptedIds)
+
             acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
                 logger.info("Applying accepted changes: $acceptedItems votes: ${voteContainer.getVotes(it.entry.getId())}")
                 logger.debug("In applyAcceptedChanges should tryToReleaseBlocker")
                 transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, it.changeId)
             }
 
-            state.acceptItems(acceptedIds)
             voteContainer.removeChanges(acceptedIds)
         }
 

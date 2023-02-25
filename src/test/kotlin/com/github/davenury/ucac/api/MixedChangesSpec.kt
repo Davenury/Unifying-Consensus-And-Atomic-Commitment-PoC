@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory
 import strikt.api.expectThat
 import strikt.assertions.*
 import java.io.File
-import java.time.Duration
 import java.util.concurrent.Phaser
 
 @Suppress("HttpUrlsUsage")
@@ -317,32 +316,34 @@ class MixedChangesSpec : IntegrationTestBase() {
     @Test
     fun `try to execute two following changes, first 2PC, then Raft`(): Unit =
         runBlocking {
-            val change = change(0, 1)
-            val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
+            val firstChange = change(0, 1)
+            val secondChange = change(mapOf(1 to firstChange.toHistoryEntry(1).getId()))
+            val thirdChange = change(mapOf(0 to firstChange.toHistoryEntry(0).getId()))
 
 
             val applyEndPhaser = Phaser(1)
             val electionPhaser = Phaser(4)
-            val applyFirstChangePhaser = Phaser(3)
-            val applyConsensusPhaser = Phaser(3)
+            val applySecondChangePhaser = Phaser(2)
+            val applyThirdChangePhaser = Phaser(2)
 
-            listOf(applyEndPhaser,applyFirstChangePhaser, electionPhaser)
+            listOf(applyEndPhaser,applyThirdChangePhaser,applySecondChangePhaser, electionPhaser)
                 .forEach { it.register() }
             val leaderElected = SignalListener {
-                logger.info("Arrived ${it.subject.getPeerName()}")
                 electionPhaser.arrive()
             }
 
             val signalListenersForCohort = mapOf(
                 Signal.TwoPCOnChangeApplied to SignalListener {
-                    logger.info("Arrived: ${it.subject.getPeerName()}")
                     applyEndPhaser.arrive()
                 },
                 Signal.ConsensusLeaderElected to leaderElected,
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                    logger.info("Arrived raft change ${it.change}")
-                    if (it.change?.id == change.id) applyFirstChangePhaser.arrive()
-                    if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
+                    if (it.change?.id == thirdChange.id) {
+                        applyThirdChangePhaser.arrive()
+                    }
+                    if (it.change?.id == secondChange.id) {
+                        applySecondChangePhaser.arrive()
+                    }
                 }
             )
 
@@ -356,27 +357,27 @@ class MixedChangesSpec : IntegrationTestBase() {
             electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // when - executing transaction
-            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", change)
+            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", firstChange)
 
-            applyFirstChangePhaser.arriveAndAwaitAdvanceWithTimeout()
             applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
-            applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
+            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", thirdChange)
+            applySecondChangePhaser.arriveAndAwaitAdvanceWithTimeout()
+            applyThirdChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset
             askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
-                logger.info("Peer: $it")
                 val changes = it.second
-                expectThat(changes.size).isGreaterThanOrEqualTo(2)
-                expectThat(changes[1].id).isEqualTo(change.id)
+                expectThat(changes.size).isEqualTo(3)
+                expectThat(changes[1].id).isEqualTo(firstChange.id)
+                expectThat(changes[2].id).isEqualTo(thirdChange.id)
             }
 
             askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
-                logger.info("Peer: $it")
                 val changes = it.second
-                expectThat(changes.size).isGreaterThanOrEqualTo(3)
-                expectThat(changes[1].id).isEqualTo(change.id)
+                expectThat(changes.size).isEqualTo(3)
+                expectThat(changes[1].id).isEqualTo(firstChange.id)
                 expectThat(changes[2].id).isEqualTo(secondChange.id)
             }
         }
