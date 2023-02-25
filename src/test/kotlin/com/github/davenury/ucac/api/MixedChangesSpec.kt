@@ -366,12 +366,14 @@ class MixedChangesSpec : IntegrationTestBase() {
 
 //      First peerset
             askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
+                logger.info("Peer: $it")
                 val changes = it.second
                 expectThat(changes.size).isGreaterThanOrEqualTo(2)
                 expectThat(changes[1].id).isEqualTo(change.id)
             }
 
             askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
+                logger.info("Peer: $it")
                 val changes = it.second
                 expectThat(changes.size).isGreaterThanOrEqualTo(3)
                 expectThat(changes[1].id).isEqualTo(change.id)
