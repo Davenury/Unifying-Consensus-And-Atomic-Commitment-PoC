@@ -1,6 +1,7 @@
 package com.github.davenury.common.history
 
 import com.github.davenury.common.Metrics
+import com.github.davenury.common.meterRegistry
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
@@ -27,35 +28,43 @@ class InMemoryHistory : CachedHistory() {
         )
     }
 
+    override fun isEntryCompatible(entry: HistoryEntry): Boolean =
+        meterRegistry.timer("history_is_entry_compatible").record<Boolean> {
+            super.isEntryCompatible(entry)
+        }!!
+
+
     override fun addEntry(entry: HistoryEntry) {
-        val newId = entry.getId()
-        val expectedParentId = currentEntryId.get()
+        meterRegistry.timer("in_memory_history_add_entry").record {
+            val newId = entry.getId()
+            val expectedParentId = currentEntryId.get()
 
-        if (entry.getParentId() != expectedParentId) {
-            throw HistoryException(
-                "Wrong parent ID, expected ${expectedParentId}, " +
-                        "got ${entry.getParentId()}, entryId=${newId}"
-            )
-        }
-
-        val existing = entries.put(newId, entry) != null
-        var successful = false
-        try {
-            successful = currentEntryId.compareAndSet(expectedParentId, newId)
-        } finally {
-            if (!successful && !existing) {
-                entries.remove(newId)
+            if (entry.getParentId() != expectedParentId) {
+                throw HistoryException(
+                    "Wrong parent ID, expected ${expectedParentId}, " +
+                            "got ${entry.getParentId()}, entryId=${newId}"
+                )
             }
-        }
 
-        if (!successful) {
-            Metrics.bumpIncorrectHistory()
-            throw HistoryException(
-                "Optimistic locking exception: parent changed concurrently, " +
-                        "entryId=${newId}"
-            )
-        } else {
-            logger.info("History entry added ($newId): $entry")
+            val existing = entries.put(newId, entry) != null
+            var successful = false
+            try {
+                successful = currentEntryId.compareAndSet(expectedParentId, newId)
+            } finally {
+                if (!successful && !existing) {
+                    entries.remove(newId)
+                }
+            }
+
+            if (!successful) {
+                Metrics.bumpIncorrectHistory()
+                throw HistoryException(
+                    "Optimistic locking exception: parent changed concurrently, " +
+                            "entryId=${newId}"
+                )
+            } else {
+                logger.info("History entry added ($newId): $entry")
+            }
         }
     }
 
