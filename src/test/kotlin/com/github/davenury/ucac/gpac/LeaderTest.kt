@@ -39,7 +39,7 @@ class LeaderTest {
 
 
         runBlocking {
-            phaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(15))
+            phaser.arriveAndAwaitAdvanceWithTimeout()
         }
 
         // assert that we're actually asking 3 times

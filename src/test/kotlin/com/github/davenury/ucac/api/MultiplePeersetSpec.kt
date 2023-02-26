@@ -304,9 +304,8 @@ class MultiplePeersetSpec : IntegrationTestBase() {
     @Test
     fun `transaction should be processed and should be processed only once when one peerset applies its change and the other not`(): Unit =
         runBlocking {
-            val consensusLeaderElectedPhaser = Phaser(6)
             val changePhaser = Phaser(8)
-            listOf(changePhaser, consensusLeaderElectedPhaser).forEach { it.register() }
+            changePhaser.register()
 
 
             val leaderAction = SignalListener {
@@ -346,9 +345,6 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     logger.info("Arrived on apply ${it.subject.getPeerName()}")
                     changePhaser.arrive()
                 },
-                Signal.ConsensusLeaderElected to SignalListener {
-                    consensusLeaderElectedPhaser.arrive()
-                }
             )
             val signalListenersForLeader = mapOf(
                 Signal.BeforeSendingApply to leaderAction,
@@ -365,12 +361,21 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     5 to signalListenersForAll,
                     6 to signalListenersForAll,
                     7 to signalListenersForAll,
+                ),
+                configOverrides = mapOf(
+                    0 to mapOf("raft.isEnabled" to false),
+                    1 to mapOf("raft.isEnabled" to false),
+                    2 to mapOf("raft.isEnabled" to false),
+                    3 to mapOf("raft.isEnabled" to false),
+                    4 to mapOf("raft.isEnabled" to false),
+                    5 to mapOf("raft.isEnabled" to false),
+                    6 to mapOf("raft.isEnabled" to false),
+                    7 to mapOf("raft.isEnabled" to false),
                 )
             )
             val peers = apps.getPeers()
             val change = change(0, 1)
 
-            consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // when - executing transaction something should go wrong after ft-agree
             expectThrows<ServerResponseException> {
@@ -445,7 +450,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             )
             val peers = apps.getPeers()
 
-            consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(15))
+            consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // given - change in first peerset
             expectCatching {

@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus.raft.infrastructure
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
+import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.twopc.TwoPC
@@ -73,7 +74,9 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendLeaderRequest() {
         if (executorService != null) {
-            restartTimer(RaftRole.Candidate)
+            mutex.withLock {
+                restartTimer(RaftRole.Candidate)
+            }
             throw Exception("$globalPeerId Try become leader before cleaning")
         }
         signalPublisher.signal(
@@ -90,9 +93,12 @@ class RaftConsensusProtocolImpl(
 
         logger.info("Trying to become a leader in term $currentTerm")
 
+        val lastIndex = state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId()
+            ?: state.commitIndex
+
         val responses = protocolClient.sendConsensusElectMe(
             otherConsensusPeers(),
-            ConsensusElectMe(peerId, currentTerm, state.commitIndex)
+            ConsensusElectMe(peerId, currentTerm, lastIndex)
         ).map { it.message }
 
         logger.debug("Responses from leader request: $responses in iteration $currentTerm")
@@ -104,7 +110,9 @@ class RaftConsensusProtocolImpl(
         val positiveResponses = responses.filterNotNull().count { it.voteGranted }
 
         if (!isMoreThanHalf(positiveResponses) || otherConsensusPeers().isEmpty()) {
-            restartTimer(RaftRole.Candidate)
+            mutex.withLock {
+                restartTimer(RaftRole.Candidate)
+            }
             return
         }
 
@@ -124,30 +132,34 @@ class RaftConsensusProtocolImpl(
         scheduleHeartbeatToPeers()
     }
 
-    override suspend fun handleRequestVote(peerId: Int, iteration: Int, lastLogId: String): ConsensusElectedYou {
+    override suspend fun handleRequestVote(peerId: Int, iteration: Int, candidateLastLogId: String): ConsensusElectedYou {
         logger.debug(
-            "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogId, " +
+            "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$candidateLastLogId, " +
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
         )
 
         mutex.withLock {
-            val denyVoteResponse = ConsensusElectedYou(this.peerId, currentTerm, false)
             if (iteration < currentTerm || (iteration == currentTerm && votedFor != null)) {
                 logger.info(
                     "Denying vote for $peerId due to an old term ($iteration vs $currentTerm), " +
                             "I voted for ${votedFor?.id}"
                 )
-                return denyVoteResponse
-            }
-            if (amILeader()) stopBeingLeader(iteration)
-
-            val candidateIsUpToDate: Boolean = lastLogId == state.commitIndex || !state.checkIfItemExist(lastLogId)
-
-            if (!candidateIsUpToDate && amILeader()) {
-                logger.info("Denying vote for $peerId due to an old index ($lastLogId vs ${state.commitIndex})")
-                return denyVoteResponse
+                return ConsensusElectedYou(this.peerId, currentTerm, false)
             }
             currentTerm = iteration
+            if (amILeader()) stopBeingLeader(iteration)
+
+
+            val lastEntryId =
+                state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId()
+                    ?: state.lastApplied
+
+            val candidateIsUpToDate: Boolean = state.isNotApplied(candidateLastLogId) || candidateLastLogId == lastEntryId
+
+            if (!candidateIsUpToDate) {
+                logger.info("Denying vote for $peerId due to an old index ($candidateLastLogId vs $lastEntryId)")
+                return ConsensusElectedYou(this.peerId, currentTerm, false)
+            }
             val peerAddress = peerResolver.resolve(GlobalPeerId(globalPeerId.peersetId, peerId)).address
             votedFor = VotedFor(peerId, peerAddress)
         }
@@ -159,14 +171,12 @@ class RaftConsensusProtocolImpl(
     private suspend fun newLeaderElected(leaderId: Int, term: Int) {
         logger.info("A leader has been elected: $leaderId (in term $term)")
         val leaderAddress = peerResolver.resolve(GlobalPeerId(globalPeerId.peersetId, leaderId)).address
-        mutex.withLock {
-            votedFor = VotedFor(peerId, leaderAddress, true)
+        votedFor = VotedFor(peerId, leaderAddress, true)
 //          DONE: Check if stop() function make sure if you need to wait to all job finish ->
 //          fixed by setting executor to null and adding null condition in if
-            if (role == RaftRole.Leader) stopBeingLeader(term)
-            role = RaftRole.Follower
-            currentTerm = term
-        }
+        if (role == RaftRole.Leader) stopBeingLeader(term)
+        role = RaftRole.Follower
+        currentTerm = term
         signalPublisher.signal(
             Signal.ConsensusLeaderElected,
             this,
@@ -182,7 +192,19 @@ class RaftConsensusProtocolImpl(
 
     }
 
-    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
+    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse = mutex.withLock {
+
+        heartbeat.logEntries.forEach {
+            val entry = HistoryEntry.deserialize(it.serializedEntry)
+            signalPublisher.signal(
+                signal = Signal.ConsensusFollowerHeartbeatReceived,
+                subject = this,
+                peers = listOf(otherConsensusPeers()),
+                change = Change.fromHistoryEntry(entry),
+                historyEntry = entry,
+            )
+        }
+
         Metrics.registerTimerHeartbeat()
         val term = heartbeat.term
         val leaderCommitId = heartbeat.leaderCommitId
@@ -190,13 +212,9 @@ class RaftConsensusProtocolImpl(
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
         val prevEntryId = heartbeat.prevEntryId
 
-        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex \n $heartbeat")
-        logger.debug(
-            """I have in state: ${state.proposedEntries.map { it.entry.getId() }}
-            | should have: $prevEntryId, 
-            | leaderCommit: $leaderCommitId 
-            | message changes: ${proposedChanges.map { it.entry.getId() }}""".trimMargin()
-        )
+//        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex")
+//        logger.info("Lastapplied: ${state.lastApplied} commitIndex: ${state.commitIndex}")
+//        logger.info("PrevEntry: ${prevEntryId},  leaderCommitId: ${leaderCommitId} logEntries: ${proposedChanges.map { it.entry.getId() }}")
 
         if (term < currentTerm) {
             logger.info("The received heartbeat has an old term ($term vs $currentTerm)")
@@ -213,25 +231,22 @@ class RaftConsensusProtocolImpl(
 
 //      Restart timer because we received heartbeat from proper leader
         if (currentTerm < term) {
-            mutex.withLock {
-                currentTerm = term
-            }
+            currentTerm = term
             releaseBlockerFromPreviousTermChanges()
         }
 
-        mutex.withLock {
-            lastHeartbeatTime = Instant.now()
-        }
+        lastHeartbeatTime = Instant.now()
 
         restartTimer()
 
-        val notAppliedProposedChanges = proposedChanges.filter { state.isNotApplied(it.entry.getId()) }
+        val notAppliedProposedChanges = proposedChanges.filter { state.isNotAppliedNorProposed(it.entry.getId()) }
 
         val prevLogEntryExists = prevEntryId == null || state.checkIfItemExist(prevEntryId)
 
         val commitIndexEntryExists = notAppliedProposedChanges
             .find { it.entry.getId() == leaderCommitId }
-            ?.let { true } ?: state.checkIfItemExist(leaderCommitId)
+            ?.let { true }
+            ?: state.checkIfItemExist(leaderCommitId)
 
 
         val areProposedChangesIncompatible =
@@ -239,10 +254,7 @@ class RaftConsensusProtocolImpl(
 
         val acceptedChangesFromProposed = notAppliedProposedChanges
             .indexOfFirst { it.entry.getId() == leaderCommitId }
-            .let {
-                if (it > 0) notAppliedProposedChanges.take(it + 1)
-                else listOf()
-            }
+            .let { notAppliedProposedChanges.take(it + 1) }
 
 
         when {
@@ -257,7 +269,7 @@ class RaftConsensusProtocolImpl(
                 return ConsensusHeartbeatResponse(false, currentTerm)
             }
 
-            isUpdatedCommitIndex && transactionBlocker.isAcquired() -> {
+            isUpdatedCommitIndex && transactionBlocker.isAcquiredByProtocol(ProtocolName.CONSENSUS) -> {
                 logger.info("Received heartbeat when is blocked so only accepted changes, blocked on ${transactionBlocker.getChangeId()}")
                 updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
                 return ConsensusHeartbeatResponse(true, currentTerm, true)
@@ -295,10 +307,7 @@ class RaftConsensusProtocolImpl(
         leaderCommitId: String,
         proposedChanges: List<LedgerItem> = listOf()
     ) {
-        val updateResult: LedgerUpdateResult
-        mutex.withLock {
-            updateResult = state.updateLedger(leaderCommitId, proposedChanges)
-        }
+        val updateResult: LedgerUpdateResult = state.updateLedger(leaderCommitId, proposedChanges)
 
         updateResult.acceptedItems.forEach { acceptedItem ->
             signalPublisher.signal(
@@ -345,16 +354,17 @@ class RaftConsensusProtocolImpl(
         val message = "Received heartbeat from ${heartbeat.leaderId} with " +
                 "${updateResult.proposedItems.size} proposed and " +
                 "${updateResult.acceptedItems.size} accepted items"
-        logger.debug(message)
 
         if (updateResult.proposedItems.isNotEmpty() || updateResult.acceptedItems.isNotEmpty()) {
             logger.info(message)
+        } else {
+            logger.debug(message)
         }
 
-        if (updateResult.acceptedItems.isNotEmpty()) {
+        updateResult.acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
             transactionBlocker.tryToReleaseBlockerChange(
                 ProtocolName.CONSENSUS,
-                updateResult.acceptedItems.first().changeId
+                it.changeId
             )
         }
     }
@@ -438,8 +448,8 @@ class RaftConsensusProtocolImpl(
 
             response.message.term > currentTerm -> {
                 logger.info("Based on info from $peer, someone else is currently leader")
-                stopBeingLeader(response.message.term)
                 mutex.withLock {
+                    stopBeingLeader(response.message.term)
                     votedFor = null
                 }
             }
@@ -459,7 +469,6 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun applyAcceptedChanges() {
-//      DONE: change name of ledgerIndexToMatchIndex
 
         val acceptedItems: List<LedgerItem>
 
@@ -467,10 +476,10 @@ class RaftConsensusProtocolImpl(
             val acceptedIds: List<String> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
             acceptedItems = state.getLogEntries(acceptedIds)
 
-            if (acceptedItems.isNotEmpty()) {
+            acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
                 logger.info("Applying accepted changes: $acceptedItems")
                 logger.debug("In applyAcceptedChanges should tryToReleaseBlocker")
-                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, acceptedItems.first().changeId)
+                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, it.changeId)
             }
 
             state.acceptItems(acceptedIds)
@@ -623,14 +632,6 @@ class RaftConsensusProtocolImpl(
                 return
             }
 
-            try {
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, change.id)
-            } catch (ex: AlreadyLockedException) {
-                logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
-                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                throw ex
-            }
-
             val updatedChange: Change
 
             val peersetId = peerResolver.currentPeer().peersetId
@@ -638,7 +639,13 @@ class RaftConsensusProtocolImpl(
             updatedChange = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
             entry = updatedChange.toHistoryEntry(peersetId)
 
-
+            try {
+                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, updatedChange.id)
+            } catch (ex: AlreadyLockedException) {
+                logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
+                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                throw ex
+            }
 
             if (!history.isEntryCompatible(entry)) {
                 logger.info(
@@ -649,7 +656,7 @@ class RaftConsensusProtocolImpl(
                     }"
                 )
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, change.id)
+                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, updatedChange.id)
                 return
             }
 
@@ -681,11 +688,14 @@ class RaftConsensusProtocolImpl(
     }
 
     private fun releaseBlockerFromPreviousTermChanges() {
+
+        val blockedChange = state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }
+
         if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS
-            && transactionBlocker.getChangeId() == state.proposedEntries.lastOrNull()?.changeId
+            && blockedChange != null
         ) {
             logger.info("Release blocker for changes from previous term")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, state.proposedEntries.last().changeId)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, blockedChange.changeId)
 
             changeIdToCompletableFuture[state.proposedEntries.last().changeId]
                 ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
