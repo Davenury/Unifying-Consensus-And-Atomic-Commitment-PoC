@@ -19,7 +19,7 @@ private const val CAS_SCRIPT = """
 /**
  * @author Kamil Jarosz
  */
-class JedisHistory(host: String, port: Int) : History {
+class JedisHistory(host: String, port: Int) : CachedHistory() {
     private val jedis: JedisPooled = JedisPooled(host, port)
     private val casSha: String
 
