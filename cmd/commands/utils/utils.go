@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,6 +16,13 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 )
+
+func RandomString(length int) string {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, length+2)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)[2 : length+2]
+}
 
 func GetKubernetesConfig() (*rest.Config, error) {
 	home := homedir.HomeDir()
@@ -80,11 +89,11 @@ func ServiceAddress(peerConfig PeerConfig) string {
 	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
 }
 
-func PVName(config PeerConfig) string {
-	return fmt.Sprintf("peerset%s-peer%s-pv", config.PeersetId, config.PeerId)
+func PVName(config PeerConfig, namespace string) string {
+	return fmt.Sprintf("peerset%s-peer%s-pv-%s", config.PeersetId, config.PeerId, namespace)
 }
-func PVCName(config PeerConfig) string {
-	return fmt.Sprintf("peerset%s-peer%s-claim", config.PeersetId, config.PeerId)
+func PVCName(config PeerConfig, namespace string) string {
+	return fmt.Sprintf("peerset%s-peer%s-claim-%s", config.PeersetId, config.PeerId, namespace)
 }
 func RedisConfigmapName(config PeerConfig) string {
 	return fmt.Sprintf("peerset%s-peer%s-rediscf", config.PeersetId, config.PeerId)

@@ -167,7 +167,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 					"peersetId": peerConfig.PeersetId,
 				},
 			},
-			Template: createPodTemplate(peerConfig, imageName, createResources, proxyDelay, proxyLimit),
+			Template: createPodTemplate(peerConfig, imageName, createResources, proxyDelay, proxyLimit, namespace),
 		},
 	}
 
@@ -180,7 +180,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 
 }
 
-func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string, proxyLimit string) apiv1.PodTemplateSpec {
+func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string, proxyLimit string, namespace string) apiv1.PodTemplateSpec {
 	containerName := utils.ContainerName(peerConfig)
 
 	return apiv1.PodTemplateSpec{
@@ -209,7 +209,7 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 					Name: "redis-data",
 					VolumeSource: apiv1.VolumeSource{
 						PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
-							ClaimName: utils.PVCName(peerConfig),
+							ClaimName: utils.PVCName(peerConfig, namespace),
 						},
 					},
 				},
@@ -425,7 +425,7 @@ func createPV(namespace string, peerConfig utils.PeerConfig) {
 
 	pv := &apiv1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.PVName(peerConfig),
+			Name:      utils.PVName(peerConfig, namespace),
 			Namespace: namespace,
 			Labels: map[string]string{
 				"project": "ucac",
@@ -439,10 +439,10 @@ func createPV(namespace string, peerConfig utils.PeerConfig) {
 			AccessModes: []apiv1.PersistentVolumeAccessMode{
 				"ReadWriteOnce",
 			},
-			PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimRetain,
+			PersistentVolumeReclaimPolicy: apiv1.PersistentVolumeReclaimDelete,
 			PersistentVolumeSource: apiv1.PersistentVolumeSource{
 				HostPath: &apiv1.HostPathVolumeSource{
-					Path: "/mnt/ucac/redis/data",
+					Path: fmt.Sprintf("/mnt/ucac/redis/data-ucac-%s", utils.RandomString(6)),
 					Type: &hostPathType,
 				},
 			},
@@ -464,7 +464,7 @@ func createPVC(namespace string, config utils.PeerConfig) {
 
 	pvc := &apiv1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.PVCName(config),
+			Name:      utils.PVCName(config, namespace),
 			Namespace: namespace,
 			Labels: map[string]string{
 				"project": "ucac",
