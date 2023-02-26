@@ -1,5 +1,6 @@
 package com.github.davenury.common.history
 
+import com.github.davenury.common.meterRegistry
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -33,7 +34,9 @@ class CachedHistory(private val delegate: History) : History {
 
     override fun getEntry(id: String): HistoryEntry = delegate.getEntry(id)
 
-    override fun addEntry(entry: HistoryEntry) = delegate.addEntry(entry)
+    override fun addEntry(entry: HistoryEntry) = meterRegistry.timer("in_memory_history_add_entry").record {
+        delegate.addEntry(entry)
+    }
 
     override fun containsEntry(entryId: String): Boolean {
         return getAncestors(getCurrentEntry().getId()).contains(entryId)
@@ -46,5 +49,7 @@ class CachedHistory(private val delegate: History) : History {
         delegate.getAllEntriesUntilHistoryEntryId(historyEntryId)
 
     override fun isEntryCompatible(entry: HistoryEntry): Boolean =
-        delegate.isEntryCompatible(entry)
+        meterRegistry.timer("history_is_entry_compatible").record<Boolean> {
+            delegate.isEntryCompatible(entry)
+        }!!
 }
