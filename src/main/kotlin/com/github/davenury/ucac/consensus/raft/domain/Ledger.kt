@@ -55,7 +55,7 @@ data class Ledger(
         val newAcceptedItems = proposedEntries.take(index + 1)
 
         newAcceptedItems.forEach {
-            history.addEntry(it.entry)
+            if (!history.containsEntry(it.entry.getId())) history.addEntry(it.entry)
             proposedEntries.remove(it)
             lastApplied = it.entry.getId()
         }
