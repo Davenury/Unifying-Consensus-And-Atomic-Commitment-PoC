@@ -1,24 +1,34 @@
 package com.github.davenury.common.history
 
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.collections.HashSet
 
 /**
  * @author Kamil Jarosz
  */
-class CachedHistory(private val delegate: History) : History {
+abstract class CachedHistory : History {
     private val ancestors: ConcurrentHashMap<String, Set<String>> = ConcurrentHashMap()
 
     @Throws(EntryNotFoundException::class)
     private fun getAncestors(entryId: String): Set<String> {
-        return ancestors.computeIfAbsent(entryId) { id ->
-            val entry = getEntry(id)
-            val parentId = entry.getParentId()
-            return@computeIfAbsent if (parentId == null) {
-                setOf(id)
-            } else {
-                getAncestors(parentId).union(setOf(id))
-            }
-        };
+        val existing = ancestors[entryId]
+        if (existing != null) {
+            return existing
+        }
+
+        val entry = getEntry(entryId)
+        val parentId = entry.getParentId()
+
+        val new = if (parentId == null) {
+            Collections.singleton(entryId)
+        } else {
+            val union = HashSet<String>(getAncestors(parentId))
+            union.add(entryId)
+            Collections.unmodifiableSet(union)
+        }
+        ancestors.putIfAbsent(entryId, new)
+        return new
     }
 
     override fun getEntryFromHistory(id: String): HistoryEntry? {
@@ -29,22 +39,7 @@ class CachedHistory(private val delegate: History) : History {
         }
     }
 
-    override fun getCurrentEntry(): HistoryEntry = delegate.getCurrentEntry()
-
-    override fun getEntry(id: String): HistoryEntry = delegate.getEntry(id)
-
-    override fun addEntry(entry: HistoryEntry) = delegate.addEntry(entry)
-
     override fun containsEntry(entryId: String): Boolean {
         return getAncestors(getCurrentEntry().getId()).contains(entryId)
     }
-
-    override fun toEntryList(skipInitial: Boolean): List<HistoryEntry> =
-        delegate.toEntryList(skipInitial)
-
-    override fun getAllEntriesUntilHistoryEntryId(historyEntryId: String): List<HistoryEntry> =
-        delegate.getAllEntriesUntilHistoryEntryId(historyEntryId)
-
-    override fun isEntryCompatible(entry: HistoryEntry): Boolean =
-        delegate.isEntryCompatible(entry)
 }

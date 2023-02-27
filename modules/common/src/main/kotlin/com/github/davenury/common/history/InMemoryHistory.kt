@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * @author Kamil Jarosz
  */
-class InMemoryHistory : History {
+class InMemoryHistory : CachedHistory() {
     private val initialEntry: InitialHistoryEntry = InitialHistoryEntry
     private val currentEntryId: AtomicReference<String> = AtomicReference(initialEntry.getId())
     private val entries: ConcurrentHashMap<String, HistoryEntry> = ConcurrentHashMap()

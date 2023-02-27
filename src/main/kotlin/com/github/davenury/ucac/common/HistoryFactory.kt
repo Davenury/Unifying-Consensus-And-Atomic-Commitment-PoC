@@ -1,6 +1,5 @@
 package com.github.davenury.ucac.common
 
-import com.github.davenury.common.history.CachedHistory
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.JedisHistory
@@ -19,6 +18,6 @@ class HistoryFactory {
                 JedisHistory(persistence.redisHost!!, persistence.redisPort!!)
             }
         }
-        return CachedHistory(history)
+        return history
     }
 }
