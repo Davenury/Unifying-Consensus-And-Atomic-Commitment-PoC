@@ -1,5 +1,6 @@
 package com.github.davenury.common.history
 
+
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.HashSet
@@ -42,4 +43,5 @@ abstract class CachedHistory : History {
     override fun containsEntry(entryId: String): Boolean {
         return getAncestors(getCurrentEntry().getId()).contains(entryId)
     }
+
 }

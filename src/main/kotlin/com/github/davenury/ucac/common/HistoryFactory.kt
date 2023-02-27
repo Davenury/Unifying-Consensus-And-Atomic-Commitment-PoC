@@ -1,8 +1,10 @@
 package com.github.davenury.ucac.common
 
+
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.JedisHistory
+import com.github.davenury.common.history.MeteredHistory
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.PersistenceType
 
@@ -18,6 +20,6 @@ class HistoryFactory {
                 JedisHistory(persistence.redisHost!!, persistence.redisPort!!)
             }
         }
-        return history
+        return MeteredHistory(history)
     }
 }
