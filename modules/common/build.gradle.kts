@@ -47,3 +47,6 @@ val compileTestKotlin: KotlinCompile by tasks
 compileTestKotlin.kotlinOptions {
     jvmTarget = "11"
 }
+tasks.test {
+    useJUnitPlatform()
+}
