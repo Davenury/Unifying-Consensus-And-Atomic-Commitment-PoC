@@ -323,6 +323,7 @@ func createSingleContainer(peerConfig utils.PeerConfig, imageName string, create
 		Args: []string{
 			"-Xmx500m",
 			"-Dcom.sun.management.jmxremote.port=9999",
+			"-Dlogback.configurationFile=./src/main/resources/loki.xml",
 		},
 		Ports: []apiv1.ContainerPort{
 			{
