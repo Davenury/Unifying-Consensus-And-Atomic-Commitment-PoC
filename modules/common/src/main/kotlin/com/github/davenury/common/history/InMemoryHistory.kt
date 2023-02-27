@@ -50,7 +50,6 @@ class InMemoryHistory : CachedHistory() {
         }
 
         if (!successful) {
-            Metrics.bumpIncorrectHistory()
             throw HistoryException(
                 "Optimistic locking exception: parent changed concurrently, " +
                         "entryId=${newId}"

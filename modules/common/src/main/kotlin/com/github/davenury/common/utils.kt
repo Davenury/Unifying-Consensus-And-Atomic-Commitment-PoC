@@ -34,9 +34,6 @@ object Metrics {
     private val changeIdToTimer: MutableMap<String, Instant> = mutableMapOf()
 
     private var lastHearbeat: Instant = Instant.now()
-    fun bumpIncorrectHistory() {
-        meterRegistry.counter("incorrect_history_change").increment()
-    }
 
     fun bumpChangeProcessed(changeResult: ChangeResult, protocol: String) {
         Counter

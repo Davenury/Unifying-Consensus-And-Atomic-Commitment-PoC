@@ -9,7 +9,14 @@ class MeteredHistory(
         meterRegistry.timer("history_get_current_entry").record<HistoryEntry> { delegate.getCurrentEntry() }!!
 
     override fun addEntry(entry: HistoryEntry) =
-        meterRegistry.timer("history_add_entry").record { delegate.addEntry(entry) }
+        meterRegistry.timer("history_add_entry").record {
+            try {
+                delegate.addEntry(entry)
+            } catch (e: HistoryException) {
+                meterRegistry.counter("history_incorrect_entry").increment()
+                throw e
+            }
+        }
 
     override fun getEntry(id: String): HistoryEntry =
         meterRegistry.timer("history_get_entry").record<HistoryEntry> { delegate.getEntry(id) }!!
