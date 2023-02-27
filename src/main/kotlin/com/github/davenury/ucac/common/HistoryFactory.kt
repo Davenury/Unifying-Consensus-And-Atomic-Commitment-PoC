@@ -1,5 +1,6 @@
 package com.github.davenury.ucac.common
 
+
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.JedisHistory
