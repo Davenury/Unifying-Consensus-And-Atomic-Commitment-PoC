@@ -4,8 +4,23 @@
             <pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} %-5level [%-11logger{36}] %msg \(%thread\)%n</pattern>
         </encoder>
     </appender>
+    <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+        <http>
+            <url>http://loki.ddebowski.svc.cluster.local:3100/loki/api/v1/push</url>
+        </http>
+        <format>
+            <label>
+                <pattern>app=my-app,host=${HOSTNAME},level=%level</pattern>
+            </label>
+            <message>
+                <pattern>l=%level h=${HOSTNAME} c=%logger{20} t=%thread | %msg %ex</pattern>
+            </message>
+            <sortByTime>true</sortByTime>
+        </format>
+    </appender>
     <root level="info">
         <appender-ref ref="STDOUT"/>
+        <appender-ref ref="LOKI" />
     </root>
     <logger name="org.eclipse.jetty" level="INFO"/>
     <logger name="io.netty" level="INFO"/>
