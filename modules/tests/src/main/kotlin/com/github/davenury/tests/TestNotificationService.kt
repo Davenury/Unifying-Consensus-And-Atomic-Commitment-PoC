@@ -30,14 +30,16 @@ fun main() {
 
 class TestNotificationService {
 
-    private val config = loadConfig<Config>(decoders = listOf(StrategyDecoder(), ACProtocolDecoder(), CreatingChangeStrategyDecoder()))
+    private val config =
+        loadConfig<Config>(decoders = listOf(StrategyDecoder(), ACProtocolDecoder(), CreatingChangeStrategyDecoder()))
 
     init {
         logger.info("Starting performance tests with config: $config")
     }
 
     private val peers = config.peerAddresses()
-    private val changes = Changes(peers, HttpSender(config.acProtocol), config.getSendingStrategy(), config.getCreateChangeStrategy())
+    private val changes =
+        Changes(peers, HttpSender(config.acProtocol), config.getSendingStrategy(), config.getCreateChangeStrategy())
     private val testExecutor = TestExecutor(
         config.numberOfRequestsToSendToSinglePeerset,
         config.numberOfRequestsToSendToMultiplePeersets,
@@ -48,7 +50,7 @@ class TestNotificationService {
         config.fixedPeersetsInChange
     )
 
-    private val server: NettyApplicationEngine = embeddedServer(Netty, port=8080, host = "0.0.0.0") {
+    private val server: NettyApplicationEngine = embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
         }
@@ -79,15 +81,15 @@ class TestNotificationService {
             }
         }
 
-        try {
-            GlobalScope.launch {
+        GlobalScope.launch {
+            try {
                 delay(2000)
                 testExecutor.startTest()
                 delay(2000)
                 closeService()
+            } catch (e: Exception) {
+                logger.error("Exception in tests", e)
             }
-        } catch (e: Exception) {
-            logger.error("Exception in tests", e)
         }
     }
 
