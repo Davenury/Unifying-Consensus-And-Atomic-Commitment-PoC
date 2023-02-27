@@ -1,10 +1,6 @@
 package com.github.davenury.common.history
 
-<<<<<<< HEAD
 import java.util.*
-=======
-import com.github.davenury.common.meterRegistry
->>>>>>> 0cb27e1 (timer on history operations)
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.HashSet
 
@@ -42,7 +38,7 @@ abstract class CachedHistory : History {
             null
         }
     }
-    
+
     override fun containsEntry(entryId: String): Boolean {
         return getAncestors(getCurrentEntry().getId()).contains(entryId)
     }
