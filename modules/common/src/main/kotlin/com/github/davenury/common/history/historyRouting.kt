@@ -26,7 +26,9 @@ fun Application.historyRouting(history: History) {
         }
         route("/changes") {
             get {
-                call.respond(Changes.fromHistory(history))
+                val changes = Changes.fromHistory(history)
+                log.info("Changes: $changes")
+                call.respond(changes)
             }
         }
     }

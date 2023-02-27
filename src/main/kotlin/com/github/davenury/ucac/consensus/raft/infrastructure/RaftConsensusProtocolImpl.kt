@@ -476,13 +476,14 @@ class RaftConsensusProtocolImpl(
             val acceptedIds: List<String> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
             acceptedItems = state.getLogEntries(acceptedIds)
 
+            state.acceptItems(acceptedIds)
+
             acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
-                logger.info("Applying accepted changes: $acceptedItems")
+                logger.info("Applying accepted changes: $acceptedItems votes: ${voteContainer.getVotes(it.entry.getId())}")
                 logger.debug("In applyAcceptedChanges should tryToReleaseBlocker")
                 transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, it.changeId)
             }
 
-            state.acceptItems(acceptedIds)
             voteContainer.removeChanges(acceptedIds)
         }
 
@@ -537,7 +538,7 @@ class RaftConsensusProtocolImpl(
 
             proposedChanges
                 .filter { state.isNotApplied(it.entry.getId()) }
-                .forEach { voteContainer.voteForChange(it.entry.getId()) }
+                .forEach { voteContainer.voteForChange(it.entry.getId(), peerAddress) }
             peerUrlToNextIndex[globalPeerId] =
                 peerIndices.copy(acknowledgedEntryId = proposedChanges.last().entry.getId())
         }
@@ -663,6 +664,7 @@ class RaftConsensusProtocolImpl(
             logger.info("Propose change to ledger: $updatedChange")
             state.proposeEntry(entry, updatedChange.id)
             voteContainer.initializeChange(entry.getId())
+            scheduleHeartbeatToPeers()
         }
     }
 
@@ -810,7 +812,7 @@ data class PeerIndices(
     val acceptedEntryId: String = InitialHistoryEntry.getId(),
     val acknowledgedEntryId: String = InitialHistoryEntry.getId()
 ) {
-    fun decrement(ledger: Ledger): PeerIndices = ledger
+    suspend fun decrement(ledger: Ledger): PeerIndices = ledger
         .getPreviousEntryId(acceptedEntryId)
         .let { PeerIndices(it, it) }
 }
