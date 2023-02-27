@@ -10,7 +10,7 @@
         </http>
         <format>
             <label>
-                <pattern>app=my-app,host=${HOSTNAME},level=%level</pattern>
+                <pattern>app=peer,host=${HOSTNAME},level=%level</pattern>
             </label>
             <message>
                 <pattern>l=%level h=${HOSTNAME} c=%logger{20} t=%thread | %msg %ex</pattern>
