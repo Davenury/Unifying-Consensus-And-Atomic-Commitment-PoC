@@ -17,7 +17,7 @@ WORKDIR /application
 
 COPY --from=builder /home/gradle/src/build/install/PoC .
 
-ENTRYPOINT ["sh", "-c", "/application/bin/PoC"]
+ENTRYPOINT ["/application/bin/PoC"]
 
 ###
 
@@ -28,4 +28,4 @@ WORKDIR /tests
 
 COPY --from=builder /home/gradle/src/modules/tests/build/install/tests .
 
-ENTRYPOINT ["sh", "-c", "/tests/bin/tests"]
+ENTRYPOINT ["/tests/bin/tests"]
