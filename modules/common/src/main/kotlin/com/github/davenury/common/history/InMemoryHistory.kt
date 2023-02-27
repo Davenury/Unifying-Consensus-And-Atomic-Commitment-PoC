@@ -1,7 +1,5 @@
 package com.github.davenury.common.history
 
-import com.github.davenury.common.Metrics
-import com.github.davenury.common.meterRegistry
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
