@@ -78,6 +78,11 @@ func DoInit(namespace string, createNamespace bool) {
 						"type":      "prometheus",
 						"isDefault": true,
 					},
+					{
+						"name": "Loki",
+						"url":  fmt.Sprintf("http://loki.%s.svc.cluster.local:3100", namespace),
+						"type": "loki",
+					},
 				},
 			},
 		},
@@ -85,6 +90,39 @@ func DoInit(namespace string, createNamespace bool) {
 
 	// install grafana
 	installChart(namespace, "grafana", "grafana", "grafana", grafanaValues)
+
+	lokiValues := map[string]interface{}{
+		"loki": map[string]interface{}{
+			"commonConfig": map[string]interface{}{
+				"replication_factor": 1,
+			},
+			"storage": map[string]interface{}{
+				"type": "filesystem",
+			},
+			"auth_enabled": false,
+		},
+		"singleBinary": map[string]interface{}{
+			"replicas": 1,
+		},
+		"test": map[string]interface{}{
+			"enabled": false,
+		},
+		"gateway": map[string]interface{}{
+			"enabled": false,
+		},
+		"monitoring": map[string]interface{}{
+			"selfMonitoring": map[string]interface{}{
+				"grafanaAgent": map[string]interface{}{
+					"installOperator": false,
+				},
+			},
+			"lokiCanary": map[string]interface{}{
+				"enabled": false,
+			},
+		},
+	}
+
+	installChart(namespace, "grafana", "loki", "loki", lokiValues)
 }
 
 func installChart(namespace string, repoName string, chartName string, releaseName string, values map[string]interface{}) {
