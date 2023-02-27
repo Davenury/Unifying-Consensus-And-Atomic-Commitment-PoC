@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
 
 
@@ -44,6 +45,7 @@ class RaftConsensusProtocolImpl(
     private val peerUrlToNextIndex: MutableMap<GlobalPeerId, PeerIndices> = mutableMapOf()
     private val voteContainer: VoteContainer = VoteContainer()
     private var votedFor: VotedFor? = null
+    private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> = ConcurrentLinkedDeque()
     private var state: Ledger = Ledger(history)
 
     @Volatile
@@ -130,6 +132,7 @@ class RaftConsensusProtocolImpl(
         }
 
         scheduleHeartbeatToPeers()
+        tryPropagatingChangesToLeader()
     }
 
     override suspend fun handleRequestVote(peerId: Int, iteration: Int, candidateLastLogId: String): ConsensusElectedYou {
@@ -171,7 +174,7 @@ class RaftConsensusProtocolImpl(
     private suspend fun newLeaderElected(leaderId: Int, term: Int) {
         logger.info("A leader has been elected: $leaderId (in term $term)")
         val leaderAddress = peerResolver.resolve(GlobalPeerId(globalPeerId.peersetId, leaderId)).address
-        votedFor = VotedFor(peerId, leaderAddress, true)
+        votedFor = VotedFor(leaderId, leaderAddress, true)
 //          DONE: Check if stop() function make sure if you need to wait to all job finish ->
 //          fixed by setting executor to null and adding null condition in if
         if (role == RaftRole.Leader) stopBeingLeader(term)
@@ -190,6 +193,7 @@ class RaftConsensusProtocolImpl(
 
         state.removeNotAcceptedItems()
 
+        tryPropagatingChangesToLeader()
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse = mutex.withLock {
@@ -742,14 +746,14 @@ class RaftConsensusProtocolImpl(
                 proposeChangeToLedger(result, change)
             }
 
-            votedFor != null -> {
+            votedFor?.elected == true -> {
                 logger.info("Forwarding change to the leader(${votedFor!!}): $change")
                 sendRequestToLeader(result, change)
             }
 //              TODO: Change after queue
             else -> {
-                result.complete(ChangeResult(ChangeResult.Status.TIMEOUT, "There should always be a leader"))
-                throw Exception("There should always be a leader")
+                logger.info("Queueing a change to be propagated when leader is elected")
+                changesToBePropagatedToLeader.push(ChangeToBePropagatedToLeader(change, result))
             }
         }
         return result
@@ -803,6 +807,22 @@ class RaftConsensusProtocolImpl(
 
     private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout.dividedBy(2), ctx)
 
+    private suspend fun tryPropagatingChangesToLeader() {
+        // TODO mutex?
+        val votedFor = this.votedFor
+        if (votedFor == null || !votedFor.elected) return
+        while (true) {
+            val changeToBePropagated = changesToBePropagatedToLeader.poll() ?: break
+            if (votedFor.id == globalPeerId.peerId) {
+                logger.info("Processing a queued change as a leader: ${changeToBePropagated.change}")
+                proposeChangeToLedger(changeToBePropagated.cf, changeToBePropagated.change)
+            } else {
+                logger.info("Propagating a change to the leader (${votedFor.id}): ${changeToBePropagated.change}")
+                sendRequestToLeader(changeToBePropagated.cf, changeToBePropagated.change)
+            }
+        }
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger("raft")
     }
@@ -818,3 +838,8 @@ data class PeerIndices(
 }
 
 data class VotedFor(val id: Int, val address: String, val elected: Boolean = false)
+
+data class ChangeToBePropagatedToLeader(
+    val change: Change,
+    val cf: CompletableFuture<ChangeResult>,
+)

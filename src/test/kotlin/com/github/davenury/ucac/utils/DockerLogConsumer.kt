@@ -1,24 +1,27 @@
 package com.github.davenury.ucac.utils
 
+import org.slf4j.LoggerFactory
 import org.testcontainers.containers.output.OutputFrame
 import java.nio.charset.StandardCharsets
 import java.util.function.Consumer
 
 class DockerLogConsumer(private val name: String) : Consumer<OutputFrame> {
+    private val logger = LoggerFactory.getLogger("container/$name")
+
     override fun accept(t: OutputFrame) {
         when (t.type!!) {
             OutputFrame.OutputType.STDOUT -> {
                 val msg = getMessage(t.bytes)
-                println("[container/$name/stdout] $msg")
+                logger.info("{}", "$msg")
             }
 
             OutputFrame.OutputType.STDERR -> {
                 val msg = getMessage(t.bytes)
-                println("[container/$name/stderr] $msg")
+                logger.info("[stderr] {}", "$msg")
             }
 
             OutputFrame.OutputType.END -> {
-                println("[container/$name/end]")
+                logger.info("[end]")
             }
         }
     }

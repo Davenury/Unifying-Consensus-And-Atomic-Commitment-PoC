@@ -16,7 +16,6 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
@@ -29,7 +28,6 @@ import strikt.assertions.isEqualTo
 /**
  * @author Kamil Jarosz
  */
-@Disabled
 @Testcontainers
 @ExtendWith(TestLogExtension::class)
 class SinglePeersetApiSpec {
