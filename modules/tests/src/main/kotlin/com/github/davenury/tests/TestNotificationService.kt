@@ -79,11 +79,15 @@ class TestNotificationService {
             }
         }
 
-        GlobalScope.launch {
-            delay(2000)
-            testExecutor.startTest()
-            delay(2000)
-            closeService()
+        try {
+            GlobalScope.launch {
+                delay(2000)
+                testExecutor.startTest()
+                delay(2000)
+                closeService()
+            }
+        } catch (e: Exception) {
+            logger.error("Exception in tests", e)
         }
     }
 
