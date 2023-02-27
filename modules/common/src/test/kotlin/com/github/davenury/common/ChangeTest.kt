@@ -2,6 +2,7 @@ package com.github.davenury.common
 
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
+import strikt.assertions.isEqualTo
 import strikt.assertions.isNotEqualTo
 
 /**
@@ -21,6 +22,6 @@ internal class ChangeTest {
         val change3 = change1.copyWithNewParentId(0, "")
 
         expectThat(change1.id).isNotEqualTo(change2.id)
-        expectThat(change1.id).isNotEqualTo(change3.id)
+        expectThat(change1.id).isEqualTo(change3.id)
     }
 }
