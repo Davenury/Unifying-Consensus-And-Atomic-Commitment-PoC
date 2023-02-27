@@ -46,7 +46,7 @@ class Changes(
 
             val result = try {
                 changes[ids[0]]!!.introduceChange(change)
-            } finally {
+            } catch (e: Exception) {
                 getPeersStrategy.freePeersets(ids)
             }
             if (result == ChangeState.ACCEPTED) {
