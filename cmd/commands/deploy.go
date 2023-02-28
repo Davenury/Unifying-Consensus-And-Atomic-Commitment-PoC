@@ -183,6 +183,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string, proxyLimit string, namespace string) apiv1.PodTemplateSpec {
 	containerName := utils.ContainerName(peerConfig)
 
+	fiveHundredMega := resource.MustParse("500Mi")
 	return apiv1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: containerName,
@@ -210,6 +211,15 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 					VolumeSource: apiv1.VolumeSource{
 						PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
 							ClaimName: utils.PVCName(peerConfig, namespace),
+						},
+					},
+				},
+				{
+					Name: "heapdumps",
+					VolumeSource: apiv1.VolumeSource{
+						EmptyDir: &apiv1.EmptyDirVolumeSource{
+							Medium:    apiv1.StorageMediumMemory, // use memory (e.g. tmpfs on linux)
+							SizeLimit: &fiveHundredMega,
 						},
 					},
 				},
@@ -261,6 +271,10 @@ func createRedisContainer() apiv1.Container {
 			{
 				Name:      "config",
 				MountPath: "/redis-master",
+			},
+			{
+				Name: "heapdumps",
+				MountPath: "/dumps",
 			},
 		},
 	}
