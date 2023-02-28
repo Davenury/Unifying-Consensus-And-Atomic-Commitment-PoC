@@ -86,7 +86,7 @@ class ConsensusSpec : IntegrationTestBase() {
         logger.info("Leader elected")
 
         // when: peer1 executed change
-        val change1 = createChange(null)
+        val change1 = createChange()
         expectCatching {
             executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change1)
         }.isSuccess()
@@ -99,12 +99,11 @@ class ConsensusSpec : IntegrationTestBase() {
             expectThat(changes.size).isEqualTo(1)
             expect {
                 that(changes[0]).isEqualTo(change1)
-                that(changes[0].acceptNum).isEqualTo(null)
             }
         }
 
         // when: peer2 executes change
-        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(0).getId())
+        val change2 = createChange(userName = "userName2", parentId = change1.toHistoryEntry(0).getId())
         expectCatching {
             executeChange("${apps.getPeer(0, 1).address}/v2/change/sync", change2)
         }.isSuccess()
@@ -118,7 +117,6 @@ class ConsensusSpec : IntegrationTestBase() {
             expect {
                 that(changes[1]).isEqualTo(change2)
                 that(changes[0]).isEqualTo(change1)
-                that(changes[1].acceptNum).isEqualTo(1)
             }
         }
     }
@@ -148,7 +146,7 @@ class ConsensusSpec : IntegrationTestBase() {
 
         logger.info("Sending change")
 
-        val change = createChange(null)
+        val change = createChange()
         expectCatching {
             executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change)
         }.isSuccess()
@@ -380,7 +378,7 @@ class ConsensusSpec : IntegrationTestBase() {
 
     @Test
     fun `leader fails during processing change`(): Unit = runBlocking {
-        val change = createChange(null)
+        val change = createChange()
         var peersWithoutLeader = 4
 
         val failurePhaser = Phaser(2)
@@ -484,7 +482,6 @@ class ConsensusSpec : IntegrationTestBase() {
             }
             expect {
                 that(acceptedChanges2.first()).isEqualTo(change)
-                that(acceptedChanges2.first().acceptNum).isEqualTo(null)
             }
         }
 
@@ -524,7 +521,7 @@ class ConsensusSpec : IntegrationTestBase() {
         val peersToStop = peerAddresses.filter { it != firstLeaderAddress }.take(2)
         peersToStop.forEach { apps.getApp(it.globalPeerId).stop(0, 0) }
         val runningPeers = peerAddresses.filter { address -> address !in peersToStop }
-        val change = createChange(null)
+        val change = createChange()
 
 //      Start processing
         expectCatching {
@@ -542,7 +539,6 @@ class ConsensusSpec : IntegrationTestBase() {
             }
             expect {
                 that(acceptedChanges.first()).isEqualTo(change)
-                that(acceptedChanges.first().acceptNum).isEqualTo(null)
             }
         }
     }
@@ -581,7 +577,7 @@ class ConsensusSpec : IntegrationTestBase() {
         val peersToStop = peerAddresses.filter { it != firstLeaderAddress }.take(3)
         peersToStop.forEach { apps.getApp(it.globalPeerId).stop(0, 0) }
         val runningPeers = peerAddresses.filter { address -> address !in peersToStop }
-        val change = createChange(null)
+        val change = createChange()
 
 //      Start processing
         expectCatching {
@@ -600,7 +596,6 @@ class ConsensusSpec : IntegrationTestBase() {
             }
             expect {
                 that(proposedChanges.first()).isEqualTo(change)
-                that(proposedChanges.first().acceptNum).isEqualTo(null)
             }
         }
     }
@@ -710,8 +705,8 @@ class ConsensusSpec : IntegrationTestBase() {
             }
         }
 
-        val change1 = createChange(1)
-        val change2 = createChange(2)
+        val change1 = createChange()
+        val change2 = createChange()
 
 //      Run change in both halfs
         expectCatching {
@@ -736,7 +731,6 @@ class ConsensusSpec : IntegrationTestBase() {
             }
             expect {
                 that(proposedChanges.first()).isEqualTo(change1)
-                that(proposedChanges.first().acceptNum).isEqualTo(1)
             }
         }
 
@@ -750,7 +744,6 @@ class ConsensusSpec : IntegrationTestBase() {
             }
             expect {
                 that(acceptedChanges.first()).isEqualTo(change2)
-                that(acceptedChanges.first().acceptNum).isEqualTo(2)
             }
         }
 
@@ -775,7 +768,6 @@ class ConsensusSpec : IntegrationTestBase() {
             }
             expect {
                 that(acceptedChanges.first()).isEqualTo(change2)
-                that(acceptedChanges.first().acceptNum).isEqualTo(2)
             }
         }
     }
@@ -977,12 +969,10 @@ class ConsensusSpec : IntegrationTestBase() {
     }
 
     private fun createChange(
-        acceptNum: Int?,
         userName: String = "userName",
         parentId: String = InitialHistoryEntry.getId(),
     ) = AddUserChange(
         userName,
-        acceptNum,
         peersets = listOf(ChangePeersetInfo(0, parentId)),
     )
 
