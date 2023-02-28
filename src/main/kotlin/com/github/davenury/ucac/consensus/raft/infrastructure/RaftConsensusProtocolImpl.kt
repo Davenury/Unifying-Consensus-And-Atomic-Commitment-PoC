@@ -8,6 +8,7 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.github.davenury.ucac.consensus.LeaderBasedConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -37,7 +38,7 @@ class RaftConsensusProtocolImpl(
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
     private val transactionBlocker: TransactionBlocker,
     private val isMetricTest: Boolean
-) : ConsensusProtocol, RaftConsensusProtocol, SignalSubject {
+) : RaftConsensusProtocol, SignalSubject {
     private val globalPeerId = peerResolver.currentPeer()
     private val peerId = globalPeerId.peerId
 
@@ -822,6 +823,9 @@ class RaftConsensusProtocolImpl(
             }
         }
     }
+
+    override fun getLeaderId(): Int? =
+        votedFor?.let { if (it.elected) it.id else null }
 
     companion object {
         private val logger = LoggerFactory.getLogger("raft")

@@ -11,6 +11,7 @@ import io.ktor.response.*
 import io.ktor.routing.*
 import kotlinx.coroutines.future.await
 
+data class CurrentLeaderDto(val currentLeaderPeerId: Int?)
 fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
     routing {
         // głosujemy na leadera
@@ -32,6 +33,11 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             val result = protocol.handleProposeChange(message).await()
             call.respond(result)
         }
+
+        get("/consensus/current-leader") {
+            call.respond(CurrentLeaderDto(protocol.getLeaderId()))
+        }
+
 //      Endpoints for tests
         get("/consensus/proposed_changes") {
             call.respond(Changes(protocol.getProposedChanges()))
