@@ -17,7 +17,7 @@ WORKDIR /application
 
 COPY --from=builder /home/gradle/src/build/install/PoC .
 
-ENTRYPOINT ["sh", "-c", "/application/bin/PoC -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps/oom.bin"]
+ENTRYPOINT ["sh", "-c", "/application/bin/PoC"]
 
 ###
 

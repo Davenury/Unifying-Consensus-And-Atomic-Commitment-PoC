@@ -272,10 +272,6 @@ func createRedisContainer() apiv1.Container {
 				Name:      "config",
 				MountPath: "/redis-master",
 			},
-			{
-				Name: "heapdumps",
-				MountPath: "/dumps",
-			},
 		},
 	}
 }
@@ -337,6 +333,8 @@ func createSingleContainer(peerConfig utils.PeerConfig, imageName string, create
 		Args: []string{
 			"-Xmx500m",
 			"-Dcom.sun.management.jmxremote.port=9999",
+			"-XX:+HeapDumpOnOutOfMemoryError",
+			"-XX:HeapDumpPath=/dumps/oom.bin",
 		},
 		Ports: []apiv1.ContainerPort{
 			{
@@ -354,6 +352,12 @@ func createSingleContainer(peerConfig utils.PeerConfig, imageName string, create
 		},
 		ReadinessProbe: probe,
 		LivenessProbe:  probe,
+		VolumeMounts: []apiv1.VolumeMount{
+			{
+				Name:      "heapdumps",
+				MountPath: "/dumps",
+			},
+		},
 	}
 }
 
