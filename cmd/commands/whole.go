@@ -88,7 +88,18 @@ func perform(config Config) {
 		DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
 	}
 	fmt.Println("Deploying application...")
-	DoDeploy(config.numberOfPeersInPeersets, config.createTestNamespace, config.testNamespace, true, config.applicationImageName, config.isMetricTest, true, config.proxyDelay, config.proxyLimit)
+	DoDeploy(DeployConfig{
+		NumberOfPeersInPeersets: config.numberOfPeersInPeersets,
+		DeployNamespace:         config.testNamespace,
+		DeployCreateNamespace:   config.createTestNamespace,
+		WaitForReadiness:        true,
+		ImageName:               config.applicationImageName,
+		IsMetricTest:            config.isMetricTest,
+		CreateResources:         true,
+		ProxyDelay:              config.proxyDelay,
+		ProxyLimit:              config.proxyLimit,
+		MonitoringNamespace:     config.monitoringNamespace,
+	})
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
 	time.Sleep(30 * time.Second)
 	fmt.Println("Deploying performance test")
@@ -108,6 +119,7 @@ func perform(config Config) {
 		ConsensusProtocol:           config.consensusProtocol,
 		ConstantLoad:                config.constantLoad,
 		FixedPeersetsInChange:       config.fixedPeersetsInChange,
+		MonitoringNamespace:         config.monitoringNamespace,
 	})
 	fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
 	waitUntilJobPodCompleted(config)

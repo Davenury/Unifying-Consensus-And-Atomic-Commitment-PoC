@@ -9,9 +9,9 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -31,6 +31,7 @@ type Config struct {
 	ConsensusProtocol           string
 	ConstantLoad                string
 	FixedPeersetsInChange       string
+	MonitoringNamespace         string
 }
 
 func createPerformanceDeployCommand() *cobra.Command {
@@ -192,6 +193,7 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 		"ENFORCE_AC_USAGE":                strconv.FormatBool(config.EnforceAcUsage),
 		"AC_PROTOCOL":                     config.AcProtocol,
 		"CONSENSUS_PROTOCOL":              config.ConsensusProtocol,
+		"LOKI_BASE_URL":                   fmt.Sprintf("http://loki.%s.svc.cluster.local:3100", config.MonitoringNamespace),
 	}
 
 	if config.FixedPeersetsInChange != "" {
