@@ -2,10 +2,6 @@ package com.github.davenury.tests
 
 import com.github.davenury.common.meterRegistry
 import io.micrometer.core.instrument.Tag
-import io.micrometer.core.instrument.Timer
-import org.slf4j.LoggerFactory
-import java.time.Duration
-import java.time.Instant
 
 object Metrics {
 

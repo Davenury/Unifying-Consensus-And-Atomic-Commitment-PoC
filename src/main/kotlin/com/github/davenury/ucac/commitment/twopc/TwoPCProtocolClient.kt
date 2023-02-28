@@ -10,11 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import org.slf4j.LoggerFactory
 
-data class ResponsesWithErrorAggregation<K>(
-    val responses: List<List<K>>,
-    val aggregatedValue: Int?
-)
-
 interface TwoPCProtocolClient {
     suspend fun sendAccept(peers: List<PeerAddress>, change: Change): List<Boolean>
     suspend fun sendDecision(peers: List<PeerAddress>, decisionChange: Change): List<Boolean>

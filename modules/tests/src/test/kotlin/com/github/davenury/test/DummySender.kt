@@ -9,7 +9,6 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.Phaser
 
 class DummySender(
-    private val peers: Map<Int, List<String>>,
     private val shouldNotify: Boolean,
     private val phaser: Phaser? = null
 ) : Sender {

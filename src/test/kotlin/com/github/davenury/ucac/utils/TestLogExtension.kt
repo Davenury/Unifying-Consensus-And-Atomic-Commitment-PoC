@@ -27,7 +27,7 @@ class TestLogExtension : BeforeEachCallback, AfterEachCallback, CloseableResourc
     }
 
     override fun beforeEach(context: ExtensionContext) {
-        disableAnsiConsoleInstallation();
+        disableAnsiConsoleInstallation()
 
         val className = context.testClass.orElse(null)?.name
         val methodName = context.testMethod.orElse(null)?.name

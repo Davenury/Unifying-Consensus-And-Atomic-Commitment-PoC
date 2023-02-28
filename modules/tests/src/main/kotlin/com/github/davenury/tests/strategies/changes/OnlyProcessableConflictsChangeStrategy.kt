@@ -4,8 +4,6 @@ import com.github.davenury.common.AddUserChange
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangePeersetInfo
 import com.github.davenury.tests.OnePeersetChanges
-import java.net.URLEncoder
-import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicInteger
 
 class OnlyProcessableConflictsChangeStrategy(
@@ -27,7 +25,7 @@ class OnlyProcessableConflictsChangeStrategy(
         return AddUserChange(
             userName = "user${counter.incrementAndGet()}",
             peersets = peersets,
-            notificationUrl = URLEncoder.encode("$ownAddress/api/v1/notification", Charset.defaultCharset())
+            notificationUrl = "$ownAddress/api/v1/notification",
         )
     }
 

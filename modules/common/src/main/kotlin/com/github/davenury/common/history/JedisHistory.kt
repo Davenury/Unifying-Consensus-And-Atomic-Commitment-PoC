@@ -1,6 +1,5 @@
 package com.github.davenury.common.history
 
-import com.github.davenury.common.Metrics
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPooled
 

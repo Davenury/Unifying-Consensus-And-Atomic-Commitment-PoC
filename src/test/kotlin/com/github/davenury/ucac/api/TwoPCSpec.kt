@@ -24,7 +24,6 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
-import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -38,7 +37,6 @@ class TwoPCSpec : IntegrationTestBase() {
     @BeforeEach
     fun setup() {
         System.setProperty("configFile", "application-integration.conf")
-        deleteRaftHistories()
     }
 
     @Test
@@ -540,10 +538,4 @@ class TwoPCSpec : IntegrationTestBase() {
             ChangePeersetInfo(it.first, it.second)
         },
     )
-
-    private fun deleteRaftHistories() {
-        File(System.getProperty("user.dir")).listFiles { pathname -> pathname?.name?.startsWith("history") == true }
-            ?.forEach { file -> FileUtils.deleteDirectory(file) }
-    }
-
 }

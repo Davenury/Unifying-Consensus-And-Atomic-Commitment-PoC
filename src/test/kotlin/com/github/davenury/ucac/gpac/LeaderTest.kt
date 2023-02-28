@@ -3,6 +3,7 @@ package com.github.davenury.ucac.gpac
 import com.github.davenury.common.AddUserChange
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangePeersetInfo
+import com.github.davenury.common.history.History
 import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
@@ -10,13 +11,12 @@ import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.utils.PeerThree
-import com.github.davenury.ucac.utils.PeerTwo
-import com.github.davenury.ucac.utils.TestLogExtension
-import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
+import com.github.davenury.ucac.utils.*
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import strikt.api.expectThat
@@ -28,12 +28,64 @@ import java.util.concurrent.Phaser
 
 @ExtendWith(TestLogExtension::class)
 class LeaderTest {
-    val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
+
+    private val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
+
+    private lateinit var history: History
+    private lateinit var phaser: Phaser
+
+    private lateinit var peerTwo: PeerWiremock
+    private lateinit var peerThree: PeerWiremock
+
+    private lateinit var subject: GPACProtocolImpl
+
+    @BeforeEach
+    fun setUp() {
+        history = InMemoryHistory()
+        phaser = Phaser(1).also { it.register() }
+
+        peerTwo = PeerWiremock()
+        peerThree = PeerWiremock()
+
+        val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)
+        subject = GPACProtocolImpl(
+            history,
+            GpacConfig(3),
+            ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
+            GPACProtocolClientImpl(),
+            TransactionBlocker(),
+            peerResolver = PeerResolver(
+                GlobalPeerId(1, 0),
+                mapOf(
+                    GlobalPeerId(1, 0) to PeerAddress(GlobalPeerId(1, 0), "localhost:8081"),
+                    GlobalPeerId(1, 1) to PeerAddress(GlobalPeerId(1, 1), "localhost:${peerTwo.getPort()}"),
+                    GlobalPeerId(1, 2) to PeerAddress(GlobalPeerId(1, 2), "localhost:${peerThree.getPort()}"),
+                )
+            ),
+            signalPublisher = SignalPublisher(
+                mapOf(
+                    Signal.ReachedMaxRetries to SignalListener {
+                        phaser.arrive()
+                    }
+                )
+            ),
+            isMetricTest = false
+        ).also {
+            it.leaderTimer = timer
+            it.retriesTimer = timer
+        }
+    }
+
+    @AfterEach
+    fun tearDown() {
+        peerTwo.close()
+        peerThree.close()
+    }
 
     @Test
     fun `should throw max retires exceeded, when too many times tried to be a leader`() {
-        PeerTwo.stubForNotElectingYou()
-        PeerThree.stubForNotElectingYou()
+        peerTwo.stubForNotElectingYou()
+        peerThree.stubForNotElectingYou()
 
         runBlocking { subject.performProtocolAsLeader(change) }
 
@@ -43,71 +95,38 @@ class LeaderTest {
         }
 
         // assert that we're actually asking 3 times
-        PeerTwo.verifyMaxRetriesForElectionPassed(3)
-        PeerThree.verifyMaxRetriesForElectionPassed(3)
+        peerTwo.verifyMaxRetriesForElectionPassed(3)
+        peerThree.verifyMaxRetriesForElectionPassed(3)
     }
 
     @Test
     fun `should throw TooFewResponsesException when not enough responses for agree message`() = runBlocking {
-        PeerTwo.stubForElectMe(10, Accept.COMMIT, 10, null, false)
-        PeerThree.stubForElectMe(10, Accept.COMMIT, 10, null, false)
-        PeerTwo.stubForNotAgree()
-        PeerThree.stubForNotAgree()
+        peerTwo.stubForElectMe(10, Accept.COMMIT, 10, null, false)
+        peerThree.stubForElectMe(10, Accept.COMMIT, 10, null, false)
+        peerTwo.stubForNotAgree()
+        peerThree.stubForNotAgree()
 
         val result = subject.proposeChangeAsync(change).await()
         expectThat(result.detailedMessage).isNotNull()
         expectThat(result.detailedMessage).isEqualTo("Transaction failed due to too few responses of ft phase.")
 
-        PeerTwo.verifyAgreeStub(1)
-        PeerThree.verifyAgreeStub(1)
+        peerTwo.verifyAgreeStub(1)
+        peerThree.verifyAgreeStub(1)
     }
 
     @Test
     fun `should perform operation to the end`(): Unit = runBlocking {
-        PeerTwo.stubForElectMe(10, Accept.COMMIT, 10, null, false)
-        PeerThree.stubForElectMe(10, Accept.COMMIT, 10, null, false)
-        PeerTwo.stubForAgree(10, Accept.COMMIT)
-        PeerThree.stubForAgree(10, Accept.COMMIT)
-        PeerTwo.stubForApply()
-        PeerThree.stubForApply()
+        peerTwo.stubForElectMe(10, Accept.COMMIT, 10, null, false)
+        peerThree.stubForElectMe(10, Accept.COMMIT, 10, null, false)
+        peerTwo.stubForAgree(10, Accept.COMMIT)
+        peerThree.stubForAgree(10, Accept.COMMIT)
+        peerTwo.stubForApply()
+        peerThree.stubForApply()
 
         runBlocking { subject.performProtocolAsLeader(change) }
 
         expectThat(history.getCurrentEntry().let { Change.fromHistoryEntry(it) })
             .isEqualTo(change)
-    }
-
-    private val history = InMemoryHistory()
-    private val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)
-    private val client = GPACProtocolClientImpl()
-    private val transactionBlocker = TransactionBlocker()
-    private val phaser: Phaser = Phaser(1).also { it.register() }
-
-    private var subject = GPACProtocolImpl(
-        history,
-        GpacConfig(3),
-        ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
-        client,
-        transactionBlocker,
-        peerResolver = PeerResolver(
-            GlobalPeerId(1, 0),
-            mapOf(
-                GlobalPeerId(1, 0) to PeerAddress(GlobalPeerId(1, 0), "localhost:8081"),
-                GlobalPeerId(1, 1) to PeerAddress(GlobalPeerId(1, 1), "localhost:${PeerTwo.getPort()}"),
-                GlobalPeerId(1, 2) to PeerAddress(GlobalPeerId(1, 2), "localhost:${PeerThree.getPort()}"),
-            )
-        ),
-        signalPublisher = SignalPublisher(
-            mapOf(
-                Signal.ReachedMaxRetries to SignalListener {
-                    phaser.arrive()
-                }
-            )
-        ),
-        isMetricTest = false
-    ).also {
-        it.leaderTimer = timer
-        it.retriesTimer = timer
     }
 
     private val change = AddUserChange(

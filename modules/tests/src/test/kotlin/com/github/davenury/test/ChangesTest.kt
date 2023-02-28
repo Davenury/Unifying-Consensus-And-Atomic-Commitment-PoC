@@ -31,13 +31,13 @@ class ChangesTest {
             5 to listOf("localhost5:8080"),
         )
 
-        private val ownAddress = "http://localhost:8080"
+        private const val ownAddress = "http://localhost:8080"
     }
 
     @Test
     fun `should call lock, when list of available peersets is empty`(): Unit = runBlocking {
         // given - changes
-        val sender = DummySender(peers, shouldNotify = false)
+        val sender = DummySender(shouldNotify = false)
         val lockMock = mockk<Lock>()
         val conditionMock = mockk<Condition>()
         val subject = Changes(
@@ -99,7 +99,7 @@ class ChangesTest {
 
     @Test
     fun `should be able to unlock peersets`(): Unit = runBlocking {
-        val sender = DummySender(peers, shouldNotify = false)
+        val sender = DummySender(shouldNotify = false)
         val subject = Changes(
             peers,
             sender,
@@ -139,7 +139,7 @@ class ChangesTest {
         val changesToExecute = 10
         val phaser = Phaser(changesToExecute)
         phaser.register()
-        val sender = DummySender(peers, shouldNotify = true, phaser = phaser)
+        val sender = DummySender(shouldNotify = true, phaser = phaser)
         val subject = Changes(
             peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size)), DefaultChangeStrategy(
                 ownAddress
@@ -178,7 +178,7 @@ class ChangesTest {
         }
 
         val changes = Changes(
-            peers, DummySender(peers, shouldNotify = false), strategy, DefaultChangeStrategy(
+            peers, DummySender(shouldNotify = false), strategy, DefaultChangeStrategy(
                 ownAddress
             )
         )
@@ -203,7 +203,7 @@ class ChangesTest {
 
     private fun areChangesValid(changes: List<Pair<String, Change>>): Boolean {
         val mapOfChanges = (0..changes.size).associateWith { InitialHistoryEntry.getId() }.toMutableMap()
-        changes.forEach { (address, change) ->
+        changes.forEach { (_, change) ->
             change.peersets.forEach { (peersetId, parentId) ->
                 if (parentId != mapOfChanges[peersetId]) {
                     println("ParentId differs for change in peerset $peersetId - parentId: ${parentId}, expected parent id: ${mapOfChanges[peersetId]}")

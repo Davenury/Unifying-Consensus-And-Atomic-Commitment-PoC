@@ -17,9 +17,9 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 class ApiV2Service(
-    private val gpacFactory: GPACFactory,
-    private val consensusProtocol: ConsensusProtocol,
-    private val twoPC: TwoPC,
+    gpacFactory: GPACFactory,
+    consensusProtocol: ConsensusProtocol,
+    twoPC: TwoPC,
     private val history: History,
     private var config: Config,
 ) {
