@@ -3,18 +3,15 @@ package com.github.davenury.ucac.utils
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock.*
-import org.junit.jupiter.api.AfterAll
 
-abstract class BaseWiremock {
-
+class PeerWiremock : AutoCloseable {
     private var wireMockServer: WireMockServer = WireMockServer(0)
 
     init {
         wireMockServer.start()
     }
 
-    @AfterAll
-    fun cleanup() {
+    override fun close() {
         wireMockServer.resetAll()
         wireMockServer.stop()
     }
@@ -72,10 +69,6 @@ abstract class BaseWiremock {
 
     fun verifyAgreeStub(expected: Int) {
         wireMockServer.verify(expected, postRequestedFor(urlMatching("/ft-agree")))
-    }
-
-    fun verifyApplyStub(expected: Int) {
-        wireMockServer.verify(expected, postRequestedFor(urlMatching("/apply")))
     }
 
     fun getPort(): Int = wireMockServer.port()

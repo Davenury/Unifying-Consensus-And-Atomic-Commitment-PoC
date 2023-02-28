@@ -27,7 +27,6 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
-import java.time.Duration
 import java.util.concurrent.Phaser
 
 @Suppress("HttpUrlsUsage")
@@ -40,7 +39,6 @@ class MultiplePeersetSpec : IntegrationTestBase() {
     @BeforeEach
     fun setup() {
         System.setProperty("configFile", "application-integration.conf")
-        deleteRaftHistories()
     }
 
     @Test
@@ -308,35 +306,35 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             changePhaser.register()
 
 
-            val leaderAction = SignalListener {
-                val url2 = "${it.peers[0][1]}/apply"
+            val leaderAction = SignalListener { data ->
+                val url2 = "${data.peers[0][1]}/apply"
                 runBlocking {
                     httpClient.post<HttpResponse>(url2) {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
                         body = Apply(
-                            it.transaction!!.ballotNumber, true, Accept.COMMIT,
+                            data.transaction!!.ballotNumber, true, Accept.COMMIT,
                             change(0, 1),
                         )
                     }.also {
                         logger.info("Got response test apply ${it.status.value}")
                     }
                 }
-                logger.info("${it.peers[0][1]} sent response to apply")
-                val url3 = "${it.peers[0][2]}/apply"
+                logger.info("${data.peers[0][1]} sent response to apply")
+                val url3 = "${data.peers[0][2]}/apply"
                 runBlocking {
                     httpClient.post<HttpResponse>(url3) {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
                         body = Apply(
-                            it.transaction!!.ballotNumber, true, Accept.COMMIT,
+                            data.transaction!!.ballotNumber, true, Accept.COMMIT,
                             change(0, 1),
                         )
                     }.also {
                         logger.info("Got response test apply ${it.status.value}")
                     }
                 }
-                logger.info("${it.peers[0][2]} sent response to apply")
+                logger.info("${data.peers[0][2]} sent response to apply")
                 throw RuntimeException("Leader failed after applying change in one peerset")
             }
 
@@ -535,10 +533,4 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ChangePeersetInfo(it, InitialHistoryEntry.getId())
         },
     )
-
-    private fun deleteRaftHistories() {
-        File(System.getProperty("user.dir")).listFiles { pathname -> pathname?.name?.startsWith("history") == true }
-            ?.forEach { file -> FileUtils.deleteDirectory(file) }
-    }
-
 }

@@ -5,7 +5,7 @@ import org.testcontainers.containers.output.OutputFrame
 import java.nio.charset.StandardCharsets
 import java.util.function.Consumer
 
-class DockerLogConsumer(private val name: String) : Consumer<OutputFrame> {
+class DockerLogConsumer(name: String) : Consumer<OutputFrame> {
     private val logger = LoggerFactory.getLogger("container/$name")
 
     override fun accept(t: OutputFrame) {

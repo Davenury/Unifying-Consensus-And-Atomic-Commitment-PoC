@@ -11,7 +11,7 @@ class TransactionBlocker {
     private var changeId: String? = null
 
     fun isAcquired() = semaphore.availablePermits < 1
-    fun isAcquiredByProtocol(protocol: ProtocolName) = semaphore.availablePermits < 1 && this.protocol == protocol
+    fun isAcquiredByProtocol(protocol: ProtocolName) = isAcquired() && this.protocol == protocol
 
     fun releaseBlock() {
         try {
@@ -19,7 +19,7 @@ class TransactionBlocker {
             semaphore.release()
             protocol = null
         } catch (e: Exception) {
-            logger.error("Tried to release semaphore, when it was already released")
+            logger.error("Tried to release semaphore, when it was already released", e)
         }
     }
 

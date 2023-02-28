@@ -111,8 +111,8 @@ class GPACProtocolClientImpl : GPACProtocolClient {
             // max of all ballotNumbers sent back to the leader
             logger.error(errorMessage(e), e)
             if (e.response.status.value == 422) {
-                val value = e.response.content.readUTF8Line()?.let {
-                    return@let Regex("[0-9]+").findAll(it)
+                val value = e.response.content.readUTF8Line()?.let { line ->
+                    return@let Regex("[0-9]+").findAll(line)
                         .map(MatchResult::value)
                         .toList()
                         .map { it.toInt() }

@@ -47,8 +47,8 @@ class ProtocolTimerImpl(
     override fun cancelCounting() {
         try {
             this.task?.cancel()
-        } catch (_: CancellationException) {
-            logger.info("Cancelation exception occured")
+        } catch (e: CancellationException) {
+            logger.error("Cancellation exception occurred", e)
         }
     }
 

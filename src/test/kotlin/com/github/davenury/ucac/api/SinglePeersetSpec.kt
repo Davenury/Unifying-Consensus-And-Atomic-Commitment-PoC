@@ -44,7 +44,6 @@ class SinglePeersetSpec : IntegrationTestBase() {
     @BeforeEach
     fun setup() {
         System.setProperty("configFile", "single_peerset_application.conf")
-        deleteRaftHistories()
     }
 
     @Test
@@ -314,9 +313,4 @@ class SinglePeersetSpec : IntegrationTestBase() {
             ChangePeersetInfo(it, InitialHistoryEntry.getId())
         },
     )
-
-    private fun deleteRaftHistories() {
-        File(System.getProperty("user.dir")).listFiles { pathname -> pathname?.name?.startsWith("history") == true }
-            ?.forEach { file -> FileUtils.deleteDirectory(file) }
-    }
 }

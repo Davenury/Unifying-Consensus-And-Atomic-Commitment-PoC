@@ -4,8 +4,6 @@ import com.github.davenury.common.AddUserChange
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangePeersetInfo
 import com.github.davenury.tests.OnePeersetChanges
-import java.net.URLEncoder
-import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicInteger
 
 class DefaultChangeStrategy(
@@ -18,6 +16,6 @@ class DefaultChangeStrategy(
         AddUserChange(
             userName = "user${counter.incrementAndGet()}",
             peersets = ids.map { ChangePeersetInfo(it, changes[it]!!.getCurrentParentId()) },
-            notificationUrl = URLEncoder.encode("$ownAddress/api/v1/notification", Charset.defaultCharset())
+            notificationUrl = "$ownAddress/api/v1/notification",
         )
 }

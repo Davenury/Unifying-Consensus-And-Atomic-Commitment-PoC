@@ -502,7 +502,7 @@ class GPACProtocolImpl(
             } && allShards
     }
 
-    private suspend fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
+    private fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
         try {
             signal(signal, transaction, change)
         } catch (e: Exception) {

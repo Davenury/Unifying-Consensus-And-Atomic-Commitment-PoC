@@ -69,9 +69,7 @@ class Worker(
             job.completableFuture.complete(it)
             Metrics.stopTimer(job.change.id, job.protocolName.name.lowercase(), it)
             Metrics.bumpChangeProcessed(it, job.protocolName.name.lowercase())
-            runBlocking {
-                ChangeNotifier.notify(job.change, it)
-            }
+            ChangeNotifier.notify(job.change, it)
         }.await()
     }
 
