@@ -15,57 +15,61 @@ import (
 	"time"
 )
 
+type DeployConfig struct {
+	NumberOfPeersInPeersets []int
+	DeployNamespace         string
+	DeployCreateNamespace   bool
+	WaitForReadiness        bool
+	ImageName               string
+	IsMetricTest            bool
+	CreateResources         bool
+	ProxyDelay              string
+	ProxyLimit              string
+	MonitoringNamespace     string
+}
+
 const ratisPort = 10024
 const servicePort = 8080
 
 func CreateDeployCommand() *cobra.Command {
 
-	var numberOfPeersInPeersets []int
-	var deployNamespace string
-	var deployCreateNamespace bool
-	var waitForReadiness bool
-	var imageName string
-	var isMetricTest bool
-	var createResources bool
-	var proxyDelay string
-	var proxyLimit string
-
+	var config DeployConfig
 	var deployCommand = &cobra.Command{
 		Use:   "deploy",
 		Short: "deploy application to cluster",
 		Run: func(cmd *cobra.Command, args []string) {
-			DoDeploy(numberOfPeersInPeersets, deployCreateNamespace, deployNamespace, waitForReadiness, imageName, isMetricTest, createResources, proxyDelay, proxyLimit)
+			DoDeploy(config)
 		},
 	}
 
-	deployCommand.Flags().IntSliceVar(&numberOfPeersInPeersets, "peers", make([]int, 0), "Number of peers in peersets; example usage '--peers=1,2,3'")
-	deployCommand.Flags().BoolVarP(&deployCreateNamespace, "create-namespace", "", false, "Include if should create namespace")
-	deployCommand.Flags().StringVarP(&deployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
-	deployCommand.Flags().BoolVarP(&waitForReadiness, "wait-for-readiness", "", false, "Wait for deployment to be ready")
-	deployCommand.Flags().StringVarP(&imageName, "image", "", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
-	deployCommand.Flags().BoolVar(&isMetricTest, "is-metric-test", false, "Determines whether add additional change related metrics. DO NOT USE WITH NORMAL TESTS!")
-	deployCommand.Flags().BoolVar(&createResources, "create-resources", true, "Determines if pods should have limits and requests")
-	deployCommand.Flags().StringVar(&proxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
-	deployCommand.Flags().StringVar(&proxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
+	deployCommand.Flags().IntSliceVar(&config.NumberOfPeersInPeersets, "peers", make([]int, 0), "Number of peers in peersets; example usage '--peers=1,2,3'")
+	deployCommand.Flags().BoolVarP(&config.DeployCreateNamespace, "create-namespace", "", false, "Include if should create namespace")
+	deployCommand.Flags().StringVarP(&config.DeployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
+	deployCommand.Flags().BoolVarP(&config.WaitForReadiness, "wait-for-readiness", "", false, "Wait for deployment to be ready")
+	deployCommand.Flags().StringVarP(&config.ImageName, "image", "", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
+	deployCommand.Flags().BoolVar(&config.IsMetricTest, "is-metric-test", false, "Determines whether add additional change related metrics. DO NOT USE WITH NORMAL TESTS!")
+	deployCommand.Flags().BoolVar(&config.CreateResources, "create-resources", true, "Determines if pods should have limits and requests")
+	deployCommand.Flags().StringVar(&config.ProxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
+	deployCommand.Flags().StringVar(&config.ProxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
 
 	return deployCommand
 
 }
 
-func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace string, waitForReadiness bool, imageName string, isMetricTest bool, createResources bool, proxyDelay string, proxyLimit string) {
-	ratisPeers := utils.GenerateServicesForPeers(numberOfPeersInPeersets, ratisPort)
-	gpacPeers := utils.GenerateServicesForPeersStaticPort(numberOfPeersInPeersets, servicePort)
-	ratisGroups := make([]string, len(numberOfPeersInPeersets))
-	for i := 0; i < len(numberOfPeersInPeersets); i++ {
+func DoDeploy(config DeployConfig) {
+	ratisPeers := utils.GenerateServicesForPeers(config.NumberOfPeersInPeersets, ratisPort)
+	gpacPeers := utils.GenerateServicesForPeersStaticPort(config.NumberOfPeersInPeersets, servicePort)
+	ratisGroups := make([]string, len(config.NumberOfPeersInPeersets))
+	for i := 0; i < len(config.NumberOfPeersInPeersets); i++ {
 		ratisGroups[i] = uuid.New().String()
 	}
 
-	if createNamespace {
-		utils.CreateNamespace(namespace)
+	if config.DeployCreateNamespace {
+		utils.CreateNamespace(config.DeployNamespace)
 	}
 
 	totalPeers := 0
-	for idx, num := range numberOfPeersInPeersets {
+	for idx, num := range config.NumberOfPeersInPeersets {
 		totalPeers += num
 		for i := 0; i < num; i++ {
 			peerId := strconv.Itoa(i)
@@ -74,25 +78,25 @@ func DoDeploy(numberOfPeersInPeersets []int, createNamespace bool, namespace str
 				PeerId:         peerId,
 				PeersetId:      strconv.Itoa(idx),
 				PeersInPeerset: num,
-				PeersetsConfig: numberOfPeersInPeersets,
+				PeersetsConfig: config.NumberOfPeersInPeersets,
 			}
 
-			createPV(namespace, peerConfig)
-			createPVC(namespace, peerConfig)
-			createRedisConfigmap(namespace, peerConfig)
+			createPV(config.DeployNamespace, peerConfig)
+			createPVC(config.DeployNamespace, peerConfig)
+			createRedisConfigmap(config.DeployNamespace, peerConfig)
 
-			deploySinglePeerService(namespace, peerConfig, ratisPort+i)
+			deploySinglePeerService(config.DeployNamespace, peerConfig, ratisPort+i)
 
-			deploySinglePeerConfigMap(namespace, peerConfig, ratisPeers, gpacPeers, isMetricTest)
+			deploySinglePeerConfigMap(config, peerConfig, ratisPeers, gpacPeers)
 
-			deploySinglePeerDeployment(namespace, peerConfig, imageName, createResources, proxyDelay, proxyLimit)
+			deploySinglePeerDeployment(config, peerConfig)
 
 			fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
 		}
 	}
 
-	if waitForReadiness {
-		waitForPodsReadiness(totalPeers, namespace)
+	if config.WaitForReadiness {
+		waitForPodsReadiness(totalPeers, config.DeployNamespace)
 	}
 }
 
@@ -141,20 +145,20 @@ func areContainersReady(containerStatuses []apiv1.ContainerStatus) bool {
 	return true
 }
 
-func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string, proxyLimit string) {
+func deploySinglePeerDeployment(config DeployConfig, peerConfig utils.PeerConfig) {
 	clientset, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
 	}
 
-	deploymentClient := clientset.AppsV1().Deployments(namespace)
+	deploymentClient := clientset.AppsV1().Deployments(config.DeployNamespace)
 
 	oneReplicaPointer := int32(1)
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      utils.DeploymentName(peerConfig),
-			Namespace: namespace,
+			Namespace: config.DeployNamespace,
 			Labels: map[string]string{
 				"project": "ucac",
 			},
@@ -167,7 +171,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 					"peersetId": peerConfig.PeersetId,
 				},
 			},
-			Template: createPodTemplate(peerConfig, imageName, createResources, proxyDelay, proxyLimit, namespace),
+			Template: createPodTemplate(config, peerConfig),
 		},
 	}
 
@@ -180,7 +184,7 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 
 }
 
-func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string, proxyLimit string, namespace string) apiv1.PodTemplateSpec {
+func createPodTemplate(config DeployConfig, peerConfig utils.PeerConfig) apiv1.PodTemplateSpec {
 	containerName := utils.ContainerName(peerConfig)
 
 	return apiv1.PodTemplateSpec{
@@ -200,8 +204,8 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 		},
 		Spec: apiv1.PodSpec{
 			Containers: []apiv1.Container{
-				createSingleContainer(peerConfig, imageName, createResources),
-				createProxyContainer(proxyDelay, proxyLimit),
+				createSingleContainer(config, peerConfig),
+				createProxyContainer(config.ProxyDelay, config.ProxyLimit),
 				createRedisContainer(),
 			},
 			Volumes: []apiv1.Volume{
@@ -209,7 +213,7 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 					Name: "redis-data",
 					VolumeSource: apiv1.VolumeSource{
 						PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
-							ClaimName: utils.PVCName(peerConfig, namespace),
+							ClaimName: utils.PVCName(peerConfig, config.DeployNamespace),
 						},
 					},
 				},
@@ -291,7 +295,7 @@ func createProxyContainer(delay string, limit string) apiv1.Container {
 		},
 	}
 }
-func createSingleContainer(peerConfig utils.PeerConfig, imageName string, createResources bool) apiv1.Container {
+func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) apiv1.Container {
 
 	probe := &apiv1.Probe{
 		ProbeHandler: apiv1.ProbeHandler{
@@ -303,7 +307,7 @@ func createSingleContainer(peerConfig utils.PeerConfig, imageName string, create
 	}
 
 	resources := apiv1.ResourceRequirements{}
-	if createResources {
+	if config.CreateResources {
 		resources = apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
 				"cpu":    resource.MustParse("700m"),
@@ -318,7 +322,7 @@ func createSingleContainer(peerConfig utils.PeerConfig, imageName string, create
 
 	return apiv1.Container{
 		Name:      "application",
-		Image:     imageName,
+		Image:     config.ImageName,
 		Resources: resources,
 		Args: []string{
 			"-Xmx500m",
@@ -343,7 +347,7 @@ func createSingleContainer(peerConfig utils.PeerConfig, imageName string, create
 	}
 }
 
-func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ratisPeers string, gpacPeers string, isMetricTest bool) {
+func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig, ratisPeers string, gpacPeers string) {
 	clientset, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
@@ -356,7 +360,7 @@ func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ra
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      utils.ConfigMapName(peerConfig),
-			Namespace: namespace,
+			Namespace: config.DeployNamespace,
 			Labels: map[string]string{
 				"project": "ucac",
 			},
@@ -369,14 +373,15 @@ func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ra
 			"config_peerId":                peerConfig.PeerId,
 			"config_ratis_addresses":       ratisPeers,
 			"config_peers":                 gpacPeers,
-			"IS_METRIC_TEST":               strconv.FormatBool(isMetricTest),
+			"IS_METRIC_TEST":               strconv.FormatBool(config.IsMetricTest),
 			"config_persistence_type":      "REDIS",
 			"config_persistence_redisHost": "localhost",
 			"config_persistence_redisPort": "6379",
+			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s.svc.cluster.local:3100", config.MonitoringNamespace),
 		},
 	}
 
-	clientset.CoreV1().ConfigMaps(namespace).Create(context.Background(), configMap, metav1.CreateOptions{})
+	clientset.CoreV1().ConfigMaps(config.DeployNamespace).Create(context.Background(), configMap, metav1.CreateOptions{})
 }
 
 func deploySinglePeerService(namespace string, peerConfig utils.PeerConfig, currentRatisPort int) {
