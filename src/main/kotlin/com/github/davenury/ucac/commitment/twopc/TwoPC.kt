@@ -87,7 +87,7 @@ class TwoPC(
 
         val changeWithProperParentId = change.copyWithNewParentId(
             peerResolver.currentPeer().peersetId,
-            history.getCurrentEntry().getId(),
+            history.getCurrentEntryId(),
         )
         val result = consensusProtocol.proposeChangeAsync(changeWithProperParentId).await()
 
@@ -134,7 +134,7 @@ class TwoPC(
                 changeTimer.cancelCounting()
                 val updatedChange = change.copyWithNewParentId(
                     peerResolver.currentPeer().peersetId,
-                    history.getCurrentEntry().getId(),
+                    history.getCurrentEntryId(),
                 )
                 checkChangeAndProposeToConsensus(updatedChange, currentProcessedChange.change.id)
             }
@@ -248,7 +248,7 @@ class TwoPC(
                     change.toHistoryEntry(
                         peerset
                     ).getParentId()
-                } is ${history.getCurrentEntry().getId()}"
+                } is ${history.getCurrentEntryId()}"
             )
             changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.REJECTED))
             throw HistoryCannotBeBuildException()
@@ -288,7 +288,7 @@ class TwoPC(
 
             return if (grandParentChange2PCChangeId == proposedChangeParentId) change.copyWithNewParentId(
                 peersetId,
-                history.getCurrentEntry().getId()
+                history.getCurrentEntryId()
             )
             else change
         }

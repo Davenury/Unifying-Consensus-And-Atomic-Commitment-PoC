@@ -4,6 +4,8 @@ package com.github.davenury.common.history
  * @author Kamil Jarosz
  */
 interface History {
+    fun getCurrentEntryId(): String
+
     fun getCurrentEntry(): HistoryEntry
 
     fun addEntry(entry: HistoryEntry)
@@ -43,7 +45,7 @@ interface History {
         return getEntryFromHistory(entryId) != null
     }
     fun isEntryCompatible(entry: HistoryEntry): Boolean {
-        return containsEntry(entry.getId()) || getCurrentEntry().getId() == entry.getParentId()
+        return containsEntry(entry.getId()) || getCurrentEntryId() == entry.getParentId()
     }
 
     fun getAllEntriesUntilHistoryEntryId(historyEntryId: String): List<HistoryEntry> =

@@ -1,6 +1,7 @@
 package com.github.davenury.common.history
 
 
+import java.lang.IllegalArgumentException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.HashSet
@@ -9,27 +10,38 @@ import kotlin.collections.HashSet
  * @author Kamil Jarosz
  */
 abstract class CachedHistory : History {
-    private val ancestors: ConcurrentHashMap<String, Set<String>> = ConcurrentHashMap()
+    internal val ancestors: ConcurrentHashMap<String, Set<EntryId>> = ConcurrentHashMap()
 
     @Throws(EntryNotFoundException::class)
-    private fun getAncestors(entryId: String): Set<String> {
+    private fun getAncestors(entryId: String): Set<EntryId> {
         val existing = ancestors[entryId]
         if (existing != null) {
             return existing
         }
 
+        val newAncestors = HashSet<EntryId>()
+        newAncestors.add(EntryId.fromString(entryId))
         val entry = getEntry(entryId)
-        val parentId = entry.getParentId()
 
-        val new = if (parentId == null) {
-            Collections.singleton(entryId)
-        } else {
-            val union = HashSet<String>(getAncestors(parentId))
-            union.add(entryId)
-            Collections.unmodifiableSet(union)
+        var ancestorId = entry.getParentId()
+        var ancestorCacheKey: String? = null
+        while (ancestorId != null) {
+            val ancestorCache = ancestors[ancestorId]
+            if (ancestorCache != null) {
+                ancestorCacheKey = ancestorId
+                newAncestors.addAll(ancestorCache)
+                ancestorId = null
+            } else {
+                newAncestors.add(EntryId.fromString(ancestorId))
+                ancestorId = getEntry(ancestorId).getParentId()
+            }
         }
-        ancestors.putIfAbsent(entryId, new)
-        return new
+
+        ancestors.putIfAbsent(entryId, newAncestors)
+        if (ancestorCacheKey != null) {
+            ancestors.remove(ancestorCacheKey)
+        }
+        return newAncestors
     }
 
     override fun getEntryFromHistory(id: String): HistoryEntry? {
@@ -41,7 +53,12 @@ abstract class CachedHistory : History {
     }
 
     override fun containsEntry(entryId: String): Boolean {
-        return getAncestors(getCurrentEntry().getId()).contains(entryId)
+        val id: EntryId
+        try {
+            id = EntryId.fromString(entryId)
+        } catch (e: IllegalArgumentException) {
+            return false
+        }
+        return getAncestors(getCurrentEntryId()).contains(id)
     }
-
 }

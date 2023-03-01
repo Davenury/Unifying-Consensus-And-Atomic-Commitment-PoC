@@ -22,7 +22,7 @@ internal class HistoryTest {
     fun `add entry`(): Unit = runBlocking {
         val history = InMemoryHistory()
 
-        val parentId = history.getCurrentEntry().getId()
+        val parentId = history.getCurrentEntryId()
         val entry = IntermediateHistoryEntry("test", parentId)
         history.addEntry(entry)
 
@@ -43,7 +43,7 @@ internal class HistoryTest {
     fun `add the same entry multiple times`(): Unit = runBlocking {
         val history = InMemoryHistory()
 
-        val parentId = history.getCurrentEntry().getId()
+        val parentId = history.getCurrentEntryId()
         val entry1 = IntermediateHistoryEntry("test1", parentId)
         val entry2 = IntermediateHistoryEntry("test2", parentId)
         history.addEntry(entry1)
@@ -56,7 +56,7 @@ internal class HistoryTest {
     fun `get entry from history`(): Unit = runBlocking {
         val history = InMemoryHistory()
 
-        val parentId = history.getCurrentEntry().getId()
+        val parentId = history.getCurrentEntryId()
         val entry1 = IntermediateHistoryEntry("test1", parentId)
         val entry2 = IntermediateHistoryEntry("test2", entry1.getId())
         val entry3 = IntermediateHistoryEntry("test2", entry2.getId())

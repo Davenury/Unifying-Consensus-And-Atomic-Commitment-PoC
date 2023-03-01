@@ -16,6 +16,10 @@ class InMemoryHistory : CachedHistory() {
         entries[initialEntry.getId()] = initialEntry
     }
 
+    override fun getCurrentEntryId(): String {
+        return currentEntryId.get()
+    }
+
     override fun getCurrentEntry(): HistoryEntry {
         return getEntry(currentEntryId.get())
     }

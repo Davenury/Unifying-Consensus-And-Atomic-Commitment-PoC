@@ -1,6 +1,5 @@
 package com.github.davenury.common.history
 
-import com.github.davenury.common.Metrics
 import org.slf4j.LoggerFactory
 import redis.clients.jedis.JedisPooled
 
@@ -48,7 +47,7 @@ class JedisHistory(host: String, port: Int) : CachedHistory() {
         jedis.set(key, entry.serialize())
     }
 
-    private fun getCurrentEntryId(): String {
+    override fun getCurrentEntryId(): String {
         val currentEntryId = jedis.get(CURRENT_ENTRY_ID)
         logger.trace("Current entry ID is $currentEntryId")
         return currentEntryId
