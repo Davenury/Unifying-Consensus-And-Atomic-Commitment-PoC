@@ -10,7 +10,7 @@ import java.time.Instant
 object Metrics {
 
     fun reportUnsuccessfulChange(code: Int) {
-        meterRegistry.counter("unsuccessful_change", "$code").increment()
+        meterRegistry.counter("unsuccessful_change", listOf(Tag.of("code", "$code"))).increment()
     }
 
     fun bumpSentChanges() {

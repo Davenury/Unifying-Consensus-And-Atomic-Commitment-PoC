@@ -47,17 +47,13 @@ class Changes(
             val result = try {
                 changes[ids[0]]!!.introduceChange(change)
             } catch (e: Exception) {
+                logger.error("Error while introducing change", e)
                 getPeersStrategy.freePeersets(ids)
             }
             if (result == ChangeState.ACCEPTED) {
+                val entries = ids.map { it to change.toHistoryEntry(it).getId() }
                 logger.info(
-                    "Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: ${
-                        ids.map {
-                            it to change.toHistoryEntry(
-                                it
-                            ).getId()
-                        }
-                    }"
+                    "Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: $entries"
                 )
             } else {
                 logger.info("Change $change was rejected, freeing peersets $ids")
