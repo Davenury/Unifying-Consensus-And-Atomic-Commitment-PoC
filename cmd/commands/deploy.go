@@ -183,6 +183,8 @@ func deploySinglePeerDeployment(namespace string, peerConfig utils.PeerConfig, i
 func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createResources bool, proxyDelay string, proxyLimit string, namespace string) apiv1.PodTemplateSpec {
 	containerName := utils.ContainerName(peerConfig)
 
+	fiftyMega := resource.MustParse("50Mi")
+	var terminationPeriodSeconds int64 = 120
 	return apiv1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: containerName,
@@ -204,12 +206,22 @@ func createPodTemplate(peerConfig utils.PeerConfig, imageName string, createReso
 				createProxyContainer(proxyDelay, proxyLimit),
 				createRedisContainer(),
 			},
+			TerminationGracePeriodSeconds: &terminationPeriodSeconds,
 			Volumes: []apiv1.Volume{
 				{
 					Name: "redis-data",
 					VolumeSource: apiv1.VolumeSource{
 						PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
 							ClaimName: utils.PVCName(peerConfig, namespace),
+						},
+					},
+				},
+				{
+					Name: "heapdumps",
+					VolumeSource: apiv1.VolumeSource{
+						EmptyDir: &apiv1.EmptyDirVolumeSource{
+							Medium:    apiv1.StorageMediumDefault,
+							SizeLimit: &fiftyMega,
 						},
 					},
 				},
@@ -320,13 +332,18 @@ func createSingleContainer(peerConfig utils.PeerConfig, imageName string, create
 		Name:      "application",
 		Image:     imageName,
 		Resources: resources,
-		Args: []string{
-			"-Xmx500m",
-			"-Dcom.sun.management.jmxremote.port=9999",
-		},
 		Ports: []apiv1.ContainerPort{
 			{
 				ContainerPort: 8081,
+			},
+		},
+		Lifecycle: &apiv1.Lifecycle{
+			PreStop: &apiv1.LifecycleHandler{
+				Exec: &apiv1.ExecAction{
+					Command: []string{
+						"jmap", "-dump:live,format=b,file=/dumps/preStop.bin", "1",
+					},
+				},
 			},
 		},
 		EnvFrom: []apiv1.EnvFromSource{
@@ -340,6 +357,12 @@ func createSingleContainer(peerConfig utils.PeerConfig, imageName string, create
 		},
 		ReadinessProbe: probe,
 		LivenessProbe:  probe,
+		VolumeMounts: []apiv1.VolumeMount{
+			{
+				Name:      "heapdumps",
+				MountPath: "/dumps",
+			},
+		},
 	}
 }
 
@@ -363,6 +386,7 @@ func deploySinglePeerConfigMap(namespace string, peerConfig utils.PeerConfig, ra
 		},
 		Data: map[string]string{
 			"CONFIG_FILE":                  "application-kubernetes.conf",
+			"JAVA_OPTS":                    "-Xmx500m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps/oom.bin",
 			"config_host":                  utils.ServiceAddress(peerConfig),
 			"config_port":                  "8081",
 			"config_peersetId":             peerConfig.PeersetId,
