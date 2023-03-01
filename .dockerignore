@@ -5,4 +5,4 @@ k8s-stuff/
 cmd/
 gradle/
 build/
-!build/distributions/*.tar
+!build/distributions/*.zip
