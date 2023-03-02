@@ -9,6 +9,7 @@ import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.delay
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.time.Duration
@@ -413,15 +414,21 @@ class GPACProtocolImpl(
         change: Change,
         acceptVal: Accept,
         decision: Boolean = false,
-        acceptNum: Int? = null
+        acceptNum: Int? = null,
+        iteration: Int = 0,
     ): Boolean {
+
         transactionBlocker.tryToBlock(ProtocolName.GPAC, change.id)
 
         val agreedResponses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
-        if (!superSet(agreedResponses, getPeersFromChange(change))) {
+        if (!superSet(agreedResponses, getPeersFromChange(change)) && iteration == maxLeaderElectionTries) {
             changeTimeout(change, "Transaction failed due to too few responses of ft phase.")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             return false
+        }
+        if (!superSet(agreedResponses, getPeersFromChange(change))) {
+            delay(500)
+            return ftAgreePhase(change, acceptVal, decision, acceptNum, iteration + 1)
         }
 
         this.transaction = this.transaction.copy(decision = true, acceptVal = acceptVal)
