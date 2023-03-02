@@ -160,7 +160,9 @@ func deploySinglePeerDeployment(config DeployConfig, peerConfig utils.PeerConfig
 			Name:      utils.DeploymentName(peerConfig),
 			Namespace: config.DeployNamespace,
 			Labels: map[string]string{
-				"project": "ucac",
+				"project":   "ucac",
+				"peerId":    peerConfig.PeerId,
+				"peersetId": peerConfig.PeersetId,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -362,7 +364,9 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			Name:      utils.ConfigMapName(peerConfig),
 			Namespace: config.DeployNamespace,
 			Labels: map[string]string{
-				"project": "ucac",
+				"project":   "ucac",
+				"peerId":    peerConfig.PeerId,
+				"peersetId": peerConfig.PeersetId,
 			},
 		},
 		Data: map[string]string{
@@ -395,7 +399,9 @@ func deploySinglePeerService(namespace string, peerConfig utils.PeerConfig, curr
 			Name:      utils.ServiceName(peerConfig),
 			Namespace: namespace,
 			Labels: map[string]string{
-				"project": "ucac",
+				"project":   "ucac",
+				"peerId":    peerConfig.PeerId,
+				"peersetId": peerConfig.PeersetId,
 			},
 		},
 		Spec: apiv1.ServiceSpec{
@@ -433,7 +439,9 @@ func createPV(namespace string, peerConfig utils.PeerConfig) {
 			Name:      utils.PVName(peerConfig, namespace),
 			Namespace: namespace,
 			Labels: map[string]string{
-				"project": "ucac",
+				"project":   "ucac",
+				"peerId":    peerConfig.PeerId,
+				"peersetId": peerConfig.PeersetId,
 			},
 		},
 		Spec: apiv1.PersistentVolumeSpec{
@@ -472,7 +480,9 @@ func createPVC(namespace string, config utils.PeerConfig) {
 			Name:      utils.PVCName(config, namespace),
 			Namespace: namespace,
 			Labels: map[string]string{
-				"project": "ucac",
+				"project":   "ucac",
+				"peerId":    config.PeerId,
+				"peersetId": config.PeersetId,
 			},
 		},
 		Spec: apiv1.PersistentVolumeClaimSpec{
@@ -506,7 +516,9 @@ func createRedisConfigmap(namespace string, config utils.PeerConfig) {
 			Name:      utils.RedisConfigmapName(config),
 			Namespace: namespace,
 			Labels: map[string]string{
-				"project": "ucac",
+				"project":   "ucac",
+				"peerId":    config.PeerId,
+				"peersetId": config.PeersetId,
 			},
 		},
 		Data: map[string]string{
