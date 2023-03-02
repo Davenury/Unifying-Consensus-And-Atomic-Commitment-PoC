@@ -109,7 +109,6 @@ class LeaderTest {
         val result = subject.proposeChangeAsync(change).await()
         expectThat(result.detailedMessage).isNotNull()
         expectThat(result.detailedMessage).isEqualTo("Transaction failed due to too few responses of ft phase.")
-        
     }
 
     @Test
