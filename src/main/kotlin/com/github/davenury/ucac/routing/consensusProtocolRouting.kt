@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
+import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusHeartbeat
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProposeChange
@@ -10,6 +11,7 @@ import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.runBlocking
 
 data class CurrentLeaderDto(val currentLeaderPeerId: Int?)
 fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
@@ -29,7 +31,13 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
 
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
-            val result = protocol.handleProposeChange(message).await()
+            val result = protocol.handleProposeChange(message)
+                .thenAccept {
+                    runBlocking {
+                        ChangeNotifier.notify(message, it)
+                    }
+                }
+                .await()
             call.respond(result)
         }
 
