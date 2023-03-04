@@ -193,7 +193,7 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 		"ENFORCE_AC_USAGE":                strconv.FormatBool(config.EnforceAcUsage),
 		"AC_PROTOCOL":                     config.AcProtocol,
 		"CONSENSUS_PROTOCOL":              config.ConsensusProtocol,
-		"LOKI_BASE_URL":                   fmt.Sprintf("http://loki.%s.svc.cluster.local:3100", config.MonitoringNamespace),
+		"LOKI_BASE_URL":                   fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 	}
 
 	if config.FixedPeersetsInChange != "" {

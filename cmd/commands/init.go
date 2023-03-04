@@ -80,7 +80,7 @@ func DoInit(namespace string, createNamespace bool) {
 					},
 					{
 						"name": "Loki",
-						"url":  fmt.Sprintf("http://loki.%s.svc.cluster.local:3100", namespace),
+						"url":  fmt.Sprintf("http://loki.%s:3100", namespace),
 						"type": "loki",
 					},
 				},

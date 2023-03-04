@@ -378,7 +378,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"config_persistence_type":      "REDIS",
 			"config_persistence_redisHost": "localhost",
 			"config_persistence_redisPort": "6379",
-			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s.svc.cluster.local:3100", config.MonitoringNamespace),
+			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 		},
 	}
 
