@@ -326,10 +326,6 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 		Name:      "application",
 		Image:     config.ImageName,
 		Resources: resources,
-		Args: []string{
-			"-Xmx500m",
-			"-Dcom.sun.management.jmxremote.port=9999",
-		},
 		Ports: []apiv1.ContainerPort{
 			{
 				ContainerPort: 8081,
@@ -371,6 +367,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 		},
 		Data: map[string]string{
 			"CONFIG_FILE":                  "application-kubernetes.conf",
+			"JAVA_OPTS":                    "-Xmx200m",
 			"config_host":                  utils.ServiceAddress(peerConfig),
 			"config_port":                  "8081",
 			"config_peersetId":             peerConfig.PeersetId,
