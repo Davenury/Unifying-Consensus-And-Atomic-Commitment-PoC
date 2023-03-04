@@ -726,7 +726,7 @@ class RaftConsensusProtocolImpl(
                     null
                 } ?: ChangeResult(ChangeResult.Status.TIMEOUT)
 
-                if (result.status == ChangeResult.Status.CONFLICT) {
+                if (result.status != ChangeResult.Status.SUCCESS) {
                     cf.complete(result)
                 }
             }
