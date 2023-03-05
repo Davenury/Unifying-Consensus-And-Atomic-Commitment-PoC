@@ -406,8 +406,12 @@ class RaftConsensusProtocolImpl(
             }.mapNotNull { Change.fromHistoryEntry(it) }
 
     private suspend fun sendHeartbeatToPeer(peer: GlobalPeerId) {
-        val peerAddress = peerResolver.resolve(peer)
-        val peerMessage = getMessageForPeer(peerAddress)
+        val peerAddress: PeerAddress
+        val peerMessage: ConsensusHeartbeat
+        mutex.withLock {
+            peerAddress = peerResolver.resolve(peer)
+            peerMessage = getMessageForPeer(peerAddress)
+        }
         val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
 
         // We should schedule heartbeat even if something failed during handling response
@@ -563,6 +567,8 @@ class RaftConsensusProtocolImpl(
         val peerIndices = peerUrlToNextIndex.getOrDefault(peerAddress.globalPeerId, PeerIndices()) // TODO
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
         val lastAppliedChangeId = peerIndices.acceptedEntryId
+        if (newProposedChanges.isNotEmpty())
+            logger.info("Leader send message to $peerAddress $newProposedChanges")
 
         return ConsensusHeartbeat(
             peerId,
