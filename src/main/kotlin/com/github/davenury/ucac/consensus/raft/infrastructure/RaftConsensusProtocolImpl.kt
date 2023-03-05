@@ -131,6 +131,7 @@ class RaftConsensusProtocolImpl(
         }
 
         scheduleHeartbeatToPeers()
+        scheduleHeartbeatToPeers(false)
         tryPropagatingChangesToLeader()
     }
 
@@ -765,9 +766,9 @@ class RaftConsensusProtocolImpl(
         return result
     }
 
-    private fun scheduleHeartbeatToPeers() {
+    private fun scheduleHeartbeatToPeers(sendInstant: Boolean = true) {
         otherConsensusPeers().forEach {
-            launchHeartBeatToPeer(it.globalPeerId, true)
+            launchHeartBeatToPeer(it.globalPeerId, sendInstant)
         }
     }
 
