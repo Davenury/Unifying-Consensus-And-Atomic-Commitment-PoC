@@ -24,6 +24,7 @@ object ChangeNotifier {
                         sendNotification(notificationUrl, change, changeResult)
                     }
                 }
+                logger.info("Notifier accepted")
             }
         }
     }
