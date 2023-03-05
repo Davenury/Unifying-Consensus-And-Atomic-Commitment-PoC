@@ -7,8 +7,6 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.ConsensusProtocol
-import com.github.davenury.ucac.consensus.LeaderBasedConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -405,7 +403,7 @@ class RaftConsensusProtocolImpl(
                 history.toEntryList() + entries.take(index + 1).map { it.entry }
             }.mapNotNull { Change.fromHistoryEntry(it) }
 
-    private suspend fun sendHeartbeatToPeer(peer: GlobalPeerId) {
+    private suspend fun sendHeartbeatToPeer(peer: GlobalPeerId, isRegular: Boolean) {
         val peerAddress: PeerAddress
         val peerMessage: ConsensusHeartbeat
         mutex.withLock {
@@ -418,6 +416,7 @@ class RaftConsensusProtocolImpl(
         if (role == RaftRole.Leader
             && otherConsensusPeers().any { it.globalPeerId == peer }
             && executorService != null
+            && isRegular
         ) {
             launchHeartBeatToPeer(peer)
         }
@@ -775,8 +774,11 @@ class RaftConsensusProtocolImpl(
     private fun launchHeartBeatToPeer(peer: GlobalPeerId, sendInstant: Boolean = false): Job =
         with(CoroutineScope(executorService!!)) {
             launch(MDCContext()) {
-                if (!sendInstant) delay(heartbeatDelay.toMillis())
-                sendHeartbeatToPeer(peer)
+                if (!sendInstant) {
+                    logger.info("Wait with sending heartbeat to $peer for ${heartbeatDelay.toMillis()} ms")
+                    delay(heartbeatDelay.toMillis())
+                }
+                sendHeartbeatToPeer(peer, sendInstant)
             }
         }
 

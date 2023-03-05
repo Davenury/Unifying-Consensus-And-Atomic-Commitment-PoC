@@ -33,12 +33,14 @@ import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.assertions.*
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
+import kotlin.system.measureTimeMillis
 
 @ExtendWith(TestLogExtension::class)
 class ConsensusSpec : IntegrationTestBase() {
@@ -120,6 +122,59 @@ class ConsensusSpec : IntegrationTestBase() {
                 that(changes[0]).isEqualTo(change1)
                 that(changes[1].acceptNum).isEqualTo(1)
             }
+        }
+    }
+
+
+    @Test
+    fun `1000 change processed sequentially`(): Unit = runBlocking {
+        val peersWithoutLeader = 4
+
+        val phaser = Phaser(peersWithoutLeader)
+        phaser.register()
+
+        val peerLeaderElected = SignalListener {
+            expectThat(phaser.phase).isEqualTo(0)
+            logger.info("Arrived ${it.subject.getPeerName()}")
+            phaser.arrive()
+        }
+
+        apps = TestApplicationSet(
+            listOf(5),
+            signalListeners = (0..4).associateWith {
+                mapOf(
+                    Signal.ConsensusLeaderElected to peerLeaderElected,
+                )
+            }
+        )
+        val peerAddresses = apps.getPeers(0)
+
+        phaser.arriveAndAwaitAdvanceWithTimeout()
+        logger.info("Leader elected")
+
+
+        var change = createChange(null)
+
+        val endRange = 1000
+
+        var time = 0L
+
+        (0 until endRange).forEach {
+            time += measureTimeMillis {
+                expectCatching {
+                    executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change)
+                }.isSuccess()
+            }
+            println("$it Change took $time")
+            change = createChange(null, parentId = change.toHistoryEntry(0).getId())
+        }
+        // when: peer1 executed change
+
+        expectThat(time/endRange).isLessThanOrEqualTo(500L)
+
+        askAllForChanges(peerAddresses.values).forEach { changes ->
+            // then: there are two changes
+            expectThat(changes.size).isEqualTo(endRange)
         }
     }
 
@@ -410,6 +465,7 @@ class ConsensusSpec : IntegrationTestBase() {
                         logger.info("Arrived at election 1 ${it.subject.getPeerName()}")
                         election1Phaser.arrive()
                     }
+
                     else -> {
                         logger.info("Arrived at election 2 ${it.subject.getPeerName()}")
                         firstLeader = false
@@ -474,19 +530,19 @@ class ConsensusSpec : IntegrationTestBase() {
 
         apps.getRunningPeers(0)
             .values
-            .filter { it != firstLeaderAddress  }
+            .filter { it != firstLeaderAddress }
             .forEach {
-            val proposedChanges2 = askForProposedChanges(it)
-            val acceptedChanges2 = askForAcceptedChanges(it)
-            expect {
-                that(proposedChanges2.size).isEqualTo(0)
-                that(acceptedChanges2.size).isEqualTo(1)
+                val proposedChanges2 = askForProposedChanges(it)
+                val acceptedChanges2 = askForAcceptedChanges(it)
+                expect {
+                    that(proposedChanges2.size).isEqualTo(0)
+                    that(acceptedChanges2.size).isEqualTo(1)
+                }
+                expect {
+                    that(acceptedChanges2.first()).isEqualTo(change)
+                    that(acceptedChanges2.first().acceptNum).isEqualTo(null)
+                }
             }
-            expect {
-                that(acceptedChanges2.first()).isEqualTo(change)
-                that(acceptedChanges2.first().acceptNum).isEqualTo(null)
-            }
-        }
 
     }
 
