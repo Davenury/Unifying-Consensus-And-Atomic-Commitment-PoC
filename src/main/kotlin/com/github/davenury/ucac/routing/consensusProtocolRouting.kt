@@ -12,8 +12,10 @@ import io.ktor.response.*
 import io.ktor.routing.*
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
+import org.slf4j.LoggerFactory
 
 data class CurrentLeaderDto(val currentLeaderPeerId: Int?)
+
 fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
     routing {
         // głosujemy na leadera
@@ -31,13 +33,12 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
 
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
-            val result = protocol.handleProposeChange(message)
-                .thenAccept {
+            val result = protocol.handleProposeChange(message).await()
+                .also {
                     runBlocking {
                         ChangeNotifier.notify(message, it)
                     }
                 }
-                .await()
             call.respond(result)
         }
 
