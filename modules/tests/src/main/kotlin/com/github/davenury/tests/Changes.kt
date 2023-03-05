@@ -1,14 +1,15 @@
 package com.github.davenury.tests
 
-import com.github.davenury.common.*
+import com.github.davenury.common.AddUserChange
+import com.github.davenury.common.Change
+import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.Notification
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
 import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
-import java.net.URLEncoder
-import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicReference
 
 class Changes(

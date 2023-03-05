@@ -14,7 +14,6 @@ import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
-import com.github.davenury.ucac.consensus.ratis.HistoryRatisNode
 import com.github.davenury.ucac.routing.consensusProtocolRouting
 import com.github.davenury.ucac.routing.gpacProtocolRouting
 import com.github.davenury.ucac.routing.metaRouting
@@ -81,7 +80,6 @@ class ApplicationUcac constructor(
 ) {
     private val mdc: MutableMap<String, String> = HashMap(mapOf("peer" to config.globalPeerId().toString()))
     private val engine: NettyApplicationEngine
-    private var raftNode: HistoryRatisNode? = null
     private var consensusProtocol: RaftConsensusProtocol? = null
     private var twoPC: TwoPC? = null
     private val ctx: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
@@ -290,7 +288,6 @@ class ApplicationUcac constructor(
         withMdc {
             ctx.close()
             engine.stop(gracePeriodMillis, timeoutMillis)
-            raftNode?.close()
             consensusProtocol?.stop()
         }
     }

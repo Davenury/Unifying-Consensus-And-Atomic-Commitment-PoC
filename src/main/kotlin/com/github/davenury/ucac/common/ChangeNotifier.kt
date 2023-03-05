@@ -7,22 +7,37 @@ import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import java.net.URLDecoder
-import java.nio.charset.Charset
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 object ChangeNotifier {
-    suspend fun notify(change: Change, changeResult: ChangeResult) {
-        change.notificationUrl?.let {
-            try {
-                val response = httpClient.post<HttpStatement>(URLDecoder.decode(it, Charset.defaultCharset())) {
-                    contentType(ContentType.Application.Json)
-                    body = Notification(change, changeResult)
+    private val executor: ExecutorService = Executors.newCachedThreadPool()
+
+    fun notify(change: Change, changeResult: ChangeResult) {
+        change.notificationUrl?.let { notificationUrl ->
+            executor.submit {
+                runBlocking {
+                    sendNotification(notificationUrl, change, changeResult)
                 }
-                logger.info("Response from notifier: ${response.execute().status.value}")
-            } catch (e: Exception) {
-                logger.error("Error while sending notification to $it", e)
             }
+        }
+    }
+
+    private suspend fun sendNotification(
+        notificationUrl: String,
+        change: Change,
+        changeResult: ChangeResult
+    ) {
+        try {
+            val response = httpClient.post<HttpStatement>(notificationUrl) {
+                contentType(ContentType.Application.Json)
+                body = Notification(change, changeResult)
+            }
+            logger.info("Response from notifier: ${response.execute().status.value}")
+        } catch (e: Exception) {
+            logger.error("Error while sending notification to $notificationUrl", e)
         }
     }
 

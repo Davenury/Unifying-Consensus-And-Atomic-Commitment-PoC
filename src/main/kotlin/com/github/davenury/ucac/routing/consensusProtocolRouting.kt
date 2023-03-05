@@ -27,7 +27,6 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             call.respond(heartbeatResult)
         }
 
-        // kiedy nie jesteś leaderem to prosisz leadera o zmianę
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
             val result = protocol.handleProposeChange(message).await()
@@ -38,10 +37,10 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             call.respond(CurrentLeaderDto(protocol.getLeaderId()))
         }
 
-//      Endpoints for tests
         get("/consensus/proposed_changes") {
             call.respond(Changes(protocol.getProposedChanges()))
         }
+
         get("/consensus/accepted_changes") {
             call.respond(Changes(protocol.getAcceptedChanges()))
         }

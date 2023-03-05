@@ -33,7 +33,6 @@ class MixedChangesSpec : IntegrationTestBase() {
     @BeforeEach
     fun setup() {
         System.setProperty("configFile", "application-integration.conf")
-        deleteRaftHistories()
     }
 
 
@@ -415,10 +414,4 @@ class MixedChangesSpec : IntegrationTestBase() {
         "userName",
         peersets = peerSetIdToId.map { ChangePeersetInfo(it.key, it.value) },
     )
-
-    private fun deleteRaftHistories() {
-        File(System.getProperty("user.dir")).listFiles { pathname -> pathname?.name?.startsWith("history") == true }
-            ?.forEach { file -> FileUtils.deleteDirectory(file) }
-    }
-
 }
