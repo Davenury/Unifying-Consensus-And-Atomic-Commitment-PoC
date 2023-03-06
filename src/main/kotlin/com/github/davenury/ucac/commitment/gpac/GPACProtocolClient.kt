@@ -8,10 +8,13 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
+import java.util.concurrent.atomic.AtomicInteger
 
 data class ResponsesWithErrorAggregation<K>(
     val responses: List<List<K>>,
@@ -64,32 +67,63 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         crossinline aggregateErrors: (accs: List<Int>) -> Int? = { _: List<Int> -> 0 }
     ): ResponsesWithErrorAggregation<K> {
         val acc = mutableListOf<Int?>()
-        val responses: List<List<K>> = otherPeers.map { peerset ->
-            peerset.map { peer ->
-                CoroutineScope(Dispatchers.IO).async(MDCContext()) {
-                    val (httpResult, value) = gpacHttpCall<K, T>(
-                        "http://${peer.address}/$urlPath",
-                        requestBody,
-                    ) { throwable -> errorMessage(peer, throwable) }
-                    acc.add(value)
-                    httpResult
+        val responses: List<List<K>> =
+            otherPeers.map { peerset ->
+                peerset.map { peer ->
+                    CoroutineScope(Dispatchers.IO).async(MDCContext()) {
+                        val (httpResult, value) = gpacHttpCall<K, T>(
+                            "http://${peer.address}/$urlPath",
+                            requestBody,
+                        ) { throwable -> errorMessage(peer, throwable) }
+                        acc.add(value)
+                        logger.info("xdd: $httpResult, $value")
+                        httpResult
+                    }
                 }
-            }
-        }.map { jobs ->
-            jobs.mapNotNull { job ->
-                try {
-                    job.await()
-                } catch (e: Exception) {
-                    logger.error("Error while evaluating responses", e)
-                    null
+            }.map { jobs ->
+                val selectState = SelectState(jobs.size)
+                val results: MutableList<K> = mutableListOf()
+                val jobsToExecute = jobs.toMutableList()
+                while (!selectState.shouldStop()) {
+                    val singleResult = select<Pair<K?, Deferred<K?>>> {
+                        jobsToExecute.map { job ->
+                            job.onAwait {
+                                logger.info("Response here - $it")
+                                Pair(it, job)
+                            }
+                        }
+                    }
+                    jobsToExecute.remove(singleResult.second)
+                    if (singleResult.first != null) {
+                        selectState.success()
+                        results.add(singleResult.first!!)
+                    } else {
+                        selectState.error()
+                    }
                 }
-            }
-        }.also { logger.info("Got responses: $it") }
+                results
+            }.also { logger.info("Got responses: $it") }
 
         return ResponsesWithErrorAggregation(
             responses,
             aggregateErrors(acc.filterNotNull())
         )
+    }
+
+    data class SelectState(
+        val numberOfJobs: Int,
+    ) {
+        private val succeeded = AtomicInteger(0)
+        private val overallResolved = AtomicInteger(0)
+        fun shouldStop(): Boolean = succeeded.get() > (numberOfJobs / 2 + 1) || overallResolved.get() == numberOfJobs
+        fun success() {
+            this.succeeded.incrementAndGet()
+            this.overallResolved.incrementAndGet()
+        }
+
+        fun error() {
+            this.overallResolved.incrementAndGet()
+        }
     }
 
     private suspend inline fun <reified Response, Message> gpacHttpCall(
