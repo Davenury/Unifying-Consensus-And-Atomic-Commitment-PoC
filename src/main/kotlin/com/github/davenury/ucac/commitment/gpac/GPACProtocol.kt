@@ -58,19 +58,20 @@ class GPACProtocolImpl(
     override fun getBallotNumber(): Int = myBallotNumber
 
     override suspend fun handleElect(message: ElectMe): ElectedYou {
-        val decision = message.acceptNum?.let { acceptNum ->
-            Changes.fromHistory(history).find { it.acceptNum == acceptNum }
-        }
-        if (decision != null) {
-            // meaning that I'm the cohort that got apply for transaction of original leader
-            return ElectedYou(
-                message.ballotNumber,
-                Accept.COMMIT,
-                message.acceptNum,
-                Accept.COMMIT,
-                true
-            )
-        }
+        // TODO either remove this, or add a test covering this case
+        // val decision = message.acceptNum?.let { acceptNum ->
+        //     Changes.fromHistory(history).find { it.acceptNum == acceptNum }
+        // }
+        // if (decision != null) {
+        //     // meaning that I'm the cohort that got apply for transaction of original leader
+        //     return ElectedYou(
+        //         message.ballotNumber,
+        //         Accept.COMMIT,
+        //         message.acceptNum,
+        //         Accept.COMMIT,
+        //         true
+        //     )
+        // }
 
         signal(Signal.OnHandlingElectBegin, null, message.change)
 
