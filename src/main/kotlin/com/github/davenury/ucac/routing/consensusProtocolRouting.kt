@@ -35,9 +35,7 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             val message: ConsensusProposeChange = call.receive()
             val result = protocol.handleProposeChange(message).await()
                 .also {
-                    runBlocking {
-                        ChangeNotifier.notify(message, it)
-                    }
+                    ChangeNotifier.notify(message, it)
                 }
             call.respond(result)
         }
