@@ -66,7 +66,6 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         val acc = mutableListOf<Int?>()
         val responses: List<List<K>> = otherPeers.map { peerset ->
             peerset.map { peer ->
-                logger.info("Sending regest ")
                 CoroutineScope(Dispatchers.IO).async(MDCContext()) {
                     val (httpResult, value) = gpacHttpCall<K, T>(
                         "http://${peer.address}/$urlPath",

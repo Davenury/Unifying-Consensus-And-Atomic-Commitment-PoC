@@ -567,7 +567,7 @@ class RaftConsensusProtocolImpl(
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
         val lastAppliedChangeId = peerIndices.acceptedEntryId
         if (newProposedChanges.isNotEmpty())
-            logger.info("Leader send message to $peerAddress $newProposedChanges")
+            logger.info("Leader sends a message to $peerAddress $newProposedChanges")
 
         return ConsensusHeartbeat(
             peerId,
