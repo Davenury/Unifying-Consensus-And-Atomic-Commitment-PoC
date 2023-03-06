@@ -194,6 +194,8 @@ class TwoPCSpec : IntegrationTestBase() {
             fail("executing change didn't fail")
         } catch (e: ClientRequestException) {
             expectThat(e.response.status).isEqualTo(HttpStatusCode.NotFound)
+        } catch (e: ServerResponseException){
+            expectThat(e.response.status).isEqualTo(HttpStatusCode.NotFound)
         }
     }
 
