@@ -229,7 +229,7 @@ class RaftConsensusProtocolImpl(
         if (currentTerm < term || votedFor == null || votedFor?.elected == false)
             newLeaderElected(heartbeat.leaderId, term)
 
-        if (history.getCurrentEntry().getId() != heartbeat.currentHistoryEntryId && !isUpdatedCommitIndex) {
+        if (history.getCurrentEntryId() != heartbeat.currentHistoryEntryId && !isUpdatedCommitIndex) {
             logger.info("Received heartbeat from leader that has outdated history ${state.commitIndex}  $leaderCommitId")
             return ConsensusHeartbeatResponse(false, currentTerm)
         }
@@ -569,7 +569,7 @@ class RaftConsensusProtocolImpl(
             currentTerm,
             newProposedChanges.map { it.toDto() },
             lastAppliedChangeId,
-            history.getCurrentEntry().getId(),
+            history.getCurrentEntryId(),
             state.commitIndex
         )
     }
@@ -656,7 +656,7 @@ class RaftConsensusProtocolImpl(
             if (!history.isEntryCompatible(entry)) {
                 logger.info(
                     "Proposed change is incompatible. \n CurrentChange: ${
-                        history.getCurrentEntry().getId()
+                        history.getCurrentEntryId()
                     } \n Change.parentId: ${
                         updatedChange.toHistoryEntry(peerResolver.currentPeer().peersetId).getParentId()
                     }"
@@ -688,7 +688,7 @@ class RaftConsensusProtocolImpl(
         val changeIsApplyingOf2PC: Boolean =
             currentHistoryChange is TwoPCChange && change == currentHistoryChange.change.copyWithNewParentId(
                 peerResolver.currentPeer().peersetId,
-                history.getCurrentEntry().getId(),
+                history.getCurrentEntryId(),
             )
 
         return isDuring2PC && !(changeIsAbortingOf2PC || changeIsApplyingOf2PC)

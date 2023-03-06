@@ -47,7 +47,7 @@ class JedisHistory(host: String, port: Int) : CachedHistory() {
         jedis.set(key, entry.serialize())
     }
 
-    private fun getCurrentEntryId(): String {
+    override fun getCurrentEntryId(): String {
         val currentEntryId = jedis.get(CURRENT_ENTRY_ID)
         logger.trace("Current entry ID is $currentEntryId")
         return currentEntryId

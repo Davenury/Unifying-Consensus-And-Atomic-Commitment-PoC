@@ -5,6 +5,9 @@ import com.github.davenury.common.meterRegistry
 class MeteredHistory(
     private val delegate: History
 ) : History {
+    override fun getCurrentEntryId(): String =
+        meterRegistry.timer("history_get_current_entry_id").record<String> { delegate.getCurrentEntryId() }!!
+
     override fun getCurrentEntry(): HistoryEntry =
         meterRegistry.timer("history_get_current_entry").record<HistoryEntry> { delegate.getCurrentEntry() }!!
 

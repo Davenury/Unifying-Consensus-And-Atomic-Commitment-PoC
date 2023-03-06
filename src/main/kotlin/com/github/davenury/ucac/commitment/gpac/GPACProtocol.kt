@@ -386,7 +386,7 @@ class GPACProtocolImpl(
             signal(Signal.OnSendingElectBuildFail, this.transaction, change)
             changeRejected(
                 change,
-                "History entry not compatible, change: ${change}, expected: ${history.getCurrentEntry().getId()}"
+                "History entry not compatible, change: ${change}, expected: ${history.getCurrentEntryId()}"
             )
             throw HistoryCannotBeBuildException()
         }
