@@ -3,6 +3,7 @@ package com.github.davenury.ucac.common
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.Notification
+import com.github.davenury.common.meterRegistry
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -18,8 +19,10 @@ object ChangeNotifier {
     fun notify(change: Change, changeResult: ChangeResult) {
         change.notificationUrl?.let { notificationUrl ->
             executor.submit {
-                runBlocking {
-                    sendNotification(notificationUrl, change, changeResult)
+                meterRegistry.timer("change_notifier_send_time").record<Unit> {
+                    runBlocking {
+                        sendNotification(notificationUrl, change, changeResult)
+                    }
                 }
             }
         }
@@ -38,6 +41,7 @@ object ChangeNotifier {
             logger.info("Response from notifier: ${response.execute().status.value}")
         } catch (e: Exception) {
             logger.error("Error while sending notification to $notificationUrl", e)
+            meterRegistry.counter("change_notifier_failed").increment()
         }
     }
 
