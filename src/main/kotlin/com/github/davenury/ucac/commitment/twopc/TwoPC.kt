@@ -74,6 +74,7 @@ class TwoPC(
             }
 
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(result))
+            signal(Signal.TwoPCOnChangeApplied, change)
         } catch (e: Exception) {
             changeIdToCompletableFuture[mainChangeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
         }
@@ -231,7 +232,6 @@ class TwoPC(
         }
 
         logger.info("Decision $decision committed in all peersets $commitChange")
-        signal(Signal.TwoPCOnChangeApplied, change)
     }
 
     private fun signal(signal: Signal, change: Change) {

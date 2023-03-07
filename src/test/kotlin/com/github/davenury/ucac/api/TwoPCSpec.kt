@@ -15,7 +15,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
@@ -23,7 +22,7 @@ import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
-import java.io.File
+import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -132,10 +131,19 @@ class TwoPCSpec : IntegrationTestBase() {
 
     @Test
     fun `should not execute transaction if one peerset is not responding`(): Unit = runBlocking {
-        val changeAppliedPhaser = Phaser(4)
-        val appliedChangesListener = SignalListener {
-            logger.info("Arrived: ${it.subject.getPeerName()}")
-            changeAppliedPhaser.arrive()
+        val change2PCAppliedPhaser = Phaser(1)
+        val changeRaftAppliedPhaser = Phaser(2)
+        val applied2PCChangesListener = SignalListener {
+            logger.info("Arrived 2PC: ${it.subject.getPeerName()}")
+            change2PCAppliedPhaser.arrive()
+        }
+
+        val appliedRaftChangesListener = SignalListener {
+
+            if(it.change is TwoPCChange && (it.change as TwoPCChange).twoPCStatus == TwoPCStatus.ABORTED) {
+                logger.info("Arrived raft: ${it.subject.getPeerName()}")
+                changeRaftAppliedPhaser.arrive()
+            }
         }
 
         val electionPhaser = Phaser(2)
@@ -143,10 +151,11 @@ class TwoPCSpec : IntegrationTestBase() {
             electionPhaser.arrive()
         }
 
-        listOf(electionPhaser, changeAppliedPhaser).forEach { it.register() }
+        listOf(electionPhaser, change2PCAppliedPhaser, changeRaftAppliedPhaser).forEach { it.register() }
 
         val signalListenersForCohort = mapOf(
-            Signal.ConsensusFollowerChangeAccepted to appliedChangesListener,
+            Signal.TwoPCOnChangeApplied to applied2PCChangesListener,
+            Signal.ConsensusFollowerChangeAccepted to appliedRaftChangesListener,
             Signal.ConsensusLeaderElected to leaderElected
         )
 
@@ -163,7 +172,9 @@ class TwoPCSpec : IntegrationTestBase() {
 
         expectThat(result.status).isEqualTo(HttpStatusCode.Accepted)
 
-        changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+        change2PCAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+        changeRaftAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
 
         // then - transaction should not be executed
         askAllForChanges(apps.getPeers(0).values).forEach { changes ->
@@ -195,6 +206,8 @@ class TwoPCSpec : IntegrationTestBase() {
         } catch (e: ClientRequestException) {
             expectThat(e.response.status).isEqualTo(HttpStatusCode.NotFound)
         } catch (e: ServerResponseException){
+            logger.error("${e.message} ${e.response.content} ${e.cause?.message}")
+//            expectThat(e.response.status).isEqualTo(HttpStatusCode.InternalServerError)
             expectThat(e.response.status).isEqualTo(HttpStatusCode.NotFound)
         }
     }
