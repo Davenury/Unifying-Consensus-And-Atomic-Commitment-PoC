@@ -909,7 +909,7 @@ class ConsensusSpec : IntegrationTestBase() {
         )
 
         val firstLeaderAction = SignalListener { signalData ->
-            val url = "http://${signalData.peers[0][0].address}/apply"
+            val url = "http://${signalData.peers[0][0].address}/apply?leader-return-address=localhost:8080"
             logger.info("here - ${signalData.toString()}")
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {

@@ -14,8 +14,8 @@ class GPACQueue(
         channels.ftagreeChannel.send(EnrichedAgree(agree, returnUrl))
     }
 
-    suspend fun handleApply(apply: Apply) {
-        channels.applyChannel.send(EnrichedApply(apply, ""))
+    suspend fun handleApply(apply: Apply, returnUrl: String) {
+        channels.applyChannel.send(EnrichedApply(apply, returnUrl))
     }
 
     suspend fun handleElectedYou(electedYou: ElectedYou) {
@@ -26,6 +26,10 @@ class GPACQueue(
         channels.agreedResponseChannel.send(agreed)
     }
 
+    suspend fun handleApplied(applied: Applied) {
+        channels.appliedResponseChannel.send(applied)
+    }
+
 }
 
 data class GPACChannels(
@@ -34,6 +38,7 @@ data class GPACChannels(
     val applyChannel: Channel<EnrichedApply>,
     val electResponseChannel: Channel<ElectedYou>,
     val agreedResponseChannel: Channel<Agreed>,
+    val appliedResponseChannel: Channel<Applied>,
 ) {
     companion object {
         fun create(): GPACChannels = GPACChannels(
@@ -41,7 +46,8 @@ data class GPACChannels(
             Channel(),
             Channel(),
             Channel(),
-            Channel()
+            Channel(),
+            Channel(),
         )
     }
 }

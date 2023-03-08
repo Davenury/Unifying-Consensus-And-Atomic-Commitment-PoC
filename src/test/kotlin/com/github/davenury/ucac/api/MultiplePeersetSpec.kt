@@ -311,7 +311,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
 
             val leaderAction = SignalListener { data ->
-                val url2 = "${data.peers[0][1]}/apply"
+                val url2 = "${data.peers[0][1]}/apply?leader-return-address=localhost:8080"
                 runBlocking {
                     httpClient.post<HttpResponse>(url2) {
                         contentType(ContentType.Application.Json)
@@ -325,7 +325,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     }
                 }
                 logger.info("${data.peers[0][1]} sent response to apply")
-                val url3 = "${data.peers[0][2]}/apply"
+                val url3 = "${data.peers[0][2]}/apply?leader-return-address=localhost:8080"
                 runBlocking {
                     httpClient.post<HttpResponse>(url3) {
                         contentType(ContentType.Application.Json)

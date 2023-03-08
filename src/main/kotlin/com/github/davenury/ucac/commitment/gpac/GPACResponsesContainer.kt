@@ -17,6 +17,7 @@ class GPACResponsesContainer {
 
     private val electWaiter = Waiter<ElectedYou>()
     private val agreeWaiter = Waiter<Agreed>()
+    private val applyWaiter = Waiter<Applied>()
 
     fun waitForElectResponses(condition: (List<List<ElectedYou>>) -> Boolean): List<List<ElectedYou>> =
         electWaiter.waitForResponses(condition)
@@ -24,12 +25,19 @@ class GPACResponsesContainer {
     fun waitForAgreeResponses(condition: (List<List<Agreed>>) -> Boolean): List<List<Agreed>> =
         agreeWaiter.waitForResponses(condition)
 
+    fun waitForApplyResponses(condition: (List<List<Applied>>) -> Boolean) =
+        applyWaiter.waitForResponses(condition)
+
     fun addElectResponse(response: ElectedYou) {
         electWaiter.addResponse(response)
     }
 
     fun addAgreeResponse(response: Agreed) {
         agreeWaiter.addResponse(response)
+    }
+
+    fun addApplyResponse(response: Applied) {
+        applyWaiter.addResponse(response)
     }
 
     private class Waiter<T: GpacResponse> {
@@ -74,7 +82,8 @@ class GPACResponsesContainer {
 
         private fun timeout() {
             runBlocking {
-                delay(1000)
+                // TODO - move to config if this solution is better
+                delay(2000)
                 shouldWait = false
                 lock.withLock {
                     lockCondition.signalAll()

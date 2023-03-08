@@ -7,6 +7,7 @@ import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 import java.net.URLDecoder
+import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 fun Application.gpacProtocolRouting(
@@ -31,7 +32,8 @@ fun Application.gpacProtocolRouting(
 
         post("/apply") {
             val message = call.receive<Apply>()
-            queue.handleApply(message)
+            val returnUrl = call.parameters["leader-return-address"]!!
+            queue.handleApply(message, URLDecoder.decode(returnUrl, StandardCharsets.UTF_8))
             call.respond(HttpStatusCode.OK)
         }
 
@@ -46,6 +48,7 @@ fun Application.gpacProtocolRouting(
         }
 
         post("/gpac/leader/apply-response") {
+            queue.handleApplied(call.receive())
             call.respond(HttpStatusCode.OK)
         }
     }

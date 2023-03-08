@@ -18,10 +18,11 @@ abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) 
 
     abstract suspend fun handleElect(message: ElectMe): ElectedYou
     abstract suspend fun handleAgree(message: Agree): Agreed
-    abstract suspend fun handleApply(message: Apply)
+    abstract suspend fun handleApply(message: Apply): Applied
 
     abstract suspend fun handleElectResponse(message: ElectedYou)
     abstract suspend fun handleAgreeResponse(message: Agreed)
+    abstract suspend fun handleApplyResponse(message: Applied)
 
     abstract suspend fun performProtocolAsLeader(change: Change, iteration: Int = 1)
     abstract suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int = 1)
@@ -207,7 +208,7 @@ class GPACProtocolImpl(
         )
     }
 
-    override suspend fun handleApply(message: Apply) {
+    override suspend fun handleApply(message: Apply): Applied {
         logger.info("HandleApply message: $message")
         val isCurrentTransaction =
             message.ballotNumber >= this.myBallotNumber
@@ -274,7 +275,13 @@ class GPACProtocolImpl(
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
+
         }
+
+        return Applied(
+            change = message.change,
+            sender = peerResolver.currentPeer()
+        )
     }
 
     private fun addChangeToHistory(change: Change) {
@@ -540,8 +547,10 @@ class GPACProtocolImpl(
     }
 
     private suspend fun applyPhase(change: Change, acceptVal: Accept) {
-        val applyMessages = sendApplyMessages(change, getPeersFromChange(change), acceptVal)
-        logger.info("Apply Messages Responses: $applyMessages")
+        sendApplyMessages(change, getPeersFromChange(change), acceptVal)
+        gpacResponsesContainer.waitForApplyResponses {
+            superSet(it, getPeersFromChange(change))
+        }
         this.handleApply(
             Apply(
                 myBallotNumber,
@@ -644,6 +653,10 @@ class GPACProtocolImpl(
 
     override suspend fun handleAgreeResponse(message: Agreed) {
         gpacResponsesContainer.addAgreeResponse(message)
+    }
+
+    override suspend fun handleApplyResponse(message: Applied) {
+        gpacResponsesContainer.addApplyResponse(message)
     }
 
     private fun changeRejected(change: Change, detailedMessage: String? = null) {

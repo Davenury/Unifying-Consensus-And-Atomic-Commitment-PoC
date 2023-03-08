@@ -71,7 +71,7 @@ class GPACFactory(
                 launch(MDCContext()) {
                     for (apply in gpacChannels.applyChannel) {
                         try {
-                            handleApply(apply.message)
+                            notifyLeader(apply.returnUrl, handleApply(apply.message))
                         } catch (e: Exception) {
                             logger.error("Error while handling apply message", e)
                         }
@@ -88,7 +88,20 @@ class GPACFactory(
                 }
                 launch(MDCContext()) {
                     for (agreeResponse in gpacChannels.agreedResponseChannel) {
-                        handleAgreeResponse(agreeResponse)
+                        try {
+                            handleAgreeResponse(agreeResponse)
+                        } catch (e: Exception) {
+                            logger.error("Error while handling agreeResponse", e)
+                        }
+                    }
+                }
+                launch(MDCContext()) {
+                    for (applyResponse in gpacChannels.appliedResponseChannel) {
+                        try {
+                            handleApplyResponse(applyResponse)
+                        } catch (e: Exception) {
+                            logger.error("Error while handling applyResponse", e)
+                        }
                     }
                 }
             }
@@ -107,6 +120,12 @@ class GPACFactory(
         }
     }
 
+    private suspend fun handleApplyResponse(applyResponse: Applied) {
+        changeIdToGpacInstance[applyResponse.change.id]?.let {
+            it.handleApplyResponse(applyResponse)
+        }
+    }
+
     private suspend fun handleElect(message: ElectMe) =
         getOrCreateGPAC(message.change.id).handleElect(message)
 
@@ -114,14 +133,13 @@ class GPACFactory(
         changeIdToGpacInstance[message.change.id]?.handleAgree(message)
             ?: throw GPACInstanceNotFoundException(message.change.id)
 
-    private suspend fun handleApply(message: Apply) {
+    private suspend fun handleApply(message: Apply) =
         changeIdToGpacInstance[message.change.id]
             ?.handleApply(message)
             ?.also {
                 changeIdToGpacInstance.remove(message.change.id)
             }
             ?: throw GPACInstanceNotFoundException(message.change.id)
-    }
 
     private suspend fun <T : Any> notifyLeader(returnUrl: String, result: T) {
         try {

@@ -15,6 +15,7 @@ sealed class GpacResponse(open val sender: GlobalPeerId) {
 }
 
 data class ElectMe(val ballotNumber: Int, val change: Change, val acceptNum: Int? = null)
+
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class ElectedYou(
     val change: Change,
@@ -51,6 +52,11 @@ data class Agreed(
 }
 
 data class Apply(val ballotNumber: Int, val decision: Boolean, val acceptVal: Accept, val change: Change)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class Applied(val change: Change, override val sender: GlobalPeerId): GpacResponse(sender) {
+    override fun isSuccess(): Boolean = true
+}
 
 enum class Reason {
     ALREADY_LOCKED, WRONG_BALLOT_NUMBER, NOT_VALID_LEADER, UNKNOWN

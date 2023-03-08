@@ -57,9 +57,9 @@ class GPACProtocolClientImpl(
         ) { peer, e -> "Peer: ${peer.globalPeerId} didn't apply transaction: $e" }
     }
 
-    private suspend inline fun <T, reified K> sendRequests(
+    private suspend inline fun <Message, reified K> sendRequests(
         otherPeers: List<List<PeerAddress>>,
-        requestBody: T,
+        requestBody: Message,
         urlPath: String,
         gpacReturnPath: String,
         crossinline errorMessage: (PeerAddress, Throwable) -> String,
