@@ -463,7 +463,7 @@ class GPACProtocolImpl(
         sendElectMessages(change, getPeersFromChange(change), acceptNum)
 
         val responses = gpacResponsesContainer.waitForElectResponses { responses ->
-            superFunction(responses) || areListsEqualInSize(responses, getPeersFromChange(change))
+            areListsEqualInSize(responses, getPeersFromChange(change))
         }
 
         if (superFunction(responses)) {

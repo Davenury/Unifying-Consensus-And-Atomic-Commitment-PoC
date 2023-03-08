@@ -17,7 +17,7 @@ class GPACResponsesContainer {
 
     private val electWaiter = Waiter<ElectedYou>()
     private val agreeWaiter = Waiter<Agreed>()
-    private val applyWaiter = Waiter<Applied>()
+    private val applyWaiter = Waiter<Applied>(waitingTimeout = 400)
 
     fun waitForElectResponses(condition: (List<List<ElectedYou>>) -> Boolean): List<List<ElectedYou>> =
         electWaiter.waitForResponses(condition)
@@ -40,7 +40,9 @@ class GPACResponsesContainer {
         applyWaiter.addResponse(response)
     }
 
-    private class Waiter<T: GpacResponse> {
+    private class Waiter<T: GpacResponse>(
+        val waitingTimeout: Long = 2000,
+    ) {
         private val ctx = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
         private val lock = ReentrantLock()
         private val lockCondition = lock.newCondition()
@@ -83,7 +85,7 @@ class GPACResponsesContainer {
         private fun timeout() {
             runBlocking {
                 // TODO - move to config if this solution is better
-                delay(2000)
+                delay(waitingTimeout)
                 shouldWait = false
                 lock.withLock {
                     lockCondition.signalAll()
