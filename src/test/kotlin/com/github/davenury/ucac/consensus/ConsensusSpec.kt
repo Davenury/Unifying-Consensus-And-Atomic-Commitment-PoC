@@ -33,7 +33,6 @@ import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.assertions.*
-import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
@@ -911,6 +910,7 @@ class ConsensusSpec : IntegrationTestBase() {
 
         val firstLeaderAction = SignalListener { signalData ->
             val url = "http://${signalData.peers[0][0].address}/apply"
+            logger.info("here - ${signalData.toString()}")
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)

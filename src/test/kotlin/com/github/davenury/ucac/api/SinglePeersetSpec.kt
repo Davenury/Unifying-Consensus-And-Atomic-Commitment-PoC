@@ -28,6 +28,8 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
@@ -142,11 +144,11 @@ class SinglePeersetSpec : IntegrationTestBase() {
 
             val firstLeaderAction = SignalListener {
                 runBlocking {
-                    testHttpClient.post<Agreed>("http://${it.peers[0][1].address}/ft-agree") {
+                    testHttpClient.post<HttpStatement>("http://${it.peers[0][1].address}/ft-agree?leader-return-address=${URLEncoder.encode("http://localhost:8080", StandardCharsets.UTF_8)}") {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
                         body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, it.change!!)
-                    }
+                    }.execute()
                     throw RuntimeException("Stop")
                 }
             }
@@ -250,7 +252,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
             ),
             configOverrides = mapOf(
                 0 to mapOf("raft.isEnabled" to false),
-                1 to mapOf("raft.isEnabled" to false),
+                1 to mapOf("raft.isEnabled" to false, "gpac.leaderFailDelay" to Duration.ZERO),
                 2 to mapOf("raft.isEnabled" to false),
                 3 to mapOf("raft.isEnabled" to false),
                 4 to mapOf("raft.isEnabled" to false),

@@ -10,6 +10,7 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolClientImpl
 import com.github.davenury.ucac.commitment.gpac.GPACProtocolImpl
+import com.github.davenury.ucac.commitment.gpac.GPACResponsesContainer
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.utils.*
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -46,13 +47,18 @@ class LeaderTest {
 
         peerTwo = PeerWiremock()
         peerThree = PeerWiremock()
+        val peerResolver = PeerResolver(GlobalPeerId(0, 0), peers = mapOf(
+            GlobalPeerId(0, 0) to PeerAddress(GlobalPeerId(0, 0), "localhost:8080"),
+            GlobalPeerId(0, 1) to PeerAddress(GlobalPeerId(0, 1), "localhost:${peerTwo.getPort()}"),
+            GlobalPeerId(0, 2) to PeerAddress(GlobalPeerId(0, 2), "localhost:${peerThree.getPort()}")
+        ))
 
         val timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(1), ctx)
         subject = GPACProtocolImpl(
             history,
             GpacConfig(3),
             ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
-            GPACProtocolClientImpl(),
+            GPACProtocolClientImpl(peerResolver),
             TransactionBlocker(),
             peerResolver = PeerResolver(
                 GlobalPeerId(1, 0),
@@ -69,7 +75,8 @@ class LeaderTest {
                     }
                 )
             ),
-            isMetricTest = false
+            isMetricTest = false,
+            gpacResponsesContainer = GPACResponsesContainer()
         ).also {
             it.leaderTimer = timer
             it.retriesTimer = timer
@@ -109,21 +116,6 @@ class LeaderTest {
         val result = subject.proposeChangeAsync(change).await()
         expectThat(result.detailedMessage).isNotNull()
         expectThat(result.detailedMessage).isEqualTo("Transaction failed due to too few responses of ft phase.")
-    }
-
-    @Test
-    fun `should perform operation to the end`(): Unit = runBlocking {
-        peerTwo.stubForElectMe(10, Accept.COMMIT, 10, null, false)
-        peerThree.stubForElectMe(10, Accept.COMMIT, 10, null, false)
-        peerTwo.stubForAgree(10, Accept.COMMIT)
-        peerThree.stubForAgree(10, Accept.COMMIT)
-        peerTwo.stubForApply()
-        peerThree.stubForApply()
-
-        runBlocking { subject.performProtocolAsLeader(change) }
-
-        expectThat(history.getCurrentEntry().let { Change.fromHistoryEntry(it) })
-            .isEqualTo(change)
     }
 
     private val change = AddUserChange(

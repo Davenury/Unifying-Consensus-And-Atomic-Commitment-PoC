@@ -31,3 +31,10 @@ val testHttpClient = HttpClient(OkHttp) {
         socketTimeoutMillis = 120000
     }
 }
+
+fun areListsEqualInSize(a: List<List<Any>>, b: List<List<Any>>) =
+    try {
+        b.withIndex().all { (index, array) -> a[index].size == array.size }
+    } catch (e: Exception) {
+        false
+    }

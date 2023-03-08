@@ -16,6 +16,7 @@ import strikt.api.expect
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.isEqualTo
+import strikt.assertions.isFalse
 import java.util.concurrent.Executors
 
 @ExtendWith(TestLogExtension::class)
@@ -38,7 +39,8 @@ class GPACProtocolSpec {
                 GlobalPeerId(0, 2) to PeerAddress(GlobalPeerId(0, 2), "peer3"),
             )
         ),
-        isMetricTest = false
+        isMetricTest = false,
+        gpacResponsesContainer = GPACResponsesContainer()
     ).also {
         it.leaderTimer = timerMock
         it.retriesTimer = timerMock
@@ -56,7 +58,7 @@ class GPACProtocolSpec {
         val result = subject.handleElect(message)
 
         expect {
-            that(result).isEqualTo(ElectedYou(100000, Accept.COMMIT, 0, null, false))
+            that(result).isEqualTo(ElectedYou(change = change, 100000, Accept.COMMIT, 0, null, false, elected = true, sender = GlobalPeerId(0, 0)))
             that(subject.getBallotNumber()).isEqualTo(100000)
         }
     }
@@ -72,8 +74,10 @@ class GPACProtocolSpec {
         // with functionality of changing state is not the way
         val message = ElectMe(-1, change)
 
-        expectThrows<NotElectingYou> {
-            subject.handleElect(message)
+        val result = subject.handleElect(message)
+        expect {
+            that(result.elected).isFalse()
+            that(result.reason).isEqualTo(Reason.WRONG_BALLOT_NUMBER)
         }
     }
 
@@ -88,7 +92,7 @@ class GPACProtocolSpec {
 
         val result = subject.handleElect(message)
 
-        expectThat(result).isEqualTo(ElectedYou(3, Accept.COMMIT, 0, null, false))
+        expectThat(result).isEqualTo(ElectedYou(change, 3, Accept.COMMIT, 0, null, false, elected = true, sender = GlobalPeerId(0, 0)))
         expectThat(subject.getBallotNumber()).isEqualTo(3)
     }
 
@@ -106,7 +110,7 @@ class GPACProtocolSpec {
 
         val result = subject.handleAgree(message)
 
-        expectThat(result).isEqualTo(Agreed(100, Accept.COMMIT))
+        expectThat(result).isEqualTo(Agreed(change, 100, Accept.COMMIT, agreed = true, sender = GlobalPeerId(0, 0)))
         expectThat(subject.getTransaction().ballotNumber).isEqualTo(100)
         expectThat(subject.getBallotNumber()).isEqualTo(100)
     }
@@ -114,8 +118,10 @@ class GPACProtocolSpec {
     @Test
     fun `should throw not electing you, when proposed ballot number is less than state's`(): Unit = runBlocking {
         val message = Agree(-1, Accept.COMMIT, change)
-        expectThrows<NotValidLeader> {
-            subject.handleAgree(message)
+        val result = subject.handleAgree(message)
+        expect {
+            that(result.agreed).isFalse()
+            that(result.reason).isEqualTo(Reason.NOT_VALID_LEADER)
         }
     }
 

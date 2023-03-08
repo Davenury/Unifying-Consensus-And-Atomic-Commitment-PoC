@@ -1,14 +1,16 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.common.*
-import com.github.davenury.ucac.common.HistoryFactory
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
+import com.github.davenury.ucac.commitment.gpac.GPACChannels
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
+import com.github.davenury.ucac.commitment.gpac.GPACQueue
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.common.HistoryFactory
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
@@ -30,9 +32,8 @@ import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics
 import io.netty.channel.socket.nio.NioServerSocketChannel
-import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -119,7 +120,9 @@ class ApplicationUcac constructor(
         val raftProtocolClientImpl = RaftProtocolClientImpl()
 
         val transactionBlocker = TransactionBlocker()
-        gpacFactory = GPACFactory(transactionBlocker, history, config, ctx, signalPublisher, peerResolver)
+        val gpacChannels = GPACChannels.create()
+        val gpacQueue = GPACQueue(gpacChannels)
+        gpacFactory = GPACFactory(transactionBlocker, history, config, ctx, signalPublisher, peerResolver, gpacChannels)
 
         consensusProtocol = RaftConsensusProtocolImpl(
             history,
@@ -258,12 +261,13 @@ class ApplicationUcac constructor(
         metaRouting()
         historyRouting(history)
         apiV2Routing(service!!, peerResolver.currentPeer())
-        gpacProtocolRouting(gpacFactory)
+        gpacProtocolRouting(gpacQueue)
         consensusProtocolRouting(consensusProtocol!!)
         twoPCRouting(twoPC!!)
 
         runBlocking {
             if (config.raft.isEnabled) consensusProtocol!!.begin()
+            gpacFactory.startProcessing()
         }
     }
 

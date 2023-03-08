@@ -27,6 +27,7 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.io.File
+import java.time.Duration
 import java.util.concurrent.Phaser
 
 @Suppress("HttpUrlsUsage")
@@ -274,7 +275,10 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 5 to signalListenersForCohort,
                 6 to signalListenersForCohort,
                 7 to signalListenersForCohort,
-            )
+            ),
+            configOverrides = mapOf(
+                1 to mapOf("gpac.leaderFailDelay" to Duration.ZERO),
+            ),
         )
         val peers = apps.getPeers()
         val change = change(0, 1)
@@ -366,7 +370,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     2 to mapOf("raft.isEnabled" to false),
                     3 to mapOf("raft.isEnabled" to false),
                     4 to mapOf("raft.isEnabled" to false),
-                    5 to mapOf("raft.isEnabled" to false),
+                    5 to mapOf("raft.isEnabled" to false, "gpac.leaderFailDelay" to Duration.ZERO),
                     6 to mapOf("raft.isEnabled" to false),
                     7 to mapOf("raft.isEnabled" to false),
                 )

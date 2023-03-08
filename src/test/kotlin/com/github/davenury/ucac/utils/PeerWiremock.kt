@@ -64,7 +64,7 @@ class PeerWiremock : AutoCloseable {
     }
 
     fun verifyMaxRetriesForElectionPassed(maxRetries: Int) {
-        wireMockServer.verify(maxRetries, postRequestedFor(urlMatching("/elect")))
+        wireMockServer.verify(maxRetries, postRequestedFor(urlMatching("/elect.*")))
     }
 
     fun verifyAgreeStub(expected: Int) {
