@@ -149,7 +149,7 @@ class RaftConsensusProtocolImpl(
             role = RaftRole.Leader
             votedFor = votedFor!!.copy(elected = true)
             assert(executorService == null)
-            executorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+            executorService = Executors.newCachedThreadPool().asCoroutineDispatcher()
         }
 
         logger.info("I have been selected as a leader (in term $currentTerm)")
@@ -681,7 +681,7 @@ class RaftConsensusProtocolImpl(
     }
 
     //  TODO: sync change will have to use Condition/wait/notifyAll
-    private suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
+    override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
         var entry = change.toHistoryEntry(peersetId)
         changeIdToCompletableFuture[change.id] = result
 
