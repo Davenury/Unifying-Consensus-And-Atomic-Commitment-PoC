@@ -616,6 +616,7 @@ class GPACProtocolImpl(
         divider: Int,
         peers: List<List<PeerAddress>>
     ): Boolean {
+        // TODO - why concurrent modification exception - while was already out of condition, got response from another peer
         val allShards = responses.size >= peers.size / divider.toDouble()
         val myPeersetId = globalPeerId.peersetId
 

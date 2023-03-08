@@ -60,7 +60,7 @@ class GPACResponsesContainer(
             }
         }
 
-        fun waitForResponses(condition: (List<List<T>>) -> Boolean): List<List<T>> {
+        fun waitForResponses(condition: (List<List<T>>) -> Boolean): List<List<T>> =
             lock.withLock {
                 ctx.dispatch(Dispatchers.IO) { timeout() }
                 while (true) {
@@ -76,9 +76,8 @@ class GPACResponsesContainer(
                         break
                     }
                 }
+                return responseContainer.asOrderedList()
             }
-            return responseContainer.asOrderedList()
-        }
 
         private fun MutableMap<Int, MutableList<T>>.asOrderedList() = this.entries.sortedBy { it.key }.toList().map { (_, list) -> list }
 
