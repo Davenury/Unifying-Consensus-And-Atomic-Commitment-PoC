@@ -15,6 +15,7 @@ import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
+import java.time.Duration
 
 class GPACFactory(
     private val transactionBlocker: TransactionBlocker,
@@ -40,7 +41,7 @@ class GPACFactory(
                 signalPublisher,
                 peerResolver,
                 config.metricTest,
-                GPACResponsesContainer()
+                GPACResponsesContainer(config.gpac.responsesTimeouts)
             ).also {
                 changeIdToGpacInstance[changeId] = it
             }

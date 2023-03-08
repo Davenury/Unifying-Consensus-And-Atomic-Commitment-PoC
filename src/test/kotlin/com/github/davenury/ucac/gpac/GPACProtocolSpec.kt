@@ -4,6 +4,7 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.GpacConfig
+import com.github.davenury.ucac.ResponsesTimeoutsConfig
 import com.github.davenury.ucac.commitment.gpac.*
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.utils.TestLogExtension
@@ -40,7 +41,7 @@ class GPACProtocolSpec {
             )
         ),
         isMetricTest = false,
-        gpacResponsesContainer = GPACResponsesContainer()
+        gpacResponsesContainer = GPACResponsesContainer(ResponsesTimeoutsConfig.default())
     ).also {
         it.leaderTimer = timerMock
         it.retriesTimer = timerMock

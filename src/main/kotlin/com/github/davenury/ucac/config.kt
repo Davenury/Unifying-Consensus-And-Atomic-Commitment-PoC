@@ -50,8 +50,18 @@ data class GpacConfig(
     val maxLeaderElectionTries: Int = 5,
     val leaderFailDelay: Duration = Duration.ofSeconds(60),
     val retriesBackoffTimeout: Duration = Duration.ofSeconds(120),
-    val initialRetriesDelay: Duration = Duration.ofSeconds(0)
+    val initialRetriesDelay: Duration = Duration.ofSeconds(0),
+    val responsesTimeouts: ResponsesTimeoutsConfig = ResponsesTimeoutsConfig.default()
 )
+data class ResponsesTimeoutsConfig(
+    val electTimeout: Duration,
+    val agreeTimeout: Duration,
+    val applyTimeout: Duration
+) {
+    companion object {
+        fun default() = ResponsesTimeoutsConfig(Duration.ofSeconds(2), Duration.ofSeconds(2), Duration.ofMillis(200))
+    }
+}
 
 data class RaftConfig(
     val heartbeatTimeout: Duration = Duration.ofSeconds(2),

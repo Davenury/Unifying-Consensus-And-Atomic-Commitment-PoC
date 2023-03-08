@@ -74,7 +74,7 @@ class GPACProtocolClientImpl(
                     ) { throwable -> errorMessage(peer, throwable) }
                 }
             }
-        }
+        }.map { it.forEach { it.await() } }
     }
 
     private suspend inline fun <Message> gpacHttpCall(
@@ -99,7 +99,6 @@ class GPACProtocolClientImpl(
             logger.info("Response from $url: ${response.execute().status.value} (return address: ${peerResolver.currentPeerAddress().address}$path")
         } catch (e: Exception) {
             logger.error(errorMessage(e), e)
-            Pair(null, 0)
         }
     }
 

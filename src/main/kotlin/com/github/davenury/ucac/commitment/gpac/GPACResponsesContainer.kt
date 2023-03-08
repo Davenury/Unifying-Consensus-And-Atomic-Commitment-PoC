@@ -1,23 +1,23 @@
 package com.github.davenury.ucac.commitment.gpac
 
-import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.ResponsesTimeoutsConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import okhttp3.internal.notify
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.timer
 import kotlin.concurrent.withLock
 
-class GPACResponsesContainer {
+class GPACResponsesContainer(
+    timeouts: ResponsesTimeoutsConfig
+) {
 
-    private val electWaiter = Waiter<ElectedYou>()
-    private val agreeWaiter = Waiter<Agreed>()
-    private val applyWaiter = Waiter<Applied>(waitingTimeout = 400)
+    private val electWaiter = Waiter<ElectedYou>(waitingTimeout = timeouts.electTimeout)
+    private val agreeWaiter = Waiter<Agreed>(waitingTimeout = timeouts.agreeTimeout)
+    private val applyWaiter = Waiter<Applied>(waitingTimeout = timeouts.applyTimeout)
 
     fun waitForElectResponses(condition: (List<List<ElectedYou>>) -> Boolean): List<List<ElectedYou>> =
         electWaiter.waitForResponses(condition)
@@ -41,7 +41,7 @@ class GPACResponsesContainer {
     }
 
     private class Waiter<T: GpacResponse>(
-        val waitingTimeout: Long = 2000,
+        val waitingTimeout: Duration = Duration.ofSeconds(2),
     ) {
         private val ctx = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
         private val lock = ReentrantLock()
@@ -85,7 +85,7 @@ class GPACResponsesContainer {
         private fun timeout() {
             runBlocking {
                 // TODO - move to config if this solution is better
-                delay(waitingTimeout)
+                delay(waitingTimeout.toMillis())
                 shouldWait = false
                 lock.withLock {
                     lockCondition.signalAll()
