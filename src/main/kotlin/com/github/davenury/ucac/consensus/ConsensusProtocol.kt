@@ -8,6 +8,8 @@ import java.util.concurrent.CompletableFuture
 interface ConsensusProtocol {
     suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult>
 
+    suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change)
+
     fun getState(): History
 
     fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>?
