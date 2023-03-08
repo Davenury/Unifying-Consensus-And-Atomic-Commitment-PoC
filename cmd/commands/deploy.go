@@ -380,6 +380,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"config_persistence_redisPort": "6379",
 			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 			"NAMESPACE":                    config.DeployNamespace,
+			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
 		},
 	}
 

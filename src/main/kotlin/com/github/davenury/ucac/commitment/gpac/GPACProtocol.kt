@@ -31,7 +31,7 @@ abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) 
 
 class GPACProtocolImpl(
     private val history: History,
-    gpacConfig: GpacConfig,
+    private val gpacConfig: GpacConfig,
     ctx: ExecutorCoroutineDispatcher,
     private val protocolClient: GPACProtocolClient,
     private val transactionBlocker: TransactionBlocker,
@@ -427,7 +427,7 @@ class GPACProtocolImpl(
             return false
         }
         if (!superSet(agreedResponses, getPeersFromChange(change))) {
-            delay(500)
+            delay(gpacConfig.ftAgreeRepeatDelay.toMillis())
             return ftAgreePhase(change, acceptVal, decision, acceptNum, iteration + 1)
         }
 
