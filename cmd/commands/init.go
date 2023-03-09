@@ -38,23 +38,17 @@ func DoInit(namespace string, createNamespace bool) {
 		utils.CreateNamespace(namespace)
 	}
 
-	prometheusValues := map[string]interface{}{
-		"alertmanager": map[string]interface{}{
-			"enabled": false,
-		},
+	victoriaValues := map[string]interface{}{
 		"server": map[string]interface{}{
-			"global": map[string]interface{}{
-				"scrape_interval": "5s",
-				"scrape_timeout":  "2s",
+			"scrape": map[string]interface{}{
+				"enabled": true,
+			},
+			"persistentVolume": map[string]interface{}{
+				"enabled": true,
 			},
 		},
-		"prometheus-node-exporter": map[string]interface{}{
-			"enabled": false,
-		},
 	}
-
-	// install prometheus
-	installChart(namespace, "prometheus-community", "prometheus", "prometheus", prometheusValues)
+	installChart(namespace, "vm", "victoria-metrics-single", "victoria", victoriaValues)
 
 	grafanaValues := map[string]interface{}{
 		"adminPassword": "admin123",
@@ -68,13 +62,20 @@ func DoInit(namespace string, createNamespace bool) {
 				"memory": "256Mi",
 			},
 		},
+		"grafana.ini": map[string]interface{}{
+			"auth.anonymous": map[string]interface{}{
+				"enabled":  true,
+				"org_role": "Admin",
+			},
+		},
 		"datasources": map[string]interface{}{
 			"datasources.yaml": map[string]interface{}{
 				"apiVersion": 1,
 				"datasources": []map[string]interface{}{
 					{
-						"name":      "Prometheus",
-						"url":       fmt.Sprintf("http://prometheus-server.%s", namespace),
+						"name":      "VictoriaMetrics",
+						"uid":       "PBFA97CFB590B2093",
+						"url":       fmt.Sprintf("http://victoria-victoria-metrics-single-server.%s:8428/", namespace),
 						"type":      "prometheus",
 						"isDefault": true,
 					},
