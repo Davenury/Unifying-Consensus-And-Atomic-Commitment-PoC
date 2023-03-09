@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -48,15 +49,18 @@ class GPACResponsesContainer(
         private val lockCondition = lock.newCondition()
         private val responseContainer: MutableMap<Int, MutableList<T>> = mutableMapOf()
         private var shouldWait = true
+        private val waitingForResponses = AtomicBoolean(true)
 
         fun addResponse(response: T) {
             lock.withLock {
-                val peersetId = response.sender.peersetId
-                responseContainer[peersetId]?.add(response) ?: kotlin.run {
-                    responseContainer[peersetId] = mutableListOf(response)
+                if (waitingForResponses.get()) {
+                    val peersetId = response.sender.peersetId
+                    responseContainer[peersetId]?.add(response) ?: kotlin.run {
+                        responseContainer[peersetId] = mutableListOf(response)
+                    }
+                    logger.info("Got response from peerset: $peersetId: $response")
+                    lockCondition.signalAll()
                 }
-                logger.info("Got response from peerset: $peersetId: $response")
-                lockCondition.signalAll()
             }
         }
 
@@ -73,6 +77,7 @@ class GPACResponsesContainer(
                         } else {
                             logger.info("Condition is ok: $responseContainer")
                         }
+                        waitingForResponses.set(false)
                         break
                     }
                 }

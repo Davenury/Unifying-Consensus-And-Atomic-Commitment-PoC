@@ -44,7 +44,7 @@ func DoInit(namespace string, createNamespace bool) {
 				"enabled": true,
 			},
 			"persistentVolume": map[string]interface{}{
-				"enabled": true,
+				"enabled": false,
 			},
 		},
 	}
