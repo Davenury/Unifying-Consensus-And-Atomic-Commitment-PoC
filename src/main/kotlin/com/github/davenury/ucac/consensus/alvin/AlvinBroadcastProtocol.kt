@@ -11,10 +11,9 @@ import java.util.concurrent.CompletableFuture
 
 interface AlvinBroadcastProtocol : ConsensusProtocol {
     suspend fun begin()
-    suspend fun handleProposalPhase(change: Change): CompletableFuture<ChangeResult>
-    suspend fun handleDecisionPhase(change: Change): CompletableFuture<ChangeResult>
-    suspend fun handleAcceptPhase(change: Change): CompletableFuture<ChangeResult>
-    suspend fun handleDeliveryPhase(change: Change): CompletableFuture<ChangeResult>
+    suspend fun handleProposalPhase(message: AlvinPropose): AlvinAckPropose
+    suspend fun handleAcceptPhase(message: AlvinAccept): AlvinAckAccept
+    suspend fun handleStable(message: AlvinStable): AlvinAckStable
     suspend fun getProposedChanges(): List<Change>
     suspend fun getAcceptedChanges(): List<Change>
 

@@ -95,7 +95,7 @@ class RaftConsensusProtocolImpl(
     //    TODO: Useless, it should use a worker queue.
     private val queuedChanges: MutableList<Change> = mutableListOf()
 
-    private fun otherConsensusPeers(): List<PeerAddress> {
+    override fun otherConsensusPeers(): List<PeerAddress> {
         return peerResolver.getPeersFromPeerset(peersetId).filter { it.peerId != peerId }
     }
 
@@ -880,9 +880,6 @@ class RaftConsensusProtocolImpl(
         executorService?.close()
         executorService = null
     }
-
-    //    DONE: unit tests for this function
-    fun isMoreThanHalf(value: Int): Boolean = (value + 1) * 2 > otherConsensusPeers().size + 1
 
     private fun amILeader(): Boolean = role == RaftRole.Leader
 
