@@ -44,7 +44,8 @@ class RaftConsensusProtocolImpl(
     private val peerUrlToNextIndex: MutableMap<GlobalPeerId, PeerIndices> = mutableMapOf()
     private val voteContainer: VoteContainer = VoteContainer()
     private var votedFor: VotedFor? = null
-    private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> = ConcurrentLinkedDeque()
+    private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
+        ConcurrentLinkedDeque()
     private var state: Ledger = Ledger(history)
 
     @Volatile
@@ -130,11 +131,15 @@ class RaftConsensusProtocolImpl(
             peerUrlToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
         }
 
-        scheduleHeartbeatToPeers()
+        scheduleHeartbeatToPeers(true)
         tryPropagatingChangesToLeader()
     }
 
-    override suspend fun handleRequestVote(peerId: Int, iteration: Int, candidateLastLogId: String): ConsensusElectedYou {
+    override suspend fun handleRequestVote(
+        peerId: Int,
+        iteration: Int,
+        candidateLastLogId: String
+    ): ConsensusElectedYou {
         logger.debug(
             "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$candidateLastLogId, " +
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
@@ -156,7 +161,8 @@ class RaftConsensusProtocolImpl(
                 state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId()
                     ?: state.lastApplied
 
-            val candidateIsUpToDate: Boolean = state.isNotApplied(candidateLastLogId) || candidateLastLogId == lastEntryId
+            val candidateIsUpToDate: Boolean =
+                state.isNotApplied(candidateLastLogId) || candidateLastLogId == lastEntryId
 
             if (!candidateIsUpToDate) {
                 logger.info("Denying vote for $peerId due to an old index ($candidateLastLogId vs $lastEntryId)")
@@ -418,7 +424,7 @@ class RaftConsensusProtocolImpl(
             && executorService != null
             && isRegular
         ) {
-            launchHeartBeatToPeer(peer)
+            launchHeartBeatToPeer(peer, true)
         }
 
         when {
@@ -513,7 +519,7 @@ class RaftConsensusProtocolImpl(
             .map { changeIdToCompletableFuture[it.changeId] }
             .forEach { it!!.complete(ChangeResult(ChangeResult.Status.SUCCESS)) }
 
-        if (acceptedItems.isNotEmpty()) scheduleHeartbeatToPeers()
+        if (acceptedItems.isNotEmpty()) scheduleHeartbeatToPeers(false)
     }
 
     private suspend fun stopBeingLeader(newTerm: Int) {
@@ -674,7 +680,7 @@ class RaftConsensusProtocolImpl(
             logger.info("Propose change to ledger: $updatedChange")
             state.proposeEntry(entry, updatedChange.id)
             voteContainer.initializeChange(entry.getId())
-            scheduleHeartbeatToPeers()
+            scheduleHeartbeatToPeers(false)
         }
     }
 
@@ -765,20 +771,24 @@ class RaftConsensusProtocolImpl(
         return result
     }
 
-    private fun scheduleHeartbeatToPeers() {
+    private fun scheduleHeartbeatToPeers(isRegular: Boolean) {
         otherConsensusPeers().forEach {
-            launchHeartBeatToPeer(it.globalPeerId, true)
+            launchHeartBeatToPeer(it.globalPeerId, isRegular, true)
         }
     }
 
-    private fun launchHeartBeatToPeer(peer: GlobalPeerId, sendInstant: Boolean = false): Job =
+    private fun launchHeartBeatToPeer(
+        peer: GlobalPeerId,
+        isRegular: Boolean = false,
+        sendInstant: Boolean = false
+    ): Job =
         with(CoroutineScope(executorService!!)) {
             launch(MDCContext()) {
                 if (!sendInstant) {
                     logger.info("Wait with sending heartbeat to $peer for ${heartbeatDelay.toMillis()} ms")
                     delay(heartbeatDelay.toMillis())
                 }
-                sendHeartbeatToPeer(peer, sendInstant)
+                sendHeartbeatToPeer(peer, isRegular)
             }
         }
 

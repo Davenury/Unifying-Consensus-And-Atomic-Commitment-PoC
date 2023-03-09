@@ -383,6 +383,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"GPAC_ASYNC_ELECT_TIMEOUT":     "PT2S",
 			"GPAC_ASYNC_AGREE_TIMEOUT":     "PT2S",
 			"GPAC_ASYNC_APPLY_TIMEOUT":     "PT0.2S",
+			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
 		},
 	}
 

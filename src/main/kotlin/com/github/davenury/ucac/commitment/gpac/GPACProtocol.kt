@@ -32,7 +32,7 @@ abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) 
 
 class GPACProtocolImpl(
     private val history: History,
-    gpacConfig: GpacConfig,
+    private val gpacConfig: GpacConfig,
     ctx: ExecutorCoroutineDispatcher,
     private val protocolClient: GPACProtocolClient,
     private val transactionBlocker: TransactionBlocker,
@@ -534,6 +534,7 @@ class GPACProtocolImpl(
 
         if (reason == Reason.NOT_VALID_LEADER) {
             logger.error("Discarding GPAC for change: ${change.id} as it is not valid leader anymore")
+            return false
         }
 
         if (iteration == maxLeaderElectionTries) {
@@ -542,7 +543,7 @@ class GPACProtocolImpl(
             return false
         }
 
-        delay(500)
+        delay(gpacConfig.ftAgreeRepeatDelay.toMillis())
         return ftAgreePhase(change, acceptVal, decision, acceptNum, iteration + 1)
     }
 
