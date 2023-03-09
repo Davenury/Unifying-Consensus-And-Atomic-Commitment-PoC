@@ -550,7 +550,7 @@ class GPACProtocolImpl(
     private suspend fun applyPhase(change: Change, acceptVal: Accept) {
         sendApplyMessages(change, getPeersFromChange(change), acceptVal)
         gpacResponsesContainer.waitForApplyResponses {
-            areListsEqualInSize(it, getPeersFromChange(change))
+            superSet(it, getPeersFromChange(change)) || areListsEqualInSize(it, getPeersFromChange(change))
         }
         this.handleApply(
             Apply(

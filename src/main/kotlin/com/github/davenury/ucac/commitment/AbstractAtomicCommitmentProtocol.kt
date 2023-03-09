@@ -49,7 +49,7 @@ abstract class AbstractAtomicCommitmentProtocol(
 
     fun getPeersFromChange(change: Change): List<List<PeerAddress>> {
         if (change.peersets.isEmpty()) throw IllegalStateException("Change without peersetIds")
-        return change.peersets.map { peersetInfo ->
+        return change.peersets.sortedBy { it.peersetId }.map { peersetInfo ->
             peerResolver.getPeersFromPeerset(peersetInfo.peersetId)
         }.map { peerset -> peerset.filter { it.globalPeerId != peerResolver.currentPeerAddress().globalPeerId } }
     }
