@@ -1,7 +1,5 @@
 package com.github.davenury.ucac.consensus.alvin
 
-import AlvinAckPropose
-import AlvinPropose
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.raftHttpClient
 import io.ktor.client.request.*
@@ -22,15 +20,26 @@ interface AlvinProtocolClient {
         message: AlvinPropose
     ): ConsensusResponse<AlvinAckPropose?>
 
-
-    suspend fun sendConsensusHeartbeat(
-        peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>,
-    ): List<ConsensusResponse<ConsensusHeartbeatResponse?>>
-
-    suspend fun sendConsensusHeartbeat(
+    suspend fun sendAccept(
         peer: PeerAddress,
-        message: ConsensusHeartbeat,
-    ): ConsensusResponse<ConsensusHeartbeatResponse?>
+        message: AlvinAccept
+    ): ConsensusResponse<AlvinAckAccept?>
+
+    suspend fun sendStable(
+        peer: PeerAddress,
+        message: AlvinStable,
+    ): ConsensusResponse<AlvinAckStable?>
+
+    suspend fun sendPrepare(
+        peer: PeerAddress,
+        message: AlvinAccept
+    ): ConsensusResponse<AlvinPromise?>
+
+
+    suspend fun sendCommit(
+        peer: PeerAddress,
+        message: AlvinCommit
+    ): ConsensusResponse<AlvinCommit?>
 }
 
 class AlvinProtocolClientImpl : AlvinProtocolClient {
@@ -40,53 +49,31 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
         message: AlvinPropose
     ): ConsensusResponse<AlvinAckPropose?> {
         logger.debug("Sending proposal request to ${peer.globalPeerId}")
-        return sendRequest(Pair(peer,message), "alvin/proposal")
+        return sendRequest(Pair(peer, message), "alvin/proposal")
     }
 
-    override suspend fun sendConsensusHeartbeat(
-        peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>
-    ): List<ConsensusResponse<ConsensusHeartbeatResponse?>> =
-        sendRequests(peersWithMessage, "consensus/heartbeat")
-
-    override suspend fun sendConsensusHeartbeat(
-        peer: PeerAddress, message: ConsensusHeartbeat,
-    ): ConsensusResponse<ConsensusHeartbeatResponse?> {
-
-        return CoroutineScope(Dispatchers.IO).async(MDCContext()) {
-            sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(peer, "consensus/heartbeat", message)
-        }.let {
-            val result = try {
-                it.await()
-            } catch (e: Exception) {
-                logger.error("Error while evaluating response from ${peer.globalPeerId}", e)
-                null
-            }
-            ConsensusResponse(peer.address, result)
-        }
+    override suspend fun sendAccept(
+        peer: PeerAddress,
+        message: AlvinAccept
+    ): ConsensusResponse<AlvinAckAccept?> {
+        logger.debug("Sending accept request to ${peer.globalPeerId}")
+        return sendRequest(Pair(peer, message), "alvin/accept")
     }
 
-    private suspend inline fun <T, reified K> sendRequests(
-        peersWithBody: List<Pair<PeerAddress, T>>,
-        urlPath: String,
-    ): List<ConsensusResponse<K?>> =
-        peersWithBody.map {
-            val peer = it.first
-            val body = it.second
-            CoroutineScope(Dispatchers.IO).async(MDCContext()) {
-                sendConsensusMessage<T, K>(peer, urlPath, body)
-            }.let { coroutine ->
-                Pair(peer, coroutine)
-            }
-        }.map {
-            val result = try {
-                it.second.await()
-            } catch (e: Exception) {
-                logger.error("Error while evaluating response from ${it.first}", e)
-                null
-            }
+    override suspend fun sendStable(peer: PeerAddress, message: AlvinStable): ConsensusResponse<AlvinAckStable?> {
+        logger.debug("Sending stable request to ${peer.globalPeerId}")
+        return sendRequest(Pair(peer, message), "alvin/stable")
+    }
 
-            ConsensusResponse(it.first.address, result)
-        }
+    override suspend fun sendPrepare(peer: PeerAddress, message: AlvinAccept): ConsensusResponse<AlvinPromise?> {
+        logger.debug("Sending prepare request to ${peer.globalPeerId}")
+        return sendRequest(Pair(peer, message), "alvin/prepare")
+    }
+
+    override suspend fun sendCommit(peer: PeerAddress, message: AlvinCommit): ConsensusResponse<AlvinCommit?> {
+        logger.debug("Sending commit request to ${peer.globalPeerId}")
+        return sendRequest(Pair(peer, message), "alvin/prepare")
+    }
 
     private suspend inline fun <T, reified K> sendRequest(
         peerWithBody: Pair<PeerAddress, T>,
