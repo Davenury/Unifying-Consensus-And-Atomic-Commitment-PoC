@@ -10,7 +10,7 @@
         </http>
         <format>
             <label>
-                <pattern>app=performance-test,host=${HOSTNAME},level=%level</pattern>
+                <pattern>app=performance-test,host=${HOSTNAME},level=%level,namespace=${NAMESPACE}</pattern>
             </label>
             <message>
                 <pattern>l=%level namespace=${NAMESPACE} h=${HOSTNAME} c=%logger{20} t=%thread | %msg %ex</pattern>
