@@ -221,10 +221,6 @@ class RaftConsensusProtocolImpl(
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
         val prevEntryId = heartbeat.prevEntryId
 
-//        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex")
-//        logger.info("Lastapplied: ${state.lastApplied} commitIndex: ${state.commitIndex}")
-//        logger.info("PrevEntry: ${prevEntryId},  leaderCommitId: ${leaderCommitId} logEntries: ${proposedChanges.map { it.entry.getId() }}")
-
         if (term < currentTerm) {
             logger.info("The received heartbeat has an old term ($term vs $currentTerm)")
             return ConsensusHeartbeatResponse(false, currentTerm)
@@ -275,7 +271,7 @@ class RaftConsensusProtocolImpl(
             !prevLogEntryExists -> {
                 logger.info("The received heartbeat is missing some changes (I am behind)")
                 state.removeNotAcceptedItems()
-                return ConsensusHeartbeatResponse(false, currentTerm)
+                return ConsensusHeartbeatResponse(false, currentTerm, missingValues = true)
             }
 
             isUpdatedCommitIndex && transactionBlocker.isAcquiredByProtocol(ProtocolName.CONSENSUS) -> {
@@ -468,14 +464,26 @@ class RaftConsensusProtocolImpl(
                 }
             }
 
-
-            response.message.term <= currentTerm -> {
+            response.message.missingValues -> {
                 logger.info("Peer ${peerAddress.globalPeerId} is not up to date, decrementing index")
                 val oldValues = peerUrlToNextIndex[peerAddress.globalPeerId]
 //                Done: Add decrement method for PeerIndices
                 peerUrlToNextIndex[peerAddress.globalPeerId] = oldValues
                     ?.decrement(state)
                     ?: PeerIndices()
+            }
+
+            !response.message.success -> {
+                logger.info("Peer ${peerAddress.globalPeerId}  doesn't accept heartbeat, because I am outdated history")
+
+                if (role == RaftRole.Leader
+                    && otherConsensusPeers().any { it.globalPeerId == peer }
+                    && executorService != null
+                    && isRegular
+                ) {
+                    launchHeartBeatToPeer(peer, delay = heartbeatDelay.dividedBy(4))
+                }
+
             }
         }
 
@@ -781,12 +789,12 @@ class RaftConsensusProtocolImpl(
         peer: GlobalPeerId,
         isRegular: Boolean = false,
         sendInstant: Boolean = false
-    ): Job =
+    , delay: Duration = heartbeatDelay): Job =
         with(CoroutineScope(executorService!!)) {
             launch(MDCContext()) {
                 if (!sendInstant) {
-                    logger.info("Wait with sending heartbeat to $peer for ${heartbeatDelay.toMillis()} ms")
-                    delay(heartbeatDelay.toMillis())
+                    logger.info("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
+                    delay(delay.toMillis())
                 }
                 sendHeartbeatToPeer(peer, isRegular)
             }

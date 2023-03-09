@@ -6,6 +6,7 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.consensus.ConsensusSpec
 import com.github.davenury.ucac.utils.IntegrationTestBase
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
@@ -17,7 +18,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
@@ -26,8 +26,8 @@ import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
-import java.io.File
 import java.util.concurrent.Phaser
+import kotlin.system.measureTimeMillis
 
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
@@ -78,6 +78,57 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         askAllForChanges(peers.values).forEach { changes ->
             expectThat(changes.size).isGreaterThanOrEqualTo(1)
             expectThat(changes[0]).isEqualTo(change)
+        }
+    }
+
+
+    @Test
+    fun `1000 change processed sequentially`(): Unit = runBlocking {
+        val peersWithoutLeader = 4
+
+        val phaser = Phaser(peersWithoutLeader)
+        phaser.register()
+
+        val peerLeaderElected = SignalListener {
+            logger.info("Arrived ${it.subject.getPeerName()}")
+            phaser.arrive()
+        }
+
+        apps = TestApplicationSet(
+            listOf(3, 3),
+            signalListeners = (0..5).associateWith {
+                mapOf(
+                    Signal.ConsensusLeaderElected to peerLeaderElected,
+                )
+            }
+        )
+        val peerAddresses = apps.getPeers(0)
+
+        phaser.arriveAndAwaitAdvanceWithTimeout()
+        logger.info("Leader elected")
+
+
+        var change = change(0, 1)
+
+        val endRange = 1000
+
+        var time = 0L
+
+        (0 until endRange).forEach {
+            time += measureTimeMillis {
+                expectCatching {
+                    executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync", change)
+                }.isSuccess()
+            }
+            change = twoPeersetChange(change)
+        }
+        // when: peer1 executed change
+
+        expectThat(time / endRange).isLessThanOrEqualTo(500L)
+
+        askAllForChanges(peerAddresses.values).forEach { changes ->
+            // then: there are two changes
+            expectThat(changes.size).isEqualTo(endRange)
         }
     }
 
@@ -532,5 +583,12 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         peersets = peersetIds.map {
             ChangePeersetInfo(it, InitialHistoryEntry.getId())
         },
+    )
+
+    private fun twoPeersetChange(
+        change: Change
+    ) = AddUserChange(
+        "userName",
+        peersets = (0..1).map { ChangePeersetInfo(it, change.toHistoryEntry(it).getId()) },
     )
 }
