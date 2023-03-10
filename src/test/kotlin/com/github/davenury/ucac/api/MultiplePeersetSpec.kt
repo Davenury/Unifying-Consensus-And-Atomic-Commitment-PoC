@@ -6,7 +6,6 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.ConsensusSpec
 import com.github.davenury.ucac.utils.IntegrationTestBase
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
@@ -84,13 +83,20 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
     @Test
     fun `1000 change processed sequentially`(): Unit = runBlocking {
-        val peersWithoutLeader = 4
-
-        val phaser = Phaser(peersWithoutLeader)
+        val phaser = Phaser(6)
         phaser.register()
+
+        val peersWithoutLeader = 4
+        val leaderElectionPhaser = Phaser(peersWithoutLeader)
+        leaderElectionPhaser.register()
 
         val peerLeaderElected = SignalListener {
             logger.info("Arrived ${it.subject.getPeerName()}")
+            leaderElectionPhaser.arrive()
+        }
+
+        val changeAccepted = SignalListener {
+            logger.info("Arrived change: ${it.change}")
             phaser.arrive()
         }
 
@@ -99,14 +105,14 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             signalListeners = (0..5).associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
+                    Signal.OnHandlingApplyCommitted to changeAccepted
                 )
             }
         )
         val peerAddresses = apps.getPeers(0)
 
-        phaser.arriveAndAwaitAdvanceWithTimeout()
+        leaderElectionPhaser.arriveAndAwaitAdvanceWithTimeout()
         logger.info("Leader elected")
-
 
         var change = change(0, 1)
 
@@ -120,6 +126,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync", change)
                 }.isSuccess()
             }
+            phaser.arriveAndAwaitAdvanceWithTimeout()
             change = twoPeersetChange(change)
         }
         // when: peer1 executed change

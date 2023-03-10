@@ -22,7 +22,6 @@ import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
-import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.measureTimeMillis
@@ -82,25 +81,36 @@ class TwoPCSpec : IntegrationTestBase() {
     fun `1000 change processed sequentially`(): Unit = runBlocking {
         val peersWithoutLeader = 4
 
-        val phaser = Phaser(peersWithoutLeader)
+        val leaderElectedPhaser = Phaser(peersWithoutLeader)
+        leaderElectedPhaser.register()
+
+        val phaser = Phaser(peersWithoutLeader*2)
         phaser.register()
+
 
         val peerLeaderElected = SignalListener {
             logger.info("Arrived ${it.subject.getPeerName()}")
+            leaderElectedPhaser.arrive()
+        }
+
+        val peerChangeAccepted = SignalListener {
+            logger.info("Arrived change: ${it.change}")
             phaser.arrive()
         }
+
 
         apps = TestApplicationSet(
             listOf(3, 3),
             signalListeners = (0..5).associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
+                    Signal.ConsensusFollowerChangeAccepted to peerChangeAccepted
                 )
             }
         )
         val peerAddresses = apps.getPeers(0)
 
-        phaser.arriveAndAwaitAdvanceWithTimeout()
+        leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
         logger.info("Leader elected")
 
 
@@ -116,6 +126,7 @@ class TwoPCSpec : IntegrationTestBase() {
                     executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync?use_2pc=true", change)
                 }.isSuccess()
             }
+            phaser.arriveAndAwaitAdvanceWithTimeout()
             change = twoPeersetChange(change)
         }
         // when: peer1 executed change

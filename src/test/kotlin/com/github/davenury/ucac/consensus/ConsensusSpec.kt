@@ -6,6 +6,7 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.api.TwoPCSpec
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.GlobalPeerId
@@ -33,7 +34,6 @@ import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.assertions.*
-import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
@@ -130,12 +130,20 @@ class ConsensusSpec : IntegrationTestBase() {
     fun `1000 change processed sequentially`(): Unit = runBlocking {
         val peersWithoutLeader = 4
 
+        val leaderElectedPhaser = Phaser(peersWithoutLeader)
+        leaderElectedPhaser.register()
+
         val phaser = Phaser(peersWithoutLeader)
         phaser.register()
 
         val peerLeaderElected = SignalListener {
-            expectThat(phaser.phase).isEqualTo(0)
+            expectThat(leaderElectedPhaser.phase).isEqualTo(0)
             logger.info("Arrived ${it.subject.getPeerName()}")
+            leaderElectedPhaser.arrive()
+        }
+
+        val peerChangeAccepted = SignalListener {
+            logger.info("Arrived change: ${it.change}")
             phaser.arrive()
         }
 
@@ -144,12 +152,13 @@ class ConsensusSpec : IntegrationTestBase() {
             signalListeners = (0..4).associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
+                    Signal.ConsensusFollowerChangeAccepted to peerChangeAccepted
                 )
             }
         )
         val peerAddresses = apps.getPeers(0)
 
-        phaser.arriveAndAwaitAdvanceWithTimeout()
+        leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
         logger.info("Leader elected")
 
 
@@ -165,6 +174,7 @@ class ConsensusSpec : IntegrationTestBase() {
                     executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change)
                 }.isSuccess()
             }
+            phaser.arriveAndAwaitAdvanceWithTimeout()
             change = createChange(null, parentId = change.toHistoryEntry(0).getId())
         }
         // when: peer1 executed change
