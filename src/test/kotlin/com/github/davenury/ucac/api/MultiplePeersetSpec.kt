@@ -26,6 +26,7 @@ import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
 import java.util.concurrent.Phaser
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.system.measureTimeMillis
 
 @Suppress("HttpUrlsUsage")
@@ -85,6 +86,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
     fun `1000 change processed sequentially`(): Unit = runBlocking {
         val phaser = Phaser(6)
         phaser.register()
+        var atomicInteger: AtomicInteger = AtomicInteger(0)
 
         val peersWithoutLeader = 4
         val leaderElectionPhaser = Phaser(peersWithoutLeader)
@@ -95,9 +97,11 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             leaderElectionPhaser.arrive()
         }
 
+        val endRange = 1000
+
         val changeAccepted = SignalListener {
             logger.info("Arrived change: ${it.change}")
-            phaser.arrive()
+            if(atomicInteger.get() == endRange) phaser.arrive()
         }
 
         apps = TestApplicationSet(
@@ -116,19 +120,18 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
         var change = change(0, 1)
 
-        val endRange = 1000
-
         var time = 0L
 
         (0 until endRange).forEach {
+            atomicInteger.incrementAndGet()
             time += measureTimeMillis {
                 expectCatching {
                     executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync", change)
                 }.isSuccess()
             }
-            phaser.arriveAndAwaitAdvanceWithTimeout()
             change = twoPeersetChange(change)
         }
+        phaser.arriveAndAwaitAdvanceWithTimeout()
         // when: peer1 executed change
 
         expectThat(time / endRange).isLessThanOrEqualTo(500L)
@@ -591,7 +594,6 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ChangePeersetInfo(it, InitialHistoryEntry.getId())
         },
     )
-
     private fun twoPeersetChange(
         change: Change
     ) = AddUserChange(

@@ -418,6 +418,7 @@ class RaftConsensusProtocolImpl(
         when {
             role != RaftRole.Leader ->
                 logger.info("I am not longer leader so not schedule heartbeat again")
+
             !otherConsensusPeers().any { it.globalPeerId == peer } ->
                 logger.info("Peer $peer is not one of other consensus peer ${otherConsensusPeers()}")
 
@@ -777,8 +778,11 @@ class RaftConsensusProtocolImpl(
     override suspend fun proposeChange(change: Change): ChangeResult = proposeChangeAsync(change).await()
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
-        val result = CompletableFuture<ChangeResult>()
-        changeIdToCompletableFuture[change.id] = result
+
+
+        val result = changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+            ?: changeIdToCompletableFuture[change.id]!!
+
         when {
             amILeader() -> {
                 logger.info("Proposing change: $change")
@@ -806,7 +810,7 @@ class RaftConsensusProtocolImpl(
 
     private fun launchHeartBeatToPeer(
         peer: GlobalPeerId,
-       isRegular: Boolean = false, sendInstant: Boolean = false,
+        isRegular: Boolean = false, sendInstant: Boolean = false,
         delay: Duration = heartbeatDelay
     ): Job =
         with(CoroutineScope(executorService!!)) {

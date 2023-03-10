@@ -136,6 +136,8 @@ class TwoPCSpec : IntegrationTestBase() {
         askAllForChanges(peerAddresses.values).forEach { changes ->
             // then: there are two changes
             expectThat(changes.size).isEqualTo(endRange*2)
+            expectThat(changes.all { it is TwoPCChange && it.twoPCStatus == TwoPCStatus.ACCEPTED || it is AddUserChange }).isTrue()
+
         }
     }
 

@@ -6,7 +6,6 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
-import com.github.davenury.ucac.api.TwoPCSpec
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.GlobalPeerId
@@ -179,7 +178,7 @@ class ConsensusSpec : IntegrationTestBase() {
         }
         // when: peer1 executed change
 
-        expectThat(time/endRange).isLessThanOrEqualTo(500L)
+        expectThat(time / endRange).isLessThanOrEqualTo(500L)
 
         askAllForChanges(peerAddresses.values).forEach { changes ->
             // then: there are two changes
