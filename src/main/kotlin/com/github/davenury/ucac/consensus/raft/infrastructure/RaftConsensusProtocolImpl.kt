@@ -575,7 +575,12 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun getMessageForPeer(peerAddress: PeerAddress): ConsensusHeartbeat {
-        state.checkCommitIndex()
+
+        if (state.checkCommitIndex()) {
+            peerUrlToNextIndex.keys.forEach {
+                peerUrlToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
+            }
+        }
 
         val peerIndices = peerUrlToNextIndex.getOrDefault(peerAddress.globalPeerId, PeerIndices()) // TODO
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
@@ -787,9 +792,9 @@ class RaftConsensusProtocolImpl(
 
     private fun launchHeartBeatToPeer(
         peer: GlobalPeerId,
-        isRegular: Boolean = false,
-        sendInstant: Boolean = false
-    , delay: Duration = heartbeatDelay): Job =
+       isRegular: Boolean = false, sendInstant: Boolean = false,
+        delay: Duration = heartbeatDelay
+    ): Job =
         with(CoroutineScope(executorService!!)) {
             launch(MDCContext()) {
                 if (!sendInstant) {

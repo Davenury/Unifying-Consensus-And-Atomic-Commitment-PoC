@@ -134,14 +134,15 @@ data class Ledger(
     suspend fun isNotAppliedNorProposed(entryId: String): Boolean =
         mutex.withLock { !history.containsEntry(entryId) && !proposedEntries.any { it.entry.getId() == entryId } }
 
-    suspend fun checkCommitIndex() = mutex.withLock {
+    suspend fun checkCommitIndex(): Boolean = mutex.withLock {
         val currentEntryId = this.history.getCurrentEntryId()
 
         if (currentEntryId != commitIndex) {
             commitIndex = currentEntryId
             lastApplied = currentEntryId
+            return true
         }
-
+        return false
     }
 
 
