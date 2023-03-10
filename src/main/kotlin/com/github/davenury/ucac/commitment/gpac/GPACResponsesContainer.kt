@@ -74,8 +74,6 @@ class GPACResponsesContainer(
                     } else {
                         if (!shouldWait) {
                             logger.info("Waiter timeout")
-                        } else {
-                            logger.info("Condition is ok: $responseContainer")
                         }
                         waitingForResponses.set(false)
                         break
