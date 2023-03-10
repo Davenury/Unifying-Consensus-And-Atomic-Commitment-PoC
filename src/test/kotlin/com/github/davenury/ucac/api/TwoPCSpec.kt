@@ -25,6 +25,7 @@ import strikt.assertions.*
 import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.system.measureTimeMillis
 
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
@@ -72,6 +73,58 @@ class TwoPCSpec : IntegrationTestBase() {
                 .with(TwoPCChange::change) { isEqualTo(change) }
             expectThat(changes[1]).isA<AddUserChange>()
                 .with(AddUserChange::userName) { isEqualTo("userName") }
+        }
+    }
+
+
+
+    @Test
+    fun `1000 change processed sequentially`(): Unit = runBlocking {
+        val peersWithoutLeader = 4
+
+        val phaser = Phaser(peersWithoutLeader)
+        phaser.register()
+
+        val peerLeaderElected = SignalListener {
+            logger.info("Arrived ${it.subject.getPeerName()}")
+            phaser.arrive()
+        }
+
+        apps = TestApplicationSet(
+            listOf(3, 3),
+            signalListeners = (0..5).associateWith {
+                mapOf(
+                    Signal.ConsensusLeaderElected to peerLeaderElected,
+                )
+            }
+        )
+        val peerAddresses = apps.getPeers(0)
+
+        phaser.arriveAndAwaitAdvanceWithTimeout()
+        logger.info("Leader elected")
+
+
+        var change = change(0, 1)
+
+        val endRange = 1000
+
+        var time = 0L
+
+        (0 until endRange).forEach {
+            time += measureTimeMillis {
+                expectCatching {
+                    executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync?use_2pc=true", change)
+                }.isSuccess()
+            }
+            change = twoPeersetChange(change)
+        }
+        // when: peer1 executed change
+
+        expectThat(time / endRange).isLessThanOrEqualTo(500L)
+
+        askAllForChanges(peerAddresses.values).forEach { changes ->
+            // then: there are two changes
+            expectThat(changes.size).isEqualTo(endRange*2)
         }
     }
 
@@ -552,5 +605,12 @@ class TwoPCSpec : IntegrationTestBase() {
         peersets = peersetToChangeId.map {
             ChangePeersetInfo(it.first, it.second)
         },
+    )
+
+    private fun twoPeersetChange(
+        change: Change
+    ) = AddUserChange(
+        "userName",
+        peersets = (0..1).map { ChangePeersetInfo(it, change.toHistoryEntry(it).getId()) },
     )
 }
