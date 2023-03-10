@@ -550,9 +550,6 @@ class GPACProtocolImpl(
     private suspend fun applyPhase(change: Change, acceptVal: Accept) {
         sendApplyMessages(change, getPeersFromChange(change), acceptVal)
         gpacResponsesContainer.waitForApplyResponses {
-            logger.info("Responses: $it")
-            logger.info("Superset: ${superSet(it, getPeersFromChange(change))}")
-            logger.info("Peers: ${getPeersFromChange(change)}")
             superSet(it, getPeersFromChange(change)) || areListsEqualInSize(it, getPeersFromChange(change))
         }
         this.handleApply(
