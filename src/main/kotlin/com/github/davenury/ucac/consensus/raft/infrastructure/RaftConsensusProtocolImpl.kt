@@ -415,6 +415,20 @@ class RaftConsensusProtocolImpl(
         val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
 
         // We should schedule heartbeat even if something failed during handling response
+        when {
+            role != RaftRole.Leader ->
+                logger.info("I am not longer leader so not schedule heartbeat again")
+            !otherConsensusPeers().any { it.globalPeerId == peer } ->
+                logger.info("Peer $peer is not one of other consensus peer ${otherConsensusPeers()}")
+
+            executorService == null ->
+                logger.info("Executor service is null")
+
+            !isRegular ->
+                logger.info("Heartbeat message is not regular")
+        }
+
+
         if (role == RaftRole.Leader
             && otherConsensusPeers().any { it.globalPeerId == peer }
             && executorService != null
