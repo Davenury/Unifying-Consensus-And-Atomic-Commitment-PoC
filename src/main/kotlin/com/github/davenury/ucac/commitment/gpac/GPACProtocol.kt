@@ -305,7 +305,7 @@ class GPACProtocolImpl(
                 applySignal(Signal.BeforeSendingApply, this.transaction, change)
             } catch (e: Exception) {
                 transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
-                logger.info("performProtocolAsLeader releaseBlocker")
+                logger.info("Exception in Signal BeforeSendingApply")
                 transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
                 throw e
             }

@@ -306,6 +306,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             throw RuntimeException("Leader failed after ft-agree")
         }
 
+
         val applyCommittedPhaser = Phaser(8)
         applyCommittedPhaser.register()
 

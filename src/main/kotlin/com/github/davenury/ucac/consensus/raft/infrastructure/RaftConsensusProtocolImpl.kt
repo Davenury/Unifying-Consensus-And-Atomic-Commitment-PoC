@@ -752,19 +752,23 @@ class RaftConsensusProtocolImpl(
     private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change) {
         with(CoroutineScope(leaderRequestExecutorService)) {
             launch(MDCContext()) {
-                val result: ChangeResult = try {
-                    val response =
-                        httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
-                            contentType(ContentType.Application.Json)
-                            accept(ContentType.Application.Json)
-                            body = change
-                        }
-                    logger.info("Response from leader: $response")
-                    response
-                } catch (e: Exception) {
-                    logger.info("Request to leader (${votedFor!!.address}) failed", e)
-                    null
-                } ?: ChangeResult(ChangeResult.Status.TIMEOUT)
+                var result: ChangeResult? = null
+                while(result == null) {
+                    logger.info("Send request to leader again \n")
+                    result = try {
+                        val response =
+                            httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
+                                contentType(ContentType.Application.Json)
+                                accept(ContentType.Application.Json)
+                                body = change
+                            }
+                        logger.info("Response from leader: $response")
+                        response
+                    } catch (e: Exception) {
+                        logger.info("Request to leader (${votedFor!!.address}) failed", e)
+                        null
+                    }
+                }
 
                 if (result.status != ChangeResult.Status.SUCCESS) {
                     cf.complete(result)
@@ -778,11 +782,8 @@ class RaftConsensusProtocolImpl(
     override suspend fun proposeChange(change: Change): ChangeResult = proposeChangeAsync(change).await()
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
-
-
-        val result = changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-            ?: changeIdToCompletableFuture[change.id]!!
-
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+        val result = changeIdToCompletableFuture[change.id]!!
         when {
             amILeader() -> {
                 logger.info("Proposing change: $change")
