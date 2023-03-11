@@ -64,9 +64,9 @@ class Changes(
         executor.dispatch(Dispatchers.IO) {
             runBlocking {
                 delay(8000)
-                logger.error("Change $change timed out from performance tests, freeing peersets")
                 mutex.withLock {
                     if (!handledChanges.contains(change.id)) {
+                        logger.error("Change $change timed out from performance tests, freeing peersets")
                         getPeersStrategy.freePeersets(change.peersets.map { it.peersetId })
                         handledChanges.add(change.id)
                     }
