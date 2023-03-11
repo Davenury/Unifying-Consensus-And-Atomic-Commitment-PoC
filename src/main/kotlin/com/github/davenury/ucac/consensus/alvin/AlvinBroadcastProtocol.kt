@@ -14,6 +14,8 @@ interface AlvinBroadcastProtocol : ConsensusProtocol {
     suspend fun handleProposalPhase(message: AlvinPropose): AlvinAckPropose
     suspend fun handleAcceptPhase(message: AlvinAccept): AlvinAckAccept
     suspend fun handleStable(message: AlvinStable): AlvinAckStable
+    suspend fun handlePrepare(message: AlvinAccept): AlvinPromise
+    suspend fun handleCommit(message: AlvinCommit): AlvinPromise
     suspend fun getProposedChanges(): List<Change>
     suspend fun getAcceptedChanges(): List<Change>
 
