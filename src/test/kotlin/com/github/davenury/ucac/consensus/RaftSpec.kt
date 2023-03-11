@@ -42,14 +42,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.measureTimeMillis
 
 @ExtendWith(TestLogExtension::class)
-class ConsensusSpec : IntegrationTestBase() {
+class RaftSpec : IntegrationTestBase() {
     private val knownPeerIp = "localhost"
     private val unknownPeerIp = "198.18.0.0"
     private val noneLeader = null
 
     @BeforeEach
     fun setUp() {
-        System.setProperty("configFile", "consensus_application.conf")
+        System.setProperty("configFile", "raft_application.conf")
     }
 
     @Test
@@ -1127,7 +1127,7 @@ class ConsensusSpec : IntegrationTestBase() {
         }
 
     private suspend fun genericAskForChange(suffix: String, peerAddress: PeerAddress) =
-        testHttpClient.get<Changes>("http://${peerAddress.address}/consensus/$suffix") {
+        testHttpClient.get<Changes>("http://${peerAddress.address}/raft/$suffix") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -1159,6 +1159,6 @@ class ConsensusSpec : IntegrationTestBase() {
     }
 
     companion object {
-        private val logger = LoggerFactory.getLogger(ConsensusSpec::class.java)
+        private val logger = LoggerFactory.getLogger(RaftSpec::class.java)
     }
 }

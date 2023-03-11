@@ -13,7 +13,7 @@ data class Config(
     // peerset1=peer1,peer2;peerset2=peer3,peer4
     val peersets: String,
 
-    val raft: RaftConfig = RaftConfig(),
+    val consensus: ConsensusConfig = ConsensusConfig(),
     val gpac: GpacConfig = GpacConfig(),
     val twoPC: TwoPCConfig = TwoPCConfig(),
     val rest: RestConfig = RestConfig(),
@@ -56,9 +56,10 @@ data class PhasesTimeouts(
     val applyTimeout: Duration = Duration.ofSeconds(2)
 )
 
-data class RaftConfig(
+data class ConsensusConfig(
     val heartbeatTimeout: Duration = Duration.ofSeconds(2),
     val leaderTimeout: Duration = Duration.ofSeconds(1),
+    val name: String = "raft",
     val isEnabled: Boolean = true,
     val maxChangesPerMessage: Int = 200
 )

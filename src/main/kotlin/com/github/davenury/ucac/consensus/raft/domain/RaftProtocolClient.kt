@@ -48,20 +48,20 @@ class RaftProtocolClientImpl : RaftProtocolClient {
         logger.debug("Sending elect me requests to ${otherPeers.map { it.peerId }}")
         return otherPeers
             .map { Pair(it, message) }
-            .let { sendRequests(it, "consensus/request_vote") }
+            .let { sendRequests(it, "raft/request_vote") }
     }
 
     override suspend fun sendConsensusHeartbeat(
         peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>
     ): List<RaftResponse<ConsensusHeartbeatResponse?>> =
-        sendRequests(peersWithMessage, "consensus/heartbeat")
+        sendRequests(peersWithMessage, "raft/heartbeat")
 
     override suspend fun sendConsensusHeartbeat(
         peer: PeerAddress, message: ConsensusHeartbeat,
     ): RaftResponse<ConsensusHeartbeatResponse?> {
 
         return CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
-            sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(peer, "consensus/heartbeat", message)
+            sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(peer, "raft/heartbeat", message)
         }.let {
             val result = try {
                 it.await()
