@@ -72,7 +72,7 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
 
     override suspend fun sendCommit(peer: PeerAddress, message: AlvinCommit): ConsensusResponse<AlvinCommit?> {
         logger.debug("Sending commit request to ${peer.globalPeerId}")
-        return sendRequest(Pair(peer, message), "alvin/prepare")
+        return sendRequest(Pair(peer, message), "alvin/commit")
     }
 
     private suspend inline fun <T, reified K> sendRequest(
