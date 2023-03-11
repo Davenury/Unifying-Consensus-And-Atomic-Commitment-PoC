@@ -958,23 +958,23 @@
     "list": [
       {
         "current": {
-          "selected": true,
-          "text": "rszuma",
-          "value": "rszuma"
+          "selected": false,
+          "text": "ddebowski",
+          "value": "ddebowski"
         },
         "datasource": {
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "definition": "label_values(container_cpu_usage_seconds_total, namespace)",
-        "description": "label_values(container_cpu_usage_seconds_total, namespace)",
+        "definition": "label_values(change_processed_total, kubernetes_namespace)",
+        "description": "label_values(change_processed_total, namespace)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "namespace",
         "options": [],
         "query": {
-          "query": "label_values(container_cpu_usage_seconds_total, namespace)",
+          "query": "label_values(change_processed_total, kubernetes_namespace)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -993,6 +993,6 @@
   "timezone": "",
   "title": "PoC",
   "uid": "HSUzSq2Vk",
-  "version": 2,
+  "version": 1,
   "weekStart": ""
 }
