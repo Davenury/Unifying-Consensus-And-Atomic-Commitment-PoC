@@ -137,9 +137,9 @@ class GPACFactory(
     private suspend fun handleApply(message: Apply) =
         changeIdToGpacInstance[message.change.id]
             ?.handleApply(message)
-            ?.also {
-                changeIdToGpacInstance.remove(message.change.id)
-            }
+//            ?.also {
+//                changeIdToGpacInstance.remove(message.change.id)
+//            }
             ?: throw GPACInstanceNotFoundException(message.change.id)
 
     private suspend fun <T : Any> notifyLeader(returnUrl: String, result: T) {

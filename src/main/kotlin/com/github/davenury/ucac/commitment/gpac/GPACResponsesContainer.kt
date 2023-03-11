@@ -44,7 +44,6 @@ class GPACResponsesContainer(
     private class Waiter<T: GpacResponse>(
         val waitingTimeout: Duration = Duration.ofSeconds(2),
     ) {
-        private val ctx = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
         private val lock = ReentrantLock()
         private val lockCondition = lock.newCondition()
         private val responseContainer: MutableMap<Int, MutableList<T>> = mutableMapOf()
@@ -97,6 +96,7 @@ class GPACResponsesContainer(
 
         companion object {
             private val logger = LoggerFactory.getLogger("Waiter")
+            private val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
         }
     }
 
