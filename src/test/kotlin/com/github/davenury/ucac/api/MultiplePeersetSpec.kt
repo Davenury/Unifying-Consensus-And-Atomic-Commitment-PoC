@@ -85,8 +85,8 @@ class MultiplePeersetSpec : IntegrationTestBase() {
     @Test
     fun `1000 change processed sequentially`(): Unit = runBlocking {
         val phaser = Phaser(6)
+        var change = change(0, 1)
         phaser.register()
-        var atomicInteger: AtomicInteger = AtomicInteger(0)
 
         val peersWithoutLeader = 4
         val leaderElectionPhaser = Phaser(peersWithoutLeader)
@@ -101,7 +101,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
         val changeAccepted = SignalListener {
             logger.info("Arrived change: ${it.change}")
-            if(atomicInteger.get() == endRange) phaser.arrive()
+            if(change.id==it.change?.id) phaser.arrive()
         }
 
         apps = TestApplicationSet(
@@ -109,7 +109,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             signalListeners = (0..5).associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
-                    Signal.OnHandlingApplyCommitted to changeAccepted
+                    Signal.OnHandlingApplyEnd to changeAccepted
                 )
             }
         )
@@ -118,20 +118,17 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         leaderElectionPhaser.arriveAndAwaitAdvanceWithTimeout()
         logger.info("Leader elected")
 
-        var change = change(0, 1)
-
         var time = 0L
 
-        (0 until endRange).forEach {
-            atomicInteger.incrementAndGet()
+        repeat((0 until endRange).count()) {
             time += measureTimeMillis {
                 expectCatching {
                     executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync", change)
                 }.isSuccess()
             }
+            phaser.arriveAndAwaitAdvanceWithTimeout()
             change = twoPeersetChange(change)
         }
-        phaser.arriveAndAwaitAdvanceWithTimeout()
         // when: peer1 executed change
 
         expectThat(time / endRange).isLessThanOrEqualTo(500L)
