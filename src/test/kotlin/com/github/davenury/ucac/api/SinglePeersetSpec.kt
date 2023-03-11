@@ -271,11 +271,11 @@ class SinglePeersetSpec : IntegrationTestBase() {
                 "peer4" to peerSignals,
             ),
             configOverrides = mapOf(
-                "peer0" to mapOf("raft.isEnabled" to false),
-                "peer1" to mapOf("raft.isEnabled" to false),
-                "peer2" to mapOf("raft.isEnabled" to false),
-                "peer3" to mapOf("raft.isEnabled" to false),
-                "peer4" to mapOf("raft.isEnabled" to false),
+                "peer0" to mapOf("consensus.isEnabled" to false),
+                "peer1" to mapOf("consensus.isEnabled" to false),
+                "peer2" to mapOf("consensus.isEnabled" to false),
+                "peer3" to mapOf("consensus.isEnabled" to false),
+                "peer4" to mapOf("consensus.isEnabled" to false),
             )
         )
 

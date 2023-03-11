@@ -448,14 +448,14 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     "peer7" to signalListenersForAll,
                 ),
                 configOverrides = mapOf(
-                    "peer0" to mapOf("raft.isEnabled" to false),
-                    "peer1" to mapOf("raft.isEnabled" to false),
-                    "peer2" to mapOf("raft.isEnabled" to false),
-                    "peer3" to mapOf("raft.isEnabled" to false),
-                    "peer4" to mapOf("raft.isEnabled" to false),
-                    "peer5" to mapOf("raft.isEnabled" to false),
-                    "peer6" to mapOf("raft.isEnabled" to false),
-                    "peer7" to mapOf("raft.isEnabled" to false),
+                    "peer0" to mapOf("consensus.isEnabled" to false),
+                    "peer1" to mapOf("consensus.isEnabled" to false),
+                    "peer2" to mapOf("consensus.isEnabled" to false),
+                    "peer3" to mapOf("consensus.isEnabled" to false),
+                    "peer4" to mapOf("consensus.isEnabled" to false),
+                    "peer5" to mapOf("consensus.isEnabled" to false),
+                    "peer6" to mapOf("consensus.isEnabled" to false),
+                    "peer7" to mapOf("consensus.isEnabled" to false),
                 ),
             )
             val change = change(0, 1)

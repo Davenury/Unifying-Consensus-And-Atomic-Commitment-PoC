@@ -29,6 +29,17 @@ class HistoryRatisNode(
     ConsensusProtocol {
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
+    override suspend fun begin() {
+        TODO("Not yet implemented")
+    }
+
+    override fun setPeerAddress(address: String) {
+        TODO("Not yet implemented")
+    }
+
+    override fun stop() {
+        TODO("Not yet implemented")
+    }
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
         val cf = CompletableFuture<ChangeResult>()
@@ -47,10 +58,26 @@ class HistoryRatisNode(
         return cf
     }
 
+    override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
+        TODO("Not yet implemented")
+    }
+
     override fun getState(): History {
         return history
     }
 
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
+
+    override fun otherConsensusPeers(): List<PeerAddress> {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun getProposedChanges(): List<Change> {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun getAcceptedChanges(): List<Change> {
+        TODO("Not yet implemented")
+    }
 }

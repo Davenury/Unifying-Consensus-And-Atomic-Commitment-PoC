@@ -15,22 +15,22 @@ import kotlinx.coroutines.future.await
 
 data class CurrentLeaderDto(val currentLeaderPeerId: PeerId?)
 
-fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
+fun Application.raftProtocolRouting(protocol: RaftConsensusProtocol) {
     routing {
         // głosujemy na leadera
-        post("/consensus/request_vote") {
+        post("/raft/request_vote") {
             val message: ConsensusElectMe = call.receive()
             val response = protocol.handleRequestVote(message.peerId, message.term, message.lastEntryId)
             call.respond(response)
         }
 
-        post("/consensus/heartbeat") {
+        post("/raft/heartbeat") {
             val message: ConsensusHeartbeat = call.receive()
             val heartbeatResult = protocol.handleHeartbeat(message)
             call.respond(heartbeatResult)
         }
 
-        post("/consensus/request_apply_change") {
+        post("/raft/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
             val result = protocol.handleProposeChange(message).await()
                 .also {
@@ -39,15 +39,15 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             call.respond(result)
         }
 
-        get("/consensus/current-leader") {
+        get("/raft/current-leader") {
             call.respond(CurrentLeaderDto(protocol.getLeaderId()))
         }
 
-        get("/consensus/proposed_changes") {
+        get("/raft/proposed_changes") {
             call.respond(Changes(protocol.getProposedChanges()))
         }
 
-        get("/consensus/accepted_changes") {
+        get("/raft/accepted_changes") {
             call.respond(Changes(protocol.getAcceptedChanges()))
         }
     }

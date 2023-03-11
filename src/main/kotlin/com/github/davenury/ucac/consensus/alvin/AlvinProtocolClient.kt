@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus.alvin
 
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.raftHttpClient
+import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
@@ -78,20 +79,28 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
     private suspend inline fun <T, reified K> sendRequest(
         peerWithBody: Pair<PeerAddress, T>,
         urlPath: String,
-    ) = CoroutineScope(Dispatchers.IO).async(MDCContext()) {
+    ): ConsensusResponse<K?> = CoroutineScope(Dispatchers.IO).async(MDCContext()) {
         sendConsensusMessage<T, K>(
             peerWithBody.first,
             urlPath,
             peerWithBody.second
         )
     }.let {
-        val result = try {
-            it.await()
+        try {
+            val result = it.await()
+            ConsensusResponse(peerWithBody.first.address, result)
         } catch (e: Exception) {
-            logger.error("Error while evaluating response from ${peerWithBody.first.globalPeerId}", e)
-            null
+            when {
+                e is ClientRequestException && e.response.status == HttpStatusCode.Unauthorized -> {
+                    ConsensusResponse(peerWithBody.first.address, null, true)
+                }
+
+                else -> {
+                    logger.error("Error while evaluating response from ${peerWithBody.first.globalPeerId}", e)
+                    ConsensusResponse(peerWithBody.first.address, null)
+                }
+            }
         }
-        ConsensusResponse(peerWithBody.first.address, result)
     }
 
     private suspend inline fun <Message, reified Response> sendConsensusMessage(
@@ -112,4 +121,4 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
     }
 }
 
-data class ConsensusResponse<K>(val from: String, val message: K)
+data class ConsensusResponse<K>(val from: String, val message: K, val unathorized: Boolean = false)
