@@ -122,7 +122,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "rate(container_cpu_usage_seconds_total{pod=~\"peerset.*\", namespace=~\"$namespace\"}[30s])",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\"peerset.*\", namespace=~\"$namespace\", container!=\"\"}[30s])) by (pod)",
+          "hide": false,
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -214,8 +215,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"peer.*\", namespace=\"$namespace\"}[30s]))",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"peer.*\", namespace=\"$namespace\"}[30s])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         },
@@ -323,6 +324,18 @@
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum(jvm_memory_used_bytes{area=\"nonheap\", app_name=~\"peer.*\", kubernetes_namespace=~\"$namespace\"}) by (app_name)",
+          "hide": false,
+          "legendFormat": "{{app_name}} - nonheap",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "AVG Container memory usage - only application",
@@ -412,7 +425,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(container_memory_usage_bytes{pod=~\"peerset.*\", namespace=~\"$namespace\"}) by (pod)",
+          "expr": "sum(container_memory_usage_bytes{pod=~\"peerset.*\", namespace=~\"$namespace\", container!=\"\"}) by (pod)",
+          "hide": false,
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -505,7 +519,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "rate(container_network_receive_bytes_total{pod=~\"peerset.*\", namespace=~\"$namespace\"}[30s])",
+          "expr": "sum(rate(container_network_receive_bytes_total{pod=~\"peerset.*\", namespace=~\"$namespace\"}[30s])) by (pod)",
+          "hide": false,
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -943,9 +958,9 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "ddebowski",
-          "value": "ddebowski"
+          "selected": true,
+          "text": "rszuma",
+          "value": "rszuma"
         },
         "datasource": {
           "type": "prometheus",
