@@ -221,10 +221,6 @@ class RaftConsensusProtocolImpl(
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
         val prevEntryId = heartbeat.prevEntryId
 
-//        logger.info("Received heartbeat isUpdatedCommitIndex $isUpdatedCommitIndex")
-//        logger.info("Lastapplied: ${state.lastApplied} commitIndex: ${state.commitIndex}")
-//        logger.info("PrevEntry: ${prevEntryId},  leaderCommitId: ${leaderCommitId} logEntries: ${proposedChanges.map { it.entry.getId() }}")
-
         if (term < currentTerm) {
             logger.info("The received heartbeat has an old term ($term vs $currentTerm)")
             return ConsensusHeartbeatResponse(false, currentTerm)
@@ -275,7 +271,7 @@ class RaftConsensusProtocolImpl(
             !prevLogEntryExists -> {
                 logger.info("The received heartbeat is missing some changes (I am behind)")
                 state.removeNotAcceptedItems()
-                return ConsensusHeartbeatResponse(false, currentTerm)
+                return ConsensusHeartbeatResponse(false, currentTerm, missingValues = true)
             }
 
             isUpdatedCommitIndex && transactionBlocker.isAcquiredByProtocol(ProtocolName.CONSENSUS) -> {
@@ -419,6 +415,21 @@ class RaftConsensusProtocolImpl(
         val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
 
         // We should schedule heartbeat even if something failed during handling response
+        when {
+            role != RaftRole.Leader ->
+                logger.info("I am not longer leader so not schedule heartbeat again")
+
+            !otherConsensusPeers().any { it.globalPeerId == peer } ->
+                logger.info("Peer $peer is not one of other consensus peer ${otherConsensusPeers()}")
+
+            executorService == null ->
+                logger.info("Executor service is null")
+
+            !isRegular ->
+                logger.info("Heartbeat message is not regular")
+        }
+
+
         if (role == RaftRole.Leader
             && otherConsensusPeers().any { it.globalPeerId == peer }
             && executorService != null
@@ -468,14 +479,26 @@ class RaftConsensusProtocolImpl(
                 }
             }
 
-
-            response.message.term <= currentTerm -> {
+            response.message.missingValues -> {
                 logger.info("Peer ${peerAddress.globalPeerId} is not up to date, decrementing index")
                 val oldValues = peerUrlToNextIndex[peerAddress.globalPeerId]
 //                Done: Add decrement method for PeerIndices
                 peerUrlToNextIndex[peerAddress.globalPeerId] = oldValues
                     ?.decrement(state)
                     ?: PeerIndices()
+            }
+
+            !response.message.success -> {
+                logger.info("Peer ${peerAddress.globalPeerId}  doesn't accept heartbeat, because I am outdated history")
+
+                if (role == RaftRole.Leader
+                    && otherConsensusPeers().any { it.globalPeerId == peer }
+                    && executorService != null
+                    && isRegular
+                ) {
+                    launchHeartBeatToPeer(peer, delay = heartbeatDelay.dividedBy(4))
+                }
+
             }
         }
 
@@ -567,7 +590,12 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun getMessageForPeer(peerAddress: PeerAddress): ConsensusHeartbeat {
-        state.checkCommitIndex()
+
+        if (state.checkCommitIndex()) {
+            peerUrlToNextIndex.keys.forEach {
+                peerUrlToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
+            }
+        }
 
         val peerIndices = peerUrlToNextIndex.getOrDefault(peerAddress.globalPeerId, PeerIndices()) // TODO
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
@@ -750,8 +778,11 @@ class RaftConsensusProtocolImpl(
     override suspend fun proposeChange(change: Change): ChangeResult = proposeChangeAsync(change).await()
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
-        val result = CompletableFuture<ChangeResult>()
-        changeIdToCompletableFuture[change.id] = result
+
+
+        val result = changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+            ?: changeIdToCompletableFuture[change.id]!!
+
         when {
             amILeader() -> {
                 logger.info("Proposing change: $change")
@@ -779,14 +810,14 @@ class RaftConsensusProtocolImpl(
 
     private fun launchHeartBeatToPeer(
         peer: GlobalPeerId,
-        isRegular: Boolean = false,
-        sendInstant: Boolean = false
+        isRegular: Boolean = false, sendInstant: Boolean = false,
+        delay: Duration = heartbeatDelay
     ): Job =
         with(CoroutineScope(executorService!!)) {
             launch(MDCContext()) {
                 if (!sendInstant) {
-                    logger.info("Wait with sending heartbeat to $peer for ${heartbeatDelay.toMillis()} ms")
-                    delay(heartbeatDelay.toMillis())
+                    logger.info("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
+                    delay(delay.toMillis())
                 }
                 sendHeartbeatToPeer(peer, isRegular)
             }
