@@ -9,6 +9,8 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import java.util.concurrent.CompletableFuture
 
 interface ConsensusProtocol {
+    suspend fun begin()
+    fun stop()
     suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult>
 
     suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change)
@@ -21,4 +23,7 @@ interface ConsensusProtocol {
 
 
     fun otherConsensusPeers(): List<PeerAddress>
+
+    suspend fun getProposedChanges(): List<Change>
+    suspend fun getAcceptedChanges(): List<Change>
 }

@@ -6,11 +6,13 @@ import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.PeersetProtocols
+import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.common.TransactionBlocker
+import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
-import com.github.davenury.ucac.routing.consensusProtocolRouting
-import com.github.davenury.ucac.routing.gpacProtocolRouting
-import com.github.davenury.ucac.routing.metaRouting
-import com.github.davenury.ucac.routing.twoPCRouting
+import com.github.davenury.ucac.routing.*
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -112,6 +114,7 @@ class ApplicationUcac constructor(
         )
 
         service = ApiV2Service(config, peersetProtocols, changeNotifier)
+
 
         install(CallLogging) {
             level = Level.DEBUG
@@ -219,11 +222,15 @@ class ApplicationUcac constructor(
         historyRouting(peersetProtocols.history)
         apiV2Routing(service, peersetId)
         gpacProtocolRouting(peersetProtocols.gpacFactory)
-        consensusProtocolRouting(peersetProtocols.consensusProtocol)
+        when (config.consensus.name){
+            "raft" -> raftProtocolRouting(peersetProtocols.consensusProtocol as RaftConsensusProtocol)
+            "alvin" -> alvinProtocolRouting(peersetProtocols.consensusProtocol as AlvinProtocol)
+            else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
+        }
         twoPCRouting(peersetProtocols.twoPC)
 
         runBlocking {
-            if (config.raft.isEnabled) peersetProtocols.consensusProtocol.begin()
+            if (config.consensus.isEnabled) peersetProtocols.consensusProtocol.begin()
         }
     }
 
