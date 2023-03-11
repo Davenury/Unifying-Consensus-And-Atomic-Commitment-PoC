@@ -419,14 +419,14 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     7 to signalListenersForAll,
                 ),
                 configOverrides = mapOf(
-                    0 to mapOf("raft.isEnabled" to false),
-                    1 to mapOf("raft.isEnabled" to false),
-                    2 to mapOf("raft.isEnabled" to false),
-                    3 to mapOf("raft.isEnabled" to false),
-                    4 to mapOf("raft.isEnabled" to false),
-                    5 to mapOf("raft.isEnabled" to false),
-                    6 to mapOf("raft.isEnabled" to false),
-                    7 to mapOf("raft.isEnabled" to false),
+                    0 to mapOf("consensus.isEnabled" to false),
+                    1 to mapOf("consensus.isEnabled" to false),
+                    2 to mapOf("consensus.isEnabled" to false),
+                    3 to mapOf("consensus.isEnabled" to false),
+                    4 to mapOf("consensus.isEnabled" to false),
+                    5 to mapOf("consensus.isEnabled" to false),
+                    6 to mapOf("consensus.isEnabled" to false),
+                    7 to mapOf("consensus.isEnabled" to false),
                 )
             )
             val peers = apps.getPeers()

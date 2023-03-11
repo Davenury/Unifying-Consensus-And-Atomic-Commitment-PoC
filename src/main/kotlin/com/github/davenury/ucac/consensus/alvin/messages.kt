@@ -9,7 +9,7 @@ data class AlvinAccept(val peerId: Int, val entry: AlvinEntry)
 data class AlvinAckAccept(val newDeps: List<HistoryEntry>, val newPos: Int)
 data class AlvinStable(val peerId: Int, val entry: AlvinEntry)
 data class AlvinAckStable(val peerId: Int)
-data class AlvinPromise(val entry: AlvinEntry)
+data class AlvinPromise(val entry: AlvinEntry?)
 
 data class AlvinCommit(val result: AlvinResult)
 

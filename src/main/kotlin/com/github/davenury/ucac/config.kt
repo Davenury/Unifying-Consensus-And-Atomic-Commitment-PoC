@@ -26,7 +26,7 @@ data class Config(
     // peer1,peer2;peer3,peer4
     val peers: String,
 
-    val raft: RaftConfig = RaftConfig(),
+    val consensus: ConsensusConfig = ConsensusConfig(),
     val ratis: RatisConfig = RatisConfig(),
     val gpac: GpacConfig = GpacConfig(),
     val twoPC: TwoPCConfig = TwoPCConfig(),
@@ -55,9 +55,10 @@ data class GpacConfig(
     val maxFTAgreeTries: Int = 5,
 )
 
-data class RaftConfig(
+data class ConsensusConfig(
     val heartbeatTimeout: Duration = Duration.ofSeconds(2),
     val leaderTimeout: Duration = Duration.ofSeconds(1),
+    val name: String = "raft",
     val isEnabled: Boolean = true
 )
 

@@ -1,7 +1,6 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.common.*
-import com.github.davenury.ucac.common.HistoryFactory
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
@@ -9,15 +8,16 @@ import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.ucac.common.HistoryFactory
 import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.TransactionBlocker
+import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
-import com.github.davenury.ucac.routing.consensusProtocolRouting
-import com.github.davenury.ucac.routing.gpacProtocolRouting
-import com.github.davenury.ucac.routing.metaRouting
-import com.github.davenury.ucac.routing.twoPCRouting
+import com.github.davenury.ucac.routing.*
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -80,7 +80,7 @@ class ApplicationUcac constructor(
 ) {
     private val mdc: MutableMap<String, String> = HashMap(mapOf("peer" to config.globalPeerId().toString()))
     private val engine: NettyApplicationEngine
-    private var consensusProtocol: RaftConsensusProtocol? = null
+    private var consensusProtocol: ConsensusProtocol? = null
     private var twoPC: TwoPC? = null
     private val ctx: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
     private lateinit var gpacFactory: GPACFactory
@@ -121,18 +121,35 @@ class ApplicationUcac constructor(
         val transactionBlocker = TransactionBlocker()
         gpacFactory = GPACFactory(transactionBlocker, history, config, ctx, signalPublisher, peerResolver)
 
-        consensusProtocol = RaftConsensusProtocolImpl(
-            history,
-            config.host + ":" + config.port,
-            ctx,
-            peerResolver,
-            signalPublisher,
-            raftProtocolClientImpl,
-            heartbeatTimeout = config.raft.heartbeatTimeout,
-            heartbeatDelay = config.raft.leaderTimeout,
-            transactionBlocker = transactionBlocker,
-            config.metricTest
-        )
+        consensusProtocol = when (config.consensus.name) {
+
+            "raft" -> RaftConsensusProtocolImpl(
+                history,
+                config.host + ":" + config.port,
+                ctx,
+                peerResolver,
+                signalPublisher,
+                raftProtocolClientImpl,
+                heartbeatTimeout = config.consensus.heartbeatTimeout,
+                heartbeatDelay = config.consensus.leaderTimeout,
+                transactionBlocker = transactionBlocker,
+                config.metricTest
+            )
+
+            "alvin" -> AlvinProtocol(
+                history,
+                ctx,
+                peerResolver,
+                signalPublisher,
+                AlvinProtocolClientImpl(),
+                heartbeatTimeout = config.consensus.heartbeatTimeout,
+                heartbeatDelay = config.consensus.leaderTimeout,
+                transactionBlocker = transactionBlocker,
+                config.metricTest
+            )
+
+            else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
+        }
 
         twoPC = TwoPC(
             history,
@@ -152,6 +169,7 @@ class ApplicationUcac constructor(
             history,
             config,
         )
+
 
         install(CallLogging) {
             level = Level.DEBUG
@@ -259,11 +277,17 @@ class ApplicationUcac constructor(
         historyRouting(history)
         apiV2Routing(service!!, peerResolver.currentPeer())
         gpacProtocolRouting(gpacFactory)
-        consensusProtocolRouting(consensusProtocol!!)
+
+        when (config.consensus.name){
+            "raft" -> raftProtocolRouting(consensusProtocol as RaftConsensusProtocol)
+            "alvin" -> alvinProtocolRouting(consensusProtocol as AlvinProtocol)
+            else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
+        }
+
         twoPCRouting(twoPC!!)
 
         runBlocking {
-            if (config.raft.isEnabled) consensusProtocol!!.begin()
+            if (config.consensus.isEnabled) consensusProtocol!!.begin()
         }
     }
 

@@ -753,12 +753,7 @@ class RaftConsensusProtocolImpl(
         with(CoroutineScope(leaderRequestExecutorService)) {
             launch(MDCContext()) {
                 val result: ChangeResult = try {
-                    val response =
-                        httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
-                            contentType(ContentType.Application.Json)
-                            accept(ContentType.Application.Json)
-                            body = change
-                        }
+                    val response = protocolClient.sendRequestApplyChange(votedFor!!.address, change)
                     logger.info("Response from leader: $response")
                     response
                 } catch (e: Exception) {

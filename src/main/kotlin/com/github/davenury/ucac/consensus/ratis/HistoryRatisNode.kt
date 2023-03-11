@@ -4,6 +4,7 @@ import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.RatisConfig
+import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -28,6 +29,17 @@ class HistoryRatisNode(
     ConsensusProtocol {
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
+    override suspend fun begin() {
+        TODO("Not yet implemented")
+    }
+
+    override fun setPeerAddress(address: String) {
+        TODO("Not yet implemented")
+    }
+
+    override fun stop() {
+        TODO("Not yet implemented")
+    }
 
     @Deprecated("use proposeChangeAsync")
     override suspend fun proposeChange(change: Change): ChangeResult {
@@ -53,10 +65,26 @@ class HistoryRatisNode(
         return cf
     }
 
+    override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
+        TODO("Not yet implemented")
+    }
+
     override fun getState(): History {
         return history
     }
 
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
+
+    override fun otherConsensusPeers(): List<PeerAddress> {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun getProposedChanges(): List<Change> {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun getAcceptedChanges(): List<Change> {
+        TODO("Not yet implemented")
+    }
 }

@@ -9,6 +9,10 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import java.util.concurrent.CompletableFuture
 
 interface ConsensusProtocol {
+
+    suspend fun begin()
+    fun setPeerAddress(address: String)
+    fun stop()
     @Deprecated("use proposeChangeAsync")
     suspend fun proposeChange(change: Change): ChangeResult
 
@@ -24,4 +28,7 @@ interface ConsensusProtocol {
 
 
     fun otherConsensusPeers(): List<PeerAddress>
+
+    suspend fun getProposedChanges(): List<Change>
+    suspend fun getAcceptedChanges(): List<Change>
 }

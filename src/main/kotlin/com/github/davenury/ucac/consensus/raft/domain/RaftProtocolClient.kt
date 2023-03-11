@@ -1,6 +1,9 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
+import com.github.davenury.common.Change
+import com.github.davenury.common.ChangeResult
 import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.ucac.httpClient
 import com.github.davenury.ucac.raftHttpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -27,6 +30,11 @@ interface RaftProtocolClient {
         peer: PeerAddress,
         message: ConsensusHeartbeat,
     ): RaftResponse<ConsensusHeartbeatResponse?>
+
+    suspend fun sendRequestApplyChange(
+        address: String,
+        change: Change
+    ): ChangeResult
 }
 
 class RaftProtocolClientImpl : RaftProtocolClient {
@@ -38,20 +46,20 @@ class RaftProtocolClientImpl : RaftProtocolClient {
         logger.debug("Sending elect me requests to ${otherPeers.map { it.globalPeerId }}")
         return otherPeers
             .map { Pair(it, message) }
-            .let { sendRequests(it, "consensus/request_vote") }
+            .let { sendRequests(it, "raft/request_vote") }
     }
 
     override suspend fun sendConsensusHeartbeat(
         peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>
     ): List<RaftResponse<ConsensusHeartbeatResponse?>> =
-        sendRequests(peersWithMessage, "consensus/heartbeat")
+        sendRequests(peersWithMessage, "raft/heartbeat")
 
     override suspend fun sendConsensusHeartbeat(
         peer: PeerAddress, message: ConsensusHeartbeat,
     ): RaftResponse<ConsensusHeartbeatResponse?> {
 
         return CoroutineScope(Dispatchers.IO).async(MDCContext()) {
-            sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(peer, "consensus/heartbeat", message)
+            sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(peer, "raft/heartbeat", message)
         }.let {
             val result = try {
                 it.await()
@@ -62,6 +70,13 @@ class RaftProtocolClientImpl : RaftProtocolClient {
             RaftResponse(peer.address, result)
         }
     }
+
+    override suspend fun sendRequestApplyChange(address: String, change: Change) =
+        httpClient.post<ChangeResult>("http://${address}/raft/request_apply_change") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            body = change
+        }
 
     private suspend inline fun <T, reified K> sendRequests(
         peersWithBody: List<Pair<PeerAddress, T>>,
