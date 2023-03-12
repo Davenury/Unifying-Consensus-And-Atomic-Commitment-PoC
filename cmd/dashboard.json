@@ -719,8 +719,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(change_processed_total{kubernetes_namespace=~\"$namespace\"}[1m]))",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(change_processed_total{kubernetes_namespace=~\"$namespace\", result=\"success\"}[1m]))",
+          "legendFormat": "changes per second",
           "range": true,
           "refId": "A"
         }
@@ -736,7 +736,8 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "fixedColor": "semi-dark-green",
+            "mode": "fixed"
           },
           "mappings": [],
           "thresholds": {
@@ -745,10 +746,6 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -773,7 +770,7 @@
           "values": false
         },
         "showThresholdLabels": false,
-        "showThresholdMarkers": true
+        "showThresholdMarkers": false
       },
       "pluginVersion": "9.3.8",
       "targets": [
@@ -878,76 +875,13 @@
           },
           "editorMode": "code",
           "expr": "avg(rate(change_processing_time_seconds_sum{result=\"success\", kubernetes_namespace=~\"$namespace\"}[1m]) / rate(change_processing_time_seconds_count{result=\"success\", kubernetes_namespace=~\"$namespace\"}[1m]))",
-          "legendFormat": "__auto",
+          "legendFormat": "avg commit latency",
           "range": true,
           "refId": "A"
         }
       ],
       "title": "Avg commit latency",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 54
-      },
-      "id": 10,
-      "options": {
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "pluginVersion": "9.3.8",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "kube_pod_container_status_restarts_total{kubernetes_namespace=~\"$namespace\"}",
-          "legendFormat": "{{pod}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Pods restarts",
-      "type": "gauge"
     }
   ],
   "refresh": "10s",
@@ -958,9 +892,9 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "ddebowski",
-          "value": "ddebowski"
+          "selected": true,
+          "text": "kjarosz",
+          "value": "kjarosz"
         },
         "datasource": {
           "type": "prometheus",
@@ -993,6 +927,6 @@
   "timezone": "",
   "title": "PoC",
   "uid": "HSUzSq2Vk",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
