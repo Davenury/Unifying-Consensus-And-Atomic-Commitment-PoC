@@ -7,11 +7,8 @@ import com.github.davenury.common.Notification
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
 import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
@@ -34,19 +31,29 @@ class Changes(
 
     suspend fun handleNotification(notification: Notification) = notificationMutex.withLock {
         logger.info("Handling notification: $notification")
-        if (!handledChanges.contains(notification.change.id)) {
+        if (shouldStartHandlingNotification(notification)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
                 if (notification.result.status == ChangeResult.Status.SUCCESS) {
                     val parentId = notification.change.toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
                     logger.info("Setting new parent id for peerset $peersetId: $parentId, change was for ${(notification.change as AddUserChange).userName}")
                 }
-                handledChanges[notification.change.id] = handledChanges.getOrDefault(notification.change.id, 0) + 1
-                if ((acProtocol == ACProtocol.TWO_PC && handledChanges[notification.change.id]!! >= notification.change.peersets.size) || acProtocol != ACProtocol.TWO_PC) {
-                    getPeersStrategy.handleNotification(peersetId)
-                }
+                getPeersStrategy.handleNotification(peersetId)
             }
         }
+    }
+
+    private fun shouldStartHandlingNotification(notification: Notification): Boolean {
+        if (acProtocol != ACProtocol.TWO_PC) {
+            return if (handledChanges.contains(notification.change.id)) {
+                false
+            } else {
+                handledChanges[notification.change.id] = 1
+                true
+            }
+        }
+        handledChanges[notification.change.id] = handledChanges.getOrDefault(notification.change.id, 0) + 1
+        return handledChanges[notification.change.id]!! >= notification.change.peersets.size
     }
 
     suspend fun introduceChange(numberOfPeersets: Int) {
@@ -57,7 +64,15 @@ class Changes(
 
             val result = changes[ids[0]]!!.introduceChange(change)
             if (result == ChangeState.ACCEPTED) {
-                logger.info("Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: ${ids.map { it to change.toHistoryEntry(it).getId() }}")
+                logger.info(
+                    "Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: ${
+                        ids.map {
+                            it to change.toHistoryEntry(
+                                it
+                            ).getId()
+                        }
+                    }"
+                )
             } else {
                 logger.info("Change $change was rejected, freeing peersets $ids")
                 getPeersStrategy.freePeersets(ids)
