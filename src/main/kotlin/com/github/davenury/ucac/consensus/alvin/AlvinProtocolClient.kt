@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.consensus.alvin
 
 import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.ucac.httpClient
 import com.github.davenury.ucac.raftHttpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -40,7 +41,12 @@ interface AlvinProtocolClient {
     suspend fun sendCommit(
         peer: PeerAddress,
         message: AlvinCommit
-    ): ConsensusResponse<AlvinCommit?>
+    ): ConsensusResponse<String?>
+
+    suspend fun sendFastRecovery(
+        peer: PeerAddress,
+        message: AlvinFastRecovery
+    ): ConsensusResponse<AlvinFastRecoveryResponse?>
 }
 
 class AlvinProtocolClientImpl : AlvinProtocolClient {
@@ -71,9 +77,17 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
         return sendRequest(Pair(peer, message), "alvin/prepare")
     }
 
-    override suspend fun sendCommit(peer: PeerAddress, message: AlvinCommit): ConsensusResponse<AlvinCommit?> {
+    override suspend fun sendCommit(peer: PeerAddress, message: AlvinCommit): ConsensusResponse<String?> {
         logger.debug("Sending commit request to ${peer.globalPeerId}")
         return sendRequest(Pair(peer, message), "alvin/commit")
+    }
+
+    override suspend fun sendFastRecovery(
+        peer: PeerAddress,
+        message: AlvinFastRecovery
+    ): ConsensusResponse<AlvinFastRecoveryResponse?> {
+        logger.debug("Sending fastRecovery request to ${peer.globalPeerId}")
+        return sendRequest(Pair(peer, message), "alvin/fast-recovery")
     }
 
     private suspend inline fun <T, reified K> sendRequest(
@@ -108,7 +122,7 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
         suffix: String,
         message: Message,
     ): Response? {
-        logger.debug("Sending request to: ${peer.globalPeerId}, message: $message")
+        logger.debug("Sending request to: ${peer.globalPeerId} ${peer.address}, message: $message")
         return raftHttpClient.post<Response>("http://${peer.address}/${suffix}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
@@ -117,7 +131,7 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
     }
 
     companion object {
-        private val logger = LoggerFactory.getLogger("raft-client")
+        private val logger = LoggerFactory.getLogger("alvin-client")
     }
 }
 

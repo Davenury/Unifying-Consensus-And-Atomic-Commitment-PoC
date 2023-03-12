@@ -1,17 +1,18 @@
 package com.github.davenury.ucac.consensus.alvin
 
-import com.github.davenury.common.history.HistoryEntry
-import com.github.davenury.ucac.consensus.raft.domain.LedgerItemDto
 
-data class AlvinPropose(val peerId: Int, val entry: AlvinEntry)
-data class AlvinAckPropose(val newDeps: List<HistoryEntry>, val newPos: Int)
-data class AlvinAccept(val peerId: Int, val entry: AlvinEntry)
-data class AlvinAckAccept(val newDeps: List<HistoryEntry>, val newPos: Int)
-data class AlvinStable(val peerId: Int, val entry: AlvinEntry)
+data class AlvinPropose(val peerId: Int, val entry: AlvinEntryDto)
+data class AlvinAckPropose(val newDeps: List<String>, val newPos: Int)
+data class AlvinAccept(val peerId: Int, val entry: AlvinEntryDto)
+data class AlvinAckAccept(val newDeps: List<String>, val newPos: Int)
+data class AlvinStable(val peerId: Int, val entry: AlvinEntryDto)
 data class AlvinAckStable(val peerId: Int)
-data class AlvinPromise(val entry: AlvinEntry?)
+data class AlvinPromise(val entry: AlvinEntryDto?)
 
-data class AlvinCommit(val result: AlvinResult)
+data class AlvinCommit(val entry: AlvinEntryDto, val result: AlvinResult)
+
+data class AlvinFastRecovery(val entryId: String)
+data class AlvinFastRecoveryResponse(val entry: AlvinEntryDto?, val historyEntry: String?)
 
 enum class AlvinResult{
     COMMIT, ABORT
