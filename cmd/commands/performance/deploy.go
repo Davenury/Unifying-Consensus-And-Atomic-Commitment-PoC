@@ -141,11 +141,11 @@ func createJob(clientset *kubernetes.Clientset, config Config) {
 							Name: "performance-test",
 							Resources: v1.ResourceRequirements{
 								Limits: v1.ResourceList{
-									"cpu":    resource.MustParse("400m"),
+									"cpu":    resource.MustParse("1"),
 									"memory": resource.MustParse("800Mi"),
 								},
 								Requests: v1.ResourceList{
-									"cpu":    resource.MustParse("200m"),
+									"cpu":    resource.MustParse("400m"),
 									"memory": resource.MustParse("400Mi"),
 								},
 							},

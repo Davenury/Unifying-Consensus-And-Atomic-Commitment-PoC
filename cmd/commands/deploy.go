@@ -313,7 +313,7 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 	if config.CreateResources {
 		resources = apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
-				"cpu":    resource.MustParse("700m"),
+				"cpu":    resource.MustParse("1000m"),
 				"memory": resource.MustParse("750Mi"),
 			},
 			Requests: apiv1.ResourceList{
