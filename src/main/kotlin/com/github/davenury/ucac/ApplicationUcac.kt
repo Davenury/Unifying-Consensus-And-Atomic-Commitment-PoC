@@ -156,7 +156,7 @@ class ApplicationUcac constructor(
             config.twoPC,
             ctx,
             TwoPCProtocolClientImpl(config.peerId),
-            consensusProtocol as RaftConsensusProtocolImpl,
+            consensusProtocol as ConsensusProtocol,
             signalPublisher,
             peerResolver,
             config.metricTest
@@ -164,7 +164,7 @@ class ApplicationUcac constructor(
 
         service = ApiV2Service(
             gpacFactory,
-            consensusProtocol as RaftConsensusProtocolImpl,
+            consensusProtocol as ConsensusProtocol,
             twoPC!!,
             history,
             config,
