@@ -52,6 +52,9 @@ class Changes(
                 true
             }
         }
+        if (notification.result.status != ChangeResult.Status.SUCCESS) {
+            return true
+        }
         handledChanges[notification.change.id] = handledChanges.getOrDefault(notification.change.id, 0) + 1
         return handledChanges[notification.change.id]!! >= notification.change.peersets.size
     }

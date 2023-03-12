@@ -83,11 +83,8 @@ class TwoPC(
             throw TwoPCHandleException("Received change of not TwoPCChange in handleAccept: $change")
         }
 
-        val updatedChange =
-            updateParentIdFor2PCCompatibility(change, history, peerResolver.currentPeer().peersetId)
-        val mainChangeId = updatedChange.id
-        logger.info("Change id for change: $change, id: $mainChangeId")
-        changeIdToCompletableFuture[mainChangeId] = CompletableFuture<ChangeResult>()
+        logger.info("Change id for change: $change, id: ${change.change.id}")
+        changeIdToCompletableFuture[change.change.id] = CompletableFuture<ChangeResult>()
 
         val changeWithProperParentId = change.copyWithNewParentId(
             peerResolver.currentPeer().peersetId,
