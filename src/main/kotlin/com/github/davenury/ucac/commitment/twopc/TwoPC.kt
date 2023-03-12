@@ -86,6 +86,7 @@ class TwoPC(
         val updatedChange =
             updateParentIdFor2PCCompatibility(change, history, peerResolver.currentPeer().peersetId)
         val mainChangeId = updatedChange.id
+        logger.info("Change id for change: $change, id: $mainChangeId")
         changeIdToCompletableFuture[mainChangeId] = CompletableFuture<ChangeResult>()
 
         val changeWithProperParentId = change.copyWithNewParentId(
@@ -122,6 +123,7 @@ class TwoPC(
         signal(Signal.TwoPCOnHandleDecision, change)
         val mainChangeId =
             updateParentIdFor2PCCompatibility(change, history, peerResolver.currentPeer().peersetId).id
+        logger.info("Change id for change: $change, id: $mainChangeId")
 
         val currentProcessedChange = Change.fromHistoryEntry(history.getCurrentEntry())
 
