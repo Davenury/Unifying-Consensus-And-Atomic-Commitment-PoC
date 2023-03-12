@@ -38,8 +38,8 @@ class Changes(
                     changes[peersetId]!!.overrideParentId(parentId)
                     logger.info("Setting new parent id for peerset $peersetId: $parentId, change was for ${(notification.change as AddUserChange).userName}")
                 }
-                getPeersStrategy.handleNotification(peersetId)
             }
+            getPeersStrategy.handleNotification(notification)
         }
     }
 
@@ -59,8 +59,8 @@ class Changes(
     suspend fun introduceChange(numberOfPeersets: Int) {
         val change = mutex.withLock {
             val ids = getPeersStrategy.getPeersets(numberOfPeersets)
-
             val change = createChangeStrategy.createChange(ids, changes)
+            getPeersStrategy.setCurrentChange(change.id)
 
             val result = changes[ids[0]]!!.introduceChange(change)
             if (result == ChangeState.ACCEPTED) {

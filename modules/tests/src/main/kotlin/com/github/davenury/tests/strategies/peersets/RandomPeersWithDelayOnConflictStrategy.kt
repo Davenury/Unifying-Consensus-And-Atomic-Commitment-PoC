@@ -1,7 +1,9 @@
 package com.github.davenury.tests.strategies.peersets
 
+import com.github.davenury.common.Notification
 import com.github.davenury.tests.Metrics
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
@@ -14,6 +16,7 @@ class RandomPeersWithDelayOnConflictStrategy(
 ) : GetPeersStrategy {
     private val lockedPeersets: ConcurrentHashMap<Int, Boolean> =
         ConcurrentHashMap(peersetsRange.zip(List(peersetsRange.count()) { false }).toMap())
+    private val currentlyBlockedOnChange = AtomicReference<String>()
 
     override suspend fun getPeersets(numberOfPeersets: Int): List<Int> =
         lock.withLock {
@@ -44,10 +47,18 @@ class RandomPeersWithDelayOnConflictStrategy(
         }
     }
 
-    override suspend fun handleNotification(peersetId: Int) {
+    override suspend fun handleNotification(notification: Notification) {
         lock.withLock {
-            lockedPeersets[peersetId] = false
-            condition.signalAll()
+            if (currentlyBlockedOnChange.get() == notification.change.id) {
+                notification.change.peersets.forEach {
+                    lockedPeersets[it.peersetId] = false
+                }
+                condition.signalAll()
+            }
         }
+    }
+
+    override fun setCurrentChange(changeId: String) {
+        this.currentlyBlockedOnChange.set(changeId)
     }
 }

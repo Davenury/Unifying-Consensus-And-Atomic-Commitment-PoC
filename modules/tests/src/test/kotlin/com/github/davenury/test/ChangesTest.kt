@@ -175,9 +175,11 @@ class ChangesTest {
 
             override suspend fun freePeersets(peersetsId: List<Int>) {}
 
-            override suspend fun handleNotification(peersetId: Int) {
+            override suspend fun handleNotification(notification: Notification) {
                 counter.incrementAndGet()
             }
+
+            override fun setCurrentChange(changeId: String) {}
         }
 
         val changes = Changes(
