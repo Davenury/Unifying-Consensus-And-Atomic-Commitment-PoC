@@ -22,11 +22,12 @@ class Changes(
     private val peers: Map<Int, List<String>>,
     private val sender: Sender,
     private val getPeersStrategy: GetPeersStrategy,
-    private val createChangeStrategy: CreateChangeStrategy
+    private val createChangeStrategy: CreateChangeStrategy,
+    private val acProtocol: ACProtocol?
 ) {
     private val changes = List(peers.size) { it to OnePeersetChanges(peers[it]!!, sender) }.toMap()
 
-    private val handledChanges: MutableList<String> = mutableListOf()
+    private val handledChanges: MutableMap<String, Int> = mutableMapOf()
     private val mutex = Mutex()
     private val notificationMutex = Mutex()
     private val executor = Executors.newCachedThreadPool().asCoroutineDispatcher()
@@ -40,8 +41,10 @@ class Changes(
                     changes[peersetId]!!.overrideParentId(parentId)
                     logger.info("Setting new parent id for peerset $peersetId: $parentId, change was for ${(notification.change as AddUserChange).userName}")
                 }
-                getPeersStrategy.handleNotification(peersetId)
-                handledChanges.add(notification.change.id)
+                handledChanges[notification.change.id] = handledChanges.getOrDefault(notification.change.id, 0) + 1
+                if ((acProtocol == ACProtocol.TWO_PC && handledChanges[notification.change.id]!! >= notification.change.peersets.size) || acProtocol != ACProtocol.TWO_PC) {
+                    getPeersStrategy.handleNotification(peersetId)
+                }
             }
         }
     }
@@ -68,7 +71,7 @@ class Changes(
                     if (!handledChanges.contains(change.id)) {
                         logger.error("Change $change timed out from performance tests, freeing peersets")
                         getPeersStrategy.freePeersets(change.peersets.map { it.peersetId })
-                        handledChanges.add(change.id)
+                        handledChanges[change.id] = change.peersets.size
                     }
                 }
             }
