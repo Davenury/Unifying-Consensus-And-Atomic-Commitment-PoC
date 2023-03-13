@@ -239,6 +239,13 @@ class ApplicationUcac constructor(
                 )
             }
 
+            exception<AlvinOutdatedPrepareException> { cause ->
+                call.respond(
+                    status = HttpStatusCode.Unauthorized,
+                    ErrorMessage(cause.message!!)
+                )
+            }
+
             exception<Throwable> { cause ->
                 log.error("Throwable has been thrown in Application: ", cause)
                 call.respond(
@@ -285,6 +292,7 @@ class ApplicationUcac constructor(
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
         withMdc {
+            logger.info("Stop app ${peerResolver.currentPeer()}")
             if (this::peersetProtocols.isInitialized) {
                 peersetProtocols.close()
             }
