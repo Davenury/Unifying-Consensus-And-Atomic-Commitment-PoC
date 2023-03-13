@@ -35,9 +35,9 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol, peerRe
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
             val result = protocol.handleProposeChange(message).await()
-                .also {
-                    ChangeNotifier.get(peerResolver = peerResolver).notify(message, it)
-                }
+//                .also {
+//                    ChangeNotifier.get(peerResolver = peerResolver).notify(message, it)
+//                }
             call.respond(result)
         }
 
