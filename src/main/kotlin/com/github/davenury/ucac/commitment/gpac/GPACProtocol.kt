@@ -421,7 +421,7 @@ class GPACProtocolImpl(
         transactionBlocker.tryToBlock(ProtocolName.GPAC, change.id)
 
         val agreedResponses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
-        if (!superSet(agreedResponses, getPeersFromChange(change)) && iteration == maxLeaderElectionTries) {
+        if (!superSet(agreedResponses, getPeersFromChange(change)) && iteration == gpacConfig.maxFTAgreeTries) {
             changeTimeout(change, "Transaction failed due to too few responses of ft phase.")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             return false
