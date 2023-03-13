@@ -1,11 +1,16 @@
 package com.github.davenury.tests.strategies.load
 
+import com.github.davenury.common.meterRegistry
 import com.github.davenury.tests.Metrics
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.Gauge
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.ticker
 import java.time.Duration
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
+import java.util.function.Supplier
 
 class IncreasingLoadGenerator(
     private val bound: Double,
@@ -14,7 +19,11 @@ class IncreasingLoadGenerator(
 ) : LoadGenerator {
 
     private var channel: ReceiveChannel<Unit> = ticker(1000, 0)
-    private var currentTick = 1.0
+    private var currentTick: Double = 1.0
+
+    init {
+        Counter.builder("current_expected_load").register(meterRegistry).increment(currentTick)
+    }
 
     override fun generate() {
         ctx.dispatch(Dispatchers.IO) {
@@ -23,8 +32,7 @@ class IncreasingLoadGenerator(
                     delay(increaseDelay.toMillis())
                     val newTick = currentTick + increaseStep
                     channel = ticker((1000 / newTick).toLong(), 0)
-                    currentTick = newTick
-                    Metrics.setCurrentExpectedLoad(newTick)
+                    Counter.builder("current_expected_load").register(meterRegistry).increment(increaseStep)
                 }
             }
         }

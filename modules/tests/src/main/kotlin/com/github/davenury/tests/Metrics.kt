@@ -16,9 +16,4 @@ object Metrics {
     fun bumpDelayInSendingChange() {
         meterRegistry.counter("sending_change_delay").increment()
     }
-
-    fun setCurrentExpectedLoad(value: Double) {
-        meterRegistry.gauge("current_expected_load", value)
-    }
-
 }

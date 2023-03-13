@@ -10,12 +10,10 @@ import java.util.concurrent.Executors
 
 class ConstantLoadGenerator(
     private val constantLoad: String,
-): LoadGenerator {
+) : LoadGenerator {
 
     private val channel: ReceiveChannel<Unit> = ticker(calculateTickerFromLoad(constantLoad), 0)
-    override fun generate() {
-        Metrics.setCurrentExpectedLoad(constantLoad.toDouble())
-    }
+    override fun generate() {}
 
     override suspend fun subscribe(fn: suspend () -> Unit) {
         withContext(ctx) {

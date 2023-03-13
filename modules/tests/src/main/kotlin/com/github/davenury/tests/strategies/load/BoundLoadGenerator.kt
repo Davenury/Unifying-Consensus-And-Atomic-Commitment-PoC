@@ -1,6 +1,7 @@
 package com.github.davenury.tests.strategies.load
 
 import com.github.davenury.tests.Metrics
+import io.micrometer.core.instrument.Gauge
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.ticker
@@ -17,9 +18,7 @@ class BoundLoadGenerator(
     private val sendRequestBreak = timeOfSimulation.dividedBy(overallNumberOfRequests.toLong())
     private val channel: ReceiveChannel<Unit> = ticker(sendRequestBreak.toMillis(), 0)
 
-    override fun generate() {
-        Metrics.setCurrentExpectedLoad(((1 / sendRequestBreak.toMillis()) * 1000).toDouble())
-    }
+    override fun generate() {}
 
     override suspend fun subscribe(fn: suspend () -> Unit) {
         withContext(ctx) {
