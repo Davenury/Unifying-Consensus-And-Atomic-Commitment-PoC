@@ -27,6 +27,7 @@ import strikt.api.expectThrows
 import strikt.assertions.*
 import java.time.Duration
 import java.util.concurrent.Phaser
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.system.measureTimeMillis
 
 @Suppress("HttpUrlsUsage")

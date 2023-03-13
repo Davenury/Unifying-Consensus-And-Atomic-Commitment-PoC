@@ -489,14 +489,14 @@ class RaftConsensusProtocolImpl(
             }
 
             !response.message.success -> {
-                logger.info("Peer ${peerAddress.globalPeerId}  doesn't accept heartbeat, because I am outdated history")
+                logger.info("Peer doesn't accept heartbeat, because I have outdated history")
 
                 if (role == RaftRole.Leader
                     && otherConsensusPeers().any { it.globalPeerId == peer }
                     && executorService != null
                     && isRegular
                 ) {
-                    launchHeartBeatToPeer(peer, delay = heartbeatDelay.dividedBy(4))
+                    launchHeartBeatToPeer(peer, delay = heartbeatDelay)
                 }
 
             }
@@ -810,12 +810,12 @@ class RaftConsensusProtocolImpl(
 
     private fun launchHeartBeatToPeer(
         peer: GlobalPeerId,
-        isRegular: Boolean = false, sendInstant: Boolean = false,
+        isRegular: Boolean = false, sendInstantly: Boolean = false,
         delay: Duration = heartbeatDelay
     ): Job =
         with(CoroutineScope(executorService!!)) {
             launch(MDCContext()) {
-                if (!sendInstant) {
+                if (!sendInstantly) {
                     logger.info("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
                     delay(delay.toMillis())
                 }

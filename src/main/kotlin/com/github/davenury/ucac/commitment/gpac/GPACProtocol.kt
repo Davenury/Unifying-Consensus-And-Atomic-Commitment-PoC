@@ -336,6 +336,7 @@ class GPACProtocolImpl(
 
             val electResponses = electMeResult.responses
 
+
             val acceptVal =
                 if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
 
@@ -533,12 +534,6 @@ class GPACProtocolImpl(
 
         if (reason == Reason.NOT_VALID_LEADER) {
             logger.error("Discarding GPAC for change: ${change.id} as it is not valid leader anymore")
-            return false
-        }
-
-        if (iteration == maxLeaderElectionTries) {
-            changeTimeout(change, "Transaction failed due to too few responses of ft phase.")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             return false
         }
 

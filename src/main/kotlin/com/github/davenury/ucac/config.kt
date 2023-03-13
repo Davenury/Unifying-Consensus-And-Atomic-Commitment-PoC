@@ -52,7 +52,8 @@ data class GpacConfig(
     val retriesBackoffTimeout: Duration = Duration.ofSeconds(120),
     val initialRetriesDelay: Duration = Duration.ofSeconds(0),
     val responsesTimeouts: ResponsesTimeoutsConfig = ResponsesTimeoutsConfig.default(),
-    val ftAgreeRepeatDelay: Duration = Duration.ofMillis(500)
+    val ftAgreeRepeatDelay: Duration = Duration.ofMillis(500),
+    val maxFTAgreeTries: Int = 5,
 )
 data class ResponsesTimeoutsConfig(
     val electTimeout: Duration,
