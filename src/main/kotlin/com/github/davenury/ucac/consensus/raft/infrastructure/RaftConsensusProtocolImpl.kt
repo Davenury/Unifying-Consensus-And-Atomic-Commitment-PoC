@@ -754,7 +754,7 @@ class RaftConsensusProtocolImpl(
             launch(MDCContext()) {
                 var result: ChangeResult? = null
                 while(result == null) {
-                    logger.info("Send request to leader again \n")
+                    logger.info("Send request to leader again")
                     result = try {
                         val response =
                             httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
