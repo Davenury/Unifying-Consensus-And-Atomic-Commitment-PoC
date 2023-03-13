@@ -44,10 +44,10 @@ fun Application.alvinProtocolRouting(protocol: AlvinProtocol) {
 
 
 //      Endpoints for tests
-        get("/consensus/proposed_changes") {
+        get("/alvin/proposed_changes") {
             call.respond(Changes(protocol.getProposedChanges()))
         }
-        get("/consensus/accepted_changes") {
+        get("/alvin/accepted_changes") {
             call.respond(Changes(protocol.getAcceptedChanges()))
         }
     }
