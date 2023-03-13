@@ -29,7 +29,11 @@ enum class Signal {
     TwoPCOnChangeAccepted,
     TwoPCBeforeProposePhase,
     TwoPCOnHandleDecision,
-    AlvinCommitChange
+    AlvinCommitChange,
+    AlvinReceiveProposal,
+    AlvinAfterProposalPhase,
+    AlvinAfterAcceptPhase,
+    AlvinAfterStablePhase
 }
 
 

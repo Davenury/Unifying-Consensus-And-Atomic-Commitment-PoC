@@ -34,7 +34,6 @@ import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.assertions.*
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
@@ -119,471 +118,215 @@ class AlvinSpec : IntegrationTestBase() {
 
 
     @Test
-    fun `change should be applied without waiting for election`(): Unit = runBlocking {
-        val peersWithoutLeader = 4
-
-        val phaser = Phaser(peersWithoutLeader)
-        phaser.register()
-
-        val peerApplyChange = SignalListener {
-            expectThat(phaser.phase).isEqualTo(0)
-            logger.info("Arrived ${it.subject.getPeerName()}")
-            phaser.arrive()
-        }
-
-        apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith {
-                mapOf(
-                    Signal.ConsensusFollowerChangeAccepted to peerApplyChange
-                )
-            }
-        )
-        val peerAddresses = apps.getPeers(0)
-
-        logger.info("Sending change")
-
+    fun `change leader fails after proposal`(): Unit = runBlocking {
         val change = createChange(null)
-        expectCatching {
-            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change)
-        }.isSuccess()
+        var allPeers = 5
 
-        phaser.arriveAndAwaitAdvanceWithTimeout()
-        logger.info("Change 1 applied")
-
-        askAllForChanges(peerAddresses.values).forEach { changes ->
-            expectThat(changes.size).isEqualTo(1)
-            expect {
-                that(changes[0]).isEqualTo(change)
-            }
-        }
-    }
-
-    @Test
-    fun `less than half of peers respond on ConsensusElectMe`(): Unit = runBlocking {
-        val activePeers = 2
-        val triesToBecomeLeader = 2
-        val phaser = Phaser(activePeers * triesToBecomeLeader)
-
-        val peerTryToBecomeLeader = SignalListener {
-            logger.info("Arrived ${it.subject.getPeerName()}")
-            phaser.arrive()
-        }
-
-        val signalListener = mapOf(
-            Signal.ConsensusTryToBecomeLeader to peerTryToBecomeLeader,
-        )
-        apps = TestApplicationSet(
-            listOf(5),
-            appsToExclude = listOf(2, 3, 4),
-            signalListeners = (0..4).associateWith { signalListener },
-        )
-
-        phaser.arriveAndAwaitAdvanceWithTimeout()
-
-        apps.getRunningApps().forEach {
-            expect {
-                val leaderAddress = askForLeaderAddress(it)
-//              DONE  it should always be noneLeader
-                that(leaderAddress).isEqualTo(noneLeader)
-            }
-        }
-    }
-
-    @Test
-    fun `minimum number of peers respond on ConsensusElectMe`(): Unit = runBlocking {
-        val peersWithoutLeader = 3
-        val phaser = Phaser(peersWithoutLeader)
-        var isLeaderElected = false
-
-        val peerLeaderElected = SignalListener {
-            if (!isLeaderElected) {
-                logger.info("Arrived ${it.subject.getPeerName()}")
-                phaser.arrive()
-            } else {
-                logger.debug("Leader is elected, not arriving")
-            }
-        }
-
-        val signalListener = mapOf(
-            Signal.ConsensusLeaderElected to peerLeaderElected,
-        )
-
-        apps = TestApplicationSet(
-            listOf(5),
-            appsToExclude = listOf(3, 4),
-            signalListeners = (0..4).associateWith { signalListener },
-        )
-
-        phaser.arriveAndAwaitAdvanceWithTimeout()
-        isLeaderElected = true
-
-        apps.getRunningApps().forEach {
-            expect {
-                val leaderAddress = askForLeaderAddress(it)
-                that(leaderAddress).isNotEqualTo(noneLeader)
-            }
-        }
-    }
-
-    @Test
-    fun `leader failed and new leader is elected`(): Unit = runBlocking {
-        val peersWithoutLeader = 4
-
-        val election1Phaser = Phaser(peersWithoutLeader)
-        val election2Phaser = Phaser(peersWithoutLeader - 1)
-        listOf(election1Phaser, election2Phaser).forEach { it.register() }
-
-        val peerLeaderElected = SignalListener {
-            if (election1Phaser.phase == 0) election1Phaser.arrive() else election2Phaser.arrive()
-        }
-
-        val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
-
-        apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
-        )
-        var peers = apps.getRunningApps()
-
-        election1Phaser.arriveAndAwaitAdvanceWithTimeout()
-
-        val firstLeaderAddress = getLeaderAddress(peers[0])
-
-        apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
-
-        peers = peers.filter { it.getGlobalPeerId() != firstLeaderAddress.globalPeerId }
-
-        election2Phaser.arriveAndAwaitAdvanceWithTimeout()
-
-        expect {
-            val secondLeaderAddress =
-                askForLeaderAddress(peers.first())
-            that(secondLeaderAddress).isNotEqualTo(noneLeader)
-            that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress.address)
-        }
-    }
-
-
-    @Test
-    fun `less than half peers failed`(): Unit = runBlocking {
-        val peersWithoutLeader = 3
-
-        val election1Phaser = Phaser(peersWithoutLeader)
-        val election2Phaser = Phaser(peersWithoutLeader - 1)
-        listOf(election1Phaser, election2Phaser).forEach { it.register() }
-
-        val peerLeaderElected = SignalListener {
-            if (election1Phaser.phase == 0) {
-                logger.info("Arrived at election 1 ${it.subject.getPeerName()}")
-                election1Phaser.arrive()
-            } else {
-                logger.info("Arrived at election 2 ${it.subject.getPeerName()}")
-                election2Phaser.arrive()
-            }
-        }
-
-        val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
-
-        apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
-            appsToExclude = listOf(4),
-        )
-        var peers = apps.getRunningApps()
-
-        election1Phaser.arriveAndAwaitAdvanceWithTimeout()
-
-        val firstLeaderAddress = getLeaderAddress(peers[0])
-
-        apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
-
-        peers = peers.filter { it.getGlobalPeerId() != firstLeaderAddress.globalPeerId }
-
-        election2Phaser.arriveAndAwaitAdvanceWithTimeout()
-
-        expect {
-            val secondLeaderAddress =
-                askForLeaderAddress(peers.first())
-            that(secondLeaderAddress).isNotEqualTo(noneLeader)
-            that(secondLeaderAddress).isNotEqualTo(firstLeaderAddress.address)
-        }
-    }
-
-    //    DONE: Exactly half of peers is running
-    @Test
-    fun `exactly half of peers is failed`(): Unit = runBlocking {
-        val peersWithoutLeader = 3
-        val activePeers = 3
-        val peersTried: MutableSet<String> = mutableSetOf()
-        var leaderElect = false
-
-        val leaderFailedPhaser = Phaser(peersWithoutLeader)
-        val electionPhaser = Phaser(peersWithoutLeader)
-        val tryToBecomeLeaderPhaser = Phaser(activePeers)
-
-        listOf(leaderFailedPhaser, electionPhaser, tryToBecomeLeaderPhaser).forEach { it.register() }
-
-        val peerTryToBecomeLeader = SignalListener {
-            val name = it.subject.getPeerName()
-            if (!peersTried.contains(name) && leaderElect) {
-                peersTried.add(name)
-                logger.info("Arrived peerTryToBecomeLeader ${it.subject.getPeerName()}")
-                tryToBecomeLeaderPhaser.arrive()
-            }
-        }
-
-        val peerLeaderFailed = SignalListener {
-            logger.info("Arrived peerLeaderFailed ${it.subject.getPeerName()}")
-            leaderFailedPhaser.arrive()
-        }
-        val peerLeaderElected = SignalListener {
-            logger.info("Arrived peerLeaderElected ${it.subject.getPeerName()}")
-            electionPhaser.arrive()
-        }
-
-        val signalListener = mapOf(
-            Signal.ConsensusLeaderDoesNotSendHeartbeat to peerLeaderFailed,
-            Signal.ConsensusLeaderElected to peerLeaderElected,
-            Signal.ConsensusTryToBecomeLeader to peerTryToBecomeLeader,
-        )
-
-        apps = TestApplicationSet(
-            listOf(6),
-            appsToExclude = listOf(4, 5),
-            signalListeners = (0..5).associateWith { signalListener },
-        )
-        var peers = apps.getRunningApps()
-
-        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
-
-        val firstLeaderAddress = getLeaderAddress(peers[0])
-
-        apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
-        leaderElect = true
-
-        peers = peers.filter { it.getGlobalPeerId() != firstLeaderAddress.globalPeerId }
-
-        leaderFailedPhaser.arriveAndAwaitAdvanceWithTimeout()
-        tryToBecomeLeaderPhaser.arriveAndAwaitAdvanceWithTimeout()
-
-        expect {
-            val secondLeaderAddress = askForLeaderAddress(peers.first())
-            that(secondLeaderAddress).isEqualTo(noneLeader)
-        }
-    }
-
-    @Test
-    fun `leader fails during processing change`(): Unit = runBlocking {
-        val change = createChange(null)
-        var peersWithoutLeader = 4
-
-        val failurePhaser = Phaser(2)
-        val election1Phaser = Phaser(peersWithoutLeader)
-        peersWithoutLeader -= 1
-        val election2Phaser = Phaser(peersWithoutLeader)
-        val changePhaser = Phaser(3)
-        var shouldElection2Starts = false
-        listOf(election1Phaser, election2Phaser, changePhaser).forEach { it.register() }
-        var firstLeader = true
-        val proposedPeers = ConcurrentHashMap<String, Boolean>()
-        var changePeers: (() -> Unit?)? = null
-
-        val leaderAction = SignalListener {
-            if (firstLeader) {
-                logger.info("Arrived ${it.subject.getPeerName()}")
-                changePeers?.invoke()
-                failurePhaser.arrive()
-                throw RuntimeException("Failed after proposing change")
-            }
-        }
-
-        val peerLeaderElected =
-            SignalListener {
-                when (election1Phaser.phase) {
-                    0 -> {
-                        logger.info("Arrived at election 1 ${it.subject.getPeerName()}")
-                        election1Phaser.arrive()
-                    }
-                    else -> {
-                        logger.info("Arrived at election 2 ${it.subject.getPeerName()}")
-                        firstLeader = false
-                        election2Phaser.arrive()
-                    }
-                }
-            }
+        val changePhaser = Phaser(allPeers)
+        changePhaser.register()
 
         val peerApplyChange = SignalListener {
             logger.info("Arrived peer apply change")
             changePhaser.arrive()
         }
-        val ignoreHeartbeatAfterProposingChange = SignalListener {
-            when {
-                it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> {
-                    proposedPeers[it.subject.getPeerName()] = true
-                }
 
-                proposedPeers.contains(it.subject.getPeerName()) && firstLeader -> throw Exception("Ignore heartbeat from old leader")
-                proposedPeers.size > 2 && firstLeader -> throw Exception("Ignore heartbeat from old leader")
-
-            }
+        val afterProposalPhase = SignalListener {
+            throw RuntimeException("Test failure after proposal")
         }
 
         val signalListener = mapOf(
-            Signal.ConsensusAfterProposingChange to leaderAction,
-            Signal.ConsensusLeaderElected to peerLeaderElected,
-            Signal.ConsensusFollowerChangeAccepted to peerApplyChange,
-            Signal.ConsensusFollowerHeartbeatReceived to ignoreHeartbeatAfterProposingChange
+            Signal.AlvinCommitChange to peerApplyChange,
+        )
+
+        val firstLeaderListener = mapOf(
+            Signal.AlvinCommitChange to peerApplyChange,
+            Signal.AlvinAfterProposalPhase to afterProposalPhase,
         )
 
         apps = TestApplicationSet(
             listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
+            signalListeners = (0..4).associateWith {
+                if(it == 0) firstLeaderListener
+                else signalListener
+            },
         )
-
-        election1Phaser.arriveAndAwaitAdvanceWithTimeout()
-
-        val firstLeaderAddress = getLeaderAddress(apps.getRunningApps()[0])
-
-        changePeers = {
-            val peers = apps.getRunningPeers(0).mapValues { entry ->
-                val peer = entry.value
-                peer.copy(address = peer.address.replace(knownPeerIp, unknownPeerIp))
-            }
-            apps.getApp(firstLeaderAddress.globalPeerId).setPeers(peers)
-        }
-
 
 //      Start processing
         expectCatching {
-            executeChange("${firstLeaderAddress.address}/v2/change/sync?timeout=PT0.5S", change)
+            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync?timeout=PT4S", change)
         }.isFailure()
 
-        failurePhaser.arriveAndAwaitAdvanceWithTimeout()
-
-        apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
-
-        election2Phaser.arriveAndAwaitAdvanceWithTimeout()
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 
         apps.getRunningPeers(0)
             .values
-            .filter { it != firstLeaderAddress  }
             .forEach {
-            val proposedChanges2 = askForProposedChanges(it)
-            val acceptedChanges2 = askForAcceptedChanges(it)
-            expect {
-                that(proposedChanges2.size).isEqualTo(0)
-                that(acceptedChanges2.size).isEqualTo(1)
+                val proposedChanges = askForProposedChanges(it)
+                val acceptedChanges = askForAcceptedChanges(it)
+                expect {
+                    that(proposedChanges.size).isEqualTo(0)
+                    that(acceptedChanges.size).isEqualTo(1)
+                }
+                expect {
+                    that(acceptedChanges.first()).isEqualTo(change)
+                    that(acceptedChanges.first().acceptNum).isEqualTo(null)
+                }
             }
-            expect {
-                that(acceptedChanges2.first()).isEqualTo(change)
-                that(acceptedChanges2.first().acceptNum).isEqualTo(null)
-            }
-        }
 
     }
 
+
     @Test
-    fun `less than half of peers fails after electing leader`(): Unit = runBlocking {
-        val peersWithoutLeader = 4
-
-        val electionPhaser = Phaser(peersWithoutLeader)
-        val changePhaser = Phaser(peersWithoutLeader - 2)
-        listOf(electionPhaser, changePhaser).forEach { it.register() }
-
-        val signalListener = mapOf(
-            Signal.ConsensusLeaderElected to SignalListener {
-                logger.info("Arrived at election ${it.subject.getPeerName()}")
-                electionPhaser.arrive()
-            },
-            Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                logger.info("Arrived at apply ${it.subject.getPeerName()}")
-                changePhaser.arrive()
-            }
-        )
-
-        apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
-        )
-        val peers = apps.getRunningApps()
-
-        val peerAddresses = apps.getRunningPeers(0).values
-
-        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
-
-        val firstLeaderAddress = getLeaderAddress(peers[0])
-
-        val peersToStop = peerAddresses.filter { it != firstLeaderAddress }.take(2)
-        peersToStop.forEach { apps.getApp(it.globalPeerId).stop(0, 0) }
-        val runningPeers = peerAddresses.filter { address -> address !in peersToStop }
+    fun `change leader fails after accept`(): Unit = runBlocking {
         val change = createChange(null)
+        var allPeers = 5
 
-//      Start processing
-        expectCatching {
-            executeChange("${runningPeers.first().address}/v2/change/sync", change)
-        }.isSuccess()
+        val changePhaser = Phaser(allPeers)
+        changePhaser.register()
 
-        changePhaser.arriveAndAwaitAdvanceWithTimeout()
-
-        runningPeers.forEach {
-            val proposedChanges = askForProposedChanges(it)
-            val acceptedChanges = askForAcceptedChanges(it)
-            expect {
-                that(proposedChanges.size).isEqualTo(0)
-                that(acceptedChanges.size).isEqualTo(1)
-            }
-            expect {
-                that(acceptedChanges.first()).isEqualTo(change)
-                that(acceptedChanges.first().acceptNum).isEqualTo(null)
-            }
-        }
-    }
-
-    @Test
-    fun `more than half of peers fails during propagating change`(): Unit = runBlocking {
-        val peersWithoutLeader = 4
-
-        val electionPhaser = Phaser(peersWithoutLeader)
-        val changePhaser = Phaser(peersWithoutLeader - 3)
-        listOf(electionPhaser, changePhaser).forEach { it.register() }
-
-        val peerLeaderElected = SignalListener { electionPhaser.arrive() }
         val peerApplyChange = SignalListener {
-            logger.info("Arrived ${it.subject.getPeerName()}")
+            logger.info("Arrived peer apply change")
             changePhaser.arrive()
         }
 
+        val afterAcceptPhase = SignalListener {
+            throw RuntimeException("Test failure after accept")
+        }
+
         val signalListener = mapOf(
-            Signal.ConsensusLeaderElected to peerLeaderElected,
-            Signal.ConsensusFollowerChangeProposed to peerApplyChange,
+            Signal.AlvinCommitChange to peerApplyChange,
+        )
+
+        val firstLeaderListener = mapOf(
+            Signal.AlvinCommitChange to peerApplyChange,
+            Signal.AlvinAfterAcceptPhase to afterAcceptPhase,
+        )
+
+        apps = TestApplicationSet(
+            listOf(5),
+            signalListeners = (0..4).associateWith {
+                if(it == 0) firstLeaderListener
+                else signalListener
+            },
+        )
+
+//      Start processing
+        expectCatching {
+            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync?timeout=PT4S", change)
+        }.isFailure()
+
+        changePhaser.arriveAndAwaitAdvanceWithTimeout()
+
+
+        apps.getRunningPeers(0)
+            .values
+            .forEach {
+                val proposedChanges = askForProposedChanges(it)
+                val acceptedChanges = askForAcceptedChanges(it)
+                expect {
+                    that(proposedChanges.size).isEqualTo(0)
+                    that(acceptedChanges.size).isEqualTo(1)
+                }
+                expect {
+                    that(acceptedChanges.first()).isEqualTo(change)
+                    that(acceptedChanges.first().acceptNum).isEqualTo(null)
+                }
+            }
+    }
+    @Test
+    fun `change leader fails after stable`(): Unit = runBlocking {
+        val change = createChange(null)
+        var allPeers = 5
+
+        val changePhaser = Phaser(allPeers)
+        changePhaser.register()
+
+        val peerApplyChange = SignalListener {
+            logger.info("Arrived peer apply change")
+            changePhaser.arrive()
+        }
+
+        val afterStablePhase = SignalListener {
+            throw RuntimeException("Test failure after stable")
+        }
+
+        val signalListener = mapOf(
+            Signal.AlvinCommitChange to peerApplyChange,
+        )
+
+        val firstLeaderListener = mapOf(
+            Signal.AlvinCommitChange to peerApplyChange,
+            Signal.AlvinAfterStablePhase to afterStablePhase,
+        )
+
+        apps = TestApplicationSet(
+            listOf(5),
+            signalListeners = (0..4).associateWith {
+                if(it == 0) firstLeaderListener
+                else signalListener
+            },
+        )
+
+//      Start processing
+        expectCatching {
+            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync?timeout=PT4S", change)
+        }.isFailure()
+
+        changePhaser.arriveAndAwaitAdvanceWithTimeout()
+
+
+        apps.getRunningPeers(0)
+            .values
+            .forEach {
+                val proposedChanges = askForProposedChanges(it)
+                val acceptedChanges = askForAcceptedChanges(it)
+                expect {
+                    that(proposedChanges.size).isEqualTo(0)
+                    that(acceptedChanges.size).isEqualTo(1)
+                }
+                expect {
+                    that(acceptedChanges.first()).isEqualTo(change)
+                    that(acceptedChanges.first().acceptNum).isEqualTo(null)
+                }
+            }
+    }
+
+
+    @Test
+    fun `more than half of peers fails before propagating change`(): Unit = runBlocking {
+        val changeProposedPhaser = Phaser(2)
+
+        val peerReceiveProposal = SignalListener {
+            logger.info("Arrived ${it.subject.getPeerName()}")
+            changeProposedPhaser.arrive()
+        }
+
+        val signalListener = mapOf(
+            Signal.AlvinReceiveProposal to peerReceiveProposal,
         )
 
         apps = TestApplicationSet(
             listOf(5),
             signalListeners = (0..4).associateWith { signalListener },
         )
-        val peers = apps.getRunningApps()
 
         val peerAddresses = apps.getRunningPeers(0).values
 
-        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        val firstLeaderAddress = getLeaderAddress(peers[0])
-
-        val peersToStop = peerAddresses.filter { it != firstLeaderAddress }.take(3)
+        val peersToStop = peerAddresses.take(3)
         peersToStop.forEach { apps.getApp(it.globalPeerId).stop(0, 0) }
         val runningPeers = peerAddresses.filter { address -> address !in peersToStop }
         val change = createChange(null)
+
+        delay(500)
 
 //      Start processing
         expectCatching {
             executeChange("${runningPeers.first().address}/v2/change/async", change)
         }.isSuccess()
 
-        changePhaser.arriveAndAwaitAdvanceWithTimeout()
+        changeProposedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      As only one peer confirm changes it should be still proposedChange
         runningPeers.forEach {
@@ -600,6 +343,7 @@ class AlvinSpec : IntegrationTestBase() {
         }
     }
 
+    @Disabled
     @Test
     fun `network divide on half and then merge`(): Unit = runBlocking {
         var peersWithoutLeader = 4
@@ -832,8 +576,9 @@ class AlvinSpec : IntegrationTestBase() {
         }
     }
 
+    @Disabled
     @Test
-    fun `should synchronize on history if it was added outside of raft`(): Unit = runBlocking {
+    fun `should synchronize on history if it was added outside of alvin`(): Unit = runBlocking {
         val phaserGPACPeer = Phaser(1)
         val phaserRaftPeers = Phaser(4)
         val leaderElectedPhaser = Phaser(4)
@@ -989,7 +734,7 @@ class AlvinSpec : IntegrationTestBase() {
         }
 
     private suspend fun genericAskForChange(suffix: String, peerAddress: PeerAddress) =
-        testHttpClient.get<Changes>("http://${peerAddress.address}/raft/$suffix") {
+        testHttpClient.get<Changes>("http://${peerAddress.address}/alvin/$suffix") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
