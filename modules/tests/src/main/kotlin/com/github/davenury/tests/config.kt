@@ -21,7 +21,6 @@ data class Config(
     val notificationServiceAddress: String,
     val numberOfRequestsToSendToSinglePeerset: Int?,
     val numberOfRequestsToSendToMultiplePeersets: Int?,
-    val durationOfTest: Duration,
     val maxPeersetsInChange: Int,
     val sendingStrategy: SendingStrategy,
     val createChangeStrategy: CreatingChangeStrategy,
@@ -29,7 +28,6 @@ data class Config(
     val acProtocol: ACProtocolConfig,
     // TODO - after implementing multiple consensus this might come in handy
     val consensusProtocol: String? = null,
-    val constantLoad: String? = null,
     val fixedPeersetsInChange: String? = null,
     val loadGeneratorConfig: LoadGeneratorConfig
 ) {

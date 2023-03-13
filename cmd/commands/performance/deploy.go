@@ -205,7 +205,7 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 		"NOTIFICATION_SERVICE_ADDRESS":    "http://notification-service:8080",
 		"SINGLE_PEERSET_CHANGES_NUMBER":   fmt.Sprintf("%d", config.SingleRequestsNumber),
 		"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", config.MultipleRequestsNumber),
-		"TEST_DURATION":                   config.TestDuration,
+		"TIME_OF_SIMULATION":              config.TestDuration,
 		"MAX_PEERSETS_IN_CHANGE":          fmt.Sprintf("%d", config.MaxPeersetsInChange),
 		"TESTS_SENDING_STRATEGY":          config.TestsSendingStrategy,
 		"TESTS_CREATING_CHANGES_STRATEGY": config.TestsCreatingChangeStrategy,
@@ -215,6 +215,11 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 		"CONSENSUS_PROTOCOL":              config.ConsensusProtocol,
 		"LOKI_BASE_URL":                   fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 		"NAMESPACE":                       config.PerformanceNamespace,
+		"LOAD_GENERATOR_TYPE":             config.LoadGeneratorType,
+		"CONSTANT_LOAD":                   config.ConstantLoad,
+		"INCREASING_LOAD_BOUND":           fmt.Sprintf("%f", config.IncreasingLoadBound),
+		"INCREASING_LOAD_INCREASE_DELAY":  config.IncreasingLoadIncreaseDelay,
+		"INCREASING_LOAD_INCREASE_STEP":   fmt.Sprintf("%f", config.IncreasingLoadIncreaseStep),
 	}
 
 	if config.FixedPeersetsInChange != "" {

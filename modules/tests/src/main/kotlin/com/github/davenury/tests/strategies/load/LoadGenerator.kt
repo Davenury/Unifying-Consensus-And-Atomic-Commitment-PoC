@@ -10,7 +10,7 @@ interface LoadGenerator {
     companion object {
         fun createFromConfig(config: Config): LoadGenerator =
             when (config.loadGeneratorConfig.loadGeneratorType.lowercase()) {
-                "constant" -> ConstantLoadGenerator(config.constantLoad!!)
+                "constant" -> ConstantLoadGenerator(config.loadGeneratorConfig.constantLoad!!)
                 "bound" -> BoundLoadGenerator(
                     config.numberOfRequestsToSendToSinglePeerset!! + config.numberOfRequestsToSendToMultiplePeersets!!,
                     config.loadGeneratorConfig.timeOfSimulation!!
