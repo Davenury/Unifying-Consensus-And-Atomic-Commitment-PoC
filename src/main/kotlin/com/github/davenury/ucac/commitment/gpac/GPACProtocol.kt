@@ -304,7 +304,7 @@ class GPACProtocolImpl(
     }
 
     private fun List<List<ElectedYou>>.getAcceptVal(change: Change): Accept {
-        val thresholds = getPeersFromChange(change).map { it.size / 2 }
+        val thresholds = getPeersFromChange(change).map { (it.size + 1) / 2 }
         val responses = this.map { it.count { it.acceptVal == Accept.COMMIT } }
 
         return if (responses.zip(thresholds).all { (res, threshold) -> res >= threshold }) Accept.COMMIT else Accept.ABORT
