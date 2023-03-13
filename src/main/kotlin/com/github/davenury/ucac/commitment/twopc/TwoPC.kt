@@ -8,6 +8,7 @@ import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.future.await
+import okhttp3.internal.notify
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
@@ -155,7 +156,9 @@ class TwoPC(
             throw e
         }
 
-        changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
+        changeIdToCompletableFuture[change.id]!!
+            .complete(ChangeResult(ChangeResult.Status.SUCCESS))
+        ChangeNotifier.get(peerResolver).notify(change, ChangeResult(ChangeResult.Status.SUCCESS))
     }
 
     fun getChange(changeId: String): Change {

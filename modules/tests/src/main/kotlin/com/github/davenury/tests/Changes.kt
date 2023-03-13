@@ -36,12 +36,13 @@ class Changes(
     suspend fun handleNotification(notification: Notification) = notificationMutex.withLock {
         logger.info("Handling notification: $notification")
         if (shouldStartHandlingNotification(notification)) {
-            val change = try {
-                httpClient.get("http://${notification.sender.address}/v2/last-change")
-            } catch (e: Exception) {
-                notification.change
-            }
-            (change.peersets.map { it.peersetId }).forEach { peersetId ->
+            (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
+                val change = try {
+                    // TODO - change to valid peer address
+                    httpClient.get("http://peer0-peerset$peersetId-service:8081/v2/last-change")
+                } catch (e: Exception) {
+                    notification.change
+                }
                 if (notification.result.status == ChangeResult.Status.SUCCESS) {
                     val parentId = change.toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
