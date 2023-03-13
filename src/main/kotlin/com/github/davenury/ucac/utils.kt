@@ -12,7 +12,6 @@ val httpClient = HttpClient(OkHttp) {
     }
     install(HttpTimeout) {
         requestTimeoutMillis = 5_000
-        connectTimeoutMillis = 100
     }
 }
 val raftHttpClient = HttpClient(OkHttp) {

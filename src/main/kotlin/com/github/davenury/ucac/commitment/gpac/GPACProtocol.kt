@@ -277,8 +277,8 @@ class GPACProtocolImpl(
 
             val electResponses = electMeResult.responses
 
-            val acceptVal =
-                if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+
+            val acceptVal = electResponses.getAcceptVal(change)
 
             this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
 
@@ -301,6 +301,13 @@ class GPACProtocolImpl(
         } catch (e: Exception) {
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT, e.message))
         }
+    }
+
+    private fun List<List<ElectedYou>>.getAcceptVal(change: Change): Accept {
+        val thresholds = getPeersFromChange(change).map { it.size / 2 }
+        val responses = this.map { it.count { it.acceptVal == Accept.COMMIT } }
+
+        return if (responses.zip(thresholds).all { (res, threshold) -> res >= threshold }) Accept.COMMIT else Accept.ABORT
     }
 
     override suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int) {
