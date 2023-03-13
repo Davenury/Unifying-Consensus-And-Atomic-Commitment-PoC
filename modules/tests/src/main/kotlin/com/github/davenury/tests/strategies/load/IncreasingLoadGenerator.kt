@@ -1,5 +1,6 @@
 package com.github.davenury.tests.strategies.load
 
+import com.github.davenury.tests.Metrics
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.ticker
@@ -23,6 +24,7 @@ class IncreasingLoadGenerator(
                     val newTick = currentTick + increaseStep
                     channel = ticker((1000 / newTick).toLong(), 0)
                     currentTick = newTick
+                    Metrics.setCurrentExpectedLoad(newTick)
                 }
             }
         }

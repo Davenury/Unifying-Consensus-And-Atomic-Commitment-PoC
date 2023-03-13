@@ -1,5 +1,6 @@
 package com.github.davenury.tests.strategies.load
 
+import com.github.davenury.tests.Metrics
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.ticker
@@ -8,11 +9,13 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 
 class ConstantLoadGenerator(
-    constantLoad: String,
+    private val constantLoad: String,
 ): LoadGenerator {
 
     private val channel: ReceiveChannel<Unit> = ticker(calculateTickerFromLoad(constantLoad), 0)
-    override fun generate() {}
+    override fun generate() {
+        Metrics.setCurrentExpectedLoad(constantLoad.toDouble())
+    }
 
     override suspend fun subscribe(fn: suspend () -> Unit) {
         withContext(ctx) {
@@ -27,7 +30,7 @@ class ConstantLoadGenerator(
 
     override fun getName(): String = "ConstantLoadGenerator"
 
-    private fun calculateTickerFromLoad(load: String) = (1.0 / load.toInt() * 1000).toLong()
+    private fun calculateTickerFromLoad(load: String) = (1.0 / load.toDouble() * 1000).toLong()
 
     companion object {
         private val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
