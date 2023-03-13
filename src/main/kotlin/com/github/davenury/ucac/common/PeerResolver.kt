@@ -1,5 +1,8 @@
 package com.github.davenury.ucac.common
 
+import com.github.davenury.common.GlobalPeerId
+import com.github.davenury.common.PeerAddress
+
 /**
  * @author Kamil Jarosz
  */

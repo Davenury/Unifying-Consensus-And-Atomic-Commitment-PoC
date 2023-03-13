@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.utils
 
-import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.common.GlobalPeerId
 import org.testcontainers.containers.FailureDetectingExternalResource
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.Network

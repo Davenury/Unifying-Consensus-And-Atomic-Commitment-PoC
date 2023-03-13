@@ -1,7 +1,7 @@
 package com.github.davenury.ucac
 
-import com.github.davenury.ucac.common.GlobalPeerId
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.GlobalPeerId
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
 import java.time.Duration
 

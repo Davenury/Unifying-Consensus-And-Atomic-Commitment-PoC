@@ -9,9 +9,9 @@ import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.gpac.GPACQueue
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
-import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.common.GlobalPeerId
 import com.github.davenury.ucac.common.HistoryFactory
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
@@ -33,7 +33,6 @@ import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -154,6 +153,7 @@ class ApplicationUcac constructor(
             twoPC!!,
             history,
             config,
+            peerResolver
         )
 
         install(CallLogging) {
@@ -262,7 +262,7 @@ class ApplicationUcac constructor(
         historyRouting(history)
         apiV2Routing(service!!, peerResolver.currentPeer())
         gpacProtocolRouting(gpacQueue)
-        consensusProtocolRouting(consensusProtocol!!)
+        consensusProtocolRouting(consensusProtocol!!, peerResolver)
         twoPCRouting(twoPC!!)
 
         runBlocking {

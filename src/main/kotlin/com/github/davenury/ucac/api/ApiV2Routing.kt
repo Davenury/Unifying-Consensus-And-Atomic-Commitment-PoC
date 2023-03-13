@@ -1,7 +1,7 @@
 package com.github.davenury.ucac.api
 
 import com.github.davenury.common.*
-import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.common.GlobalPeerId
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
@@ -121,6 +121,10 @@ fun Application.apiV2Routing(
 
         get("/v2/change") {
             call.respond(service.getChanges())
+        }
+
+        get("/v2/last-change") {
+            call.respond(service.getLastChange() ?: HttpStatusCode.NotFound)
         }
     }
 }

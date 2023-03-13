@@ -58,7 +58,8 @@ class ChangesTest {
                     subject.handleNotification(
                         Notification(
                             sender.getLastChange(),
-                            ChangeResult(ChangeResult.Status.SUCCESS)
+                            ChangeResult(ChangeResult.Status.SUCCESS),
+                            PeerAddress(GlobalPeerId(0, 0), "peer0-peerset0-service")
                         )
                     )
                 }
@@ -198,7 +199,8 @@ class ChangesTest {
                 changes.handleNotification(
                     Notification(
                         singleChange,
-                        ChangeResult(ChangeResult.Status.SUCCESS)
+                        ChangeResult(ChangeResult.Status.SUCCESS),
+                        PeerAddress(GlobalPeerId(0, 0), "peer0-peerset0-service")
                     )
                 )
             }

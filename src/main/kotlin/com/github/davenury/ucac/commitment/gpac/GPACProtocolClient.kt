@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.commitment.gpac
 
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.features.*

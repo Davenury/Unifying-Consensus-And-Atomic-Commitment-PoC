@@ -7,6 +7,7 @@ import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
+import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
@@ -22,10 +23,11 @@ class ApiV2Service(
     twoPC: TwoPC,
     private val history: History,
     private var config: Config,
+    peerResolver: PeerResolver,
 ) {
 
     private val queue: Channel<ProcessorJob> = Channel(Channel.Factory.UNLIMITED)
-    private val worker = Worker(queue, gpacFactory, consensusProtocol, twoPC)
+    private val worker = Worker(queue, gpacFactory, consensusProtocol, twoPC, peerResolver)
     private val workerThread: Thread = Thread(worker)
 
     init {
@@ -34,6 +36,10 @@ class ApiV2Service(
 
     fun getChanges(): Changes {
         return Changes.fromHistory(history)
+    }
+
+    fun getLastChange(): Change? {
+        return Change.fromHistoryEntry(history.getCurrentEntry())
     }
 
     fun getChangeById(id: String): Change? {

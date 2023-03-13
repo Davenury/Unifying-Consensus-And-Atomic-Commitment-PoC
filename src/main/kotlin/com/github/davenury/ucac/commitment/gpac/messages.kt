@@ -2,7 +2,7 @@ package com.github.davenury.ucac.commitment.gpac
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.github.davenury.common.Change
-import com.github.davenury.ucac.common.GlobalPeerId
+import com.github.davenury.common.GlobalPeerId
 
 
 enum class Accept {

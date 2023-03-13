@@ -2,6 +2,7 @@ package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
 import com.github.davenury.ucac.common.ChangeNotifier
+import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusHeartbeat
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProposeChange
@@ -16,7 +17,7 @@ import org.slf4j.LoggerFactory
 
 data class CurrentLeaderDto(val currentLeaderPeerId: Int?)
 
-fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
+fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol, peerResolver: PeerResolver) {
     routing {
         // głosujemy na leadera
         post("/consensus/request_vote") {
@@ -35,7 +36,7 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
             val message: ConsensusProposeChange = call.receive()
             val result = protocol.handleProposeChange(message).await()
                 .also {
-                    ChangeNotifier.notify(message, it)
+                    ChangeNotifier.get(peerResolver = peerResolver).notify(message, it)
                 }
             call.respond(result)
         }

@@ -13,7 +13,9 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-object ChangeNotifier {
+class ChangeNotifier(
+    private val peerResolver: PeerResolver
+) {
     private val executor: ExecutorService = Executors.newCachedThreadPool()
 
     fun notify(change: Change, changeResult: ChangeResult) {
@@ -36,7 +38,7 @@ object ChangeNotifier {
         try {
             val response = httpClient.post<HttpStatement>(notificationUrl) {
                 contentType(ContentType.Application.Json)
-                body = Notification(change, changeResult)
+                body = Notification(change, changeResult, sender = peerResolver.currentPeerAddress())
             }
             logger.info("Response from notifier: ${response.execute().status.value}")
         } catch (e: Exception) {
@@ -46,4 +48,14 @@ object ChangeNotifier {
     }
 
     private val logger = LoggerFactory.getLogger("ChangeNotifier")
+
+    companion object {
+        private var instance: ChangeNotifier? = null
+        fun get(peerResolver: PeerResolver): ChangeNotifier {
+            if (instance == null) {
+                instance = ChangeNotifier(peerResolver)
+            }
+            return instance!!
+        }
+    }
 }

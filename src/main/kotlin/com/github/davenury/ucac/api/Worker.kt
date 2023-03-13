@@ -7,6 +7,7 @@ import com.github.davenury.common.ProtocolName
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.ChangeNotifier
+import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
@@ -21,6 +22,7 @@ class Worker(
     private val gpacFactory: GPACFactory,
     private val consensusProtocol: ConsensusProtocol,
     private val twoPC: TwoPC,
+    private val peerResolver: PeerResolver,
     passMdc: Boolean = true
 ) : Runnable {
     private var mdc: MutableMap<String, String>? = if (passMdc) {
@@ -69,7 +71,7 @@ class Worker(
             job.completableFuture.complete(it)
             Metrics.stopTimer(job.change.id, job.protocolName.name.lowercase(), it)
             Metrics.bumpChangeProcessed(it, job.protocolName.name.lowercase())
-            ChangeNotifier.notify(job.change, it)
+            ChangeNotifier.get(peerResolver = peerResolver).notify(job.change, it)
         }.await()
     }
 

@@ -7,6 +7,7 @@ import com.github.davenury.common.Notification
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
 import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
+import io.ktor.client.request.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
@@ -32,11 +33,16 @@ class Changes(
     suspend fun handleNotification(notification: Notification) = notificationMutex.withLock {
         logger.info("Handling notification: $notification")
         if (shouldStartHandlingNotification(notification)) {
-            (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
+            val change = try {
+                httpClient.get("http://${notification.sender.address}/v2/last-change")
+            } catch (e: Exception) {
+                notification.change
+            }
+            (change.peersets.map { it.peersetId }).forEach { peersetId ->
                 if (notification.result.status == ChangeResult.Status.SUCCESS) {
-                    val parentId = notification.change.toHistoryEntry(peersetId).getId()
+                    val parentId = change.toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
-                    logger.info("Setting new parent id for peerset $peersetId: $parentId, change was for ${(notification.change as AddUserChange).userName}")
+                    logger.info("Setting new parent id for peerset $peersetId: $parentId, change was for ${(change as AddUserChange).userName}")
                 }
             }
             getPeersStrategy.handleNotification(notification)
@@ -53,6 +59,7 @@ class Changes(
             }
         }
         if (notification.result.status != ChangeResult.Status.SUCCESS) {
+            handledChanges[notification.change.id] = 1
             return true
         }
         handledChanges[notification.change.id] = handledChanges.getOrDefault(notification.change.id, 0) + 1

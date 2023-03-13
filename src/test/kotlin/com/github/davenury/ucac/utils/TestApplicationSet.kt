@@ -3,8 +3,8 @@ package com.github.davenury.ucac.utils
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
-import com.github.davenury.ucac.common.GlobalPeerId
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.GlobalPeerId
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.createApplication
 import org.slf4j.LoggerFactory
 import java.util.*

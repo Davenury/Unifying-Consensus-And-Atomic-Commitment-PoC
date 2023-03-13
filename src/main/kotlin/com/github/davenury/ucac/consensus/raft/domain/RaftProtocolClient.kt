@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.raftHttpClient
 import io.ktor.client.request.*
 import io.ktor.http.*

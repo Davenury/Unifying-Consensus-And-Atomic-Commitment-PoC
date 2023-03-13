@@ -1,7 +1,7 @@
 package com.github.davenury.ucac.commitment.twopc
 
 import com.github.davenury.common.Change
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
