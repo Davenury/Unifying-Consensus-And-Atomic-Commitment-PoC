@@ -27,7 +27,6 @@ import strikt.api.expectThrows
 import strikt.assertions.*
 import java.time.Duration
 import java.util.concurrent.Phaser
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.system.measureTimeMillis
 
 @Suppress("HttpUrlsUsage")
@@ -110,7 +109,8 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             signalListeners = (0..5).associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
-                    Signal.OnHandlingApplyEnd to changeAccepted
+                    Signal.OnHandlingApplyEnd to changeAccepted,
+                    Signal.ConsensusFollowerChangeAccepted to changeAccepted,
                 )
             }
         )
@@ -282,6 +282,13 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             apps = TestApplicationSet(
                 listOf(3, 5),
                 signalListeners = (3..7).associateWith { mapOf(Signal.OnHandlingAgreeEnd to failAction) },
+                configOverrides = (0..2).associateWith {
+                    mapOf(
+                        "gpac.responsesTimeouts.agreeTimeout" to Duration.ZERO,
+                        "gpac.ftAgreeRepeatDelay" to Duration.ZERO,
+                        "gpac.leaderFailDelay" to Duration.ZERO
+                    )
+                }
             )
             val peers = apps.getPeers()
             val change = change(0, 1)
@@ -653,10 +660,17 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     "raft.isEnabled" to false,
                 )
             } + (3..5).associateWith { mapOf("gpac.abortOnElectMe" to true) }
-            + mapOf(0 to mapOf("gpac.initialRetriesDelay" to Duration.ZERO, "gpac.retriesBackoffTimeout" to Duration.ZERO)),
-            signalListeners = (0..5).associateWith { mapOf(
-                Signal.OnHandlingApplyEnd to SignalListener { fail("Change should not be applied") },
-            ) } + mapOf(0 to mapOf(Signal.ReachedMaxRetries to SignalListener { phaser.arrive() }))
+                    + mapOf(
+                0 to mapOf(
+                    "gpac.initialRetriesDelay" to Duration.ZERO,
+                    "gpac.retriesBackoffTimeout" to Duration.ZERO
+                )
+            ),
+            signalListeners = (0..5).associateWith {
+                mapOf(
+                    Signal.OnHandlingApplyEnd to SignalListener { fail("Change should not be applied") },
+                )
+            } + mapOf(0 to mapOf(Signal.ReachedMaxRetries to SignalListener { phaser.arrive() }))
         )
 
         val change: Change = change(0, 1)
@@ -683,11 +697,18 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     "raft.isEnabled" to false,
                 )
             } + mapOf(3 to mapOf("gpac.abortOnElectMe" to true))
-            + mapOf(0 to mapOf("gpac.initialRetriesDelay" to Duration.ZERO, "gpac.retriesBackoffTimeout" to Duration.ZERO)),
-            signalListeners = (0..5).associateWith { mapOf(
-                Signal.OnHandlingApplyEnd to SignalListener { fail("Change should not be applied") },
-            ) } + mapOf(0 to mapOf(Signal.ReachedMaxRetries to SignalListener { phaser.arrive() }))
-            + mapOf(5 to mapOf(Signal.OnHandlingElectBegin to SignalListener { throw RuntimeException() }))
+                    + mapOf(
+                0 to mapOf(
+                    "gpac.initialRetriesDelay" to Duration.ZERO,
+                    "gpac.retriesBackoffTimeout" to Duration.ZERO
+                )
+            ),
+            signalListeners = (0..5).associateWith {
+                mapOf(
+                    Signal.OnHandlingApplyEnd to SignalListener { fail("Change should not be applied") },
+                )
+            } + mapOf(0 to mapOf(Signal.ReachedMaxRetries to SignalListener { phaser.arrive() }))
+                    + mapOf(5 to mapOf(Signal.OnHandlingElectBegin to SignalListener { throw RuntimeException() }))
         )
 
         val change: Change = change(0, 1)
