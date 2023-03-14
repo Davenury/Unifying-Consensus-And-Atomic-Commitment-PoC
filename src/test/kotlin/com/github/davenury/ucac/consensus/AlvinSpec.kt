@@ -146,7 +146,7 @@ class AlvinSpec : IntegrationTestBase() {
         apps = TestApplicationSet(
             listOf(5),
             signalListeners = (0..4).associateWith {
-                if(it == 0) firstLeaderListener
+                if (it == 0) firstLeaderListener
                 else signalListener
             },
         )
@@ -206,7 +206,7 @@ class AlvinSpec : IntegrationTestBase() {
         apps = TestApplicationSet(
             listOf(5),
             signalListeners = (0..4).associateWith {
-                if(it == 0) firstLeaderListener
+                if (it == 0) firstLeaderListener
                 else signalListener
             },
         )
@@ -234,6 +234,7 @@ class AlvinSpec : IntegrationTestBase() {
                 }
             }
     }
+
     @Test
     fun `change leader fails after stable`(): Unit = runBlocking {
         val change = createChange(null)
@@ -263,7 +264,7 @@ class AlvinSpec : IntegrationTestBase() {
         apps = TestApplicationSet(
             listOf(5),
             signalListeners = (0..4).associateWith {
-                if(it == 0) firstLeaderListener
+                if (it == 0) firstLeaderListener
                 else signalListener
             },
         )
@@ -343,42 +344,30 @@ class AlvinSpec : IntegrationTestBase() {
         }
     }
 
-    @Disabled
     @Test
     fun `network divide on half and then merge`(): Unit = runBlocking {
-        var peersWithoutLeader = 4
+        val change1AbortPhaser = Phaser(5)
+        val change2PropagatePhaser = Phaser(2)
+        val change2CommitPhaser = Phaser(3)
+        val change1 = createChange(1)
+        val change2 = createChange(2)
 
-        var isNetworkDivided = false
 
-        val election1Phaser = Phaser(peersWithoutLeader)
-        peersWithoutLeader -= 2
-        val election2Phaser = Phaser(peersWithoutLeader)
-        val change1Phaser = Phaser(peersWithoutLeader)
-        val change2Phaser = Phaser(peersWithoutLeader)
-        listOf(election1Phaser, election2Phaser, change1Phaser, change2Phaser).forEach { it.register() }
+        listOf(change1AbortPhaser, change2CommitPhaser,change2PropagatePhaser).forEach { it.register() }
 
         val signalListener = mapOf(
-            Signal.ConsensusLeaderElected to SignalListener {
-                when {
-                    election1Phaser.phase == 0 -> {
-                        logger.info("Arrived at election 1 ${it.subject.getPeerName()}")
-                        election1Phaser.arrive()
-                    }
-
-                    isNetworkDivided && election2Phaser.phase == 0 -> {
-                        logger.info("Arrived at election 2 ${it.subject.getPeerName()}")
-                        election2Phaser.arrive()
-                    }
+            Signal.AlvinCommitChange to SignalListener {
+                if (change2CommitPhaser.phase == 0) {
+                    logger.info("Arrived change before committing ${it.subject.getPeerName()}")
+                    change2CommitPhaser.arrive()
+                } else {
+                    logger.info("Arrived change after committing ${it.subject.getPeerName()}")
+                    change2PropagatePhaser.arrive()
                 }
             },
-            Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                if (change1Phaser.phase == 0) {
-                    logger.info("Arrived at change 1 ${it.subject.getPeerName()}")
-                    change1Phaser.arrive()
-                } else {
-                    logger.info("Arrived at change 2 ${it.subject.getPeerName()}")
-                    change2Phaser.arrive()
-                }
+            Signal.AlvinAbortChange to SignalListener {
+                logger.info("Arrived change abort ${it.subject.getPeerName()}")
+                change1AbortPhaser.arrive()
             }
         )
 
@@ -386,26 +375,14 @@ class AlvinSpec : IntegrationTestBase() {
             listOf(5),
             signalListeners = (0..4).associateWith { signalListener },
         )
-        val peers = apps.getRunningApps()
 
         val peerAddresses = apps.getRunningPeers(0).values
         val peerAddresses2 = apps.getRunningPeers(0)
 
-        election1Phaser.arriveAndAwaitAdvanceWithTimeout()
-
-        logger.info("First election finished")
-
-        val firstLeaderAddress = getLeaderAddress(peers[0])
-
-        logger.info("First leader: $firstLeaderAddress")
-
-        val notLeaderPeers = peerAddresses.filter { it != firstLeaderAddress }
-
-        val firstHalf: List<PeerAddress> = listOf(firstLeaderAddress, notLeaderPeers.first())
-        val secondHalf: List<PeerAddress> = notLeaderPeers.drop(1)
+        val firstHalf: List<PeerAddress> = peerAddresses.take(2)
+        val secondHalf: List<PeerAddress> = peerAddresses.drop(2)
 
 //      Divide network
-        isNetworkDivided = true
 
         firstHalf.forEach { address ->
             val peers = apps.getRunningPeers(0).mapValues { entry ->
@@ -433,25 +410,6 @@ class AlvinSpec : IntegrationTestBase() {
 
         logger.info("Network divided")
 
-        election2Phaser.arriveAndAwaitAdvanceWithTimeout()
-
-        logger.info("Second election finished")
-
-//      Check if second half chose new leader
-        secondHalf.forEachIndexed { index, peer ->
-            val app = apps.getApp(peer.globalPeerId)
-            val newLeaderAddress = askForLeaderAddress(app)
-            expectThat(newLeaderAddress).isNotEqualTo(firstLeaderAddress.address)
-
-            // log only once
-            if (index == 0) {
-                logger.info("New leader: $newLeaderAddress")
-            }
-        }
-
-        val change1 = createChange(1)
-        val change2 = createChange(2)
-
 //      Run change in both halfs
         expectCatching {
             executeChange("${firstHalf.first().address}/v2/change/async", change1)
@@ -461,7 +419,7 @@ class AlvinSpec : IntegrationTestBase() {
             executeChange("${secondHalf.first().address}/v2/change/async", change2)
         }.isSuccess()
 
-        change1Phaser.arriveAndAwaitAdvanceWithTimeout()
+        change2CommitPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         logger.info("After change 1")
 
@@ -500,7 +458,8 @@ class AlvinSpec : IntegrationTestBase() {
 
         logger.info("Network merged")
 
-        change2Phaser.arriveAndAwaitAdvanceWithTimeout()
+        change2PropagatePhaser.arriveAndAwaitAdvanceWithTimeout()
+        change1AbortPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         logger.info("After change 2")
 
@@ -509,6 +468,7 @@ class AlvinSpec : IntegrationTestBase() {
             val acceptedChanges = askForAcceptedChanges(it)
             logger.debug("Checking $it proposed: $proposedChanges accepted: $acceptedChanges")
             expect {
+                that(it).isEqualTo(it)
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
             }
