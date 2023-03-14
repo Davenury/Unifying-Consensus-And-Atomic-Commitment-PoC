@@ -134,26 +134,29 @@ class AlvinProtocol(
         val entryId = messageEntry.entry.getId()
         var votes: Int = entryIdToVotes[entryId] ?: 0
         if (message.result == AlvinResult.COMMIT) {
-
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             votes = (entryIdToVotes[entryId] ?: 0) + 1
             entryIdToVotes[entryId] = votes
         }
 
-        if (isMoreThanHalf(votes)) {
-            changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
-            history.addEntry(messageEntry.entry)
-            signalPublisher.signal(
-                Signal.AlvinCommitChange,
-                this,
-                listOf(otherConsensusPeers()),
-                change = change
-            )
+
+        val isCommitted = isMoreThanHalf(votes)
+
+        if (isCommitted || message.result == AlvinResult.ABORT) {
+            changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             entryIdToAlvinEntry.remove(entryId)
+            entryIdToFailureDetector[entryId]?.cancelCounting()
             entryIdToFailureDetector.remove(entryId)
             entryIdToVotes.remove(entryId)
-        } else if (message.result == AlvinResult.ABORT) {
-            changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+
+            val (changeResult, signal) = if (isCommitted) {
+                history.addEntry(messageEntry.entry)
+                Pair(ChangeResult.Status.SUCCESS, Signal.AlvinCommitChange)
+            } else {
+                Pair(ChangeResult.Status.CONFLICT, Signal.AlvinAbortChange)
+            }
+            changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(changeResult))
+            signalPublisher.signal(signal, this, listOf(otherConsensusPeers()), change = change)
         }
     }
 
@@ -244,7 +247,7 @@ class AlvinProtocol(
         val entry = AlvinEntry(historyEntry, getNextNum(), listOf(history.getCurrentEntry()))
         updateEntry(entry)
 
-        val jobs = scheduleMessages(historyEntry, proposeChannel) { peerAddress ->
+        val jobs = scheduleMessages(historyEntry, proposeChannel, entry.epoch) { peerAddress ->
             protocolClient.sendProposal(peerAddress, AlvinPropose(globalPeerId.peerId, entry.toDto()))
         }
         val responses: List<AlvinAckPropose> = waitForQurom(historyEntry, jobs, proposeChannel, AlvinStatus.PENDING)
@@ -268,7 +271,7 @@ class AlvinProtocol(
         updateEntry(entry)
         logger.info("Starts decision phase $entry")
 
-        val jobs = scheduleMessages(historyEntry, acceptChannel) { peerAddress ->
+        val jobs = scheduleMessages(historyEntry, acceptChannel, entry.epoch) { peerAddress ->
             protocolClient.sendAccept(peerAddress, AlvinAccept(globalPeerId.peerId, entry.toDto()))
         }
 
@@ -293,7 +296,7 @@ class AlvinProtocol(
 
         logger.info("Starts delivery phase $entry")
 
-        scheduleMessages(historyEntry, null) { peerAddress ->
+        scheduleMessages(historyEntry, null, entry.epoch) { peerAddress ->
             protocolClient.sendStable(peerAddress, AlvinStable(globalPeerId.peerId, entry.toDto()))
         }
 
@@ -315,7 +318,7 @@ class AlvinProtocol(
         var newEntry = entry.copy(epoch = entry.epoch + 1, status = AlvinStatus.UNKNOWN)
         entryIdToAlvinEntry[entryId] = newEntry
 
-        val jobs = scheduleMessages(entry.entry, promiseChannel) { peerAddress ->
+        val jobs = scheduleMessages(entry.entry, promiseChannel, newEntry.epoch) { peerAddress ->
             protocolClient.sendPrepare(
                 peerAddress,
                 AlvinAccept(globalPeerId.peerId, newEntry.toDto())
@@ -358,24 +361,46 @@ class AlvinProtocol(
     private suspend fun <A> scheduleMessages(
         entry: HistoryEntry,
         channel: Channel<RequestResult<A>>?,
+        epoch: Int,
         sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<A?>
-    ) = scheduleMessages(entry.getId(), channel, sendMessage)
+    ) = scheduleMessages(entry.getId(), channel, epoch, sendMessage)
 
 
     private suspend fun <A> scheduleMessages(
         entryId: String,
         channel: Channel<RequestResult<A>>?,
+        epoch: Int,
         sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<A?>
     ) =
-        getOtherPeers().map {
+        (0 until getOtherPeers().size).map {
             with(CoroutineScope(executorService)) {
                 launch(MDCContext()) {
-                    var response: ConsensusResponse<A?> = ConsensusResponse(it.address, null)
-                    while (response.message == null && !response.unathorized) {
+                    var peerAddress: PeerAddress
+                    var response: ConsensusResponse<A?>
+                    do {
                         delay(heartbeatDelay.toMillis())
-                        response = sendMessage(it)
+                        peerAddress = getOtherPeers()[it]
+                        response = sendMessage(peerAddress)
+
+                        mutex.withLock {
+                            val entry = entryIdToAlvinEntry[entryId]
+                            if (entry != null && entry.epoch > epoch) {
+                                logger.info("Our entry epoch increased so stop sending message, scheduleMessage epoch ${epoch}, new epoch: ${entry.epoch}")
+                                return@launch
+                            }
+                        }
+
+                    } while (response.message == null && !response.unathorized)
+
+                    if (response.message != null) channel?.send(
+                        RequestResult(
+                            entryId,
+                            response.message!!,
+                            response.unathorized
+                        )
+                    ) else {
+                        logger.info("scheduleMessage: response message is null from ${peerAddress}, response: $response")
                     }
-                    if(response.message != null) channel?.send(RequestResult(entryId, response.message!!, response.unathorized))
                 }
             }
         }
@@ -427,17 +452,17 @@ class AlvinProtocol(
 
         val depsResult = entry.deps.map {
             isEntryCommitted(it.getId())
-        }
+        } + listOf(history.isEntryCompatible(entry.entry))
 
         when {
             depsResult.any { it == false } -> {
-                scheduleMessages(entry.entry, null) { peerAddress ->
+                scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(peerAddress, AlvinCommit(entry.toDto(), AlvinResult.ABORT))
                 }
             }
 
             depsResult.all { it == true } -> {
-                scheduleMessages(entry.entry, null) { peerAddress ->
+                scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(peerAddress, AlvinCommit(entry.toDto(), AlvinResult.COMMIT))
                 }
             }
@@ -452,9 +477,14 @@ class AlvinProtocol(
     private suspend fun isEntryCommitted(entryId: String): Boolean? {
         mutex.withLock {
             if (history.containsEntry(entryId)) return true
+            if (entryIdToAlvinEntry[entryId] != null) {
+                resetFailureDetector(entryIdToAlvinEntry[entryId]!!)
+                return null
+            }
         }
 
-        val jobs = scheduleMessages(entryId, fastRecoveryChannel) {
+//      epoch 1 because we don't current value
+        val jobs = scheduleMessages(entryId, fastRecoveryChannel, 1) {
             protocolClient.sendFastRecovery(it, AlvinFastRecovery(entryId))
         }
 
