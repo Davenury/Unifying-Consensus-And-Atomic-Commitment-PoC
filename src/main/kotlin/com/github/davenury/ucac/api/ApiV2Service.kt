@@ -7,7 +7,7 @@ import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
-import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel

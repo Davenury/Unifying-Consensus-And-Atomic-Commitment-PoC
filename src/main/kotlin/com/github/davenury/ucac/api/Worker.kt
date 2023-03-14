@@ -7,7 +7,7 @@ import com.github.davenury.common.ProtocolName
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.ChangeNotifier
-import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await

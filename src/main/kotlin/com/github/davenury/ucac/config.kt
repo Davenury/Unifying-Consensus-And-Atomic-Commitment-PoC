@@ -2,7 +2,7 @@ package com.github.davenury.ucac
 
 import com.github.davenury.common.GlobalPeerId
 import com.github.davenury.common.PeerAddress
-import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.common.PeerResolver
 import java.time.Duration
 
 fun parsePeers(peers: String): Map<GlobalPeerId, PeerAddress> {
@@ -56,9 +56,9 @@ data class GpacConfig(
     val maxFTAgreeTries: Int = 5,
 )
 data class ResponsesTimeoutsConfig(
-    val electTimeout: Duration,
-    val agreeTimeout: Duration,
-    val applyTimeout: Duration
+    val electTimeout: Duration = Duration.ofSeconds(2),
+    val agreeTimeout: Duration = Duration.ofSeconds(2),
+    val applyTimeout: Duration = Duration.ofMillis(200),
 ) {
     companion object {
         fun default() = ResponsesTimeoutsConfig(Duration.ofSeconds(2), Duration.ofSeconds(2), Duration.ofMillis(200))

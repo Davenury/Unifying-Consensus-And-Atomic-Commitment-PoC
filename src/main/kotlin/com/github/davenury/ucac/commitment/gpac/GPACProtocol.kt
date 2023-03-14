@@ -505,6 +505,11 @@ class GPACProtocolImpl(
         iteration: Int = 0,
     ): Boolean {
 
+        logger.info("Starting ft agree with iteration: $iteration")
+        if (iteration == gpacConfig.maxFTAgreeTries) {
+            return false
+        }
+
         transactionBlocker.tryToBlock(ProtocolName.GPAC, change.id)
 
         sendFtAgreeMessages(change, getPeersFromChange(change), acceptVal, decision, acceptNum)

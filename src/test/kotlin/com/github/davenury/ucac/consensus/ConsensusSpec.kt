@@ -10,7 +10,7 @@ import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.common.GlobalPeerId
 import com.github.davenury.common.PeerAddress
-import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.common.PeerResolver
 import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl

@@ -1,13 +1,9 @@
 package com.github.davenury.tests
 
-import com.github.davenury.common.AddUserChange
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.common.Notification
+import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
 import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
-import com.github.davenury.tests.httpClient
 import io.ktor.client.request.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -38,8 +34,7 @@ class Changes(
         if (shouldStartHandlingNotification(notification)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
                 val change = try {
-                    // TODO - change to valid peer address
-                    httpClient.get("http://peer0-peerset$peersetId-service:8081/v2/last-change")
+                    httpClient.get("http://${peers[peersetId]!!.first()}/v2/last-change")
                 } catch (e: Exception) {
                     notification.change
                 }

@@ -17,6 +17,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import org.junit.Ignore
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
@@ -272,6 +273,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             }
     }
 
+    @Disabled("Test encourages invalid protocol behavior - the change should be blocked / processed to the end TODO - talk about this case on Monday 20.03")
     @Test
     fun `transaction should not be processed if every peer from one peerset fails after ft-agree`(): Unit =
         runBlocking {
@@ -282,6 +284,11 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             apps = TestApplicationSet(
                 listOf(3, 5),
                 signalListeners = (3..7).associateWith { mapOf(Signal.OnHandlingAgreeEnd to failAction) },
+                configOverrides = (0..2).associateWith { mapOf(
+                    "gpac.responsesTimeouts.agreeTimeout" to Duration.ZERO,
+                    "gpac.ftAgreeRepeatDelay" to Duration.ZERO,
+                    "gpac.leaderFailDelay" to Duration.ZERO
+                ) }
             )
             val peers = apps.getPeers()
             val change = change(0, 1)

@@ -4,7 +4,7 @@ import com.github.davenury.common.GPACInstanceNotFoundException
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.SignalPublisher
-import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.common.PeerResolver
 import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
@@ -15,7 +15,6 @@ import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
-import java.time.Duration
 
 class GPACFactory(
     private val transactionBlocker: TransactionBlocker,

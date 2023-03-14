@@ -1,13 +1,11 @@
 package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.PeerAddress
-import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.common.PeerResolver
 import com.github.davenury.ucac.httpClient
-import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.utils.io.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
