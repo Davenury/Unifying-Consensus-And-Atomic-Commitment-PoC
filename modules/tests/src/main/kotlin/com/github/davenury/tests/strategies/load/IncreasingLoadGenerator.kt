@@ -7,6 +7,7 @@ import io.micrometer.core.instrument.Gauge
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.ticker
+import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
@@ -30,8 +31,9 @@ class IncreasingLoadGenerator(
             runBlocking {
                 while (currentTick <= bound) {
                     delay(increaseDelay.toMillis())
-                    val newTick = currentTick + increaseStep
-                    channel = ticker((1000 / newTick).toLong(), 0)
+                    currentTick += increaseStep
+                    channel = ticker((1000 / currentTick).toLong(), 0)
+                    logger.info("Bumped load to $currentTick changes per second")
                     Counter.builder("current_expected_load").register(meterRegistry).increment(increaseStep)
                 }
             }
@@ -51,5 +53,6 @@ class IncreasingLoadGenerator(
 
     companion object {
         private val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
+        private val logger = LoggerFactory.getLogger("IncreasingLoadGenerator")
     }
 }
