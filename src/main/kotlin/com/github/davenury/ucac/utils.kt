@@ -19,7 +19,7 @@ val raftHttpClient = HttpClient(OkHttp) {
         serializer = JacksonSerializer(objectMapper)
     }
     install(HttpTimeout) {
-        requestTimeoutMillis = 500
+        requestTimeoutMillis = 750
     }
 }
 val testHttpClient = HttpClient(OkHttp) {
