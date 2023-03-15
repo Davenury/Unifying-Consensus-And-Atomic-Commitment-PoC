@@ -138,8 +138,6 @@ class AlvinProtocol(
             votes = (entryIdToVotes[entryId] ?: 0) + 1
             entryIdToVotes[entryId] = votes
         }
-
-
         val isCommitted = isMoreThanHalf(votes)
 
         if (isCommitted || message.result == AlvinResult.ABORT) {
@@ -475,12 +473,10 @@ class AlvinProtocol(
     }
 
     private suspend fun isEntryCommitted(entryId: String): Boolean? {
-        mutex.withLock {
-            if (history.containsEntry(entryId)) return true
-            if (entryIdToAlvinEntry[entryId] != null) {
-                resetFailureDetector(entryIdToAlvinEntry[entryId]!!)
-                return null
-            }
+        if (history.containsEntry(entryId)) return true
+        if (entryIdToAlvinEntry[entryId] != null) {
+            resetFailureDetector(entryIdToAlvinEntry[entryId]!!)
+            return null
         }
 
 //      epoch 1 because we don't current value
