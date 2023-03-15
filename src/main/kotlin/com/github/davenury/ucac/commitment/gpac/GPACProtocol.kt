@@ -4,7 +4,9 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
-import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.ProtocolTimer
+import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.TransactionBlocker
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.delay
 import org.slf4j.Logger
@@ -159,17 +161,19 @@ class GPACProtocolImpl(
 
         myBallotNumber = message.ballotNumber
 
-        try {
-            transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
-        } catch (e: Exception) {
-            return Agreed(
-                change = message.change,
-                ballotNumber = message.ballotNumber,
-                acceptVal = Accept.ABORT,
-                agreed = false,
-                reason = Reason.ALREADY_LOCKED,
-                sender = peerResolver.currentPeer()
-            )
+        if (!history.containsEntry(entry.getId())) {
+            try {
+                transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+            } catch (e: Exception) {
+                return Agreed(
+                    change = message.change,
+                    ballotNumber = message.ballotNumber,
+                    acceptVal = Accept.ABORT,
+                    agreed = false,
+                    reason = Reason.ALREADY_LOCKED,
+                    sender = peerResolver.currentPeer()
+                )
+            }
         }
         logger.info("Lock aquired: ${message.ballotNumber}")
 
@@ -215,9 +219,14 @@ class GPACProtocolImpl(
         if (isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
 
+        val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
+
         when {
             !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
-                transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+
+                if (history.containsEntry(entry.getId()))
+                    transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+
                 transaction =
                     Transaction(
                         ballotNumber = message.ballotNumber,
@@ -240,12 +249,7 @@ class GPACProtocolImpl(
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
 
-            val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(
-                    message.change.toHistoryEntry(
-                        globalPeerId.peersetId
-                    ).getId()
-                )
-            ) {
+            val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(entry.getId())) {
                 addChangeToHistory(message.change)
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
                 Pair(ChangeResult.Status.SUCCESS, null)
@@ -490,6 +494,7 @@ class GPACProtocolImpl(
                 logger.info("Bumped ballot number to: $myBallotNumber")
                 return ElectMeResult(responses, false)
             }
+
             else -> kotlin.run {
                 logger.info("GPAC elect phase ended with $this, executing once more")
                 ElectMeResult(responses, false)

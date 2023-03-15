@@ -17,7 +17,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import org.junit.Ignore
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
@@ -28,7 +27,6 @@ import strikt.api.expectThrows
 import strikt.assertions.*
 import java.time.Duration
 import java.util.concurrent.Phaser
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.system.measureTimeMillis
 
 @Suppress("HttpUrlsUsage")
@@ -103,7 +101,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
         val changeAccepted = SignalListener {
             logger.info("Arrived change: ${it.change}")
-            if(change.id==it.change?.id) phaser.arrive()
+            if (change.id == it.change?.id) phaser.arrive()
         }
 
         apps = TestApplicationSet(
@@ -111,14 +109,23 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             signalListeners = (0..5).associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
-                    Signal.OnHandlingApplyEnd to changeAccepted
+                    Signal.OnHandlingApplyEnd to changeAccepted,
+//                    Signal.ConsensusFollowerChangeAccepted to changeAccepted
                 )
-            }
+            },
+            configOverrides = mapOf(
+                0 to mapOf("raft.isEnabled" to false),
+                1 to mapOf("raft.isEnabled" to false),
+                2 to mapOf("raft.isEnabled" to false),
+                3 to mapOf("raft.isEnabled" to false),
+                4 to mapOf("raft.isEnabled" to false),
+                5 to mapOf("raft.isEnabled" to false),
+            )
         )
         val peerAddresses = apps.getPeers(0)
 
-        leaderElectionPhaser.arriveAndAwaitAdvanceWithTimeout()
-        logger.info("Leader elected")
+//        leaderElectionPhaser.arriveAndAwaitAdvanceWithTimeout()
+//        logger.info("Leader elected")
 
         var time = 0L
 
@@ -284,11 +291,13 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             apps = TestApplicationSet(
                 listOf(3, 5),
                 signalListeners = (3..7).associateWith { mapOf(Signal.OnHandlingAgreeEnd to failAction) },
-                configOverrides = (0..2).associateWith { mapOf(
-                    "gpac.responsesTimeouts.agreeTimeout" to Duration.ZERO,
-                    "gpac.ftAgreeRepeatDelay" to Duration.ZERO,
-                    "gpac.leaderFailDelay" to Duration.ZERO
-                ) }
+                configOverrides = (0..2).associateWith {
+                    mapOf(
+                        "gpac.responsesTimeouts.agreeTimeout" to Duration.ZERO,
+                        "gpac.ftAgreeRepeatDelay" to Duration.ZERO,
+                        "gpac.leaderFailDelay" to Duration.ZERO
+                    )
+                }
             )
             val peers = apps.getPeers()
             val change = change(0, 1)
@@ -602,6 +611,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ChangePeersetInfo(it, InitialHistoryEntry.getId())
         },
     )
+
     private fun twoPeersetChange(
         change: Change
     ) = AddUserChange(
