@@ -110,6 +110,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
                     Signal.OnHandlingApplyEnd to changeAccepted,
+                    Signal.ConsensusFollowerChangeAccepted to changeAccepted,
                 )
             }
         )

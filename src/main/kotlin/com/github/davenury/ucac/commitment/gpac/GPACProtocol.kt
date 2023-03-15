@@ -44,7 +44,7 @@ class GPACProtocolImpl(
 ) : GPACProtocolAbstract(peerResolver, logger) {
     private val globalPeerId: GlobalPeerId = peerResolver.currentPeer()
 
-    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(Duration.ZERO,gpacConfig.leaderFailDelay, ctx)
+    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay.dividedBy(2),gpacConfig.leaderFailDelay.dividedBy(2), ctx)
 
     var retriesTimer: ProtocolTimer =
         ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
@@ -275,7 +275,7 @@ class GPACProtocolImpl(
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
 
             logger.info("handleApply finally releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
+            if(transactionBlocker.isAcquired()) transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
 

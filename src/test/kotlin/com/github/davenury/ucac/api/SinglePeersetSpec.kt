@@ -108,8 +108,8 @@ class SinglePeersetSpec : IntegrationTestBase() {
                     2 to signalListenersForCohort,
                 ),
                 configOverrides = mapOf(
-                    1 to mapOf("gpac.retriesBackoffTimeout" to Duration.ZERO),
-                    2 to mapOf("gpac.retriesBackoffTimeout" to Duration.ZERO),
+                    1 to mapOf("gpac.retriesBackoffTimeout" to Duration.ZERO,"gpac.leaderFailDelay" to Duration.ZERO),
+                    2 to mapOf("gpac.retriesBackoffTimeout" to Duration.ZERO,"gpac.leaderFailDelay" to Duration.ZERO),
                 )
             )
 
