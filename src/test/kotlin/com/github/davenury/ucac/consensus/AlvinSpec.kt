@@ -728,13 +728,6 @@ class AlvinSpec : IntegrationTestBase() {
         }
     }
 
-    private suspend fun getLeaderAddress(peer: ApplicationUcac): PeerAddress {
-        val address = askForLeaderAddress(peer)!!
-        expectThat(address).isNotEqualTo(noneLeader)
-        val id = apps.getPeers().values.find { it.address == address }!!.globalPeerId
-        return PeerAddress(id, address)
-    }
-
     companion object {
         private val logger = LoggerFactory.getLogger(AlvinSpec::class.java)
     }
