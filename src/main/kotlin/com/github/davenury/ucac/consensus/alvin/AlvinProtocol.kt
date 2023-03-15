@@ -113,10 +113,13 @@ class AlvinProtocol(
         val entryId = messageEntry.entry.getId()
         mutex.withLock {
             val entry = entryIdToAlvinEntry[entryId]
-            if (entry != null && entry.epoch >= message.entry.epoch) throw AlvinOutdatedPrepareException(
-                message.entry.epoch,
-                entry.epoch
-            )
+            if (entry != null && entry.epoch >= message.entry.epoch) {
+                logger.info("Prepare message epoch is outdated")
+                throw AlvinOutdatedPrepareException(
+                    message.entry.epoch,
+                    entry.epoch
+                )
+            }
             updatedEntry = entry?.copy(epoch = message.entry.epoch) ?: messageEntry
             entryIdToAlvinEntry[entryId] = updatedEntry
         }
@@ -316,6 +319,8 @@ class AlvinProtocol(
         var newEntry = entry.copy(epoch = entry.epoch + 1, status = AlvinStatus.UNKNOWN)
         entryIdToAlvinEntry[entryId] = newEntry
 
+        logger.info("Send prepare messages")
+
         val jobs = scheduleMessages(entry.entry, promiseChannel, newEntry.epoch) { peerAddress ->
             protocolClient.sendPrepare(
                 peerAddress,
@@ -336,18 +341,21 @@ class AlvinProtocol(
 
         when {
             responses.any { it.entry?.status == AlvinStatus.STABLE } -> {
+                logger.info("Entry is in Stable status, start delivery phase")
                 newEntry = newEntry.copy(status = AlvinStatus.STABLE)
                 updateEntry(newEntry)
                 deliveryPhase(newEntry.entry, newEntry.deps)
             }
 
             responses.any { it.entry?.status == AlvinStatus.ACCEPTED } -> {
+                logger.info("Entry is in Accepted status, start decision phase")
                 newEntry = newEntry.copy(status = AlvinStatus.ACCEPTED)
                 updateEntry(newEntry)
                 decisionPhase(newEntry.entry, newEntry.transactionId, newEntry.deps)
             }
 
             else -> {
+                logger.info("Entry is in no status, start proposal phase")
                 newEntry = newEntry.copy(status = AlvinStatus.PENDING)
                 updateEntry(newEntry)
                 proposalPhase(Change.fromHistoryEntry(newEntry.entry)!!)
@@ -380,12 +388,20 @@ class AlvinProtocol(
                         peerAddress = getOtherPeers()[it]
                         response = sendMessage(peerAddress)
 
+                        val entry: AlvinEntry?
                         mutex.withLock {
-                            val entry = entryIdToAlvinEntry[entryId]
-                            if (entry != null && entry.epoch > epoch) {
-                                logger.info("Our entry epoch increased so stop sending message, scheduleMessage epoch ${epoch}, new epoch: ${entry.epoch}")
-                                return@launch
-                            }
+                            entry = entryIdToAlvinEntry[entryId]
+                        }
+                        if (entry != null && entry.epoch > epoch) {
+                            logger.info("Our entry epoch increased so stop sending message, scheduleMessage epoch ${epoch}, new epoch: ${entry.epoch}")
+                            resetFailureDetector(entry)
+                            return@launch
+                        }
+
+                        if(entry!=null && response.unathorized){
+                            logger.info("Peer responded that our epoch is outdated, wait for newer messages")
+                            resetFailureDetector(entry)
+                            return@launch
                         }
 
                     } while (response.message == null && !response.unathorized)
@@ -396,9 +412,7 @@ class AlvinProtocol(
                             response.message!!,
                             response.unathorized
                         )
-                    ) else {
-                        logger.info("scheduleMessage: response message is null from ${peerAddress}, response: $response")
-                    }
+                    )
                 }
             }
         }
