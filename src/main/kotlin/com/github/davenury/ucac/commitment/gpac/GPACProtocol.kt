@@ -14,6 +14,8 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 
 abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) : SignalSubject,
@@ -85,11 +87,15 @@ class GPACProtocolImpl(
         }
 
         val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
-        val initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
+        var initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
+        if (gpacConfig.abortOnElectMe) {
+            initVal = Accept.ABORT
+        }
 
         myBallotNumber = message.ballotNumber
 
         signal(Signal.OnHandlingElectEnd, transaction, message.change)
+        this.transaction = transaction.copy(initVal = initVal)
 
         if (isMetricTest) {
             Metrics.bumpChangeMetric(
@@ -214,9 +220,9 @@ class GPACProtocolImpl(
                     state = changeResult.name.lowercase()
                 )
             }
-        } finally {
+        } catch (e: Exception) {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
-
+        } finally {
             logger.info("handleApply finally releaseBlocker")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
@@ -279,6 +285,13 @@ class GPACProtocolImpl(
 
             val acceptVal = electResponses.getAcceptVal(change)
 
+            if (acceptVal == null) {
+                retriesTimer.startCounting(iteration) {
+                    performProtocolAsLeader(change, iteration + 1)
+                }
+                return
+            }
+
             this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
 
             applySignal(Signal.BeforeSendingAgree, this.transaction, change)
@@ -302,11 +315,16 @@ class GPACProtocolImpl(
         }
     }
 
-    private fun List<List<ElectedYou>>.getAcceptVal(change: Change): Accept {
-        val thresholds = getPeersFromChange(change).map { (it.size + 1) / 2 }
-        val responses = this.map { it.count { it.acceptVal == Accept.COMMIT } }
+    private fun List<List<ElectedYou>>.getAcceptVal(change: Change): Accept? {
 
-        return if (responses.zip(thresholds).all { (res, threshold) -> res >= threshold }) Accept.COMMIT else Accept.ABORT
+        val shouldCommit = superSet(this, getPeersFromChange(change)) { (it as ElectedYou).initVal == Accept.COMMIT }
+        val shouldAbort = superSet(this, getPeersFromChange(change)) { (it as ElectedYou).initVal == Accept.ABORT }
+
+        return when {
+            shouldCommit -> Accept.COMMIT
+            shouldAbort -> Accept.ABORT
+            else -> null
+        }
     }
 
     override suspend fun performProtocolAsRecoveryLeader(change: Change, iteration: Int) {
@@ -496,13 +514,12 @@ class GPACProtocolImpl(
     }
 
     private fun <T> superMajority(responses: List<List<T>>, peers: List<List<T>>): Boolean =
-        superFunction(responses, 2, peers) // TODO divider 2, >
+        ((floor(peers.size * 0.5) + 1) <= responses.size) && superFunction(responses, peers)
 
-    private fun <T> superSet(responses: List<List<T>>, peers: List<List<T>>): Boolean =
-        superFunction(responses, 1, peers) // TODO divider 1, >= (jak dla mnie trzeba zrobić ifa a nie parametryzować)
+    private fun <T> superSet(responses: List<List<T>>, peers: List<List<T>>, condition: (T) -> Boolean = { true }): Boolean =
+        (peers.size == responses.size) && superFunction(responses, peers, condition)
 
-    private fun <T> superFunction(responses: List<List<T>>, divider: Int, peers: List<List<T>>): Boolean {
-        val allShards = peers.size >= responses.size / divider.toDouble() // TODO what??
+    private fun <T> superFunction(responses: List<List<T>>, peers: List<List<T>>, condition: (T) -> Boolean = { true }): Boolean {
         val myPeersetId = globalPeerId.peersetId
 
         return responses.withIndex()
@@ -510,9 +527,13 @@ class GPACProtocolImpl(
                 val allPeers =
                     if (index == myPeersetId) peers[index].size + 1 else peers[index].size
                 val agreedPeers =
-                    if (index == myPeersetId) value.size + 1 else value.size
-                agreedPeers >= allPeers / 2F
-            } && allShards
+                    if (index == myPeersetId) {
+                        value.count { condition(it) } + 1
+                    } else {
+                        value.count { condition(it) }
+                    }
+                agreedPeers >= (floor(allPeers * 0.5) + 1)
+            }
     }
 
     private fun applySignal(signal: Signal, transaction: Transaction, change: Change) {

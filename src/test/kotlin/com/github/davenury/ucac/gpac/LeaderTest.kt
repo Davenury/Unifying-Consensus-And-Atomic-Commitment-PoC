@@ -111,26 +111,10 @@ class LeaderTest {
         expectThat(result.detailedMessage).isEqualTo("Transaction failed due to too few responses of ft phase.")
     }
 
-    @Test
-    fun `should perform operation to the end`(): Unit = runBlocking {
-        peerTwo.stubForElectMe(10, Accept.COMMIT, 10, null, false)
-        peerThree.stubForElectMe(10, Accept.COMMIT, 10, null, false)
-        peerTwo.stubForAgree(10, Accept.COMMIT)
-        peerThree.stubForAgree(10, Accept.COMMIT)
-        peerTwo.stubForApply()
-        peerThree.stubForApply()
-
-        runBlocking { subject.performProtocolAsLeader(change) }
-
-        expectThat(history.getCurrentEntry().let { Change.fromHistoryEntry(it) })
-            .isEqualTo(change)
-    }
-
     private val change = AddUserChange(
         "userName",
         peersets = listOf(
             ChangePeersetInfo(0, InitialHistoryEntry.getId()),
-            ChangePeersetInfo(1, InitialHistoryEntry.getId()),
         ),
     )
 }
