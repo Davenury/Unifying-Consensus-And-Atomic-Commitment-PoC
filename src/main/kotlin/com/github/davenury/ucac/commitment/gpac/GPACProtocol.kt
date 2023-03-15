@@ -44,7 +44,7 @@ class GPACProtocolImpl(
 ) : GPACProtocolAbstract(peerResolver, logger) {
     private val globalPeerId: GlobalPeerId = peerResolver.currentPeer()
 
-    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay.dividedBy(2),gpacConfig.leaderFailDelay.dividedBy(2), ctx)
+    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay,gpacConfig.leaderFailBackoff, ctx)
 
     var retriesTimer: ProtocolTimer =
         ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
