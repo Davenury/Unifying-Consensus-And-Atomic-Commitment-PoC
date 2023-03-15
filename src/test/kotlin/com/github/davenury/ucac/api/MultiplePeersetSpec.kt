@@ -110,22 +110,13 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
                     Signal.OnHandlingApplyEnd to changeAccepted,
-//                    Signal.ConsensusFollowerChangeAccepted to changeAccepted
                 )
-            },
-            configOverrides = mapOf(
-                0 to mapOf("raft.isEnabled" to false),
-                1 to mapOf("raft.isEnabled" to false),
-                2 to mapOf("raft.isEnabled" to false),
-                3 to mapOf("raft.isEnabled" to false),
-                4 to mapOf("raft.isEnabled" to false),
-                5 to mapOf("raft.isEnabled" to false),
-            )
+            }
         )
         val peerAddresses = apps.getPeers(0)
 
-//        leaderElectionPhaser.arriveAndAwaitAdvanceWithTimeout()
-//        logger.info("Leader elected")
+        leaderElectionPhaser.arriveAndAwaitAdvanceWithTimeout()
+        logger.info("Leader elected")
 
         var time = 0L
 
