@@ -277,7 +277,6 @@ class GPACProtocolImpl(
 
             val electResponses = electMeResult.responses
 
-
             val acceptVal = electResponses.getAcceptVal(change)
 
             this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
@@ -497,13 +496,13 @@ class GPACProtocolImpl(
     }
 
     private fun <T> superMajority(responses: List<List<T>>, peers: List<List<T>>): Boolean =
-        superFunction(responses, 2, peers)
+        superFunction(responses, 2, peers) // TODO divider 2, >
 
     private fun <T> superSet(responses: List<List<T>>, peers: List<List<T>>): Boolean =
-        superFunction(responses, 1, peers)
+        superFunction(responses, 1, peers) // TODO divider 1, >= (jak dla mnie trzeba zrobić ifa a nie parametryzować)
 
     private fun <T> superFunction(responses: List<List<T>>, divider: Int, peers: List<List<T>>): Boolean {
-        val allShards = peers.size >= responses.size / divider.toDouble()
+        val allShards = peers.size >= responses.size / divider.toDouble() // TODO what??
         val myPeersetId = globalPeerId.peersetId
 
         return responses.withIndex()
