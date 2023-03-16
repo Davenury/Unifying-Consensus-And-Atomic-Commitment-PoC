@@ -11,7 +11,6 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.delay
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) : SignalSubject,
@@ -44,7 +43,7 @@ class GPACProtocolImpl(
 ) : GPACProtocolAbstract(peerResolver, logger) {
     private val globalPeerId: GlobalPeerId = peerResolver.currentPeer()
 
-    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay,gpacConfig.leaderFailBackoff, ctx)
+    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, gpacConfig.leaderFailBackoff, ctx)
 
     var retriesTimer: ProtocolTimer =
         ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
@@ -271,11 +270,16 @@ class GPACProtocolImpl(
                     state = changeResult.name.lowercase()
                 )
             }
+        } catch (ex: Exception) {
+            logger.error("Exception during applying change, set it to abort", ex)
+            transaction =
+                transaction.copy(ballotNumber = myBallotNumber, decision = true, initVal = Accept.ABORT, change = null)
         } finally {
-            transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
-
             logger.info("handleApply finally releaseBlocker")
-            if(transactionBlocker.isAcquired()) transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
+            if (transactionBlocker.isAcquired()) transactionBlocker.tryToReleaseBlockerChange(
+                ProtocolName.GPAC,
+                message.change.id
+            )
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
 
