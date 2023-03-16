@@ -51,9 +51,7 @@ class AlvinProtocol(
 
     override fun getPeerName() = globalPeerId.toString()
 
-    override suspend fun begin() {
-
-    }
+    override suspend fun begin() {}
 
 
 //  TODO: use transactionBlocker
@@ -82,6 +80,10 @@ class AlvinProtocol(
     override suspend fun handleAcceptPhase(message: AlvinAccept): AlvinAckAccept {
         logger.info("Handle accept: $message")
         val entry = message.entry.toEntry()
+
+        if(transactionBlocker.isAcquired()) throw AlvinHistoryBlocked(transactionBlocker.getChangeId()!!)
+        transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, Change.fromHistoryEntry(entry.entry)!!.id)
+
         resetFailureDetector(entry)
         updateEntry(entry)
         val newDeps: List<HistoryEntry>
@@ -99,6 +101,15 @@ class AlvinProtocol(
         logger.info("Handle stable: $message")
         val entry = message.entry.toEntry()
         val entryId = entry.entry.getId()
+
+        when {
+            transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() != ProtocolName.CONSENSUS -> throw AlvinHistoryBlocked(transactionBlocker.getChangeId()!!)
+        }
+
+        if(transactionBlocker.isAcquired() ) throw AlvinHistoryBlocked(transactionBlocker.getChangeId()!!)
+        transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, Change.fromHistoryEntry(entry.entry)!!.id)
+
+
         entryIdToFailureDetector[entryId]?.cancelCounting()
         updateEntry(entry)
         deliverTransaction()
@@ -158,6 +169,7 @@ class AlvinProtocol(
             }
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(changeResult))
             signalPublisher.signal(signal, this, listOf(otherConsensusPeers()), change = change)
+            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS,change.id)
         }
     }
 
