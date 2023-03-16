@@ -161,7 +161,7 @@ class GPACProtocolImpl(
 
         myBallotNumber = message.ballotNumber
 
-        if (!history.containsEntry(entry.getId())) {
+        if (!this.transaction.decision) {
             try {
                 transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
             } catch (e: Exception) {
