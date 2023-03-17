@@ -25,7 +25,6 @@ import io.ktor.http.*
 import io.ktor.util.collections.*
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.fail
@@ -536,23 +535,17 @@ class AlvinSpec : IntegrationTestBase() {
         }
     }
 
-    @Disabled
     @Test
     fun `should synchronize on history if it was added outside of alvin`(): Unit = runBlocking {
         val phaserGPACPeer = Phaser(1)
-        val phaserRaftPeers = Phaser(4)
-        val leaderElectedPhaser = Phaser(4)
+        val phaserAlvinPeers = Phaser(5)
 
         val isSecondGPAC = AtomicBoolean(false)
 
-        listOf(phaserGPACPeer, phaserRaftPeers, leaderElectedPhaser).forEach { it.register() }
+        listOf(phaserGPACPeer, phaserAlvinPeers).forEach { it.register() }
 
-        val proposedChange = AddGroupChange(
-            "name",
-            peersets = listOf(
-                ChangePeersetInfo(0, InitialHistoryEntry.getId())
-            ),
-        )
+        val change1 = AddGroupChange("name", peersets = listOf(ChangePeersetInfo(0, InitialHistoryEntry.getId())),)
+        val change2 = AddGroupChange("name", peersets = listOf(ChangePeersetInfo(0, change1.toHistoryEntry(0).getId())),)
 
         val firstLeaderAction = SignalListener { signalData ->
             val url = "http://${signalData.peers[0][0].address}/apply"
@@ -577,15 +570,14 @@ class AlvinSpec : IntegrationTestBase() {
         val peerGPACAction = SignalListener {
             phaserGPACPeer.arrive()
         }
-        val raftPeersAction = SignalListener {
-            phaserRaftPeers.arrive()
+        val consensusPeersAction = SignalListener {
+            logger.info("Arrived: ${it.change}")
+            phaserAlvinPeers.arrive()
         }
-        val leaderElectedAction = SignalListener { leaderElectedPhaser.arrive() }
 
         val firstPeerSignals = mapOf(
             Signal.BeforeSendingApply to firstLeaderAction,
-            Signal.ConsensusFollowerChangeAccepted to raftPeersAction,
-            Signal.ConsensusLeaderElected to leaderElectedAction,
+            Signal.AlvinCommitChange to consensusPeersAction,
             Signal.OnHandlingElectBegin to SignalListener {
                 if (isSecondGPAC.get()) {
                     throw Exception("Ignore restarting GPAC")
@@ -595,23 +587,21 @@ class AlvinSpec : IntegrationTestBase() {
 
         val peerSignals =
             mapOf(
-                Signal.ConsensusLeaderElected to leaderElectedAction,
-                Signal.ConsensusFollowerChangeAccepted to raftPeersAction,
+                Signal.AlvinCommitChange to consensusPeersAction,
                 Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") }
             )
 
         val peerRaftSignals =
             mapOf(
-                Signal.ConsensusLeaderElected to leaderElectedAction,
-                Signal.ConsensusFollowerChangeAccepted to raftPeersAction,
+                Signal.AlvinCommitChange to consensusPeersAction,
                 Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") },
                 Signal.OnHandlingAgreeBegin to SignalListener { throw Exception("Ignore GPAC") }
             )
 
         val peer1Signals =
             mapOf(
+                Signal.AlvinCommitChange to consensusPeersAction,
                 Signal.OnHandlingApplyCommitted to peerGPACAction,
-                Signal.ConsensusLeaderElected to leaderElectedAction
             )
 
         apps = TestApplicationSet(
@@ -631,13 +621,12 @@ class AlvinSpec : IntegrationTestBase() {
             )
         )
 
-        leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // change that will cause leader to fall according to action
         try {
             executeChange(
                 "${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true",
-                proposedChange
+                change1
             )
             fail("Change passed")
         } catch (e: Exception) {
@@ -655,10 +644,15 @@ class AlvinSpec : IntegrationTestBase() {
 
         expect {
             that(change).isA<AddGroupChange>()
-            that((change as AddGroupChange).groupName).isEqualTo(proposedChange.groupName)
+            that((change as AddGroupChange).groupName).isEqualTo(change1.groupName)
         }
 
-        phaserRaftPeers.arriveAndAwaitAdvanceWithTimeout()
+        executeChange(
+            "${apps.getPeer(0, 1).address}/v2/change/sync",
+            change2
+        )
+
+        phaserAlvinPeers.arriveAndAwaitAdvanceWithTimeout()
 
         apps.getPeers(0).forEach { (_, peerAddress) ->
             // and should not execute this change couple of times
@@ -671,7 +665,7 @@ class AlvinSpec : IntegrationTestBase() {
             expectThat(changes.size).isGreaterThanOrEqualTo(1)
             expect {
                 that(changes[0]).isA<AddGroupChange>()
-                that((changes[0] as AddGroupChange).groupName).isEqualTo(proposedChange.groupName)
+                that((changes[0] as AddGroupChange).groupName).isEqualTo(change1.groupName)
             }
         }
     }

@@ -42,6 +42,12 @@ fun Application.alvinProtocolRouting(protocol: AlvinProtocol) {
             call.respond(HttpStatusCode.OK,"OK")
         }
 
+        post("/alvin/fast-recovery") {
+            val message: AlvinFastRecovery = call.receive()
+            val result = protocol.handleFastRecovery(message)
+            call.respond(result)
+        }
+
 
 //      Endpoints for tests
         get("/alvin/proposed_changes") {
