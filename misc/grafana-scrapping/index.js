@@ -1,4 +1,14 @@
 import puppeteer from "puppeteer";
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const getBaseDownloadPath = () => {
+    const __filename = fileURLToPath(import.meta.url)
+    return `${path.dirname(__filename)}/../data-processing`
+}
+
+const baseDownloadPath = process.env.BASE_DOWNLOAD_PATH ?? getBaseDownloadPath()
+
 
 const experiments = [
     {
@@ -22,7 +32,7 @@ const downloadFile = async (page, {
     const client = await page.target().createCDPSession()
     await client.send('Page.setDownloadBehavior', {
         behavior: 'allow',
-        downloadPath: `/home/dawid/workspace/studia/magisterka/results/20-03/${protocol}/${experiment}`
+        downloadPath: `${baseDownloadPath}/${protocol}/${experiment}`
     });
     await page.goto(`http://localhost:3000/d/HSUzSq2Vk/poc?orgId=1&refresh=10s&&viewPanel=${panelId}&inspect=${panelId}&var-namespace=${namespace}&from=${from}&to=${to}`, {waitUntil: "load"});
 
