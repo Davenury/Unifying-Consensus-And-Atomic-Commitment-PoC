@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.consensus.raft.infrastructure
+package com.github.davenury.ucac.consensus.raft
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
@@ -7,7 +7,7 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.raft.domain.*
+import com.github.davenury.ucac.consensus.raft.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*

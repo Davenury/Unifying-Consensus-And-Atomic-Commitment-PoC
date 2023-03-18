@@ -2,17 +2,15 @@ package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
 import com.github.davenury.ucac.common.ChangeNotifier
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusHeartbeat
-import com.github.davenury.ucac.consensus.raft.domain.ConsensusProposeChange
-import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
+import com.github.davenury.ucac.consensus.ConsensusProposeChange
+import com.github.davenury.ucac.consensus.raft.ConsensusElectMe
+import com.github.davenury.ucac.consensus.raft.ConsensusHeartbeat
+import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocol
 import io.ktor.application.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 import kotlinx.coroutines.future.await
-import kotlinx.coroutines.runBlocking
-import org.slf4j.LoggerFactory
 
 data class CurrentLeaderDto(val currentLeaderPeerId: Int?)
 

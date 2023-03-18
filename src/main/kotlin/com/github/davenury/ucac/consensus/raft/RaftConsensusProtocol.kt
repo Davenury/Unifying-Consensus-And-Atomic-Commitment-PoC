@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.consensus.raft.domain
+package com.github.davenury.ucac.consensus.raft
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
@@ -9,5 +9,4 @@ interface RaftConsensusProtocol: LeaderBasedConsensusProtocol {
     suspend fun handleRequestVote(peerId: Int, iteration: Int, lastLogId: String): ConsensusElectedYou
     suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse
     suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult>
-    suspend fun getLeaderAddress(): String?
 }

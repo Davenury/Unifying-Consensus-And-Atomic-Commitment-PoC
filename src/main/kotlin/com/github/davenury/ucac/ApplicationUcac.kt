@@ -14,9 +14,12 @@ import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
-import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
-import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocol
+import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocolClientImpl
+import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocolImpl
+import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocol
+import com.github.davenury.ucac.consensus.raft.RaftProtocolClientImpl
+import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.routing.*
 import io.ktor.application.*
 import io.ktor.features.*
@@ -142,6 +145,18 @@ class ApplicationUcac constructor(
                 peerResolver,
                 signalPublisher,
                 AlvinProtocolClientImpl(),
+                heartbeatTimeout = config.consensus.heartbeatTimeout,
+                heartbeatDelay = config.consensus.leaderTimeout,
+                transactionBlocker = transactionBlocker,
+                config.metricTest
+            )
+
+            "pigpaxos" -> PigPaxosProtocolImpl(
+                history,
+                ctx,
+                peerResolver,
+                signalPublisher,
+                PigPaxosProtocolClientImpl(),
                 heartbeatTimeout = config.consensus.heartbeatTimeout,
                 heartbeatDelay = config.consensus.leaderTimeout,
                 transactionBlocker = transactionBlocker,
@@ -288,6 +303,7 @@ class ApplicationUcac constructor(
         when (config.consensus.name){
             "raft" -> raftProtocolRouting(consensusProtocol as RaftConsensusProtocol)
             "alvin" -> alvinProtocolRouting(consensusProtocol as AlvinProtocol)
+            "pigpaxos" -> pigPaxosProtocolRouting(consensusProtocol as PigPaxosProtocol)
             else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
         }
 

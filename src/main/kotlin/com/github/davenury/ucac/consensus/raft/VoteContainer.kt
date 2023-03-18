@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.consensus.raft.domain
+package com.github.davenury.ucac.consensus.raft
 
 import com.github.davenury.ucac.common.PeerAddress
 

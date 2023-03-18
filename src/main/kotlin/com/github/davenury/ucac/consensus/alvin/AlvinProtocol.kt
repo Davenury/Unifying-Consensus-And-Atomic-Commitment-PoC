@@ -7,6 +7,7 @@ import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.consensus.ConsensusResponse
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
@@ -41,7 +42,7 @@ class AlvinProtocol(
     private val entryIdToAlvinEntry: ConcurrentHashMap<String, AlvinEntry> = ConcurrentHashMap()
     private val entryIdToFailureDetector: ConcurrentHashMap<String, ProtocolTimer> = ConcurrentHashMap()
     private val entryIdToVotes: ConcurrentHashMap<String, Int> = ConcurrentHashMap()
-    private var executorService: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
+    private val executorService: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
     private val deliveryQueue: PriorityQueue<AlvinEntry> =
         PriorityQueue { o1, o2 -> o1.transactionId.compareTo(o2.transactionId) }
     private val proposeChannel = Channel<RequestResult<AlvinAckPropose>>()
@@ -199,9 +200,8 @@ class AlvinProtocol(
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
 
-    override fun otherConsensusPeers(): List<PeerAddress> {
-        return peerResolver.getPeersFromCurrentPeerset().filter { it.globalPeerId != globalPeerId }
-    }
+    override fun otherConsensusPeers(): List<PeerAddress> =
+        peerResolver.getPeersFromCurrentPeerset().filter { it.globalPeerId != globalPeerId }
 
 
     override fun stop() {
@@ -222,7 +222,7 @@ class AlvinProtocol(
     override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
         val entry = change.toHistoryEntry(globalPeerId.peersetId)
         mutex.withLock {
-            if (entryIdToAlvinEntry.containsKey(entry.getId())) {
+            if (entryIdToAlvinEntry.containsKey(entry.getId()) || history.containsEntry(entry.getId())) {
                 logger.info("Already proposed that change: $change")
                 return
             }
@@ -409,14 +409,13 @@ class AlvinProtocol(
         epoch: Int,
         sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<A?>
     ) =
-        (0 until getOtherPeers().size).map {
+        (0 until otherConsensusPeers().size).map {
             with(CoroutineScope(executorService)) {
                 launch(MDCContext()) {
                     var peerAddress: PeerAddress
                     var response: ConsensusResponse<A?>
                     do {
-                        delay(heartbeatDelay.toMillis())
-                        peerAddress = getOtherPeers()[it]
+                        peerAddress = otherConsensusPeers()[it]
                         response = sendMessage(peerAddress)
 
                         val entry: AlvinEntry?
@@ -429,19 +428,20 @@ class AlvinProtocol(
                             return@launch
                         }
 
-                        if (entry != null && response.unathorized) {
+                        if (entry != null && response.unauthorized) {
                             logger.info("Peer responded that our epoch is outdated, wait for newer messages")
                             resetFailureDetector(entry)
                             return@launch
                         }
 
-                    } while (response.message == null && !response.unathorized)
+                        if (response.message == null && !response.unauthorized) delay(heartbeatDelay.toMillis())
+                    } while (response.message == null && !response.unauthorized)
 
                     if (response.message != null) channel?.send(
                         RequestResult(
                             entryId,
                             response.message!!,
-                            response.unathorized
+                            response.unauthorized
                         )
                     )
                 }
@@ -487,10 +487,10 @@ class AlvinProtocol(
         channel: Channel<RequestResult<A?>>,
         sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<A?>
     ) =
-        (0 until getOtherPeers().size).map {
+        (0 until otherConsensusPeers().size).map {
             with(CoroutineScope(executorService)) {
                 launch(MDCContext()) {
-                    val peerAddress = getOtherPeers()[it]
+                    val peerAddress = otherConsensusPeers()[it]
                     val response = sendMessage(peerAddress)
                     channel.send(RequestResult(entryId, response.message))
                 }
@@ -636,9 +636,6 @@ class AlvinProtocol(
     }
 
     private fun peers() = peerResolver.getPeersFromCurrentPeerset()
-    private fun getOtherPeers() = peerResolver
-        .getPeersFromCurrentPeerset()
-        .filter { it.globalPeerId != peerResolver.currentPeer() }
 
     private suspend fun getNextNum(peerId: Int = globalPeerId.peerId): Int = mutex.withLock {
         val previousMod = lastTransactionId % peers().size

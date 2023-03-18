@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.consensus.raft.domain
+package com.github.davenury.ucac.consensus.raft
 
 import com.github.davenury.common.Change
 
@@ -23,4 +23,3 @@ data class ConsensusHeartbeatResponse(
     val missingValues: Boolean = false
 )
 
-typealias ConsensusProposeChange = Change
