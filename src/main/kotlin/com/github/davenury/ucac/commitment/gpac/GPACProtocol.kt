@@ -162,7 +162,7 @@ class GPACProtocolImpl(
                 acceptNum = message.acceptNum ?: message.ballotNumber
             )
 
-        logger.info("State transaction state: ${this.transaction}")
+        logger.info("State transaction state: ${this@GPACProtocolImpl.transaction}")
 
 
         signal(Signal.OnHandlingAgreeEnd, transaction, message.change)
@@ -185,7 +185,7 @@ class GPACProtocolImpl(
     override suspend fun handleApply(message: Apply): Unit = phaseMutex.withLock {
         logger.info("HandleApply message: $message")
         val isCurrentTransaction =
-            message.ballotNumber >= this.myBallotNumber
+            message.ballotNumber >= this@GPACProtocolImpl.myBallotNumber
 
         if (isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
@@ -216,8 +216,8 @@ class GPACProtocolImpl(
         }
 
         try {
-            this.transaction =
-                this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
+            this@GPACProtocolImpl.transaction =
+                this@GPACProtocolImpl.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
 
             val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(entry.getId())) {
@@ -283,7 +283,7 @@ class GPACProtocolImpl(
     override suspend fun performProtocolAsLeader(
         change: Change,
         iteration: Int
-    ) {
+    ): Unit {
         logger.info("Starting performing GPAC iteration: $iteration")
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
 
@@ -321,9 +321,9 @@ class GPACProtocolImpl(
                 return
             }
 
-            this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
+            this@GPACProtocolImpl.transaction = this@GPACProtocolImpl.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
 
-            applySignal(Signal.BeforeSendingAgree, this.transaction, change)
+            applySignal(Signal.BeforeSendingAgree, this@GPACProtocolImpl.transaction, change)
 
             val agreed = ftAgreePhase(change, acceptVal)
             if (!agreed) {
@@ -331,7 +331,7 @@ class GPACProtocolImpl(
             }
 
             try {
-                applySignal(Signal.BeforeSendingApply, this.transaction, change)
+                applySignal(Signal.BeforeSendingApply, this@GPACProtocolImpl.transaction, change)
             } catch (e: Exception) {
                 transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
                 logger.error("Exception in Signal BeforeSendingApply", e.cause)
@@ -446,10 +446,10 @@ class GPACProtocolImpl(
         }
 
         myBallotNumber++
-        this.transaction =
+        this@GPACProtocolImpl.transaction =
             transaction ?: Transaction(ballotNumber = myBallotNumber, initVal = Accept.COMMIT, change = change)
 
-        signal(Signal.BeforeSendingElect, this.transaction, change)
+        signal(Signal.BeforeSendingElect, this@GPACProtocolImpl.transaction, change)
         logger.info("Sending ballot number: $myBallotNumber")
         val responses = getElectedYouResponses(change, getPeersFromChange(change), acceptNum)
 
@@ -497,11 +497,11 @@ class GPACProtocolImpl(
             return ftAgreePhase(change, acceptVal, decision, acceptNum, iteration + 1)
         }
 
-        this.transaction = this.transaction.copy(decision = true, acceptVal = acceptVal)
+        this@GPACProtocolImpl.transaction = this@GPACProtocolImpl.transaction.copy(decision = true, acceptVal = acceptVal)
         return true
     }
 
-    private suspend fun applyPhase(change: Change, acceptVal: Accept) {
+    private suspend fun applyPhase(change: Change, acceptVal: Accept): Unit {
         val applyMessages = sendApplyMessages(change, getPeersFromChange(change), acceptVal)
 
         val (responses, _) = GPACResponsesContainer(applyMessages, gpacConfig.phasesTimeouts.applyTimeout).awaitForMessages {

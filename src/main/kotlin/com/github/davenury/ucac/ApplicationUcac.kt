@@ -10,6 +10,11 @@ import com.github.davenury.ucac.routing.consensusProtocolRouting
 import com.github.davenury.ucac.routing.gpacProtocolRouting
 import com.github.davenury.ucac.routing.metaRouting
 import com.github.davenury.ucac.routing.twoPCRouting
+import com.zopa.ktor.opentracing.OpenTracingServer
+import com.zopa.ktor.opentracing.ThreadContextElementScopeManager
+import io.jaegertracing.Configuration
+import io.jaegertracing.internal.samplers.ConstSampler
+import io.ktor.application.*
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -22,6 +27,7 @@ import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics
 import io.netty.channel.socket.nio.NioServerSocketChannel
+import io.opentracing.util.GlobalTracer
 import kotlinx.coroutines.runBlocking
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -97,8 +103,22 @@ class ApplicationUcac constructor(
 
     private fun createServer() = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
         val peersetId = config.peersetId()
+
         logger.info("My peerset: $peersetId")
         val changeNotifier = ChangeNotifier(peerResolver)
+        val tracer = Configuration(peerResolver.peerName())
+            .withSampler(Configuration.SamplerConfiguration.fromEnv()
+                .withType(ConstSampler.TYPE)
+                .withParam(1))
+            .withReporter(Configuration.ReporterConfiguration.fromEnv()
+                .withLogSpans(true)
+                .withSender(
+                    Configuration.SenderConfiguration()
+                        .withAgentHost("tempo")
+                        .withAgentPort(6831))).tracerBuilder
+            .withScopeManager(ThreadContextElementScopeManager())
+            .build()
+        GlobalTracer.registerIfAbsent(tracer)
 
         val signalPublisher = SignalPublisher(signalListeners, peerResolver)
 
@@ -111,6 +131,10 @@ class ApplicationUcac constructor(
         )
 
         service = ApiV2Service(config, peersetProtocols, changeNotifier)
+
+        install(OpenTracingServer) {
+            addTag("threadName") { Thread.currentThread().name }
+        }
 
         install(CallLogging) {
             level = Level.DEBUG

@@ -55,6 +55,10 @@ dependencies {
     implementation("io.micrometer:micrometer-registry-prometheus:1.10.0")
     implementation("io.ktor:ktor-metrics-micrometer:$ktor_version")
 
+    // traces
+    implementation("io.jaegertracing:jaeger-client:1.8.1")
+    implementation("com.zopa:ktor-opentracing:0.3.6")
+
     implementation("org.apache.ratis:ratis:$ratis_version")
     implementation("org.apache.ratis:ratis-proto:$ratis_version")
     implementation("org.apache.ratis:ratis-grpc:$ratis_version")
