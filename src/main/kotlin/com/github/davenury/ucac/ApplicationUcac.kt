@@ -20,6 +20,7 @@ import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
 import io.ktor.metrics.micrometer.*
+import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -134,6 +135,7 @@ class ApplicationUcac constructor(
 
         install(OpenTracingServer) {
             addTag("threadName") { Thread.currentThread().name }
+            filter { call -> call.request.path().startsWith("/_meta") }
         }
 
         install(CallLogging) {
