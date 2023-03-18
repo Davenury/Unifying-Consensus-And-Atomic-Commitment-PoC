@@ -40,6 +40,7 @@ data class GPACChannels(
     val agreedResponseChannel: Channel<Agreed>,
     val appliedResponseChannel: Channel<Applied>,
 ) {
+
     companion object {
         fun create(): GPACChannels = GPACChannels(
             Channel(),

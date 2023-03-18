@@ -11,6 +11,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -50,60 +51,33 @@ class GPACFactory(
         context.dispatch(Dispatchers.IO) {
             runBlocking {
                 launch(MDCContext()) {
-                    for (elect in gpacChannels.electMeChannel) {
-                        try {
-                            val result = handleElect(elect.message)
-                            notifyLeader(elect.returnUrl, result)
-                        } catch (e: Exception) {
-                            logger.error("Error while handling elect message", e)
-                        }
-                    }
+                    gpacChannels.electMeChannel.handle { notifyLeader(it.returnUrl, handleElect(it.message)) }
                 }
                 launch(MDCContext()) {
-                    for (agree in gpacChannels.ftagreeChannel) {
-                        try {
-                            notifyLeader(agree.returnUrl, handleAgree(agree.message))
-                        } catch (e: Exception) {
-                            logger.error("Error while handling ftagree message", e)
-                        }
-                    }
+                    gpacChannels.ftagreeChannel.handle { notifyLeader(it.returnUrl, handleAgree(it.message)) }
                 }
                 launch(MDCContext()) {
-                    for (apply in gpacChannels.applyChannel) {
-                        try {
-                            notifyLeader(apply.returnUrl, handleApply(apply.message))
-                        } catch (e: Exception) {
-                            logger.error("Error while handling apply message", e)
-                        }
-                    }
+                    gpacChannels.applyChannel.handle { notifyLeader(it.returnUrl, handleApply(it.message)) }
                 }
                 launch(MDCContext()) {
-                    for (electResponse in gpacChannels.electResponseChannel) {
-                        try {
-                            handleElectResponse(electResponse)
-                        } catch (e: Exception) {
-                            logger.error("Error while handling electResponse", e)
-                        }
-                    }
+                    gpacChannels.electResponseChannel.handle { handleElectResponse(it) }
                 }
                 launch(MDCContext()) {
-                    for (agreeResponse in gpacChannels.agreedResponseChannel) {
-                        try {
-                            handleAgreeResponse(agreeResponse)
-                        } catch (e: Exception) {
-                            logger.error("Error while handling agreeResponse", e)
-                        }
-                    }
+                    gpacChannels.agreedResponseChannel.handle { handleAgreeResponse(it) }
                 }
                 launch(MDCContext()) {
-                    for (applyResponse in gpacChannels.appliedResponseChannel) {
-                        try {
-                            handleApplyResponse(applyResponse)
-                        } catch (e: Exception) {
-                            logger.error("Error while handling applyResponse", e)
-                        }
-                    }
+                    gpacChannels.appliedResponseChannel.handle { handleApplyResponse(it) }
                 }
+            }
+        }
+    }
+
+    private suspend fun <T> Channel<T>.handle(fn: suspend (T) -> Unit) {
+        for (message in this) {
+            try {
+                fn(message)
+            } catch (e: Exception) {
+                logger.error("Error while handling message", e)
             }
         }
     }
@@ -136,9 +110,6 @@ class GPACFactory(
     private suspend fun handleApply(message: Apply) =
         changeIdToGpacInstance[message.change.id]
             ?.handleApply(message)
-//            ?.also {
-//                changeIdToGpacInstance.remove(message.change.id)
-//            }
             ?: throw GPACInstanceNotFoundException(message.change.id)
 
     private suspend fun <T : Any> notifyLeader(returnUrl: String, result: T) {
