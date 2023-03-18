@@ -514,7 +514,7 @@ class GPACProtocolImpl(
     }
 
     private fun <T> superMajority(responses: List<List<T>>, peers: List<List<T>>): Boolean =
-        ((floor(peers.size * 0.5) + 1) <= responses.size) && superFunction(responses, peers)
+        responses.size.isMoreThanHalfOf(peers.size) && superFunction(responses, peers)
 
     private fun <T> superSet(responses: List<List<T>>, peers: List<List<T>>, condition: (T) -> Boolean = { true }): Boolean =
         (peers.size == responses.size) && superFunction(responses, peers, condition)
@@ -523,18 +523,22 @@ class GPACProtocolImpl(
         val myPeersetId = globalPeerId.peersetId
 
         return responses.withIndex()
-            .all { (index, value) ->
+            .all { (index, responses) ->
                 val allPeers =
                     if (index == myPeersetId) peers[index].size + 1 else peers[index].size
                 val agreedPeers =
                     if (index == myPeersetId) {
-                        value.count { condition(it) } + 1
+                        responses.count { condition(it) } + 1
                     } else {
-                        value.count { condition(it) }
+                        responses.count { condition(it) }
                     }
                 agreedPeers >= (floor(allPeers * 0.5) + 1)
+                agreedPeers.isMoreThanHalfOf(allPeers)
             }
     }
+
+    private fun Int.isMoreThanHalfOf(otherValue: Int) =
+        this >= (floor(otherValue * 0.5) + 1)
 
     private fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
         try {
