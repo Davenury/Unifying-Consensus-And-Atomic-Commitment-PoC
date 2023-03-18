@@ -16,5 +16,4 @@ object Metrics {
     fun bumpDelayInSendingChange() {
         meterRegistry.counter("sending_change_delay").increment()
     }
-
 }

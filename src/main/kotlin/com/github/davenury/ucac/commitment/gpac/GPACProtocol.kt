@@ -12,6 +12,8 @@ import kotlinx.coroutines.delay
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
+import kotlin.math.floor
+import kotlin.math.log
 
 abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) : SignalSubject,
     AbstractAtomicCommitmentProtocol(logger, peerResolver) {
@@ -111,11 +113,15 @@ class GPACProtocolImpl(
         }
 
         val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
-        val initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
+        var initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
+        if (gpacConfig.abortOnElectMe) {
+            initVal = Accept.ABORT
+        }
 
         myBallotNumber = message.ballotNumber
 
         signal(Signal.OnHandlingElectEnd, transaction, message.change)
+        this.transaction = transaction.copy(initVal = initVal)
 
         if (isMetricTest) {
             Metrics.bumpChangeMetric(
@@ -199,7 +205,10 @@ class GPACProtocolImpl(
                 state = "agreed"
             )
         }
-        leaderFailTimeoutStart(message.change)
+
+        if (gpacConfig.invokeRecovery) {
+            leaderFailTimeoutStart(message.change)
+        }
 
         return Agreed(
             change = message.change,
@@ -324,7 +333,12 @@ class GPACProtocolImpl(
 
         try {
             val electMeResult =
-                electMePhase(change, { responses -> superSet(responses, getPeersFromChange(change)) })
+                electMePhase(change, { responses ->
+                    kotlin.run {
+                        superSet(responses, getPeersFromChange(change)) { it.initVal == Accept.COMMIT }
+                                || superSet(responses, getPeersFromChange(change)) { it.initVal == Accept.ABORT }
+                    }
+                })
 
             if (iteration == maxLeaderElectionTries) {
                 val message = "Transaction failed due to too many retries of becoming a leader."
@@ -344,9 +358,14 @@ class GPACProtocolImpl(
 
             val electResponses = electMeResult.responses
 
+            val acceptVal = electResponses.getAcceptVal(change)
 
-            val acceptVal =
-                if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+            if (acceptVal == null) {
+                retriesTimer.startCounting(iteration) {
+                    performProtocolAsLeader(change, iteration + 1)
+                }
+                return
+            }
 
             this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
 
@@ -369,6 +388,18 @@ class GPACProtocolImpl(
         } catch (e: Exception) {
             logger.error("Error while performing gpac", e)
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT, e.message))
+        }
+    }
+
+    private fun List<List<ElectedYou>>.getAcceptVal(change: Change): Accept? {
+
+        val shouldCommit = superSet(this, getPeersFromChange(change)) { it.initVal == Accept.COMMIT }
+        val shouldAbort = superSet(this, getPeersFromChange(change)) { it.initVal == Accept.ABORT }
+
+        return when {
+            shouldCommit -> Accept.COMMIT
+            shouldAbort -> Accept.ABORT
+            else -> null
         }
     }
 
@@ -615,37 +646,40 @@ class GPACProtocolImpl(
     }
 
     private fun <T : GpacResponse> superMajority(responses: List<List<T>>, peers: List<List<PeerAddress>>): Boolean =
-        superFunction(responses, 2, peers)
+        responses.size.isMoreThanHalfOf(peers.size) && superFunction(responses, peers)
 
-    private fun <T : GpacResponse> superSet(responses: List<List<T>>, peers: List<List<PeerAddress>>): Boolean =
-        superFunction(responses, 1, peers)
+    private fun <T : GpacResponse> superSet(
+        responses: List<List<T>>,
+        peers: List<List<PeerAddress>>,
+        condition: (T) -> Boolean = { true }
+    ): Boolean =
+        (peers.size == responses.size) && superFunction(responses, peers, condition)
 
     private fun <T : GpacResponse> superFunction(
         responses: List<List<T>>,
-        divider: Int,
-        peers: List<List<PeerAddress>>
+        peers: List<List<PeerAddress>>,
+        condition: (T) -> Boolean = { true },
     ): Boolean {
-        // TODO - why concurrent modification exception - while was already out of condition, got response from another peer
-        val allShards = responses.size >= peers.size / divider.toDouble()
         val myPeersetId = globalPeerId.peersetId
 
-        return peers.withIndex()
-            .all { (index, peers) ->
-                val allPeers =
-                    if (index == myPeersetId) {
-                        peers.size + 1
-                    } else {
-                        peers.size
-                    }
-                val agreedPeers =
-                    if (index == myPeersetId) {
-                        responses.getOrElse(index, { listOf() }).count { it.isSuccess() } + 1
-                    } else {
-                        responses.getOrElse(index, { listOf() }).count { it.isSuccess() }
-                    }
-                agreedPeers >= allPeers / 2F
-            } && allShards
+        return responses.withIndex()
+            .all { (index, responses) ->
+                val allPeers = if (index == myPeersetId) {
+                    peers.size + 1
+                } else {
+                    peers.size
+                }
+                val agreedPeers = if (index == myPeersetId) {
+                    responses.filter { condition(it) }.count { it.isSuccess() } + 1
+                } else {
+                    responses.filter { condition(it) }.count { it.isSuccess() }
+                }
+                agreedPeers.isMoreThanHalfOf(allPeers)
+            }
     }
+
+    private fun Int.isMoreThanHalfOf(otherValue: Int) =
+        this >= (floor(otherValue * 0.5) + 1)
 
     private fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
         try {

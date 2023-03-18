@@ -975,7 +975,8 @@ class ConsensusSpec : IntegrationTestBase() {
         val peer1Signals =
             mapOf(
                 Signal.OnHandlingApplyCommitted to peerGPACAction,
-                Signal.ConsensusLeaderElected to leaderElectedAction
+                Signal.ConsensusLeaderElected to leaderElectedAction,
+                Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") },
             )
 
         apps = TestApplicationSet(
@@ -1010,20 +1011,24 @@ class ConsensusSpec : IntegrationTestBase() {
 
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
         phaserGPACPeer.arriveAndAwaitAdvanceWithTimeout()
+        logger.info("After phaserGPACPeer")
         isSecondGPAC.set(true)
 
         val change = testHttpClient.get<Change>("http://${apps.getPeer(0, 1).address}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
+        logger.info("change - $change")
 
         expect {
             that(change).isA<AddGroupChange>()
             that((change as AddGroupChange).groupName).isEqualTo(proposedChange.groupName)
         }
 
+        logger.info("Before phaserRaftPeers")
         phaserRaftPeers.arriveAndAwaitAdvanceWithTimeout()
 
+        logger.info("After phaser raft peers")
         apps.getPeers(0).forEach { (_, peerAddress) ->
             // and should not execute this change couple of times
             val changes = testHttpClient.get<Changes>("http://${peerAddress.address}/changes") {

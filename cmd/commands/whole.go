@@ -38,6 +38,10 @@ type Config struct {
 	fixedPeersetsInChange          string
 	proxyDelay                     string
 	proxyLimit                     string
+	loadGeneratorType              string
+	increasingLoadBound            float64
+	increasingLoadIncreaseDelay    string
+	increasingLoadIncreaseStep     float64
 }
 
 func CreateWholeCommand() *cobra.Command {
@@ -79,6 +83,11 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.proxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	cmd.Flags().StringVar(&config.proxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
 
+	cmd.Flags().StringVar(&config.loadGeneratorType, "load-generator-type", "", "Load Generator Type - one of constant, bound or increasing")
+	cmd.Flags().Float64Var(&config.increasingLoadBound, "load-bound", float64(100), "Bound of changes per second for increasing load generator")
+	cmd.Flags().StringVar(&config.increasingLoadIncreaseDelay, "load-increase-delay", "PT60S", "Determines how long load should be constant before increasing")
+	cmd.Flags().Float64Var(&config.increasingLoadIncreaseStep, "load-increase-step", float64(1), "Determines how much load should change after load-increase-delay time")
+
 	return cmd
 }
 
@@ -109,7 +118,6 @@ func perform(config Config) {
 		PerformanceImage:            config.performanceImage,
 		SingleRequestsNumber:        config.singleRequestsNumber,
 		MultipleRequestsNumber:      config.multipleRequestsNumber,
-		TestDuration:                config.testDuration,
 		MaxPeersetsInChange:         config.maxPeersetsInChange,
 		TestsSendingStrategy:        config.testsSendingStrategy,
 		TestsCreatingChangeStrategy: config.testsCreatingChangeStrategy,
@@ -117,9 +125,15 @@ func perform(config Config) {
 		EnforceAcUsage:              config.enforceAcUsage,
 		AcProtocol:                  config.acProtocol,
 		ConsensusProtocol:           config.consensusProtocol,
-		ConstantLoad:                config.constantLoad,
 		FixedPeersetsInChange:       config.fixedPeersetsInChange,
 		MonitoringNamespace:         config.monitoringNamespace,
+
+		LoadGeneratorType:           config.loadGeneratorType,
+		ConstantLoad:                config.constantLoad,
+		TestDuration:                config.testDuration,
+		IncreasingLoadBound:         config.increasingLoadBound,
+		IncreasingLoadIncreaseDelay: config.increasingLoadIncreaseDelay,
+		IncreasingLoadIncreaseStep:  config.increasingLoadIncreaseStep,
 	})
 	fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
 	waitUntilJobPodCompleted(config)
