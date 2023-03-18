@@ -54,7 +54,10 @@ data class GpacConfig(
     val responsesTimeouts: ResponsesTimeoutsConfig = ResponsesTimeoutsConfig.default(),
     val ftAgreeRepeatDelay: Duration = Duration.ofMillis(500),
     val maxFTAgreeTries: Int = 5,
+    val abortOnElectMe: Boolean = false,
+    val invokeRecovery: Boolean = true,
 )
+
 data class ResponsesTimeoutsConfig(
     val electTimeout: Duration = Duration.ofSeconds(2),
     val agreeTimeout: Duration = Duration.ofSeconds(2),

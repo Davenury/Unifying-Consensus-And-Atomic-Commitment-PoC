@@ -19,9 +19,8 @@ import kotlin.reflect.KType
 data class Config(
     val peers: String,
     val notificationServiceAddress: String,
-    val numberOfRequestsToSendToSinglePeerset: Int,
-    val numberOfRequestsToSendToMultiplePeersets: Int,
-    val durationOfTest: Duration,
+    val numberOfRequestsToSendToSinglePeerset: Int?,
+    val numberOfRequestsToSendToMultiplePeersets: Int?,
     val maxPeersetsInChange: Int,
     val sendingStrategy: SendingStrategy,
     val createChangeStrategy: CreatingChangeStrategy,
@@ -29,8 +28,8 @@ data class Config(
     val acProtocol: ACProtocolConfig,
     // TODO - after implementing multiple consensus this might come in handy
     val consensusProtocol: String? = null,
-    val constantLoad: String? = null,
     val fixedPeersetsInChange: String? = null,
+    val loadGeneratorConfig: LoadGeneratorConfig
 ) {
     fun peerAddresses(): Map<Int, List<String>> =
         parsePeers(peers)
@@ -46,6 +45,15 @@ data class Config(
         return createChangeStrategy.getStrategy(this.notificationServiceAddress)
     }
 }
+
+data class LoadGeneratorConfig(
+    val loadGeneratorType: String,
+    val constantLoad: String? = null,
+    val timeOfSimulation: Duration? = null,
+    val increasingLoadBound: Double? = null,
+    val increasingLoadIncreaseDelay: Duration? = null,
+    val increasingLoadIncreaseStep: Double? = null
+)
 
 enum class SendingStrategy {
     RANDOM {

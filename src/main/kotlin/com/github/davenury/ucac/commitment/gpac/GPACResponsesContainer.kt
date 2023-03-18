@@ -85,7 +85,6 @@ class GPACResponsesContainer(
 
         private fun timeout() {
             runBlocking {
-                // TODO - move to config if this solution is better
                 delay(waitingTimeout.toMillis())
                 shouldWait = false
                 lock.withLock {
