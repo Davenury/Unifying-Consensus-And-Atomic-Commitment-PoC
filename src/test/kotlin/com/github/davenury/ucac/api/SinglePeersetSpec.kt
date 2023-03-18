@@ -100,6 +100,14 @@ class SinglePeersetSpec : IntegrationTestBase() {
                 },
             )
 
+            val config = mapOf(
+                "gpac.retriesBackoffTimeout" to Duration.ZERO,
+                "gpac.initialRetriesDelay" to Duration.ZERO,
+                "gpac.leaderFailDelay" to Duration.ofSeconds(1),
+                "gpac.leaderFailBackoff" to Duration.ZERO,
+
+            )
+
             apps = TestApplicationSet(
                 listOf(3),
                 signalListeners = mapOf(
@@ -108,8 +116,9 @@ class SinglePeersetSpec : IntegrationTestBase() {
                     2 to signalListenersForCohort,
                 ),
                 configOverrides = mapOf(
-                    1 to mapOf("gpac.retriesBackoffTimeout" to Duration.ZERO),
-                    2 to mapOf("gpac.retriesBackoffTimeout" to Duration.ZERO),
+                    0 to config,
+                    1 to config,
+                    2 to config,
                 )
             )
 

@@ -4,12 +4,13 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
-import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.ProtocolTimer
+import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.TransactionBlocker
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.delay
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) : SignalSubject,
@@ -42,7 +43,7 @@ class GPACProtocolImpl(
 ) : GPACProtocolAbstract(peerResolver, logger) {
     private val globalPeerId: GlobalPeerId = peerResolver.currentPeer()
 
-    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, Duration.ZERO, ctx)
+    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, gpacConfig.leaderFailBackoff, ctx)
 
     var retriesTimer: ProtocolTimer =
         ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
@@ -159,17 +160,19 @@ class GPACProtocolImpl(
 
         myBallotNumber = message.ballotNumber
 
-        try {
-            transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
-        } catch (e: Exception) {
-            return Agreed(
-                change = message.change,
-                ballotNumber = message.ballotNumber,
-                acceptVal = Accept.ABORT,
-                agreed = false,
-                reason = Reason.ALREADY_LOCKED,
-                sender = peerResolver.currentPeer()
-            )
+        if (!this.transaction.decision) {
+            try {
+                transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+            } catch (e: Exception) {
+                return Agreed(
+                    change = message.change,
+                    ballotNumber = message.ballotNumber,
+                    acceptVal = Accept.ABORT,
+                    agreed = false,
+                    reason = Reason.ALREADY_LOCKED,
+                    sender = peerResolver.currentPeer()
+                )
+            }
         }
         logger.info("Lock aquired: ${message.ballotNumber}")
 
@@ -215,9 +218,14 @@ class GPACProtocolImpl(
         if (isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
 
+        val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
+
         when {
             !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
-                transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+
+                if (history.containsEntry(entry.getId()))
+                    transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+
                 transaction =
                     Transaction(
                         ballotNumber = message.ballotNumber,
@@ -240,12 +248,7 @@ class GPACProtocolImpl(
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
 
-            val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(
-                    message.change.toHistoryEntry(
-                        globalPeerId.peersetId
-                    ).getId()
-                )
-            ) {
+            val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(entry.getId())) {
                 addChangeToHistory(message.change)
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
                 Pair(ChangeResult.Status.SUCCESS, null)
@@ -267,11 +270,16 @@ class GPACProtocolImpl(
                     state = changeResult.name.lowercase()
                 )
             }
+        } catch (ex: Exception) {
+            logger.error("Exception during applying change, set it to abort", ex)
+            transaction =
+                transaction.copy(ballotNumber = myBallotNumber, decision = true, initVal = Accept.ABORT, change = null)
         } finally {
-            transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
-
             logger.info("handleApply finally releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
+            if (transactionBlocker.isAcquired()) transactionBlocker.tryToReleaseBlockerChange(
+                ProtocolName.GPAC,
+                message.change.id
+            )
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
 
@@ -490,6 +498,7 @@ class GPACProtocolImpl(
                 logger.info("Bumped ballot number to: $myBallotNumber")
                 return ElectMeResult(responses, false)
             }
+
             else -> kotlin.run {
                 logger.info("GPAC elect phase ended with $this, executing once more")
                 ElectMeResult(responses, false)

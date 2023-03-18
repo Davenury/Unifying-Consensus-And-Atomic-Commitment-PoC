@@ -72,7 +72,7 @@ class GPACProtocolClientImpl(
                     ) { throwable -> errorMessage(peer, throwable) }
                 }
             }
-        }.map { it.forEach { it.await() } }
+        }
     }
 
     private suspend inline fun <Message> gpacHttpCall(
