@@ -69,7 +69,6 @@ function delay(time) {
 
     for (let experiment of experiments) {
         for (let panel of panels) {
-            console.log(`panelId: ${panel}`)
             await downloadFile(page, {...experiment, panelId: panel})
             await delay(1000)
         }
