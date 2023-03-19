@@ -1,5 +1,8 @@
 <configuration>
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
         <encoder>
             <pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} %-5level [%-11logger{36}] %msg \(%thread\)%n</pattern>
         </encoder>
@@ -13,12 +16,12 @@
                 <pattern>app=performance-test,host=${HOSTNAME},level=%level</pattern>
             </label>
             <message>
-                <pattern>l=%level h=${HOSTNAME} c=%logger{20} t=%thread | %msg %ex</pattern>
+                <pattern>l=%level namespace=${NAMESPACE} h=${HOSTNAME} c=%logger{20} t=%thread | %msg %ex</pattern>
             </message>
             <sortByTime>true</sortByTime>
         </format>
     </appender>
-    <root level="info">
+    <root level="DEBUG">
         <appender-ref ref="STDOUT"/>
         <appender-ref ref="LOKI" />
     </root>

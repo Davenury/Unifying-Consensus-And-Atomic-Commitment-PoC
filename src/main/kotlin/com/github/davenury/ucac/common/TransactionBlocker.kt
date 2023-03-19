@@ -28,7 +28,7 @@ class TransactionBlocker {
         if (!semaphore.tryAcquire() && !sameChange) {
             throw AlreadyLockedException(this.protocol!!)
         }
-        logger.info("Transaction lock acquired")
+        logger.info("Transaction lock acquired on changeId $changeId")
         this.protocol = protocol
         this.changeId = changeId
     }

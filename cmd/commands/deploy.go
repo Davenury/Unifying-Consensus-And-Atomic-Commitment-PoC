@@ -326,10 +326,6 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 		Name:      "application",
 		Image:     config.ImageName,
 		Resources: resources,
-		Args: []string{
-			"-Xmx500m",
-			"-Dcom.sun.management.jmxremote.port=9999",
-		},
 		Ports: []apiv1.ContainerPort{
 			{
 				ContainerPort: 8081,
@@ -371,6 +367,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 		},
 		Data: map[string]string{
 			"CONFIG_FILE":                  "application-kubernetes.conf",
+			"JAVA_OPTS":                    "-Xmx200m",
 			"config_host":                  utils.ServiceAddress(peerConfig),
 			"config_port":                  "8081",
 			"config_peersetId":             peerConfig.PeersetId,
@@ -381,7 +378,9 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"config_persistence_type":      "REDIS",
 			"config_persistence_redisHost": "localhost",
 			"config_persistence_redisPort": "6379",
-			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s.svc.cluster.local:3100", config.MonitoringNamespace),
+			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
+			"NAMESPACE":                    config.DeployNamespace,
+			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
 		},
 	}
 

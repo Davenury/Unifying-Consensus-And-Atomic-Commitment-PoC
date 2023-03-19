@@ -8,6 +8,7 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"log"
+	"os"
 )
 
 var settings *cli.EnvSettings
@@ -38,23 +39,17 @@ func DoInit(namespace string, createNamespace bool) {
 		utils.CreateNamespace(namespace)
 	}
 
-	prometheusValues := map[string]interface{}{
-		"alertmanager": map[string]interface{}{
-			"enabled": false,
-		},
+	victoriaValues := map[string]interface{}{
 		"server": map[string]interface{}{
-			"global": map[string]interface{}{
-				"scrape_interval": "5s",
-				"scrape_timeout":  "2s",
+			"scrape": map[string]interface{}{
+				"enabled": true,
+			},
+			"persistentVolume": map[string]interface{}{
+				"enabled": false,
 			},
 		},
-		"prometheus-node-exporter": map[string]interface{}{
-			"enabled": false,
-		},
 	}
-
-	// install prometheus
-	installChart(namespace, "prometheus-community", "prometheus", "prometheus", prometheusValues)
+	installChart(namespace, "vm", "victoria-metrics-single", "victoria", victoriaValues)
 
 	grafanaValues := map[string]interface{}{
 		"adminPassword": "admin123",
@@ -68,21 +63,53 @@ func DoInit(namespace string, createNamespace bool) {
 				"memory": "256Mi",
 			},
 		},
+		"grafana.ini": map[string]interface{}{
+			"auth.anonymous": map[string]interface{}{
+				"enabled":  true,
+				"org_role": "Admin",
+			},
+		},
 		"datasources": map[string]interface{}{
 			"datasources.yaml": map[string]interface{}{
 				"apiVersion": 1,
 				"datasources": []map[string]interface{}{
 					{
-						"name":      "Prometheus",
-						"url":       fmt.Sprintf("http://prometheus-server.%s", namespace),
+						"name":      "VictoriaMetrics",
+						"uid":       "PBFA97CFB590B2093",
+						"url":       fmt.Sprintf("http://victoria-victoria-metrics-single-server.%s:8428/", namespace),
 						"type":      "prometheus",
 						"isDefault": true,
 					},
 					{
 						"name": "Loki",
-						"url":  fmt.Sprintf("http://loki.%s.svc.cluster.local:3100", namespace),
+						"url":  fmt.Sprintf("http://loki.%s:3100", namespace),
 						"type": "loki",
 					},
+				},
+			},
+		},
+		"dashboardProviders": map[string]interface{}{
+			"dashboardproviders.yaml": map[string]interface{}{
+				"apiVersion": 1,
+				"providers": []map[string]interface{}{
+					{
+						"name":            "default",
+						"orgId":           1,
+						"folder":          "",
+						"type":            "file",
+						"disableDeletion": "false",
+						"editable":        true,
+						"options": map[string]string{
+							"path": "/var/lib/grafana/dashboards/default",
+						},
+					},
+				},
+			},
+		},
+		"dashboards": map[string]interface{}{
+			"default": map[string]interface{}{
+				"kubernetes": map[string]interface{}{
+					"json": readFile("dashboard.json"),
 				},
 			},
 		},
@@ -149,4 +176,13 @@ func installChart(namespace string, repoName string, chartName string, releaseNa
 		log.Fatal(err)
 	}
 	fmt.Printf("Installed %s release to namespace %s\n", release.Name, namespace)
+}
+
+func readFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+
+	return string(data)
 }

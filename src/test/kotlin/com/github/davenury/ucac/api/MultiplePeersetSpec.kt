@@ -17,7 +17,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
@@ -26,8 +25,10 @@ import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
-import java.io.File
+import java.time.Duration
 import java.util.concurrent.Phaser
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.system.measureTimeMillis
 
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
@@ -78,6 +79,64 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         askAllForChanges(peers.values).forEach { changes ->
             expectThat(changes.size).isGreaterThanOrEqualTo(1)
             expectThat(changes[0]).isEqualTo(change)
+        }
+    }
+
+
+    @Test
+    fun `1000 change processed sequentially`(): Unit = runBlocking {
+        val phaser = Phaser(6)
+        var change = change(0, 1)
+        phaser.register()
+
+        val peersWithoutLeader = 4
+        val leaderElectionPhaser = Phaser(peersWithoutLeader)
+        leaderElectionPhaser.register()
+
+        val peerLeaderElected = SignalListener {
+            logger.info("Arrived ${it.subject.getPeerName()}")
+            leaderElectionPhaser.arrive()
+        }
+
+        val endRange = 1000
+
+        val changeAccepted = SignalListener {
+            logger.info("Arrived change: ${it.change}")
+            if (change.id == it.change?.id) phaser.arrive()
+        }
+
+        apps = TestApplicationSet(
+            listOf(3, 3),
+            signalListeners = (0..5).associateWith {
+                mapOf(
+                    Signal.ConsensusLeaderElected to peerLeaderElected,
+                    Signal.OnHandlingApplyEnd to changeAccepted
+                )
+            }
+        )
+        val peerAddresses = apps.getPeers(0)
+
+        leaderElectionPhaser.arriveAndAwaitAdvanceWithTimeout()
+        logger.info("Leader elected")
+
+        var time = 0L
+
+        repeat((0 until endRange).count()) {
+            time += measureTimeMillis {
+                expectCatching {
+                    executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync", change)
+                }.isSuccess()
+            }
+            phaser.arriveAndAwaitAdvanceWithTimeout()
+            change = twoPeersetChange(change)
+        }
+        // when: peer1 executed change
+
+        expectThat(time / endRange).isLessThanOrEqualTo(500L)
+
+        askAllForChanges(peerAddresses.values).forEach { changes ->
+            // then: there are two changes
+            expectThat(changes.size).isEqualTo(endRange)
         }
     }
 
@@ -511,6 +570,139 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             }
         }
 
+    @Test
+    fun `should commit change if super-set agrees to commit`(): Unit = runBlocking {
+        val electSignal = mapOf(
+            Signal.OnHandlingElectBegin to SignalListener {
+                throw RuntimeException("Should not respond to elect me")
+            }
+        )
+
+        apps = TestApplicationSet(
+            listOf(3, 3),
+            signalListeners = mapOf(
+                2 to electSignal,
+                5 to electSignal
+            ),
+            configOverrides = (0..5).associateWith { mapOf("raft.isEnabled" to false) }
+        )
+
+        val change: Change = change(0, 1)
+
+        expectCatching {
+            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync", change)
+        }.isSuccess()
+
+        askAllForChanges(apps.getPeers().values).forEach { changes ->
+            expectThat(changes.size).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `should commit change if super-set agrees to commit, even though someone yells abort`(): Unit = runBlocking {
+        apps = TestApplicationSet(
+            listOf(3, 3),
+            configOverrides = (0..5).associateWith { mapOf("raft.isEnabled" to false) } + mapOf(2 to mapOf("gpac.abortOnElectMe" to true))
+        )
+
+        val change: Change = change(0, 1)
+
+        expectCatching {
+            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync", change)
+        }.isSuccess()
+
+        askAllForChanges(apps.getPeers().values).forEach { changes ->
+            expectThat(changes.size).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `should abort change if super-set decides so, even though some peers agree`(): Unit = runBlocking {
+        val phaser = Phaser(7)
+        apps = TestApplicationSet(
+            listOf(3, 3),
+            configOverrides = (0..5).associateWith {
+                mapOf(
+                    "raft.isEnabled" to false,
+                    "gpac.abortOnElectMe" to true
+                )
+            } + mapOf(0 to mapOf("gpac.abortOnElectMe" to false), 5 to mapOf("gpac.abortOnElectMe" to false)),
+            signalListeners = (0..5).associateWith { mapOf(Signal.OnHandlingApplyEnd to SignalListener { phaser.arrive() }) }
+        )
+
+        val change: Change = change(0, 1)
+
+        expectCatching {
+            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", change)
+        }.isSuccess()
+
+        phaser.arriveAndAwaitAdvanceWithTimeout()
+
+        askAllForChanges(apps.getPeers().values).forEach { changes ->
+            expectThat(changes.size).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `should repeat change change if peersets do not agree`(): Unit = runBlocking {
+        val phaser = Phaser(2)
+        apps = TestApplicationSet(
+            listOf(3, 3),
+            configOverrides = (0..5).associateWith {
+                mapOf(
+                    "raft.isEnabled" to false,
+                )
+            } + (3..5).associateWith { mapOf("gpac.abortOnElectMe" to true) }
+            + mapOf(0 to mapOf("gpac.initialRetriesDelay" to Duration.ZERO, "gpac.retriesBackoffTimeout" to Duration.ZERO)),
+            signalListeners = (0..5).associateWith { mapOf(
+                Signal.OnHandlingApplyEnd to SignalListener { fail("Change should not be applied") },
+            ) } + mapOf(0 to mapOf(Signal.ReachedMaxRetries to SignalListener { phaser.arrive() }))
+        )
+
+        val change: Change = change(0, 1)
+
+        expectCatching {
+            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", change)
+        }.isSuccess()
+
+        phaser.arriveAndAwaitAdvanceWithTimeout()
+
+        askAllForChanges(apps.getPeers().values).forEach { changes ->
+            expectThat(changes.size).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `should repeat change if one peerset does not have quorum on change`(): Unit = runBlocking {
+        val phaser = Phaser(2)
+        // peerset1peer0 - votes abort, peerset1peer1 - votes commit, peerset1peer2 - dies
+        apps = TestApplicationSet(
+            listOf(3, 3),
+            configOverrides = (0..5).associateWith {
+                mapOf(
+                    "raft.isEnabled" to false,
+                )
+            } + mapOf(3 to mapOf("gpac.abortOnElectMe" to true))
+            + mapOf(0 to mapOf("gpac.initialRetriesDelay" to Duration.ZERO, "gpac.retriesBackoffTimeout" to Duration.ZERO)),
+            signalListeners = (0..5).associateWith { mapOf(
+                Signal.OnHandlingApplyEnd to SignalListener { fail("Change should not be applied") },
+            ) } + mapOf(0 to mapOf(Signal.ReachedMaxRetries to SignalListener { phaser.arrive() }))
+            + mapOf(5 to mapOf(Signal.OnHandlingElectBegin to SignalListener { throw RuntimeException() }))
+        )
+
+        val change: Change = change(0, 1)
+
+        expectCatching {
+            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", change)
+        }.isSuccess()
+
+        phaser.arriveAndAwaitAdvanceWithTimeout()
+
+        askAllForChanges(apps.getPeers().values).forEach { changes ->
+            expectThat(changes.size).isEqualTo(0)
+        }
+    }
+
     private suspend fun executeChange(uri: String, change: Change): HttpResponse =
         testHttpClient.post(uri) {
             contentType(ContentType.Application.Json)
@@ -532,5 +724,12 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         peersets = peersetIds.map {
             ChangePeersetInfo(it, InitialHistoryEntry.getId())
         },
+    )
+
+    private fun twoPeersetChange(
+        change: Change
+    ) = AddUserChange(
+        "userName",
+        peersets = (0..1).map { ChangePeersetInfo(it, change.toHistoryEntry(it).getId()) },
     )
 }

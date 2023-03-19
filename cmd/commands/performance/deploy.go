@@ -19,19 +19,24 @@ type Config struct {
 	PerformanceNamespace        string
 	PerformanceNumberOfPeers    []int
 	PerformanceImage            string
+	MaxPeersetsInChange         int
 	SingleRequestsNumber        int
 	MultipleRequestsNumber      int
-	TestDuration                string
-	MaxPeersetsInChange         int
 	TestsSendingStrategy        string
 	TestsCreatingChangeStrategy string
 	PushgatewayAddress          string
 	EnforceAcUsage              bool
 	AcProtocol                  string
 	ConsensusProtocol           string
-	ConstantLoad                string
 	FixedPeersetsInChange       string
 	MonitoringNamespace         string
+
+	LoadGeneratorType           string
+	ConstantLoad                string
+	TestDuration                string
+	IncreasingLoadBound         float64
+	IncreasingLoadIncreaseDelay string
+	IncreasingLoadIncreaseStep  float64
 }
 
 func createPerformanceDeployCommand() *cobra.Command {
@@ -53,6 +58,11 @@ func createPerformanceDeployCommand() *cobra.Command {
 	var constantLoad string
 	var fixedPeersetsInChange string
 
+	var loadGeneratorType string
+	var increasingLoadBound float64
+	var increasingLoadIncreaseDelay string
+	var increasingLoadIncreaseStep float64
+
 	var cmd = &cobra.Command{
 		Use:   "deploy",
 		Short: "Execute performance test",
@@ -63,7 +73,6 @@ func createPerformanceDeployCommand() *cobra.Command {
 				PerformanceImage:            performanceImage,
 				SingleRequestsNumber:        singleRequestsNumber,
 				MultipleRequestsNumber:      multipleRequestsNumber,
-				TestDuration:                testDuration,
 				MaxPeersetsInChange:         maxPeersetsInChange,
 				TestsSendingStrategy:        testsStrategy,
 				TestsCreatingChangeStrategy: testsCreatingChangeStrategy,
@@ -71,11 +80,22 @@ func createPerformanceDeployCommand() *cobra.Command {
 				EnforceAcUsage:              enforceAcUsage,
 				AcProtocol:                  acProtocol,
 				ConsensusProtocol:           consensusProtocol,
-				ConstantLoad:                constantLoad,
 				FixedPeersetsInChange:       fixedPeersetsInChange,
+
+				LoadGeneratorType:           loadGeneratorType,
+				ConstantLoad:                constantLoad,
+				TestDuration:                testDuration,
+				IncreasingLoadBound:         increasingLoadBound,
+				IncreasingLoadIncreaseDelay: increasingLoadIncreaseDelay,
+				IncreasingLoadIncreaseStep:  increasingLoadIncreaseStep,
 			})
 		},
 	}
+
+	cmd.Flags().StringVar(&loadGeneratorType, "load-generator-type", "", "Load Generator Type - one of constant, bound or increasing")
+	cmd.Flags().Float64Var(&increasingLoadBound, "load-bound", float64(100), "Bound of changes per second for increasing load generator")
+	cmd.Flags().StringVar(&increasingLoadIncreaseDelay, "load-increase-delay", "PT60S", "Determines how long load should be constant before increasing")
+	cmd.Flags().Float64Var(&increasingLoadIncreaseStep, "load-increase-step", float64(1), "Determines how much load should change after load-increase-delay time")
 
 	cmd.Flags().StringVarP(&performanceNamespace, "namespace", "n", "default", "Namespace to clear deployemtns for")
 	cmd.Flags().IntSliceVar(&performanceNumberOfPeers, "peers", make([]int, 0), "Number of peers in peersets; example usage '--peers=1,2,3'")
@@ -185,7 +205,7 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 		"NOTIFICATION_SERVICE_ADDRESS":    "http://notification-service:8080",
 		"SINGLE_PEERSET_CHANGES_NUMBER":   fmt.Sprintf("%d", config.SingleRequestsNumber),
 		"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", config.MultipleRequestsNumber),
-		"TEST_DURATION":                   config.TestDuration,
+		"TIME_OF_SIMULATION":              config.TestDuration,
 		"MAX_PEERSETS_IN_CHANGE":          fmt.Sprintf("%d", config.MaxPeersetsInChange),
 		"TESTS_SENDING_STRATEGY":          config.TestsSendingStrategy,
 		"TESTS_CREATING_CHANGES_STRATEGY": config.TestsCreatingChangeStrategy,
@@ -193,7 +213,13 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 		"ENFORCE_AC_USAGE":                strconv.FormatBool(config.EnforceAcUsage),
 		"AC_PROTOCOL":                     config.AcProtocol,
 		"CONSENSUS_PROTOCOL":              config.ConsensusProtocol,
-		"LOKI_BASE_URL":                   fmt.Sprintf("http://loki.%s.svc.cluster.local:3100", config.MonitoringNamespace),
+		"LOKI_BASE_URL":                   fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
+		"NAMESPACE":                       config.PerformanceNamespace,
+		"LOAD_GENERATOR_TYPE":             config.LoadGeneratorType,
+		"CONSTANT_LOAD":                   config.ConstantLoad,
+		"INCREASING_LOAD_BOUND":           fmt.Sprintf("%f", config.IncreasingLoadBound),
+		"INCREASING_LOAD_INCREASE_DELAY":  config.IncreasingLoadIncreaseDelay,
+		"INCREASING_LOAD_INCREASE_STEP":   fmt.Sprintf("%f", config.IncreasingLoadIncreaseStep),
 	}
 
 	if config.FixedPeersetsInChange != "" {

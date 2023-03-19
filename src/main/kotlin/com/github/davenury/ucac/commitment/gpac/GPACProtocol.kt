@@ -9,10 +9,13 @@ import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.delay
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 
 abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) : SignalSubject,
@@ -30,7 +33,7 @@ abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) 
 
 class GPACProtocolImpl(
     private val history: History,
-    gpacConfig: GpacConfig,
+    private val gpacConfig: GpacConfig,
     ctx: ExecutorCoroutineDispatcher,
     private val protocolClient: GPACProtocolClient,
     private val transactionBlocker: TransactionBlocker,
@@ -84,11 +87,15 @@ class GPACProtocolImpl(
         }
 
         val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
-        val initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
+        var initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
+        if (gpacConfig.abortOnElectMe) {
+            initVal = Accept.ABORT
+        }
 
         myBallotNumber = message.ballotNumber
 
         signal(Signal.OnHandlingElectEnd, transaction, message.change)
+        this.transaction = transaction.copy(initVal = initVal)
 
         if (isMetricTest) {
             Metrics.bumpChangeMetric(
@@ -213,9 +220,9 @@ class GPACProtocolImpl(
                     state = changeResult.name.lowercase()
                 )
             }
-        } finally {
+        } catch (e: Exception) {
             transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
-
+        } finally {
             logger.info("handleApply finally releaseBlocker")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
 
@@ -276,8 +283,14 @@ class GPACProtocolImpl(
 
             val electResponses = electMeResult.responses
 
-            val acceptVal =
-                if (electResponses.flatten().all { it.initVal == Accept.COMMIT }) Accept.COMMIT else Accept.ABORT
+            val acceptVal = electResponses.getAcceptVal(change)
+
+            if (acceptVal == null) {
+                retriesTimer.startCounting(iteration) {
+                    performProtocolAsLeader(change, iteration + 1)
+                }
+                return
+            }
 
             this.transaction = this.transaction.copy(acceptVal = acceptVal, acceptNum = myBallotNumber)
 
@@ -299,6 +312,18 @@ class GPACProtocolImpl(
             applyPhase(change, acceptVal)
         } catch (e: Exception) {
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT, e.message))
+        }
+    }
+
+    private fun List<List<ElectedYou>>.getAcceptVal(change: Change): Accept? {
+
+        val shouldCommit = superSet(this, getPeersFromChange(change)) { (it as ElectedYou).initVal == Accept.COMMIT }
+        val shouldAbort = superSet(this, getPeersFromChange(change)) { (it as ElectedYou).initVal == Accept.ABORT }
+
+        return when {
+            shouldCommit -> Accept.COMMIT
+            shouldAbort -> Accept.ABORT
+            else -> null
         }
     }
 
@@ -413,15 +438,21 @@ class GPACProtocolImpl(
         change: Change,
         acceptVal: Accept,
         decision: Boolean = false,
-        acceptNum: Int? = null
+        acceptNum: Int? = null,
+        iteration: Int = 0,
     ): Boolean {
+
         transactionBlocker.tryToBlock(ProtocolName.GPAC, change.id)
 
         val agreedResponses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
-        if (!superSet(agreedResponses, getPeersFromChange(change))) {
+        if (!superSet(agreedResponses, getPeersFromChange(change)) && iteration == gpacConfig.maxFTAgreeTries) {
             changeTimeout(change, "Transaction failed due to too few responses of ft phase.")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             return false
+        }
+        if (!superSet(agreedResponses, getPeersFromChange(change))) {
+            delay(gpacConfig.ftAgreeRepeatDelay.toMillis())
+            return ftAgreePhase(change, acceptVal, decision, acceptNum, iteration + 1)
         }
 
         this.transaction = this.transaction.copy(decision = true, acceptVal = acceptVal)
@@ -483,24 +514,31 @@ class GPACProtocolImpl(
     }
 
     private fun <T> superMajority(responses: List<List<T>>, peers: List<List<T>>): Boolean =
-        superFunction(responses, 2, peers)
+        responses.size.isMoreThanHalfOf(peers.size) && superFunction(responses, peers)
 
-    private fun <T> superSet(responses: List<List<T>>, peers: List<List<T>>): Boolean =
-        superFunction(responses, 1, peers)
+    private fun <T> superSet(responses: List<List<T>>, peers: List<List<T>>, condition: (T) -> Boolean = { true }): Boolean =
+        (peers.size == responses.size) && superFunction(responses, peers, condition)
 
-    private fun <T> superFunction(responses: List<List<T>>, divider: Int, peers: List<List<T>>): Boolean {
-        val allShards = peers.size >= responses.size / divider.toDouble()
+    private fun <T> superFunction(responses: List<List<T>>, peers: List<List<T>>, condition: (T) -> Boolean = { true }): Boolean {
         val myPeersetId = globalPeerId.peersetId
 
         return responses.withIndex()
-            .all { (index, value) ->
+            .all { (index, responses) ->
                 val allPeers =
                     if (index == myPeersetId) peers[index].size + 1 else peers[index].size
                 val agreedPeers =
-                    if (index == myPeersetId) value.size + 1 else value.size
-                agreedPeers >= allPeers / 2F
-            } && allShards
+                    if (index == myPeersetId) {
+                        responses.count { condition(it) } + 1
+                    } else {
+                        responses.count { condition(it) }
+                    }
+                agreedPeers >= (floor(allPeers * 0.5) + 1)
+                agreedPeers.isMoreThanHalfOf(allPeers)
+            }
     }
+
+    private fun Int.isMoreThanHalfOf(otherValue: Int) =
+        this >= (floor(otherValue * 0.5) + 1)
 
     private fun applySignal(signal: Signal, transaction: Transaction, change: Change) {
         try {

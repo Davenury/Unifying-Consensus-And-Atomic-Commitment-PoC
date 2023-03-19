@@ -45,9 +45,14 @@ class GPACFactory(
         changeIdToGpacInstance[message.change.id]?.handleAgree(message)
             ?: throw GPACInstanceNotFoundException(message.change.id)
 
-    suspend fun handleApply(message: Apply) =
-        changeIdToGpacInstance[message.change.id]?.handleApply(message)
+    suspend fun handleApply(message: Apply) {
+        changeIdToGpacInstance[message.change.id]
+            ?.handleApply(message)
+            ?.also {
+                changeIdToGpacInstance.remove(message.change.id)
+            }
             ?: throw GPACInstanceNotFoundException(message.change.id)
+    }
 
     fun getChangeStatus(changeId: String) =
         changeIdToGpacInstance[changeId]?.getChangeResult(changeId)
