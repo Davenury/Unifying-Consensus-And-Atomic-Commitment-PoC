@@ -13,14 +13,28 @@ const baseDownloadPath = process.env.BASE_DOWNLOAD_PATH ?? getBaseDownloadPath()
 const experiments = [
     {
         namespace: "ddebowski",
-        from: "1679148002592",
-        to: "1679148130702",
-        protocol: "gpac",
-        experiment: "3x2",
+        from: "1679240535999",
+        to: "1679241224717",
+        protocol: "2pc",
+        experiment: "6x2",
+    },
+    {
+        namespace: "rszuma",
+        from: "1679240535999",
+        to: "1679241224717",
+        protocol: "2pc",
+        experiment: "10x2",
+    },
+    {
+        namespace: "kjarosz",
+        from: "1679240535999",
+        to: "1679241224717",
+        protocol: "2pc",
+        experiment: "20x2",
     }
 ]
 
-const panels = [14, 18, 27, 4, 12]
+const panels = [14, 18, 27, 4, 12, 21]
 const downloadFile = async (page, {
     namespace,
     panelId,

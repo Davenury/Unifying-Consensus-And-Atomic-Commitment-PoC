@@ -1,7 +1,7 @@
 #!/bin/bash
 
-../ucac perform --monitoring-namespace=ddebowski \
---peers=$(python3 -c "print('$1,' * $2, end=''); print('$1')") --test-namespace=ddebowski --application-image=ghcr.io/davenury/ucac:91177497ed1198bfe5b036af9ee95e18a8b1bdb6 \
---performance-test-image=ghcr.io/davenury/tests:91177497ed1198bfe5b036af9ee95e18a8b1bdb6 --constant-load=5 --load-generator-type=constant \
+./ucac perform --monitoring-namespace=ddebowski \
+--peers=$(python3 -c "print('$1,' * $2, end=''); print('$1')") --test-namespace=ddebowski --application-image=ghcr.io/davenury/ucac:bc30be1cb0e06873f28195104ace6bd8b1a24232 \
+--performance-test-image=ghcr.io/davenury/tests:bc30be1cb0e06873f28195104ace6bd8b1a24232 --constant-load=5 --load-generator-type=constant \
 --fixed-peersets-in-change=2 --tests-sending-strategy=delay_on_conflicts \
---ac-protocol=gpac --enforce-ac --performance-test-timeout-deadline=PT120M --proxy-limit=0
+--ac-protocol=gpac --enforce-ac --performance-test-timeout-deadline=PT120M --proxy-limit=0 --deploy-monitoring=true
