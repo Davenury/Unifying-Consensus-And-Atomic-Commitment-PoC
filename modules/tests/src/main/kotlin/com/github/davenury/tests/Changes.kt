@@ -33,10 +33,14 @@ class Changes(
         logger.info("Handling notification: $notification")
         if (shouldStartHandlingNotification(notification)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
-                val change = try {
-                    httpClient.get("http://${peers[peersetId]!!.first()}/v2/last-change")
-                } catch (e: Exception) {
-                    logger.error("Could not receive change from ${peers[peersetId]!!.first()}", e)
+                val change = if (acProtocol == ACProtocol.TWO_PC) {
+                    try {
+                        httpClient.get("http://${peers[peersetId]!!.first()}/v2/last-change")
+                    } catch (e: Exception) {
+                        logger.error("Could not receive change from ${peers[peersetId]!!.first()}", e)
+                        notification.change
+                    }
+                } else {
                     notification.change
                 }
                 if (notification.result.status == ChangeResult.Status.SUCCESS) {
