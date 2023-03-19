@@ -108,7 +108,8 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             signalListeners = (0..5).associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
-                    Signal.OnHandlingApplyEnd to changeAccepted
+                    Signal.OnHandlingApplyEnd to changeAccepted,
+                    Signal.ConsensusFollowerChangeAccepted to changeAccepted,
                 )
             }
         )
@@ -281,11 +282,13 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             apps = TestApplicationSet(
                 listOf(3, 5),
                 signalListeners = (3..7).associateWith { mapOf(Signal.OnHandlingAgreeEnd to failAction) },
-                configOverrides = (0..2).associateWith { mapOf(
-                    "gpac.responsesTimeouts.agreeTimeout" to Duration.ZERO,
-                    "gpac.ftAgreeRepeatDelay" to Duration.ZERO,
-                    "gpac.leaderFailDelay" to Duration.ZERO
-                ) }
+                configOverrides = (0..2).associateWith {
+                    mapOf(
+                        "gpac.responsesTimeouts.agreeTimeout" to Duration.ZERO,
+                        "gpac.ftAgreeRepeatDelay" to Duration.ZERO,
+                        "gpac.leaderFailDelay" to Duration.ZERO
+                    )
+                }
             )
             val peers = apps.getPeers()
             val change = change(0, 1)

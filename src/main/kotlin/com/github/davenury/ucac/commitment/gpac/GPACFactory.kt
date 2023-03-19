@@ -104,13 +104,11 @@ class GPACFactory(
         getOrCreateGPAC(message.change.id).handleElect(message)
 
     private suspend fun handleAgree(message: Agree) =
-        changeIdToGpacInstance[message.change.id]?.handleAgree(message)
-            ?: throw GPACInstanceNotFoundException(message.change.id)
+        getOrCreateGPAC(message.change.id).handleAgree(message)
 
     private suspend fun handleApply(message: Apply) =
-        changeIdToGpacInstance[message.change.id]
-            ?.handleApply(message)
-            ?: throw GPACInstanceNotFoundException(message.change.id)
+        getOrCreateGPAC(message.change.id)
+            .handleApply(message)
 
     private suspend fun <T : Any> notifyLeader(returnUrl: String, result: T) {
         try {
