@@ -40,3 +40,6 @@ history-*
 
 cmd/main
 cmd/ucac
+
+**/*.png
+env
