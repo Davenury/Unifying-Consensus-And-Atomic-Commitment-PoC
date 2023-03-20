@@ -25,6 +25,7 @@ type DeployConfig struct {
 	CreateResources         bool
 	ProxyDelay              string
 	ProxyLimit              string
+	ProxyMaxRequestBody     string
 	MonitoringNamespace     string
 }
 
@@ -51,6 +52,7 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVar(&config.CreateResources, "create-resources", true, "Determines if pods should have limits and requests")
 	deployCommand.Flags().StringVar(&config.ProxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	deployCommand.Flags().StringVar(&config.ProxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
+	deployCommand.Flags().StringVar(&config.ProxyMaxRequestBody, "proxy-max-request-body", "10m", "Max request body of proxy, e.g. 2m")
 
 	return deployCommand
 
@@ -207,7 +209,7 @@ func createPodTemplate(config DeployConfig, peerConfig utils.PeerConfig) apiv1.P
 		Spec: apiv1.PodSpec{
 			Containers: []apiv1.Container{
 				createSingleContainer(config, peerConfig),
-				createProxyContainer(config.ProxyDelay, config.ProxyLimit),
+				createProxyContainer(config.ProxyDelay, config.ProxyLimit, config.ProxyMaxRequestBody),
 				createRedisContainer(),
 			},
 			Volumes: []apiv1.Volume{
@@ -272,10 +274,10 @@ func createRedisContainer() apiv1.Container {
 	}
 }
 
-func createProxyContainer(delay string, limit string) apiv1.Container {
+func createProxyContainer(delay string, limit string, maxBodySize string) apiv1.Container {
 	return apiv1.Container{
 		Name:  "proxy",
-		Image: "lovelysystems/throttling-proxy-docker:latest",
+		Image: "ghcr.io/davenury/toxic-proxy:latest",
 		Ports: []apiv1.ContainerPort{
 			{
 				ContainerPort: 8080,
@@ -293,6 +295,10 @@ func createProxyContainer(delay string, limit string) apiv1.Container {
 			{
 				Name:  "LIMIT",
 				Value: limit,
+			},
+			{
+				Name:  "CLIENT_MAX_BODY_SIZE",
+				Value: maxBodySize,
 			},
 		},
 	}

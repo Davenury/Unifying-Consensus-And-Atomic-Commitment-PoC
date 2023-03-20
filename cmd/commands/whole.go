@@ -38,6 +38,7 @@ type Config struct {
 	fixedPeersetsInChange          string
 	proxyDelay                     string
 	proxyLimit                     string
+	proxyMaxRequestBody            string
 	loadGeneratorType              string
 	increasingLoadBound            float64
 	increasingLoadIncreaseDelay    string
@@ -82,6 +83,7 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
 	cmd.Flags().StringVar(&config.proxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	cmd.Flags().StringVar(&config.proxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
+	cmd.Flags().StringVar(&config.proxyMaxRequestBody, "proxy-max-request-body", "10m", "Max request body of proxy, e.g. 2m")
 
 	cmd.Flags().StringVar(&config.loadGeneratorType, "load-generator-type", "", "Load Generator Type - one of constant, bound or increasing")
 	cmd.Flags().Float64Var(&config.increasingLoadBound, "load-bound", float64(100), "Bound of changes per second for increasing load generator")
@@ -107,6 +109,7 @@ func perform(config Config) {
 		CreateResources:         true,
 		ProxyDelay:              config.proxyDelay,
 		ProxyLimit:              config.proxyLimit,
+		ProxyMaxRequestBody:     config.proxyMaxRequestBody,
 		MonitoringNamespace:     config.monitoringNamespace,
 	})
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
