@@ -30,20 +30,21 @@ data class Ledger(
         }
 
 
+    suspend fun getCommittedItems(historyEntryId: String): List<LedgerItem> =
+        mutex.withLock {
+            history.getAllEntriesUntilHistoryEntryId(historyEntryId)
+                .map {
+                    val change = Change.fromHistoryEntry(it)
+                    LedgerItem(it, change?.id ?: it.getId())
+                }
+        }
+
     suspend fun getNewProposedItems(historyEntryId: String): List<LedgerItem> =
         mutex.withLock {
-            val entries =
-                history.getAllEntriesUntilHistoryEntryId(historyEntryId)
-                    .map {
-                        val change = Change.fromHistoryEntry(it)
-                        LedgerItem(it, change?.id ?: it.getId())
-                    }
-
             if (history.containsEntry(historyEntryId))
-                entries + proposedEntries
+                proposedEntries
             else
                 proposedEntries.dropWhile { it.entry.getId() != historyEntryId }.drop(1)
-
         }
 
     private fun updateCommitIndex(commitHistoryEntryId: String): List<LedgerItem> {

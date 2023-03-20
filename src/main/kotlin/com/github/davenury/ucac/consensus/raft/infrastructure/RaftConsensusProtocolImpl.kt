@@ -467,6 +467,15 @@ class RaftConsensusProtocolImpl(
                     peerMessage.leaderCommitId,
                     peerMessage.logEntries
                 )
+
+
+                if (role == RaftRole.Leader
+                    && otherConsensusPeers().any { it.globalPeerId == peer }
+                    && executorService != null
+                    && peerUrlToNextIndex[peer]?.acceptedEntryId != state.lastApplied
+                ) {
+                    launchHeartBeatToPeer(peer, delay = heartbeatDelay, sendInstantly = true)
+                }
             }
 
             response.message.term > currentTerm -> {
@@ -499,6 +508,7 @@ class RaftConsensusProtocolImpl(
 
             }
         }
+
 
         checkIfQueuedChanges()
     }
@@ -596,18 +606,31 @@ class RaftConsensusProtocolImpl(
         }
 
         val peerIndices = peerToNextIndex.getOrDefault(peerAddress.peerId, PeerIndices()) // TODO
+        val newCommittedChanges = state.getCommittedItems(peerIndices.acknowledgedEntryId)
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
+        val allChanges = newCommittedChanges + newProposedChanges
         val lastAppliedChangeId = peerIndices.acceptedEntryId
         if (newProposedChanges.isNotEmpty())
-            logger.info("Leader sends a message to $peerAddress $newProposedChanges")
+            logger.info("Leader sends a message to $peerAddress $allChanges")
+
+        val limitedCommittedChanges = newCommittedChanges.take(LIMIT_SIZE)
+        val lastLimitedCommittedChange = newCommittedChanges.lastOrNull()
+        val lastId = lastLimitedCommittedChange?.entry?.getId()
+
+        val (currentEntryId, leaderCommitId, changesToSend) =
+            if (limitedCommittedChanges.size < allChanges.size  && lastId != null)
+                Triple(lastId, lastId, limitedCommittedChanges)
+            else
+                Triple(history.getCurrentEntryId(), state.commitIndex, allChanges)
+
 
         return ConsensusHeartbeat(
             peerId,
             currentTerm,
-            newProposedChanges.map { it.toDto() },
+            changesToSend.map { it.toDto() },
             lastAppliedChangeId,
-            history.getCurrentEntryId(),
-            state.commitIndex
+            currentEntryId,
+            leaderCommitId
         )
     }
 
@@ -811,7 +834,8 @@ class RaftConsensusProtocolImpl(
 
     private fun launchHeartBeatToPeer(
         peer: PeerId,
-        isRegular: Boolean = false, sendInstantly: Boolean = false,
+        isRegular: Boolean = false,
+        sendInstantly: Boolean = false,
         delay: Duration = heartbeatDelay
     ): Job =
         with(CoroutineScope(executorService!!)) {
@@ -879,6 +903,7 @@ class RaftConsensusProtocolImpl(
 
     companion object {
         private val logger = LoggerFactory.getLogger("raft")
+        private const val LIMIT_SIZE = 200
     }
 }
 

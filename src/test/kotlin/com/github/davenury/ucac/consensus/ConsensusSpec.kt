@@ -53,6 +53,9 @@ class ConsensusSpec : IntegrationTestBase() {
 
     @Test
     fun `happy path`(): Unit = runBlocking {
+        val change1 = createChange(null)
+        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(PeersetId("peerset0")).getId())
+
         val peersWithoutLeader = 4
 
         val phaser = Phaser(peersWithoutLeader)
@@ -60,13 +63,13 @@ class ConsensusSpec : IntegrationTestBase() {
 
         val peerLeaderElected = SignalListener {
             expectThat(phaser.phase).isEqualTo(0)
-            logger.info("Arrived ${it.subject.getPeerName()}")
+            logger.info("Arrived leader elected ${it.subject.getPeerName()}")
             phaser.arrive()
         }
 
         val peerApplyChange = SignalListener {
             expectThat(phaser.phase).isContainedIn(listOf(1, 2))
-            logger.info("Arrived ${it.subject.getPeerName()}")
+            logger.info("Arrived change ${it.subject.getPeerName()}")
             phaser.arrive()
         }
 
@@ -87,7 +90,6 @@ class ConsensusSpec : IntegrationTestBase() {
         logger.info("Leader elected")
 
         // when: peer1 executed change
-        val change1 = createChange(null)
         expectCatching {
             executeChange("${apps.getPeer("peer0").address}/v2/change/sync", change1)
         }.isSuccess()
@@ -105,7 +107,6 @@ class ConsensusSpec : IntegrationTestBase() {
         }
 
         // when: peer2 executes change
-        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(PeersetId("peerset0")).getId())
         expectCatching {
             executeChange("${apps.getPeer("peer1").address}/v2/change/sync", change2)
         }.isSuccess()
