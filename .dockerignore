@@ -7,3 +7,5 @@ cmd/
 gradle/
 build/
 !build/distributions/*.tar
+**/*.png
+env
