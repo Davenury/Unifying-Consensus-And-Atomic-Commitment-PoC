@@ -106,7 +106,6 @@ class SinglePeersetSpec : IntegrationTestBase() {
                 "gpac.initialRetriesDelay" to Duration.ZERO,
                 "gpac.leaderFailDelay" to Duration.ofSeconds(1),
                 "gpac.leaderFailBackoff" to Duration.ZERO,
-
             )
 
             apps = TestApplicationSet(
@@ -272,7 +271,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
             ),
             configOverrides = mapOf(
                 "peer0" to mapOf("raft.isEnabled" to false),
-                "peer1" to mapOf("raft.isEnabled" to false),
+                "peer1" to mapOf("raft.isEnabled" to false, "gpac.leaderFailDelay" to java.time.Duration.ZERO),
                 "peer2" to mapOf("raft.isEnabled" to false),
                 "peer3" to mapOf("raft.isEnabled" to false),
                 "peer4" to mapOf("raft.isEnabled" to false),

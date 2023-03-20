@@ -1,6 +1,7 @@
 package com.github.davenury.tests.strategies.peersets
 
 import com.github.davenury.common.PeersetId
+import com.github.davenury.common.Notification
 
 
 class RandomPeersStrategy(
@@ -9,6 +10,7 @@ class RandomPeersStrategy(
     override suspend fun getPeersets(numberOfPeersets: Int): List<PeersetId> =
         peersets.shuffled().take(numberOfPeersets)
 
-    override suspend fun handleNotification(peersetId: PeersetId) {}
+    override suspend fun handleNotification(notification: Notification) {}
     override suspend fun freePeersets(peersetsId: List<PeersetId>) {}
+    override fun setCurrentChange(changeId: String) {}
 }

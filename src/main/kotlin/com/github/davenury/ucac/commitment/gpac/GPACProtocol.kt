@@ -172,7 +172,11 @@ class GPACProtocolImpl(
                 state = "agreed"
             )
         }
-        leaderFailTimeoutStart(message.change)
+
+        if (gpacConfig.invokeRecovery) {
+            leaderFailTimeoutStart(message.change)
+        }
+
 
         return Agreed(transaction.ballotNumber, message.acceptVal)
     }
@@ -190,8 +194,9 @@ class GPACProtocolImpl(
         when {
             !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
 
-                if (!history.containsEntry(entry.getId()))
+                if (!history.containsEntry(entry.getId())) {
                     transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+                }
 
                 transaction =
                     Transaction(
@@ -247,7 +252,6 @@ class GPACProtocolImpl(
                 ProtocolName.GPAC,
                 message.change.id
             )
-
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
         }
     }

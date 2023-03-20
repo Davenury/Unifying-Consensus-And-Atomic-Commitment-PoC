@@ -95,7 +95,6 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         leaderElectionPhaser.register()
 
         val peerLeaderElected = SignalListener {
-            logger.info("Arrived ${it.subject.getPeerName()}")
             leaderElectionPhaser.arrive()
         }
 
@@ -284,6 +283,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             }
     }
 
+    @Disabled("Test encourages invalid protocol behavior - the change should be blocked / processed to the end TODO - talk about this case on Monday 20.03")
     @Test
     fun `transaction should not be processed if every peer from one peerset fails after ft-agree`(): Unit =
         runBlocking {
@@ -359,7 +359,10 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 "peer5" to signalListenersForCohort,
                 "peer6" to signalListenersForCohort,
                 "peer7" to signalListenersForCohort,
-            )
+            ),
+            configOverrides = mapOf(
+                "peer1" to mapOf("gpac.leaderFailDelay" to Duration.ZERO),
+            ),
         )
         val change = change(0, 1)
 
@@ -453,7 +456,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     "peer2" to mapOf("raft.isEnabled" to false),
                     "peer3" to mapOf("raft.isEnabled" to false),
                     "peer4" to mapOf("raft.isEnabled" to false),
-                    "peer5" to mapOf("raft.isEnabled" to false),
+                    "peer5" to mapOf("raft.isEnabled" to false, "gpac.leaderFailDelay" to Duration.ZERO),
                     "peer6" to mapOf("raft.isEnabled" to false),
                     "peer7" to mapOf("raft.isEnabled" to false),
                 ),

@@ -3,6 +3,7 @@ package com.github.davenury.ucac.routing
 import com.github.davenury.common.Changes
 import com.github.davenury.common.PeerId
 import com.github.davenury.ucac.common.ChangeNotifier
+import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusHeartbeat
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProposeChange
@@ -33,9 +34,6 @@ fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
             val result = protocol.handleProposeChange(message).await()
-                .also {
-                    ChangeNotifier.notify(message, it)
-                }
             call.respond(result)
         }
 

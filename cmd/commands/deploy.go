@@ -51,6 +51,7 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVar(&config.CreateResources, "create-resources", true, "Determines if pods should have limits and requests")
 	deployCommand.Flags().StringVar(&config.ProxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	deployCommand.Flags().StringVar(&config.ProxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
+	deployCommand.Flags().StringVar(&config.MonitoringNamespace, "monitoring-namespace", "ddebowski", "Namespace with monitoring deployed")
 
 	return deployCommand
 
@@ -313,8 +314,8 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 	if config.CreateResources {
 		resources = apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
-				"cpu":    resource.MustParse("700m"),
-				"memory": resource.MustParse("750Mi"),
+				"cpu":    resource.MustParse("1"),
+				"memory": resource.MustParse("550Mi"),
 			},
 			Requests: apiv1.ResourceList{
 				"cpu":    resource.MustParse("500m"),

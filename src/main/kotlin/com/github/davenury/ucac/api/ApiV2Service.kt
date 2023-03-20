@@ -31,9 +31,11 @@ class ApiV2Service(
         return Changes.fromHistory(history())
     }
 
-    fun getChangeById(id: String): Change? {
-        return history().getEntryFromHistory(id)?.let { Change.fromHistoryEntry(it) }
-    }
+    fun getLastChange(): Change? =
+        Change.fromHistoryEntry(history().getCurrentEntry())
+
+    fun getChangeById(id: String): Change? =
+        history().getEntryFromHistory(id)?.let { Change.fromHistoryEntry(it) }
 
     fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> =
         worker.getChangeStatus(changeId)
