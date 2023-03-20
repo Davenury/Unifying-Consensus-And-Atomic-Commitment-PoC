@@ -1,6 +1,6 @@
 #!/bin/bash
-
-../ucac perform --monitoring-namespace=ddebowski \
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+"${SCRIPT_DIR}/../ucac" perform --monitoring-namespace=ddebowski \
 --peers=$(python3 -c "print('$1,' * $2, end=''); print('$1')") --test-namespace=ddebowski --application-image=ghcr.io/davenury/ucac:085a56bc8b0889d098ec61da001022206fd1cade \
 --performance-test-image=ghcr.io/davenury/tests:085a56bc8b0889d098ec61da001022206fd1cade \
 --fixed-peersets-in-change=2 --tests-sending-strategy=delay_on_conflicts \
