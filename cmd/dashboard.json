@@ -122,7 +122,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "rate(container_cpu_usage_seconds_total{pod=~\"peerset.*\", namespace=~\"$namespace\"}[30s])",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\"peerset.*\", namespace=~\"$namespace\", container!=\"\"}[30s])) by (pod)",
+          "hide": false,
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -214,8 +215,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"peer.*\", namespace=\"$namespace\"}[30s]))",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"peer.*\", namespace=\"$namespace\"}[30s])) by (pod)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         },
@@ -323,6 +324,18 @@
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum(jvm_memory_used_bytes{area=\"nonheap\", app_name=~\"peer.*\", kubernetes_namespace=~\"$namespace\"}) by (app_name)",
+          "hide": false,
+          "legendFormat": "{{app_name}} - nonheap",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "AVG Container memory usage - only application",
@@ -412,7 +425,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(container_memory_usage_bytes{pod=~\"peerset.*\", namespace=~\"$namespace\"}) by (pod)",
+          "expr": "sum(container_memory_usage_bytes{pod=~\"peerset.*\", namespace=~\"$namespace\", container!=\"\"}) by (pod)",
+          "hide": false,
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -505,7 +519,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "rate(container_network_receive_bytes_total{pod=~\"peerset.*\", namespace=~\"$namespace\"}[30s])",
+          "expr": "sum(rate(container_network_receive_bytes_total{pod=~\"peerset.*\", namespace=~\"$namespace\"}[30s])) by (pod)",
+          "hide": false,
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -704,8 +719,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(change_processed_total{kubernetes_namespace=~\"$namespace\"}[1m]))",
-          "legendFormat": "__auto",
+          "expr": "sum(rate(change_processed_total{kubernetes_namespace=~\"$namespace\", result=\"success\"}[1m]))",
+          "legendFormat": "changes per second",
           "range": true,
           "refId": "A"
         }
@@ -721,7 +736,8 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "fixedColor": "semi-dark-green",
+            "mode": "fixed"
           },
           "mappings": [],
           "thresholds": {
@@ -730,10 +746,6 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -758,7 +770,7 @@
           "values": false
         },
         "showThresholdLabels": false,
-        "showThresholdMarkers": true
+        "showThresholdMarkers": false
       },
       "pluginVersion": "9.3.8",
       "targets": [
@@ -863,76 +875,13 @@
           },
           "editorMode": "code",
           "expr": "avg(rate(change_processing_time_seconds_sum{result=\"success\", kubernetes_namespace=~\"$namespace\"}[1m]) / rate(change_processing_time_seconds_count{result=\"success\", kubernetes_namespace=~\"$namespace\"}[1m]))",
-          "legendFormat": "__auto",
+          "legendFormat": "avg commit latency",
           "range": true,
           "refId": "A"
         }
       ],
       "title": "Avg commit latency",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 54
-      },
-      "id": 10,
-      "options": {
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "pluginVersion": "9.3.8",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "kube_pod_container_status_restarts_total{kubernetes_namespace=~\"$namespace\"}",
-          "legendFormat": "{{pod}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Pods restarts",
-      "type": "gauge"
     }
   ],
   "refresh": "10s",
@@ -943,23 +892,23 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "ddebowski",
-          "value": "ddebowski"
+          "selected": true,
+          "text": "kjarosz",
+          "value": "kjarosz"
         },
         "datasource": {
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "definition": "label_values(container_cpu_usage_seconds_total, namespace)",
-        "description": "label_values(container_cpu_usage_seconds_total, namespace)",
+        "definition": "label_values(change_processed_total, kubernetes_namespace)",
+        "description": "label_values(change_processed_total, namespace)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "namespace",
         "options": [],
         "query": {
-          "query": "label_values(container_cpu_usage_seconds_total, namespace)",
+          "query": "label_values(change_processed_total, kubernetes_namespace)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,

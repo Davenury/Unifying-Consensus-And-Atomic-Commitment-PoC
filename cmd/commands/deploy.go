@@ -51,6 +51,7 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVar(&config.CreateResources, "create-resources", true, "Determines if pods should have limits and requests")
 	deployCommand.Flags().StringVar(&config.ProxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	deployCommand.Flags().StringVar(&config.ProxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
+	deployCommand.Flags().StringVar(&config.MonitoringNamespace, "monitoring-namespace", "ddebowski", "Namespace with monitoring deployed")
 
 	return deployCommand
 
@@ -312,8 +313,8 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 	if config.CreateResources {
 		resources = apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
-				"cpu":    resource.MustParse("700m"),
-				"memory": resource.MustParse("750Mi"),
+				"cpu":    resource.MustParse("1500m"),
+				"memory": resource.MustParse("550Mi"),
 			},
 			Requests: apiv1.ResourceList{
 				"cpu":    resource.MustParse("500m"),
@@ -380,6 +381,9 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"config_persistence_redisPort": "6379",
 			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 			"NAMESPACE":                    config.DeployNamespace,
+			"GPAC_ASYNC_ELECT_TIMEOUT":     "PT2S",
+			"GPAC_ASYNC_AGREE_TIMEOUT":     "PT2S",
+			"GPAC_ASYNC_APPLY_TIMEOUT":     "PT0.2S",
 			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
 		},
 	}

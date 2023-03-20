@@ -43,6 +43,10 @@ func DoInit(namespace string, createNamespace bool) {
 		"server": map[string]interface{}{
 			"scrape": map[string]interface{}{
 				"enabled": true,
+				"global": map[string]interface{}{
+					"scrape_interval": "10s",
+					"scrape_timeout":  "2s",
+				},
 			},
 			"persistentVolume": map[string]interface{}{
 				"enabled": false,
