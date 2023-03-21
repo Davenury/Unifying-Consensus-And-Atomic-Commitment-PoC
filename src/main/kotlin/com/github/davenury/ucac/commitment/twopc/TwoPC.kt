@@ -86,7 +86,7 @@ class TwoPC(
         }
 
         logger.info("Change id for change: $change, id: ${change.change.id}")
-        changeIdToCompletableFuture[change.change.id] = CompletableFuture<ChangeResult>()
+        changeIdToCompletableFuture.putIfAbsent(change.change.id, CompletableFuture<ChangeResult>())
 
         val changeWithProperParentId = change.copyWithNewParentId(
             peersetId,
