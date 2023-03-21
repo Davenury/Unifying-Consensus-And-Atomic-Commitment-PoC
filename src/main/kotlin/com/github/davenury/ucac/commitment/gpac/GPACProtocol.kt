@@ -180,7 +180,7 @@ class GPACProtocolImpl(
         when {
             !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
 
-                if (history.containsEntry(entry.getId()))
+                if (!history.containsEntry(entry.getId()))
                     transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
 
                 transaction =
