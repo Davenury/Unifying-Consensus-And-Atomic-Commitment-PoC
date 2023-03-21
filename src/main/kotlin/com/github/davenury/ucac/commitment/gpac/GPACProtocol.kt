@@ -8,10 +8,15 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.lang.IllegalStateException
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import kotlin.math.floor
 import kotlin.math.max
@@ -49,6 +54,8 @@ class GPACProtocolImpl(
     private var myBallotNumber: Int = 0
 
     private var transaction: Transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
+    private val phaseMutex = Mutex()
+    private var currentPhase: GPACPhase? = null
 
 
     private fun isValidBallotNumber(ballotNumber: Int): Boolean =
@@ -59,6 +66,15 @@ class GPACProtocolImpl(
     override fun getBallotNumber(): Int = myBallotNumber
 
     override suspend fun handleElect(message: ElectMe): ElectedYou {
+        phaseMutex.withLock {
+            if (currentPhase == null) {
+                currentPhase = GPACPhase.ELECT
+            }
+            if (!currentPhase!!.shouldExecutePhaseIGotNow(GPACPhase.ELECT)) {
+                throw IllegalStateException("I should not execute this phase, since the phase I've executed is: $currentPhase; they want me to do ${GPACPhase.ELECT}")
+            }
+            currentPhase = GPACPhase.ELECT
+        }
         val decision = message.acceptNum?.let { acceptNum ->
             Changes.fromHistory(history).find { it.acceptNum == acceptNum }
         }
@@ -114,6 +130,18 @@ class GPACProtocolImpl(
     }
 
     override suspend fun handleAgree(message: Agree): Agreed {
+        phaseMutex.withLock {
+            if (currentPhase == null) {
+                currentPhase = GPACPhase.AGREE
+            }
+            if (!currentPhase!!.shouldExecutePhaseIGotNow(GPACPhase.AGREE)) {
+                return Agreed(
+                    message.ballotNumber,
+                    acceptVal = this.transaction.acceptVal!!
+                )
+            }
+            currentPhase = GPACPhase.AGREE
+        }
 
         signal(Signal.OnHandlingAgreeBegin, transaction, message.change)
 
@@ -168,6 +196,15 @@ class GPACProtocolImpl(
     }
 
     override suspend fun handleApply(message: Apply) {
+        phaseMutex.withLock {
+            if (currentPhase == null) {
+                currentPhase = GPACPhase.APPLY
+            }
+            if (!currentPhase!!.shouldExecutePhaseIGotNow(GPACPhase.APPLY)) {
+                throw IllegalStateException("I should not execute this phase, since the phase I've executed is: $currentPhase; they want me to do ${GPACPhase.APPLY}")
+            }
+            currentPhase = GPACPhase.APPLY
+        }
         logger.info("HandleApply message: $message")
         val isCurrentTransaction =
             message.ballotNumber >= this.myBallotNumber
@@ -275,7 +312,10 @@ class GPACProtocolImpl(
 
         try {
             val electMeResult =
-                electMePhase(change, { responses -> superSet(responses, getPeersFromChange(change)) })
+                electMePhase(change, { responses ->
+                    superSet(responses, getPeersFromChange(change)) { it.initVal == Accept.COMMIT } ||
+                            superSet(responses, getPeersFromChange(change)) { it.initVal == Accept.ABORT }
+                })
 
             if (iteration == maxLeaderElectionTries) {
                 val message = "Transaction failed due to too many retries of becoming a leader."
@@ -323,6 +363,7 @@ class GPACProtocolImpl(
             }
             applyPhase(change, acceptVal)
         } catch (e: Exception) {
+            logger.error("Error while performing protocol as leader for change ${change.id}", e)
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT, e.message))
         }
     }
@@ -434,13 +475,16 @@ class GPACProtocolImpl(
 
         signal(Signal.BeforeSendingElect, this.transaction, change)
         logger.info("Sending ballot number: $myBallotNumber")
-        val (responses, maxBallotNumber) = getElectedYouResponses(change, getPeersFromChange(change), acceptNum)
+        val responses = getElectedYouResponses(change, getPeersFromChange(change), acceptNum)
 
-        val electResponses: List<List<ElectedYou>> = responses
-        if (superFunction(electResponses)) {
+        val (electResponses: List<List<ElectedYou>>, success: Boolean) =
+            GPACResponsesContainer(responses, Duration.ofSeconds(2)).awaitForMessages { superFunction(it) }
+
+        if (success) {
             return ElectMeResult(electResponses, true)
         }
-        myBallotNumber = max(maxBallotNumber ?: 0, myBallotNumber)
+
+        myBallotNumber++
         logger.info("Bumped ballot number to: $myBallotNumber")
 
         return ElectMeResult(electResponses, false)
@@ -456,13 +500,18 @@ class GPACProtocolImpl(
 
         transactionBlocker.tryToBlock(ProtocolName.GPAC, change.id)
 
-        val agreedResponses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
-        if (!superSet(agreedResponses, getPeersFromChange(change)) && iteration == gpacConfig.maxFTAgreeTries) {
+        val responses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
+
+        val (_: List<List<Agreed>>, success: Boolean) =
+            GPACResponsesContainer(responses, Duration.ofSeconds(2)).awaitForMessages { superSet(it, getPeersFromChange(change)) }
+
+        if (!success && iteration == gpacConfig.maxFTAgreeTries) {
             changeTimeout(change, "Transaction failed due to too few responses of ft phase.")
             transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
             return false
         }
-        if (!superSet(agreedResponses, getPeersFromChange(change))) {
+
+        if (!success) {
             delay(gpacConfig.ftAgreeRepeatDelay.toMillis())
             return ftAgreePhase(change, acceptVal, decision, acceptNum, iteration + 1)
         }
@@ -473,7 +522,22 @@ class GPACProtocolImpl(
 
     private suspend fun applyPhase(change: Change, acceptVal: Accept) {
         val applyMessages = sendApplyMessages(change, getPeersFromChange(change), acceptVal)
-        logger.info("Apply Messages Responses: $applyMessages")
+
+        val (responses, success) = GPACResponsesContainer(applyMessages, Duration.ofSeconds(2)).awaitForMessages {
+            if (gpacConfig.waitForAllInApply) {
+                it.flatten().size == getPeersFromChange(change).flatten().size
+            } else {
+                superSet(it, getPeersFromChange(change))
+            }
+        }
+
+        logger.info("Responses from apply: ${responses.flatten().map { 
+            try {
+                it.execute().status   
+            } catch (e: Exception) {
+                null
+            }
+        }}")
         this.handleApply(
             Apply(
                 myBallotNumber,
@@ -488,7 +552,7 @@ class GPACProtocolImpl(
         change: Change,
         otherPeers: List<List<PeerAddress>>,
         acceptNum: Int? = null
-    ): ResponsesWithErrorAggregation<ElectedYou> =
+    ): List<List<Deferred<ElectedYou?>>> =
         protocolClient.sendElectMe(
             otherPeers, ElectMe(myBallotNumber, change, acceptNum)
         )
@@ -499,7 +563,7 @@ class GPACProtocolImpl(
         acceptVal: Accept,
         decision: Boolean = false,
         acceptNum: Int? = null
-    ): List<List<Agreed>> =
+    ): List<List<Deferred<Agreed?>>> =
         protocolClient.sendFTAgree(
             otherPeers,
             Agree(myBallotNumber, acceptVal, change, decision, acceptNum)
@@ -525,21 +589,13 @@ class GPACProtocolImpl(
         )
     }
 
-    private fun <T> superMajority(responses: List<List<T>>, peers: List<List<T>>): Boolean =
+    private fun <T> superMajority(responses: List<List<T>>, peers: List<List<PeerAddress>>): Boolean =
         responses.size.isMoreThanHalfOf(peers.size) && superFunction(responses, peers)
 
-    private fun <T> superSet(
-        responses: List<List<T>>,
-        peers: List<List<T>>,
-        condition: (T) -> Boolean = { true }
-    ): Boolean =
+    private fun <T> superSet(responses: List<List<T>>, peers: List<List<PeerAddress>>, condition: (T) -> Boolean = { true }): Boolean =
         (peers.size == responses.size) && superFunction(responses, peers, condition)
 
-    private fun <T> superFunction(
-        responses: List<List<T>>,
-        peers: List<List<T>>,
-        condition: (T) -> Boolean = { true }
-    ): Boolean {
+    private fun <T> superFunction(responses: List<List<T>>, peers: List<List<PeerAddress>>, condition: (T) -> Boolean = { true }): Boolean {
         val myPeersetId = globalPeerId.peersetId
 
         return responses.withIndex()

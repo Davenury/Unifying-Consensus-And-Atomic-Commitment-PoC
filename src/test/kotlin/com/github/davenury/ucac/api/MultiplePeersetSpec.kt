@@ -112,7 +112,8 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     Signal.OnHandlingApplyEnd to changeAccepted,
                     Signal.ConsensusFollowerChangeAccepted to changeAccepted,
                 )
-            }
+            },
+            configOverrides = (0..5).associateWith { mapOf("gpac.waitForAllInApply" to true) }
         )
         val peerAddresses = apps.getPeers(0)
 

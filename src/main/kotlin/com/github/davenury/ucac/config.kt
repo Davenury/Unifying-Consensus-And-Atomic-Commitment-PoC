@@ -55,6 +55,7 @@ data class GpacConfig(
     val ftAgreeRepeatDelay: Duration = Duration.ofMillis(500),
     val maxFTAgreeTries: Int = 5,
     val abortOnElectMe: Boolean = false,
+    val waitForAllInApply: Boolean = false,
 )
 
 data class RaftConfig(
