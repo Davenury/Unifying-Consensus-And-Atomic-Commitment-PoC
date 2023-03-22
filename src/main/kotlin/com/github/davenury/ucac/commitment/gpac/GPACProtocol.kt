@@ -450,7 +450,7 @@ class GPACProtocolImpl(
         val responses = getElectedYouResponses(change, getPeersFromChange(change), acceptNum)
 
         val (electResponses: List<List<ElectedYou>>, success: Boolean) =
-            GPACResponsesContainer(responses, Duration.ofSeconds(2)).awaitForMessages { superFunction(it) }
+            GPACResponsesContainer(responses, gpacConfig.phasesTimeouts.electTimeout).awaitForMessages { superFunction(it) }
 
         if (success) {
             return ElectMeResult(electResponses, true)
@@ -475,7 +475,7 @@ class GPACProtocolImpl(
         val responses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
 
         val (_: List<List<Agreed>>, success: Boolean) =
-            GPACResponsesContainer(responses, Duration.ofSeconds(2)).awaitForMessages {
+            GPACResponsesContainer(responses, gpacConfig.phasesTimeouts.agreeTimeout).awaitForMessages {
                 superSet(
                     it,
                     getPeersFromChange(change)
@@ -500,12 +500,8 @@ class GPACProtocolImpl(
     private suspend fun applyPhase(change: Change, acceptVal: Accept) {
         val applyMessages = sendApplyMessages(change, getPeersFromChange(change), acceptVal)
 
-        val (responses, success) = GPACResponsesContainer(applyMessages, Duration.ofSeconds(2)).awaitForMessages {
-            if (gpacConfig.waitForAllInApply) {
-                it.flatten().size == getPeersFromChange(change).flatten().size
-            } else {
-                superSet(it, getPeersFromChange(change))
-            }
+        val (responses, success) = GPACResponsesContainer(applyMessages, gpacConfig.phasesTimeouts.applyTimeout).awaitForMessages {
+            superSet(it, getPeersFromChange(change))
         }
 
         logger.info(

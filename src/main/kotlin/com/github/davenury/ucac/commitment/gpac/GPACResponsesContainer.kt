@@ -39,25 +39,26 @@ class GPACResponsesContainer<T>(
         lock.withLock {
             ctx.dispatch(Dispatchers.IO) { timeout() }
             while (true) {
-                logger.info("Responses size: ${responses.size()}, $responses, current resolved: $overallResponses")
-                if (!condition(currentState.asOrderedList()) && shouldWait.get() && overallResponses < responses.size()) {
-                    logger.info("Waiting for responses, current state: $currentState")
-                    this.condition.await()
-                } else {
-                    if (condition(currentState.asOrderedList())) {
-                        logger.info("Got condition, responses: ${currentState.asOrderedList()}")
+                logger.debug("Responses size: ${responses.size()}, $responses, current resolved: $overallResponses")
+                when {
+                    !condition(currentState.asOrderedList()) && shouldWait.get() && overallResponses < responses.size() -> {
+                        logger.debug("Waiting for responses, current state: $currentState")
+                        this.condition.await()
+                    }
+                    condition(currentState.asOrderedList()) -> {
+                        logger.debug("Got condition, responses: ${currentState.asOrderedList()}")
                         success = true
                         waitingForResponses.set(false)
                         break
                     }
-                    if (!shouldWait.get()) {
-                        logger.info("Waiter timeout")
+                    !shouldWait.get() -> {
+                        logger.debug("Waiter timeout")
                         success = false
                         waitingForResponses.set(false)
                         break
                     }
-                    if (overallResponses >= responses.size()) {
-                        logger.info("Got all responses and condition wasn't satisfied")
+                    overallResponses >= responses.size() -> {
+                        logger.debug("Got all responses and condition wasn't satisfied")
                         success = false
                         waitingForResponses.set(false)
                         break
