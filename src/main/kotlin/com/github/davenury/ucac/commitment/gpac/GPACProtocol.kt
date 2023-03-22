@@ -65,12 +65,16 @@ class GPACProtocolImpl(
 
     override fun getBallotNumber(): Int = myBallotNumber
 
+    private fun GPACPhase?.shouldExecutePhaseIGotNow(newPhase: GPACPhase): Boolean {
+        if (this == null) {
+            return true
+        }
+        return this.shouldExecutePhaseIGotNow(newPhase)
+    }
+
     override suspend fun handleElect(message: ElectMe): ElectedYou {
         phaseMutex.withLock {
-            if (currentPhase == null) {
-                currentPhase = GPACPhase.ELECT
-            }
-            if (!currentPhase!!.shouldExecutePhaseIGotNow(GPACPhase.ELECT)) {
+            if (!currentPhase.shouldExecutePhaseIGotNow(GPACPhase.ELECT) || message.ballotNumber < myBallotNumber) {
                 throw IllegalStateException("I should not execute this phase, since the phase I've executed is: $currentPhase; they want me to do ${GPACPhase.ELECT}")
             }
             currentPhase = GPACPhase.ELECT
@@ -131,10 +135,7 @@ class GPACProtocolImpl(
 
     override suspend fun handleAgree(message: Agree): Agreed {
         phaseMutex.withLock {
-            if (currentPhase == null) {
-                currentPhase = GPACPhase.AGREE
-            }
-            if (!currentPhase!!.shouldExecutePhaseIGotNow(GPACPhase.AGREE)) {
+            if (!currentPhase.shouldExecutePhaseIGotNow(GPACPhase.AGREE) || message.ballotNumber < myBallotNumber) {
                 return Agreed(
                     message.ballotNumber,
                     acceptVal = this.transaction.acceptVal!!
@@ -197,10 +198,7 @@ class GPACProtocolImpl(
 
     override suspend fun handleApply(message: Apply) {
         phaseMutex.withLock {
-            if (currentPhase == null) {
-                currentPhase = GPACPhase.APPLY
-            }
-            if (!currentPhase!!.shouldExecutePhaseIGotNow(GPACPhase.APPLY)) {
+            if (!currentPhase.shouldExecutePhaseIGotNow(GPACPhase.APPLY) || message.ballotNumber < myBallotNumber) {
                 throw IllegalStateException("I should not execute this phase, since the phase I've executed is: $currentPhase; they want me to do ${GPACPhase.APPLY}")
             }
             currentPhase = GPACPhase.APPLY
@@ -533,9 +531,9 @@ class GPACProtocolImpl(
 
         logger.info("Responses from apply: ${responses.flatten().map { 
             try {
-                it.execute().status   
+                it.status   
             } catch (e: Exception) {
-                null
+                "null"
             }
         }}")
         this.handleApply(

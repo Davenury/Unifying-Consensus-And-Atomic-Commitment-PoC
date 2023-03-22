@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.future.asCompletableFuture
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
@@ -26,7 +27,7 @@ interface GPACProtocolClient {
     ): List<List<Deferred<ElectedYou?>>>
 
     suspend fun sendFTAgree(otherPeers: List<List<PeerAddress>>, message: Agree): List<List<Deferred<Agreed?>>>
-    suspend fun sendApply(otherPeers: List<List<PeerAddress>>, message: Apply): List<List<Deferred<HttpStatement?>>>
+    suspend fun sendApply(otherPeers: List<List<PeerAddress>>, message: Apply): List<List<Deferred<HttpResponse?>>>
 }
 
 class GPACProtocolClientImpl : GPACProtocolClient {
@@ -48,8 +49,8 @@ class GPACProtocolClientImpl : GPACProtocolClient {
             "ft-agree"
         ) { peer, e -> "Peer ${peer.globalPeerId} responded with exception: $e - ft agreement" }
 
-    override suspend fun sendApply(otherPeers: List<List<PeerAddress>>, message: Apply): List<List<Deferred<HttpStatement?>>> =
-        sendRequests<Apply, HttpStatement>(
+    override suspend fun sendApply(otherPeers: List<List<PeerAddress>>, message: Apply): List<List<Deferred<HttpResponse?>>> =
+        sendRequests<Apply, HttpResponse>(
             otherPeers, message, "apply"
         ) { peer, e -> "Peer: ${peer.globalPeerId} didn't apply transaction: $e" }
 
