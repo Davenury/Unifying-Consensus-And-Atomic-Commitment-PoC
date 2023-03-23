@@ -29,7 +29,7 @@ class Changes : ArrayList<Change> {
 }
 
 data class ChangePeersetInfo(
-    val peersetId: Int,
+    val peersetId: PeersetId,
     val parentId: String?,
 )
 
@@ -51,10 +51,10 @@ sealed class Change(open val id: String = UUID.randomUUID().toString()) {
     // TODO remove
     abstract val acceptNum: Int?
 
-    fun getPeersetInfo(peersetId: Int): ChangePeersetInfo? =
+    fun getPeersetInfo(peersetId: PeersetId): ChangePeersetInfo? =
         peersets.find { it.peersetId == peersetId }
 
-    fun toHistoryEntry(peersetId: Int, parentIdDefault: String? = null): HistoryEntry {
+    fun toHistoryEntry(peersetId: PeersetId, parentIdDefault: String? = null): HistoryEntry {
         val info = getPeersetInfo(peersetId)
             ?: throw IllegalArgumentException("Unknown peersetId: $peersetId")
         return IntermediateHistoryEntry(
@@ -65,7 +65,7 @@ sealed class Change(open val id: String = UUID.randomUUID().toString()) {
         )
     }
 
-    abstract fun copyWithNewParentId(peersetId: Int, parentId: String?): Change
+    abstract fun copyWithNewParentId(peersetId: PeersetId, parentId: String?): Change
 
     protected fun doesEqual(other: Any?): Boolean =
         (other is Change) && Objects.equals(id, other.id)
@@ -111,7 +111,7 @@ data class AddRelationChange(
         return Objects.hash(peersets, from, to)
     }
 
-    override fun copyWithNewParentId(peersetId: Int, parentId: String?): Change =
+    override fun copyWithNewParentId(peersetId: PeersetId, parentId: String?): Change =
         this.copy(peersets = peersets.map {
             if (it.peersetId == peersetId) {
                 ChangePeersetInfo(peersetId, parentId)
@@ -145,7 +145,7 @@ data class DeleteRelationChange(
         return Objects.hash(peersets, from, to)
     }
 
-    override fun copyWithNewParentId(peersetId: Int, parentId: String?): Change =
+    override fun copyWithNewParentId(peersetId: PeersetId, parentId: String?): Change =
         this.copy(peersets = peersets.map {
             if (it.peersetId == peersetId) {
                 ChangePeersetInfo(peersetId, parentId)
@@ -175,7 +175,7 @@ data class AddUserChange(
         return Objects.hash(peersets, userName)
     }
 
-    override fun copyWithNewParentId(peersetId: Int, parentId: String?): Change =
+    override fun copyWithNewParentId(peersetId: PeersetId, parentId: String?): Change =
         this.copy(peersets = peersets.map {
             if (it.peersetId == peersetId) {
                 ChangePeersetInfo(peersetId, parentId)
@@ -206,7 +206,7 @@ data class AddGroupChange(
         return Objects.hash(peersets, groupName)
     }
 
-    override fun copyWithNewParentId(peersetId: Int, parentId: String?): Change =
+    override fun copyWithNewParentId(peersetId: PeersetId, parentId: String?): Change =
         this.copy(peersets = peersets.map {
             if (it.peersetId == peersetId) {
                 ChangePeersetInfo(peersetId, parentId)
@@ -247,7 +247,7 @@ data class TwoPCChange(
         return Objects.hash(peersets, twoPCStatus)
     }
 
-    override fun copyWithNewParentId(peersetId: Int, parentId: String?): Change =
+    override fun copyWithNewParentId(peersetId: PeersetId, parentId: String?): Change =
         this.copy(peersets = peersets.map {
             if (it.peersetId == peersetId) {
                 ChangePeersetInfo(peersetId, parentId)

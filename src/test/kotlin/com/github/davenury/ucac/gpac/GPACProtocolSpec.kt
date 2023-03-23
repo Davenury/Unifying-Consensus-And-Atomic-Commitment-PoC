@@ -27,19 +27,23 @@ class GPACProtocolSpec {
     private val protocolClientMock = mockk<GPACProtocolClient>()
     private val transactionBlockerMock = mockk<TransactionBlocker>()
     private var subject = GPACProtocolImpl(
+        PeersetId("peerset0"),
         history,
         GpacConfig(3),
         ctx = Executors.newCachedThreadPool().asCoroutineDispatcher(),
         protocolClientMock,
         transactionBlockerMock,
         peerResolver = PeerResolver(
-            GlobalPeerId(0, 0), mapOf(
-                GlobalPeerId(0, 0) to PeerAddress(GlobalPeerId(0, 0), "peer1"),
-                GlobalPeerId(0, 1) to PeerAddress(GlobalPeerId(0, 1), "peer2"),
-                GlobalPeerId(0, 2) to PeerAddress(GlobalPeerId(0, 2), "peer3"),
+            PeerId("peer0"),
+            mapOf(
+                PeerId("peer0") to PeerAddress(PeerId("peer1"), "peer1"),
+                PeerId("peer1") to PeerAddress(PeerId("peer2"), "peer2"),
+                PeerId("peer2") to PeerAddress(PeerId("peer3"), "peer3"),
+            ),
+            mapOf(
+                PeersetId("peerset0") to listOf(PeerId("peer0"), PeerId("peer1"), PeerId("peer2")),
             )
         ),
-        isMetricTest = false
     ).also {
         it.leaderTimer = timerMock
         it.retriesTimer = timerMock
@@ -134,7 +138,7 @@ class GPACProtocolSpec {
         val message = Apply(10, true, Accept.COMMIT, change)
 
         subject.handleApply(message)
-        expectThat(history.getCurrentEntry()).isEqualTo(change.toHistoryEntry(0))
+        expectThat(history.getCurrentEntry()).isEqualTo(change.toHistoryEntry(PeersetId("peerset0")))
     }
 
     @Test
@@ -158,8 +162,8 @@ class GPACProtocolSpec {
     private val change = AddUserChange(
         "userName",
         peersets = listOf(
-            ChangePeersetInfo(0, InitialHistoryEntry.getId()),
-            ChangePeersetInfo(1, InitialHistoryEntry.getId()),
+            ChangePeersetInfo(PeersetId("peerset0"), InitialHistoryEntry.getId()),
+            ChangePeersetInfo(PeersetId("peerset1"), InitialHistoryEntry.getId()),
         ),
     )
 }

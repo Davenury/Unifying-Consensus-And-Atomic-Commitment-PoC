@@ -1,7 +1,6 @@
 package com.github.davenury.ucac.api
 
 import com.github.davenury.common.*
-import com.github.davenury.ucac.common.GlobalPeerId
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
@@ -13,7 +12,7 @@ import java.util.concurrent.CompletableFuture
 
 fun Application.apiV2Routing(
     service: ApiV2Service,
-    currentPeer: GlobalPeerId,
+    peersetId: PeersetId,
 ) {
     val logger = LoggerFactory.getLogger("V2Routing")
 
@@ -76,7 +75,7 @@ fun Application.apiV2Routing(
             else -> false
         }
 
-        if (change.peersets.find { it.peersetId == currentPeer.peersetId } == null) {
+        if (change.peersets.find { it.peersetId == peersetId } == null) {
             throw IllegalArgumentException("My peerset ID is not in the change")
         }
 

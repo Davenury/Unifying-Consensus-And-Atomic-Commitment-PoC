@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.GPACInstanceNotFoundException
+import com.github.davenury.common.PeersetId
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.SignalPublisher
@@ -11,6 +12,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class GPACFactory(
+    private val peersetId: PeersetId,
     private val transactionBlocker: TransactionBlocker,
     private val history: History,
     private val config: Config,
@@ -25,13 +27,14 @@ class GPACFactory(
     suspend fun getOrCreateGPAC(changeId: String): GPACProtocolAbstract =
         mutex.withLock {
             changeIdToGpacInstance[changeId] ?: GPACProtocolImpl(
+                peersetId,
                 history,
                 config.gpac,
                 context,
                 GPACProtocolClientImpl(),
                 transactionBlocker,
-                signalPublisher,
                 peerResolver,
+                signalPublisher,
                 config.metricTest
             ).also {
                 changeIdToGpacInstance[changeId] = it

@@ -8,8 +8,8 @@ import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
-import com.github.davenury.ucac.common.GlobalPeerId
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
+import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
@@ -78,7 +78,7 @@ class ApplicationUcac constructor(
     private val config: Config,
     inheritMdc: Boolean = true,
 ) {
-    private val mdc: MutableMap<String, String> = HashMap(mapOf("peer" to config.globalPeerId().toString()))
+    private val mdc: MutableMap<String, String> = HashMap(mapOf("peer" to config.peerId().toString()))
     private val engine: NettyApplicationEngine
     private var consensusProtocol: RaftConsensusProtocol? = null
     private var twoPC: TwoPC? = null
@@ -113,15 +113,26 @@ class ApplicationUcac constructor(
     }
 
     private fun createServer() = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
+        val peersetId = config.peersetId()
+
         val history = HistoryFactory().createForConfig(config)
-        val signalPublisher = SignalPublisher(signalListeners)
+        val signalPublisher = SignalPublisher(signalListeners, peerResolver)
 
         val raftProtocolClientImpl = RaftProtocolClientImpl()
 
         val transactionBlocker = TransactionBlocker()
-        gpacFactory = GPACFactory(transactionBlocker, history, config, ctx, signalPublisher, peerResolver)
+        gpacFactory = GPACFactory(
+            peersetId,
+            transactionBlocker,
+            history,
+            config,
+            ctx,
+            signalPublisher,
+            peerResolver,
+        )
 
         consensusProtocol = RaftConsensusProtocolImpl(
+            peersetId,
             history,
             config.host + ":" + config.port,
             ctx,
@@ -131,18 +142,19 @@ class ApplicationUcac constructor(
             heartbeatTimeout = config.raft.heartbeatTimeout,
             heartbeatDelay = config.raft.leaderTimeout,
             transactionBlocker = transactionBlocker,
-            config.metricTest
+            config.metricTest,
         )
 
         twoPC = TwoPC(
+            peersetId,
             history,
             config.twoPC,
             ctx,
-            TwoPCProtocolClientImpl(config.peerId),
+            TwoPCProtocolClientImpl(),
             consensusProtocol as RaftConsensusProtocolImpl,
-            signalPublisher,
             peerResolver,
-            config.metricTest
+            signalPublisher,
+            config.metricTest,
         )
 
         service = ApiV2Service(
@@ -257,7 +269,7 @@ class ApplicationUcac constructor(
 
         metaRouting()
         historyRouting(history)
-        apiV2Routing(service!!, peerResolver.currentPeer())
+        apiV2Routing(service!!, peersetId)
         gpacProtocolRouting(gpacFactory)
         consensusProtocolRouting(consensusProtocol!!)
         twoPCRouting(twoPC!!)
@@ -267,12 +279,16 @@ class ApplicationUcac constructor(
         }
     }
 
-    fun setPeers(peers: Map<GlobalPeerId, PeerAddress>) {
+    fun setPeerAddresses(peerAddresses: Map<PeerId, PeerAddress>) {
+        peerAddresses.forEach { (peerId, address) -> setPeerAddress(peerId, address) }
+    }
+
+    fun setPeerAddress(peerId: PeerId, address: PeerAddress) {
         withMdc {
-            val oldPeers = peerResolver.getPeersPrintable()
-            peerResolver.setPeers(peers)
-            val newPeers = peerResolver.getPeersPrintable()
-            logger.info("Set peers $oldPeers -> $newPeers")
+            val oldAddress = peerResolver.resolve(peerId)
+            peerResolver.setPeerAddress(peerId, address)
+            val newAddress = peerResolver.resolve(peerId)
+            logger.info("Updated peer address $peerId $oldAddress -> $newAddress")
         }
     }
 
@@ -306,7 +322,7 @@ class ApplicationUcac constructor(
         }
     }
 
-    fun getGlobalPeerId() = config.globalPeerId()
+    fun getPeerId(): PeerId = config.peerId()
 
     companion object {
         val logger: Logger = LoggerFactory.getLogger("ucac")

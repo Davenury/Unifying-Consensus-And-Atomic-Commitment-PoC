@@ -22,13 +22,29 @@ import java.util.concurrent.locks.Lock
 class ChangesTest {
 
     companion object {
-        private val peers: Map<Int, List<String>> = mapOf(
-            0 to listOf("localhost0:8080", "localhost0:8081", "localhost0:8082"),
-            1 to listOf("localhost1:8080"),
-            2 to listOf("localhost2:8080"),
-            3 to listOf("localhost3:8080", "localhost3:8081", "localhost3:8082"),
-            4 to listOf("localhost4:8080"),
-            5 to listOf("localhost5:8080"),
+        private val peers: Map<PeersetId, List<PeerAddress>> = mapOf(
+            PeersetId("peerset0") to listOf(
+                PeerAddress(PeerId("peer0"), "localhost0:8080"),
+                PeerAddress(PeerId("peer1"), "localhost0:8081"),
+                PeerAddress(PeerId("peer2"), "localhost0:8082"),
+            ),
+            PeersetId("peerset1") to listOf(
+                PeerAddress(PeerId("peer3"), "localhost1:8080"),
+            ),
+            PeersetId("peerset2") to listOf(
+                PeerAddress(PeerId("peer4"), "localhost2:8080"),
+            ),
+            PeersetId("peerset3") to listOf(
+                PeerAddress(PeerId("peer5"), "localhost3:8080"),
+                PeerAddress(PeerId("peer6"), "localhost3:8081"),
+                PeerAddress(PeerId("peer7"), "localhost3:8082"),
+            ),
+            PeersetId("peerset4") to listOf(
+                PeerAddress(PeerId("peer8"), "localhost4:8080"),
+            ),
+            PeersetId("peerset5") to listOf(
+                PeerAddress(PeerId("peer9"), "localhost5:8080"),
+            ),
         )
 
         private const val ownAddress = "http://localhost:8080"
@@ -43,7 +59,7 @@ class ChangesTest {
         val subject = Changes(
             peers,
             sender,
-            RandomPeersWithDelayOnConflictStrategy((0 until peers.size), lockMock, conditionMock),
+            RandomPeersWithDelayOnConflictStrategy(peers.keys.toList(), lockMock, conditionMock),
             DefaultChangeStrategy(ownAddress)
         )
         sender.setChanges(subject)
@@ -103,7 +119,7 @@ class ChangesTest {
         val subject = Changes(
             peers,
             sender,
-            RandomPeersWithDelayOnConflictStrategy((0 until peers.size)),
+            RandomPeersWithDelayOnConflictStrategy(peers.keys.toList()),
             DefaultChangeStrategy(ownAddress)
         )
         sender.setChanges(subject)
@@ -114,7 +130,7 @@ class ChangesTest {
         // after this all peersets are occupied with a change
         peers.keys.forEach { key ->
             withContext(Dispatchers.IO) {
-                if (key == 0) {
+                if (key == PeersetId("peerset0")) {
                     subject.introduceChange(1)
                     phaser.arrive()
                 } else {
@@ -141,7 +157,7 @@ class ChangesTest {
         phaser.register()
         val sender = DummySender(shouldNotify = true, phaser = phaser)
         val subject = Changes(
-            peers, sender, RandomPeersWithDelayOnConflictStrategy((0 until peers.size)), DefaultChangeStrategy(
+            peers, sender, RandomPeersWithDelayOnConflictStrategy(peers.keys.toList()), DefaultChangeStrategy(
                 ownAddress
             )
         )
@@ -164,15 +180,15 @@ class ChangesTest {
 
     @Test
     fun `handle notification should be idempotent`() {
-        val peersetsRange = (1..10)
+        val peersets = (1..10).map { PeersetId("peerset$it") }
         val counter = AtomicInteger(0)
         val strategy = object : GetPeersStrategy {
-            override suspend fun getPeersets(numberOfPeersets: Int): List<Int> =
-                peersetsRange.shuffled().take(numberOfPeersets)
+            override suspend fun getPeersets(numberOfPeersets: Int): List<PeersetId> =
+                peersets.shuffled().take(numberOfPeersets)
 
-            override suspend fun freePeersets(peersetsId: List<Int>) {}
+            override suspend fun freePeersets(peersetsId: List<PeersetId>) {}
 
-            override suspend fun handleNotification(peersetId: Int) {
+            override suspend fun handleNotification(peersetId: PeersetId) {
                 counter.incrementAndGet()
             }
         }
@@ -185,7 +201,7 @@ class ChangesTest {
 
         val singleChange = AddUserChange(
             "userName",
-            peersets = listOf(ChangePeersetInfo(0, "a2fasda2f"))
+            peersets = listOf(ChangePeersetInfo(PeersetId("peerset0"), "a2fasda2f"))
         )
         repeat(3) {
             runBlocking {
@@ -201,8 +217,11 @@ class ChangesTest {
         expectThat(counter.get()).isEqualTo(1)
     }
 
-    private fun areChangesValid(changes: List<Pair<String, Change>>): Boolean {
-        val mapOfChanges = (0..changes.size).associateWith { InitialHistoryEntry.getId() }.toMutableMap()
+    private fun areChangesValid(changes: List<Pair<PeerAddress, Change>>): Boolean {
+        val mapOfChanges = (0..changes.size)
+            .map { PeersetId("peerset$it") }
+            .associateWith { InitialHistoryEntry.getId() }
+            .toMutableMap()
         changes.forEach { (_, change) ->
             change.peersets.forEach { (peersetId, parentId) ->
                 if (parentId != mapOfChanges[peersetId]) {

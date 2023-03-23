@@ -14,13 +14,11 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
-import org.apache.commons.io.FileUtils
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 import strikt.api.expectThat
 import strikt.assertions.*
-import java.io.File
 import java.util.concurrent.Phaser
 
 @Suppress("HttpUrlsUsage")
@@ -39,7 +37,7 @@ class MixedChangesSpec : IntegrationTestBase() {
     @Test
     fun `try to execute two following changes in the same time, first GPAC, then Raft`(): Unit = runBlocking {
         val change = change(0, 1)
-        val secondChange = change(mapOf(0 to change.toHistoryEntry(0).getId()))
+        val secondChange = change(mapOf(0 to change.toHistoryEntry(PeersetId("peerset0")).getId()))
 
         val applyEndPhaser = Phaser(6)
         val beforeSendingApplyPhaser = Phaser(1)
@@ -68,20 +66,23 @@ class MixedChangesSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(3, 3),
-            signalListeners = (0..5).associateWith { signalListenersForCohort }
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2"),
+                "peerset1" to listOf("peer3", "peer4", "peer5"),
+            ),
+            signalListeners = (0..5).map { "peer$it" }.associateWith { signalListenersForCohort }
         )
 
-        val peers = apps.getPeers()
+        val peer0Address = apps.getPeer("peer0").address
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", change)
+        executeChange("http://$peer0Address/v2/change/async", change)
 
         beforeSendingApplyPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", secondChange)
+        executeChange("http://$peer0Address/v2/change/async", secondChange)
 
         applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -89,14 +90,14 @@ class MixedChangesSpec : IntegrationTestBase() {
 
 
 //      First peerset
-        askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
+        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach {
             val changes = it.second
             expectThat(changes.size).isGreaterThanOrEqualTo(2)
             expectThat(changes[0]).isEqualTo(change)
             expectThat(changes[1]).isEqualTo(secondChange)
         }
 
-        askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
+        askAllForChanges(apps.getPeerAddresses("peerset1").values).forEach {
             val changes = it.second
             expectThat(changes.size).isGreaterThanOrEqualTo(1)
             expectThat(changes[0]).isEqualTo(change)
@@ -107,7 +108,7 @@ class MixedChangesSpec : IntegrationTestBase() {
     fun `try to execute two following changes in the same time (two different peers), first GPAC, then Raft`(): Unit =
         runBlocking {
             val change = change(0, 1)
-            val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
+            val secondChange = change(mapOf(1 to change.toHistoryEntry(PeersetId("peerset0")).getId()))
 
             val applyEndPhaser = Phaser(6)
             val beforeSendingApplyPhaser = Phaser(1)
@@ -136,33 +137,34 @@ class MixedChangesSpec : IntegrationTestBase() {
             )
 
             apps = TestApplicationSet(
-                listOf(3, 3),
-                signalListeners = (0..5).associateWith { signalListenersForCohort }
+                mapOf(
+                    "peerset0" to listOf("peer0", "peer1", "peer2"),
+                    "peerset1" to listOf("peer3", "peer4", "peer5"),
+                ),
+                signalListeners = (0..5).map { "peer$it" }.associateWith { signalListenersForCohort }
             )
-
-            val peers = apps.getPeers()
 
             electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // when - executing transaction
-            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async", change)
 
             beforeSendingApplyPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
+            executeChange("http://${apps.getPeer("peer3").address}/v2/change/async", secondChange)
 
             applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             applyConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset
-            askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
+            askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach {
                 val changes = it.second
                 expectThat(changes.size).isGreaterThanOrEqualTo(1)
                 expectThat(changes[0]).isEqualTo(change)
             }
 
-            askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
+            askAllForChanges(apps.getPeerAddresses("peerset1").values).forEach {
                 val changes = it.second
                 expectThat(changes.size).isGreaterThanOrEqualTo(2)
                 expectThat(changes[0]).isEqualTo(change)
@@ -173,8 +175,8 @@ class MixedChangesSpec : IntegrationTestBase() {
     @Test
     fun `try to execute two following changes in the same time, first 2PC, then Raft`(): Unit = runBlocking {
         val firstChange = change(0, 1)
-        val secondChange = change(mapOf(0 to firstChange.toHistoryEntry(0).getId()))
-        val thirdChange = change(mapOf(1 to firstChange.toHistoryEntry(1).getId()))
+        val secondChange = change(mapOf(0 to firstChange.toHistoryEntry(PeersetId("peerset0")).getId()))
+        val thirdChange = change(mapOf(1 to firstChange.toHistoryEntry(PeersetId("peerset1")).getId()))
 
 
         val applyEndPhaser = Phaser(1)
@@ -183,7 +185,13 @@ class MixedChangesSpec : IntegrationTestBase() {
         val applySecondChangePhaser = Phaser(2)
         val applyThirdChangePhaser = Phaser(2)
 
-        listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser, applySecondChangePhaser, applyThirdChangePhaser)
+        listOf(
+            applyEndPhaser,
+            electionPhaser,
+            beforeSendingApplyPhaser,
+            applySecondChangePhaser,
+            applyThirdChangePhaser
+        )
             .forEach { it.register() }
         val leaderElected = SignalListener {
             logger.info("Arrived ${it.subject.getPeerName()}")
@@ -206,21 +214,22 @@ class MixedChangesSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(3, 3),
-            signalListeners = (0..5).associateWith { signalListenersForCohort }
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2"),
+                "peerset1" to listOf("peer3", "peer4", "peer5"),
+            ),
+            signalListeners = (0..5).map { "peer$it" }.associateWith { signalListenersForCohort }
         )
-
-        val peers = apps.getPeers()
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", firstChange)
+        executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?use_2pc=true", firstChange)
 
         beforeSendingApplyPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", secondChange)
-        executeChange("http://${apps.getPeer(1, 1).address}/v2/change/async", thirdChange)
+        executeChange("http://${apps.getPeer("peer0").address}/v2/change/async", secondChange)
+        executeChange("http://${apps.getPeer("peer4").address}/v2/change/async", thirdChange)
 
         applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -229,14 +238,14 @@ class MixedChangesSpec : IntegrationTestBase() {
 
 
 //      First peerset
-        askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
+        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach {
             val changes = it.second
             expectThat(changes.size).isGreaterThanOrEqualTo(3)
             expectThat(changes[1].id).isEqualTo(firstChange.id)
             expectThat(changes[2].id).isEqualTo(secondChange.id)
         }
 
-        askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
+        askAllForChanges(apps.getPeerAddresses("peerset1").values).forEach {
             val changes = it.second
             expectThat(changes.size).isGreaterThanOrEqualTo(3)
             expectThat(changes[1].id).isEqualTo(firstChange.id)
@@ -248,7 +257,7 @@ class MixedChangesSpec : IntegrationTestBase() {
     fun `try to execute two following changes in the same time (two different peers), first 2PC, then Raft`(): Unit =
         runBlocking {
             val change = change(0, 1)
-            val secondChange = change(mapOf(1 to change.toHistoryEntry(0).getId()))
+            val secondChange = change(mapOf(1 to change.toHistoryEntry(PeersetId("peerset0")).getId()))
 
             val beforeSendingApplyPhaser = Phaser(1)
             val applyEndPhaser = Phaser(1)
@@ -271,7 +280,7 @@ class MixedChangesSpec : IntegrationTestBase() {
                     beforeSendingApplyPhaser.arrive()
                 },
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
-                    if (it.change?.id == change.id){
+                    if (it.change?.id == change.id) {
                         apply2PCPhaser.arrive()
                     }
                     if (it.change?.id == secondChange.id) {
@@ -281,20 +290,21 @@ class MixedChangesSpec : IntegrationTestBase() {
             )
 
             apps = TestApplicationSet(
-                listOf(3, 3),
-                signalListeners = (0..5).associateWith { signalListenersForCohort }
+                mapOf(
+                    "peerset0" to listOf("peer0", "peer1", "peer2"),
+                    "peerset1" to listOf("peer3", "peer4", "peer5"),
+                ),
+                signalListeners = (0..5).map { "peer$it" }.associateWith { signalListenersForCohort }
             )
-
-            val peers = apps.getPeers()
 
             electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // when - executing transaction
-            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?use_2pc=true", change)
 
             beforeSendingApplyPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
+            executeChange("http://${apps.getPeer("peer3").address}/v2/change/async", secondChange)
 
             applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -303,13 +313,13 @@ class MixedChangesSpec : IntegrationTestBase() {
             apply2PCPhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset
-            askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
+            askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach {
                 val changes = it.second
                 expectThat(changes.size).isGreaterThanOrEqualTo(2)
                 expectThat(changes[1].id).isEqualTo(change.id)
             }
 
-            askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
+            askAllForChanges(apps.getPeerAddresses("peerset1").values).forEach {
                 val changes = it.second
                 expectThat(changes.size).isGreaterThanOrEqualTo(3)
                 expectThat(changes[1].id).isEqualTo(change.id)
@@ -322,8 +332,8 @@ class MixedChangesSpec : IntegrationTestBase() {
     fun `try to execute two following changes, first 2PC, then Raft`(): Unit =
         runBlocking {
             val firstChange = change(0, 1)
-            val secondChange = change(mapOf(1 to firstChange.toHistoryEntry(1).getId()))
-            val thirdChange = change(mapOf(0 to firstChange.toHistoryEntry(0).getId()))
+            val secondChange = change(mapOf(1 to firstChange.toHistoryEntry(PeersetId("peerset1")).getId()))
+            val thirdChange = change(mapOf(0 to firstChange.toHistoryEntry(PeersetId("peerset0")).getId()))
 
 
             val applyEndPhaser = Phaser(1)
@@ -331,7 +341,7 @@ class MixedChangesSpec : IntegrationTestBase() {
             val applySecondChangePhaser = Phaser(2)
             val applyThirdChangePhaser = Phaser(2)
 
-            listOf(applyEndPhaser,applyThirdChangePhaser,applySecondChangePhaser, electionPhaser)
+            listOf(applyEndPhaser, applyThirdChangePhaser, applySecondChangePhaser, electionPhaser)
                 .forEach { it.register() }
             val leaderElected = SignalListener {
                 electionPhaser.arrive()
@@ -353,33 +363,34 @@ class MixedChangesSpec : IntegrationTestBase() {
             )
 
             apps = TestApplicationSet(
-                listOf(3, 3),
-                signalListeners = (0..5).associateWith { signalListenersForCohort }
+                mapOf(
+                    "peerset0" to listOf("peer0", "peer1", "peer2"),
+                    "peerset1" to listOf("peer3", "peer4", "peer5"),
+                ),
+                signalListeners = (0..5).map { "peer$it" }.associateWith { signalListenersForCohort }
             )
-
-            val peers = apps.getPeers()
 
             electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // when - executing transaction
-            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async?use_2pc=true", firstChange)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?use_2pc=true", firstChange)
 
             applyEndPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            executeChange("http://${apps.getPeer(1, 0).address}/v2/change/async", secondChange)
-            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/async", thirdChange)
+            executeChange("http://${apps.getPeer("peer3").address}/v2/change/async", secondChange)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async", thirdChange)
             applySecondChangePhaser.arriveAndAwaitAdvanceWithTimeout()
             applyThirdChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //      First peerset
-            askAllForChanges(peers.filter { it.key.peersetId == 0 }.values).forEach {
+            askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach {
                 val changes = it.second
                 expectThat(changes.size).isEqualTo(3)
                 expectThat(changes[1].id).isEqualTo(firstChange.id)
                 expectThat(changes[2].id).isEqualTo(thirdChange.id)
             }
 
-            askAllForChanges(peers.filter { it.key.peersetId == 1 }.values).forEach {
+            askAllForChanges(apps.getPeerAddresses("peerset1").values).forEach {
                 val changes = it.second
                 expectThat(changes.size).isEqualTo(3)
                 expectThat(changes[1].id).isEqualTo(firstChange.id)
@@ -406,12 +417,14 @@ class MixedChangesSpec : IntegrationTestBase() {
     private fun change(vararg peersetIds: Int) = AddUserChange(
         "userName",
         peersets = peersetIds.map {
-            ChangePeersetInfo(it, InitialHistoryEntry.getId())
+            ChangePeersetInfo(PeersetId("peerset$it"), InitialHistoryEntry.getId())
         },
     )
 
     private fun change(peerSetIdToId: Map<Int, String>) = AddUserChange(
         "userName",
-        peersets = peerSetIdToId.map { ChangePeersetInfo(it.key, it.value) },
+        peersets = peerSetIdToId.map {
+            ChangePeersetInfo(PeersetId("peerset${it.key}"), it.value)
+        },
     )
 }

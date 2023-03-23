@@ -1,111 +1,100 @@
 package com.github.davenury.ucac.utils
 
+import com.github.davenury.common.PeerAddress
+import com.github.davenury.common.PeerId
+import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
-import com.github.davenury.ucac.common.GlobalPeerId
-import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.createApplication
+import org.junit.Assert
 import org.slf4j.LoggerFactory
-import java.util.*
-import kotlin.random.Random
 
 class TestApplicationSet(
-    numberOfPeersInPeersets: List<Int>,
-    signalListeners: Map<Int, Map<Signal, SignalListener>> = emptyMap(),
-    configOverrides: Map<Int, Map<String, Any>> = emptyMap(),
-    val appsToExclude: List<Int> = emptyList()
+    peersetConfiguration: Map<String, List<String>>,
+    signalListeners: Map<String, Map<Signal, SignalListener>> = emptyMap(),
+    configOverrides: Map<String, Map<String, Any>> = emptyMap(),
+    val appsToExclude: List<String> = emptyList(),
 ) : AutoCloseable {
-
-    private var apps: MutableList<MutableList<ApplicationUcac>> = mutableListOf()
-    private val peers: MutableMap<GlobalPeerId, PeerAddress> = HashMap()
+    private val apps: Map<PeerId, ApplicationUcac>
+    private val peerAddresses: Map<PeerId, PeerAddress>
+    private val peersets: Map<PeersetId, List<PeerId>>
 
     init {
-        val numberOfPeersets = numberOfPeersInPeersets.size
+        peersets = peersetConfiguration
+            .mapKeys { PeersetId(it.key) }
+            .mapValues { entry -> entry.value.map { PeerId(it) } }
+
+        val peerIds: Set<PeerId> = peersetConfiguration.values.flatten().map { PeerId(it) }.toSet()
         val testConfigOverrides = mapOf(
-            "ratis.addresses" to List(numberOfPeersets) {
-                List(numberOfPeersInPeersets[it]) { "localhost:${Random.nextInt(5000, 20000) + 11124}" }
-            }.joinToString(";") { it.joinToString(",") },
-            "peers" to (0 until numberOfPeersets).map { (0 until numberOfPeersInPeersets[it]).map { NON_RUNNING_PEER } }
-                .joinToString(";") { it.joinToString(",") },
+            "peers" to peerIds.joinToString(";") { peerId -> "$peerId=${NON_RUNNING_PEER}" },
+            "peersets" to peersetConfiguration.entries.joinToString(";") { (peersetId, peers) ->
+                "$peersetId=${peers.joinToString(",")}"
+            },
             "port" to 0,
             "host" to "localhost",
         )
 
-        var currentApp = 0
-        apps = (0 until numberOfPeersets).map { peersetId ->
-            (0 until numberOfPeersInPeersets[peersetId]).map { peerId ->
-                createApplication(
-                    signalListeners[currentApp] ?: emptyMap(),
-                    mapOf("peerId" to peerId, "peersetId" to peersetId) +
-                            testConfigOverrides +
-                            (configOverrides[currentApp++] ?: emptyMap()),
-                )
-            }.toMutableList()
-        }.toMutableList()
+        val peersToValidate = signalListeners.keys + configOverrides.keys + appsToExclude
+        peersToValidate.map { PeerId(it) }
+            .forEach { peerId -> Assert.assertTrue(peerId in peerIds) }
 
-        validateAppIds(signalListeners.keys, currentApp)
-        validateAppIds(configOverrides.keys, currentApp)
-        validateAppIds(appsToExclude, currentApp)
+        apps = peerIds.associateWith { peerId ->
+            createApplication(
+                signalListeners[peerId.toString()] ?: emptyMap(),
+                mapOf("peerId" to peerId) +
+                        testConfigOverrides +
+                        (configOverrides[peerId.toString()] ?: emptyMap()),
+            )
+        }
 
         // start and address discovery
-        apps
-            .flatten()
-            .filterIndexed { index, _ -> !appsToExclude.contains(index) }
-            .forEach { it.startNonblocking() }
+        apps.filter { (peerId, _) -> !appsToExclude.contains(peerId.toString()) }
+            .forEach { (_, app) -> app.startNonblocking() }
 
-        apps.flatten().forEachIndexed { appId, app ->
-            val address = if (appId in appsToExclude) {
+        peerAddresses = apps.mapValues { (peerId, app) ->
+            val address = if (peerId.toString() in appsToExclude) {
                 NON_RUNNING_PEER
             } else {
                 "localhost:${app.getBoundPort()}"
             }
-            val globalPeerId = app.getGlobalPeerId()
-            peers[globalPeerId] = PeerAddress(globalPeerId, address)
+            PeerAddress(peerId, address)
         }
 
-        apps.flatten()
-            .filterIndexed { index, _ -> index !in appsToExclude }
-            .forEach { app ->
-                app.setPeers(peers)
+        apps.filter { (peerId, _) -> !appsToExclude.contains(peerId.toString()) }
+            .forEach { (_, app) ->
+                app.setPeerAddresses(peerAddresses)
             }
 
         logger.info("Apps ready")
     }
 
-    private fun validateAppIds(
-        appIds: Collection<Int>,
-        appCount: Int,
-    ) {
-        if (appIds.isNotEmpty()) {
-            val sorted = TreeSet(appIds)
-            if (sorted.first() < 0 || sorted.last() >= appCount) {
-                throw AssertionError("Wrong app IDs: $sorted (total number of apps: $appCount)")
-            }
-        }
-    }
-
     fun stopApps(gracePeriodMillis: Long = 200, timeoutPeriodMillis: Long = 1000) {
         logger.info("Stopping apps")
-        apps.flatten().forEach { it.stop(gracePeriodMillis, timeoutPeriodMillis) }
+        apps.forEach { (_, app) -> app.stop(gracePeriodMillis, timeoutPeriodMillis) }
     }
 
-    fun getPeers(): Map<GlobalPeerId, PeerAddress> = Collections.unmodifiableMap(peers)
+    fun getPeer(peerId: String): PeerAddress = getPeer(PeerId(peerId))
+    fun getPeer(peerId: PeerId): PeerAddress = peerAddresses[peerId]!!
 
-    fun getPeers(peersetId: Int) = peers.filter { it.key.peersetId == peersetId }
+    fun getPeerAddresses(): Map<PeerId, PeerAddress> = peerAddresses
 
-    fun getPeer(peersetId: Int, peerId: Int): PeerAddress = peers[GlobalPeerId(peersetId, peerId)]!!
+    fun getPeerAddresses(peersetId: String): Map<PeerId, PeerAddress> = getPeerAddresses(PeersetId(peersetId))
+    fun getPeerAddresses(peersetId: PeersetId): Map<PeerId, PeerAddress> =
+        peersets[peersetId]!!.associateWith { peerId -> getPeer(peerId) }
 
-    fun getRunningPeers(peersetId: Int) = peers.filter {
-        it.value.address != NON_RUNNING_PEER && it.key.peersetId == peersetId
-    }
+    fun getRunningPeers(peersetId: String) =
+        getPeerAddresses(peersetId)
+            .filter {
+                it.value.address != NON_RUNNING_PEER
+            }
 
     fun getRunningApps(): List<ApplicationUcac> = apps
-        .flatten()
-        .filterIndexed { index, _ -> index !in appsToExclude }
+        .filter { (peerId, _) -> peerId.toString() !in appsToExclude }
+        .values.toList()
 
-    fun getApp(globalPeerId: GlobalPeerId): ApplicationUcac =
-        apps[globalPeerId.peersetId][globalPeerId.peerId]
+    fun getApp(peerId: String): ApplicationUcac = getApp(PeerId(peerId))
+    fun getApp(peerId: PeerId): ApplicationUcac = apps[peerId]!!
 
     companion object {
         const val NON_RUNNING_PEER: String = "localhost:0"

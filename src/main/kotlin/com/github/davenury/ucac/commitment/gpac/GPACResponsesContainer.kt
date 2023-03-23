@@ -1,5 +1,6 @@
 package com.github.davenury.ucac.commitment.gpac
 
+import com.github.davenury.common.PeersetId
 import kotlinx.coroutines.*
 import kotlinx.coroutines.future.asCompletableFuture
 import org.slf4j.LoggerFactory
@@ -10,11 +11,11 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 class GPACResponsesContainer<T>(
-    private val responses: List<List<Deferred<T?>>>,
+    private val responses: Map<PeersetId, List<Deferred<T?>>>,
     private val timeout: Duration,
 ) {
 
-    private val currentState: MutableMap<Int, MutableList<T>> = mutableMapOf()
+    private val currentState: MutableMap<PeersetId, MutableList<T>> = mutableMapOf()
     private val lock = ReentrantLock()
     private val condition = lock.newCondition()
     private val shouldWait = AtomicBoolean(true)
@@ -24,29 +25,29 @@ class GPACResponsesContainer<T>(
 
     init {
         runBlocking {
-            responses.forEachIndexed { peersetId, _ ->
-                responses[peersetId].forEach { deferred ->
+            responses.forEach { (peersetId, peersetResponses) ->
+                peersetResponses.forEach { deferred ->
                     deferred.asCompletableFuture().thenAccept { handleJob(peersetId, it) }
                 }
             }
         }
     }
-    
-    private fun List<List<*>>.size() = 
-        this.flatten().size
 
-    fun awaitForMessages(condition: (List<List<T>>) -> Boolean): Pair<List<List<T>>, Boolean> {
+    private fun Map<*, List<*>>.flattenedSize() =
+        this.values.flatten().size
+
+    fun awaitForMessages(condition: (Map<PeersetId, List<T>>) -> Boolean): Pair<Map<PeersetId, List<T>>, Boolean> {
         lock.withLock {
             ctx.dispatch(Dispatchers.IO) { timeout() }
             while (true) {
-                logger.debug("Responses size: ${responses.size()}, $responses, current resolved: $overallResponses")
+                logger.debug("Responses size: ${responses.flattenedSize()}, $responses, current resolved: $overallResponses")
                 when {
-                    !condition(currentState.asOrderedList()) && shouldWait.get() && overallResponses < responses.size() -> {
+                    !condition(currentState) && shouldWait.get() && overallResponses < responses.flattenedSize() -> {
                         logger.debug("Waiting for responses, current state: $currentState")
                         this.condition.await()
                     }
-                    condition(currentState.asOrderedList()) -> {
-                        logger.debug("Got condition, responses: ${currentState.asOrderedList()}")
+                    condition(currentState) -> {
+                        logger.debug("Got condition, responses: $currentState")
                         success = true
                         waitingForResponses.set(false)
                         break
@@ -57,7 +58,7 @@ class GPACResponsesContainer<T>(
                         waitingForResponses.set(false)
                         break
                     }
-                    overallResponses >= responses.size() -> {
+                    overallResponses >= responses.flattenedSize() -> {
                         logger.debug("Got all responses and condition wasn't satisfied")
                         success = false
                         waitingForResponses.set(false)
@@ -65,7 +66,7 @@ class GPACResponsesContainer<T>(
                     }
                 }
             }
-            return Pair(currentState.asOrderedList(), success)
+            return Pair(currentState, success)
         }
     }
 
@@ -79,7 +80,7 @@ class GPACResponsesContainer<T>(
         }
     }
 
-    private fun handleJob(peersetId: Int, value: T?) {
+    private fun handleJob(peersetId: PeersetId, value: T?) {
         lock.withLock {
             if (waitingForResponses.get()) {
                 if (value != null) {
@@ -91,12 +92,8 @@ class GPACResponsesContainer<T>(
         }
     }
 
-    private fun MutableMap<Int, MutableList<T>>.asOrderedList() =
-        this.entries.sortedBy { it.key }.toList().map { (_, list) -> list }
-
     companion object {
         private val logger = LoggerFactory.getLogger("GPACResponsesContainer")
         private val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
     }
-
 }
