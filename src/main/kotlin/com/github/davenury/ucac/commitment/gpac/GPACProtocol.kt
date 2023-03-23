@@ -12,9 +12,7 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.delay
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.time.Duration
 import java.util.concurrent.CompletableFuture
-import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 
@@ -43,7 +41,7 @@ class GPACProtocolImpl(
 ) : GPACProtocolAbstract(peerResolver, logger) {
     private val globalPeerId: GlobalPeerId = peerResolver.currentPeer()
 
-    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, Duration.ZERO, ctx)
+    var leaderTimer: ProtocolTimer = ProtocolTimerImpl(gpacConfig.leaderFailDelay, gpacConfig.leaderFailBackoff, ctx)
     var retriesTimer: ProtocolTimer =
         ProtocolTimerImpl(gpacConfig.initialRetriesDelay, gpacConfig.retriesBackoffTimeout, ctx)
     private val maxLeaderElectionTries = gpacConfig.maxLeaderElectionTries
@@ -129,7 +127,16 @@ class GPACProtocolImpl(
 
         myBallotNumber = message.ballotNumber
 
-        transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+        if (!this.transaction.decision) {
+            try {
+                transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+            } catch (e: Exception) {
+                return Agreed(
+                    ballotNumber = message.ballotNumber,
+                    acceptVal = Accept.ABORT,
+                )
+            }
+        }
         logger.info("Lock aquired: ${message.ballotNumber}")
 
         transaction =
@@ -168,9 +175,14 @@ class GPACProtocolImpl(
         if (isCurrentTransaction) leaderFailTimeoutStop()
         signal(Signal.OnHandlingApplyBegin, transaction, message.change)
 
+        val entry = message.change.toHistoryEntry(globalPeerId.peersetId)
+
         when {
             !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
-                transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+
+                if (!history.containsEntry(entry.getId()))
+                    transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+
                 transaction =
                     Transaction(
                         ballotNumber = message.ballotNumber,
@@ -193,12 +205,7 @@ class GPACProtocolImpl(
                 this.transaction.copy(decision = true, acceptVal = Accept.COMMIT, ended = true)
 
 
-            val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(
-                    message.change.toHistoryEntry(
-                        globalPeerId.peersetId
-                    ).getId()
-                )
-            ) {
+            val (changeResult, resultMessage) = if (message.acceptVal == Accept.COMMIT && !history.containsEntry(entry.getId())) {
                 addChangeToHistory(message.change)
                 signal(Signal.OnHandlingApplyCommitted, transaction, message.change)
                 Pair(ChangeResult.Status.SUCCESS, null)
@@ -220,11 +227,16 @@ class GPACProtocolImpl(
                     state = changeResult.name.lowercase()
                 )
             }
-        } catch (e: Exception) {
-            transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
+        } catch (ex: Exception) {
+            logger.error("Exception during applying change, set it to abort", ex)
+            transaction =
+                transaction.copy(ballotNumber = myBallotNumber, decision = true, initVal = Accept.ABORT, change = null)
         } finally {
             logger.info("handleApply finally releaseBlocker")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, message.change.id)
+            if (transactionBlocker.isAcquired()) transactionBlocker.tryToReleaseBlockerChange(
+                ProtocolName.GPAC,
+                message.change.id
+            )
 
             signal(Signal.OnHandlingApplyEnd, transaction, message.change)
         }
@@ -516,10 +528,18 @@ class GPACProtocolImpl(
     private fun <T> superMajority(responses: List<List<T>>, peers: List<List<T>>): Boolean =
         responses.size.isMoreThanHalfOf(peers.size) && superFunction(responses, peers)
 
-    private fun <T> superSet(responses: List<List<T>>, peers: List<List<T>>, condition: (T) -> Boolean = { true }): Boolean =
+    private fun <T> superSet(
+        responses: List<List<T>>,
+        peers: List<List<T>>,
+        condition: (T) -> Boolean = { true }
+    ): Boolean =
         (peers.size == responses.size) && superFunction(responses, peers, condition)
 
-    private fun <T> superFunction(responses: List<List<T>>, peers: List<List<T>>, condition: (T) -> Boolean = { true }): Boolean {
+    private fun <T> superFunction(
+        responses: List<List<T>>,
+        peers: List<List<T>>,
+        condition: (T) -> Boolean = { true }
+    ): Boolean {
         val myPeersetId = globalPeerId.peersetId
 
         return responses.withIndex()

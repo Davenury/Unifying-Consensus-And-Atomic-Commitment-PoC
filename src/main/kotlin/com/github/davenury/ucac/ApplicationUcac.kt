@@ -222,11 +222,10 @@ class ApplicationUcac constructor(
             }
 
             exception<ChangeDoesntExist> { cause ->
+                logger.error("Change doesn't exist", cause)
                 call.respond(
                     status = HttpStatusCode.NotFound,
-                    ErrorMessage(
-                        cause.message!!
-                    )
+                    ErrorMessage(cause.message ?: "Change doesn't exists")
                 )
             }
 
@@ -240,6 +239,7 @@ class ApplicationUcac constructor(
             }
 
             exception<GPACInstanceNotFoundException> { cause ->
+                logger.error("GPAC instance not found", cause)
                 call.respond(
                     status = HttpStatusCode.NotFound,
                     ErrorMessage(cause.message ?: "GPAC instance not found")
