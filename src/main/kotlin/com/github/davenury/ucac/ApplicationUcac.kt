@@ -143,6 +143,7 @@ class ApplicationUcac constructor(
             heartbeatDelay = config.raft.leaderTimeout,
             transactionBlocker = transactionBlocker,
             config.metricTest,
+            config.raft.maxChangesPerMessage
         )
 
         twoPC = TwoPC(

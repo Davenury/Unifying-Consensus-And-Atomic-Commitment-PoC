@@ -36,7 +36,8 @@ class RaftConsensusProtocolImpl(
     private val heartbeatTimeout: Duration = Duration.ofSeconds(4),
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
     private val transactionBlocker: TransactionBlocker,
-    private val isMetricTest: Boolean
+    private val isMetricTest: Boolean,
+    private val limitSize: Int
 ) : RaftConsensusProtocol, SignalSubject {
     private val peerId = peerResolver.currentPeer()
 
@@ -428,11 +429,7 @@ class RaftConsensusProtocolImpl(
         }
 
 
-        if (role == RaftRole.Leader
-            && otherConsensusPeers().any { it.peerId == peer }
-            && executorService != null
-            && isRegular
-        ) {
+        if (shouldISendHeartbeatToPeer(peer) && isRegular) {
             launchHeartBeatToPeer(peer, true)
         }
 
@@ -468,12 +465,9 @@ class RaftConsensusProtocolImpl(
                     peerMessage.logEntries
                 )
 
+                val isPeerMissingSomeEntries = peerUrlToNextIndex[peer]?.acceptedEntryId != state.lastApplied
 
-                if (role == RaftRole.Leader
-                    && otherConsensusPeers().any { it.globalPeerId == peer }
-                    && executorService != null
-                    && peerUrlToNextIndex[peer]?.acceptedEntryId != state.lastApplied
-                ) {
+                if (shouldISendHeartbeatToPeer(peer) && isPeerMissingSomeEntries) {
                     launchHeartBeatToPeer(peer, delay = heartbeatDelay, sendInstantly = true)
                 }
             }
@@ -498,11 +492,7 @@ class RaftConsensusProtocolImpl(
             !response.message.success -> {
                 logger.info("Peer doesn't accept heartbeat, because I have outdated history")
 
-                if (role == RaftRole.Leader
-                    && otherConsensusPeers().any { it.peerId == peer }
-                    && executorService != null
-                    && isRegular
-                ) {
+                if (shouldISendHeartbeatToPeer(peer) && isRegular) {
                     launchHeartBeatToPeer(peer, delay = heartbeatDelay)
                 }
 
@@ -512,6 +502,9 @@ class RaftConsensusProtocolImpl(
 
         checkIfQueuedChanges()
     }
+
+    private fun shouldISendHeartbeatToPeer(peer: GlobalPeerId): Boolean =
+        role == RaftRole.Leader && otherConsensusPeers().any { it.globalPeerId == peer } && executorService != null
 
     private suspend fun applyAcceptedChanges(additionalAcceptedIds: List<String>) {
         val acceptedItems: List<LedgerItem>
@@ -605,7 +598,7 @@ class RaftConsensusProtocolImpl(
             }
         }
 
-        val peerIndices = peerToNextIndex.getOrDefault(peerAddress.peerId, PeerIndices()) // TODO
+        val peerIndices = peerToNextIndex.getOrDefault(peerAddress.peerId, PeerIndices())
         val newCommittedChanges = state.getCommittedItems(peerIndices.acknowledgedEntryId)
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
         val allChanges = newCommittedChanges + newProposedChanges
@@ -613,12 +606,12 @@ class RaftConsensusProtocolImpl(
         if (newProposedChanges.isNotEmpty())
             logger.info("Leader sends a message to $peerAddress $allChanges")
 
-        val limitedCommittedChanges = newCommittedChanges.take(LIMIT_SIZE)
+        val limitedCommittedChanges = newCommittedChanges.take(limitSize)
         val lastLimitedCommittedChange = newCommittedChanges.lastOrNull()
         val lastId = lastLimitedCommittedChange?.entry?.getId()
 
         val (currentEntryId, leaderCommitId, changesToSend) =
-            if (limitedCommittedChanges.size < allChanges.size  && lastId != null)
+            if (limitedCommittedChanges.size < allChanges.size && lastId != null)
                 Triple(lastId, lastId, limitedCommittedChanges)
             else
                 Triple(history.getCurrentEntryId(), state.commitIndex, allChanges)
@@ -903,7 +896,6 @@ class RaftConsensusProtocolImpl(
 
     companion object {
         private val logger = LoggerFactory.getLogger("raft")
-        private const val LIMIT_SIZE = 200
     }
 }
 

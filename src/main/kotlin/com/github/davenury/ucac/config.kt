@@ -59,7 +59,8 @@ data class PhasesTimeouts(
 data class RaftConfig(
     val heartbeatTimeout: Duration = Duration.ofSeconds(2),
     val leaderTimeout: Duration = Duration.ofSeconds(1),
-    val isEnabled: Boolean = true
+    val isEnabled: Boolean = true,
+    val limitSize: Int = 200
 )
 
 data class RestConfig(

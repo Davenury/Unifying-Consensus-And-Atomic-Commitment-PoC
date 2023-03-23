@@ -890,7 +890,8 @@ class ConsensusSpec : IntegrationTestBase() {
             peerResolver,
             protocolClient = RaftProtocolClientImpl(),
             transactionBlocker = TransactionBlocker(),
-            isMetricTest = false
+            isMetricTest = false,
+            limitSize = 200
         )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()
