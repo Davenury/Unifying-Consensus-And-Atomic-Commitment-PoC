@@ -5,8 +5,8 @@ import numpy as np
 import itertools
 
 COLUMN_NAME = "avg commit latency"
-FILE_NAME = "network_bytes_received"
-new_file_name = "network-bytes-received-non-leaders"
+FILE_NAME = "network-bytes-received"
+new_file_name = "avg-commit-latency"
 
 leaders = {
     "gpac/3x2": ["peer0-peerset0", "peer0-peerset1"],
@@ -38,7 +38,7 @@ if SWAP_LEADERS:
         leaders2[name] = swapped
     leaders = leaders2
 
-LEADERS = 0 # 0 - drop leaders, 1 - leave only leaders
+LEADERS = -1 # -1 - dont do anything, 0 - drop leaders, 1 - leave only leaders
 
 class Experiment:
     def __init__(self, name):
@@ -64,7 +64,10 @@ class Experiment:
         if LEADERS == 0:
             self.drop_leaders()
 
-        bp = plt.boxplot(self.df.to_numpy().flatten())
+        data = self.df.to_numpy().flatten()
+        #data = [1/x for x in data]
+
+        bp = plt.boxplot(data)
         dict1 = {}
         dict1['lower-whisker'] = bp['whiskers'][0].get_ydata()[1]
         dict1['lower-quartile'] = bp['boxes'][0].get_ydata()[1]
@@ -93,7 +96,7 @@ def discover_experiments(root='results'):
     return [Experiment(ex) for ex in [x[0] for x in os.walk(root) if len(x[0].split("/")) == 3]]
 
 
-experiments = discover_experiments()
+# experiments = discover_experiments()
 
 
 def find_and_sort_results(results, protocol):
@@ -161,7 +164,37 @@ def get_values():
 def get_data_in_csv():
     values = get_values()
     df = pd.DataFrame.from_records(values)
-    df.to_csv(f"parsed_csvs/{new_file_name}.csv", sep=",", index=False)
+    df.to_csv(f"parsed_csvs/fixes/{new_file_name}.csv", sep=",", index=False)
+
+
+def separate_ac_from_consensus(df):
+    def sort_func(input):
+        def inner(k):
+            return int(k.split(" - ")[1].split("x")[0]), 0 if "gpac" in k else 1,0 if "cohort" in k else 1
+        return input.apply(lambda x: inner(x))
+
+    consensus = df.loc[df['name'].str.contains('raft')]
+    ac = df.loc[(df['name'].str.contains('2pc')) | (df['name'].str.contains('gpac'))]
+
+    consensus = consensus.sort_values(by=['name'], key=sort_func)
+    ac = ac.sort_values(by=['name'], key=sort_func)
+
+    consensus.to_csv(f"parsed_csvs/fixes/{FILE_NAME}-consensus.csv", index=False)
+    ac.to_csv(f"parsed_csvs/fixes/{FILE_NAME}-ac.csv", index=False)
+
+
+def separate_ac_from_consensus_file(file):
+    separate_ac_from_consensus(pd.read_csv(file))
+
+
+def merge_leaders_and_non_leaders(leaders_file, nonleaders_file):
+    leaders = pd.read_csv(leaders_file)
+    leaders['name'] = leaders['name'].apply(lambda x: f"{x} - leaders")
+    nonleaders = pd.read_csv(nonleaders_file)
+    nonleaders['name'] = nonleaders['name'].apply(lambda x: f"{x} - cohorts")
+
+    result = pd.concat([leaders, nonleaders], ignore_index=True)
+    return result[result['name'].str.contains('5')]
 
 # def plot_experiments():
 #     width = 0.2
@@ -183,5 +216,6 @@ def get_data_in_csv():
 
 
 if __name__ == "__main__":
-    get_data_in_csv()
-
+    #separate_ac_from_consensus("parsed_csvs/fixes/avg-commit-latency.csv")
+    # get_data_in_csv()
+    separate_ac_from_consensus(merge_leaders_and_non_leaders(f"parsed_csvs/{FILE_NAME}-leaders.csv", f"parsed_csvs/{FILE_NAME}-non-leaders.csv"))
