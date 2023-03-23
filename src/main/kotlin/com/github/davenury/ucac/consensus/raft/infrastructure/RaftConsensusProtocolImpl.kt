@@ -753,6 +753,7 @@ class RaftConsensusProtocolImpl(
         with(CoroutineScope(leaderRequestExecutorService)) {
             launch(MDCContext()) {
                 var result: ChangeResult? = null
+//              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
                 while(result == null) {
                     logger.info("Send request to leader again")
                     result = try {
