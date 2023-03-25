@@ -38,6 +38,7 @@ import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
+import kotlin.system.measureTimeMillis
 
 //@Disabled
 @ExtendWith(TestLogExtension::class)
@@ -115,6 +116,55 @@ class AlvinSpec : IntegrationTestBase() {
         }
     }
 
+    @Test
+    fun `1000 change processed sequentially`(): Unit = runBlocking {
+        val peers = 5
+
+        val phaser = Phaser(peers)
+        phaser.register()
+
+
+        val peerChangeAccepted = SignalListener {
+            logger.info("Arrived change: ${it.change}")
+            phaser.arrive()
+        }
+
+        apps = TestApplicationSet(
+            listOf(5),
+            signalListeners = (0..4).associateWith {
+                mapOf(
+                    Signal.AlvinCommitChange to peerChangeAccepted
+                )
+            }
+        )
+        val peerAddresses = apps.getPeers(0)
+
+        var change = createChange(null)
+
+        val endRange = 1000
+
+        var time = 0L
+
+        (0 until endRange).forEach {
+            val newTime = measureTimeMillis {
+                expectCatching {
+                    executeChange("${apps.getPeer(0, 0).address}/v2/change/async", change)
+                }.isSuccess()
+            }
+            logger.info("Change $it is processed $newTime ms")
+            time += newTime
+            phaser.arriveAndAwaitAdvanceWithTimeout()
+            change = createChange(null, parentId = change.toHistoryEntry(0).getId())
+        }
+        // when: peer1 executed change
+
+        expectThat(time / endRange).isLessThanOrEqualTo(500L)
+
+        askAllForChanges(peerAddresses.values).forEach { changes ->
+            // then: there are two changes
+            expectThat(changes.size).isEqualTo(endRange)
+        }
+    }
 
     @Test
     fun `change leader fails after proposal`(): Unit = runBlocking {
@@ -572,7 +622,7 @@ class AlvinSpec : IntegrationTestBase() {
         }
         val consensusPeersAction = SignalListener {
             logger.info("Arrived: ${it.change}")
-            phaserAlvinPeers.arrive()
+            if(it.change == change2)phaserAlvinPeers.arrive()
         }
 
         val firstPeerSignals = mapOf(
@@ -661,11 +711,14 @@ class AlvinSpec : IntegrationTestBase() {
                 accept(ContentType.Application.Json)
             }
 
-            // only one change and this change shouldn't be applied two times
-            expectThat(changes.size).isGreaterThanOrEqualTo(1)
+            expectThat(changes.size).isGreaterThanOrEqualTo(2)
             expect {
                 that(changes[0]).isA<AddGroupChange>()
                 that((changes[0] as AddGroupChange).groupName).isEqualTo(change1.groupName)
+            }
+            expect {
+                that(changes[1]).isA<AddGroupChange>()
+                that((changes[1] as AddGroupChange).groupName).isEqualTo(change2.groupName)
             }
         }
     }
