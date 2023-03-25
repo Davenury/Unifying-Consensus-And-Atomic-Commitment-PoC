@@ -1,8 +1,9 @@
 package com.github.davenury.ucac.gpac
 
 import com.github.davenury.common.*
-import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.InitialHistoryEntry
+import com.github.davenury.common.history.PersistentHistory
+import com.github.davenury.common.persistence.InMemoryPersistence
 import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.commitment.gpac.*
 import com.github.davenury.ucac.common.*
@@ -21,7 +22,7 @@ import java.util.concurrent.Executors
 @ExtendWith(TestLogExtension::class)
 class GPACProtocolSpec {
 
-    private val history = InMemoryHistory()
+    private val history = PersistentHistory(InMemoryPersistence())
     private val timerMock = mockk<ProtocolTimer>()
     private val protocolClientMock = mockk<GPACProtocolClient>()
     private val transactionBlockerMock = mockk<TransactionBlocker>()
@@ -166,3 +167,4 @@ class GPACProtocolSpec {
         ),
     )
 }
+
