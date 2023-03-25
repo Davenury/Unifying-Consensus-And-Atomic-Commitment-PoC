@@ -5,7 +5,7 @@ import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.common.PeerResolver
-import com.github.davenury.ucac.common.TransactionBlocker
+import com.github.davenury.common.txblocker.TransactionBlocker
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

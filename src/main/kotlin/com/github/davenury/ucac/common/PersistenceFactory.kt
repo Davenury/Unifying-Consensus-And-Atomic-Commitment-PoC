@@ -1,6 +1,5 @@
 package com.github.davenury.ucac.common
 
-
 import com.github.davenury.common.persistence.InMemoryPersistence
 import com.github.davenury.common.persistence.Persistence
 import com.github.davenury.common.persistence.RedisPersistence

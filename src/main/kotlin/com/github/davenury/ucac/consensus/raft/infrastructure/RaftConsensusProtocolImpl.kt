@@ -4,6 +4,8 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
+import com.github.davenury.common.txblocker.TransactionAcquisition
+import com.github.davenury.common.txblocker.TransactionBlocker
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
@@ -11,7 +13,6 @@ import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
-import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.*
 import com.zopa.ktor.opentracing.span
 import io.ktor.client.request.*
@@ -325,7 +326,8 @@ class RaftConsensusProtocolImpl(
 
                 notAppliedProposedChanges.isNotEmpty() -> {
                     logger.info("Introduce new changes")
-                    transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, notAppliedProposedChanges.first().changeId)
+                    val changeId = notAppliedProposedChanges.first().changeId
+                transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
                 }
             }
 
@@ -397,10 +399,7 @@ class RaftConsensusProtocolImpl(
         }
 
         updateResult.acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
-            transactionBlocker.tryToReleaseBlockerChange(
-                ProtocolName.CONSENSUS,
-                it.changeId
-            )
+            transactionBlocker.release(TransactionAcquisition(ProtocolName.CONSENSUS, it.changeId))
         }
     }
 
@@ -535,7 +534,7 @@ class RaftConsensusProtocolImpl(
             acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
                 logger.info("Applying accepted changes: $acceptedItems votes: ${voteContainer.getVotes(it.entry.getId())}")
                 logger.debug("In applyAcceptedChanges should tryToReleaseBlocker")
-                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, it.changeId)
+                transactionBlocker.release(TransactionAcquisition(ProtocolName.CONSENSUS, it.changeId))
             }
 
             voteContainer.removeChanges(acceptedIds)
@@ -710,8 +709,9 @@ class RaftConsensusProtocolImpl(
             val updatedChange: Change = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
             entry = updatedChange.toHistoryEntry(peersetId)
 
+            val acquisition = TransactionAcquisition(ProtocolName.CONSENSUS, updatedChange.id)
             try {
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, updatedChange.id)
+                transactionBlocker.acquireReentrant(acquisition)
             } catch (ex: AlreadyLockedException) {
                 logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
@@ -727,7 +727,7 @@ class RaftConsensusProtocolImpl(
                     }"
                 )
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, updatedChange.id)
+                transactionBlocker.release(acquisition)
                 return
             }
 
@@ -765,20 +765,17 @@ class RaftConsensusProtocolImpl(
     }
 
     private fun releaseBlockerFromPreviousTermChanges() {
+        val blockedChange = state.proposedEntries.find {
+            it.changeId == transactionBlocker.getChangeId()
+        } ?: return
 
-        val blockedChange = state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }
-
-        if (transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS
-            && blockedChange != null
-        ) {
-            logger.info("Release blocker for changes from previous term")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, blockedChange.changeId)
+        if (transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, blockedChange.changeId))) {
+            logger.info("Released blocker for changes from previous term")
 
             changeIdToCompletableFuture[state.proposedEntries.last().changeId]
                 ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
         }
     }
-
 
     private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit = span("Raft.sendRequestToLeader") {
         with(CoroutineScope(leaderRequestExecutorService)) {

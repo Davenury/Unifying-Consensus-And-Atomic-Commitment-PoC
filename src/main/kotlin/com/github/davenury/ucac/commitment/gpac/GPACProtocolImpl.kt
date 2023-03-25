@@ -2,13 +2,14 @@ package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
+import com.github.davenury.common.txblocker.TransactionAcquisition
+import com.github.davenury.common.txblocker.TransactionBlocker
 import com.github.davenury.ucac.GpacConfig
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimer
 import com.github.davenury.ucac.common.ProtocolTimerImpl
-import com.github.davenury.ucac.common.TransactionBlocker
 import com.zopa.ktor.opentracing.span
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -69,9 +70,10 @@ class GPACProtocolImpl(
 
             signal(Signal.OnHandlingElectBegin, null, message.change)
 
-            if (transactionBlocker.isAcquired() && transactionBlocker.getChangeId() != message.change.id) {
+            val acquisition = transactionBlocker.getAcquisition()
+        if (acquisition != null && acquisition.changeId != message.change.id) {
                 logger.error("Tried to respond to elect me when semaphore acquired!")
-                throw AlreadyLockedException(ProtocolName.GPAC)
+                throw AlreadyLockedException(acquisition)
             }
 
             if (!isValidBallotNumber(message.ballotNumber)) {
@@ -131,7 +133,7 @@ class GPACProtocolImpl(
 
             if (!this@GPACProtocolImpl.transaction.decision) {
                 try {
-                    transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+                    transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, message.change.id))
                 } catch (e: Exception) {
                     return@withLock Agreed(
                         ballotNumber = message.ballotNumber,
@@ -185,7 +187,7 @@ class GPACProtocolImpl(
             when {
                 !isCurrentTransaction && !transactionBlocker.isAcquired() -> {
                     if (!history.containsEntry(entry.getId())) {
-                        transactionBlocker.tryToBlock(ProtocolName.GPAC, message.change.id)
+                        transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, message.change.id))
                     }
 
                     transaction =
@@ -238,9 +240,11 @@ class GPACProtocolImpl(
                     transaction.copy(ballotNumber = myBallotNumber, decision = true, initVal = Accept.ABORT, change = null)
             } finally {
                 logger.info("handleApply finally releaseBlocker")
-                if (transactionBlocker.isAcquired()) transactionBlocker.tryToReleaseBlockerChange(
+                transactionBlocker.tryRelease(
+                TransactionAcquisition(
                     ProtocolName.GPAC,
                     message.change.id
+                )
                 )
                 signal(Signal.OnHandlingApplyEnd, transaction, message.change)
             }
@@ -326,7 +330,7 @@ class GPACProtocolImpl(
             } catch (e: Exception) {
                 transaction = Transaction(myBallotNumber, Accept.ABORT, change = null)
                 logger.error("Exception in Signal BeforeSendingApply", e.cause)
-                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
+                transactionBlocker.release(TransactionAcquisition(ProtocolName.GPAC, change.id))
                 throw e
             }
             applyPhase(change, acceptVal)
@@ -363,7 +367,7 @@ class GPACProtocolImpl(
             signal(Signal.ReachedMaxRetries, transaction, change)
             changeTimeout(change, message)
             transaction = transaction.copy(change = null)
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
+            transactionBlocker.release(TransactionAcquisition(ProtocolName.GPAC, change.id))
             return
         }
 
@@ -445,7 +449,9 @@ class GPACProtocolImpl(
         val responses = getElectedYouResponses(change, getPeersFromChange(change), acceptNum)
 
         val (electResponses: Map<PeersetId, List<ElectedYou>>, success: Boolean) =
-            GPACResponsesContainer(responses, gpacConfig.phasesTimeouts.electTimeout).awaitForMessages { superFunction(it) }
+            GPACResponsesContainer(responses, gpacConfig.phasesTimeouts.electTimeout).awaitForMessages {
+                superFunction(it)
+            }
 
         if (success) {
             return ElectMeResult(electResponses, true)
@@ -465,7 +471,8 @@ class GPACProtocolImpl(
         iteration: Int = 0,
     ): Boolean = span("GPAC.ftAgreePhase") {
 
-        transactionBlocker.tryToBlock(ProtocolName.GPAC, change.id)
+        val acquisition = TransactionAcquisition(ProtocolName.GPAC, change.id)
+        transactionBlocker.acquireReentrant(acquisition)
 
         val responses = getAgreedResponses(change, getPeersFromChange(change), acceptVal, decision, acceptNum)
 
@@ -479,7 +486,7 @@ class GPACProtocolImpl(
 
         if (!success && iteration == gpacConfig.maxFTAgreeTries) {
             changeTimeout(change, "Transaction failed due to too few responses of ft phase.")
-            transactionBlocker.tryToReleaseBlockerChange(ProtocolName.GPAC, change.id)
+            transactionBlocker.release(acquisition)
             return false
         }
 
@@ -495,7 +502,10 @@ class GPACProtocolImpl(
     private suspend fun applyPhase(change: Change, acceptVal: Accept): Unit = span("GPAC.applyPhase") {
         val applyMessages = sendApplyMessages(change, getPeersFromChange(change), acceptVal)
 
-        val (responses, _) = GPACResponsesContainer(applyMessages, gpacConfig.phasesTimeouts.applyTimeout).awaitForMessages {
+        val (responses, _) = GPACResponsesContainer(
+            applyMessages,
+            gpacConfig.phasesTimeouts.applyTimeout
+        ).awaitForMessages {
             superSet(it, getPeersFromChange(change))
         }
 
@@ -531,7 +541,11 @@ class GPACProtocolImpl(
             Agree(myBallotNumber, acceptVal, change, decision, acceptNum)
         )
 
-    private suspend fun sendApplyMessages(change: Change, otherPeers: Map<PeersetId, List<PeerAddress>>, acceptVal: Accept) =
+    private suspend fun sendApplyMessages(
+        change: Change,
+        otherPeers: Map<PeersetId, List<PeerAddress>>,
+        acceptVal: Accept
+    ) =
         protocolClient.sendApply(
             otherPeers, Apply(
                 myBallotNumber,
@@ -551,7 +565,10 @@ class GPACProtocolImpl(
         )
     }
 
-    private fun <T> superMajority(responses: Map<PeersetId, List<T>>, peers: Map<PeersetId, List<PeerAddress>>): Boolean =
+    private fun <T> superMajority(
+        responses: Map<PeersetId, List<T>>,
+        peers: Map<PeersetId, List<PeerAddress>>
+    ): Boolean =
         responses.size.isMoreThanHalfOf(peers.size) && superFunction(responses, peers)
 
     private fun <T> superSet(
