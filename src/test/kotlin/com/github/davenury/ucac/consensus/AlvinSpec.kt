@@ -33,7 +33,6 @@ import strikt.api.expect
 import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.assertions.*
-import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
@@ -154,7 +153,7 @@ class AlvinSpec : IntegrationTestBase() {
             }
             logger.info("Change $it is processed $newTime ms")
             time += newTime
-            phaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+            phaser.arriveAndAwaitAdvanceWithTimeout()
             change = createChange(null, parentId = change.toHistoryEntry(0).getId())
         }
         // when: peer1 executed change
