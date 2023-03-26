@@ -173,10 +173,7 @@ class GPACProtocolImpl(
             )
         }
 
-        if (gpacConfig.invokeRecovery) {
-            leaderFailTimeoutStart(message.change)
-        }
-
+        leaderFailTimeoutStart(message.change)
 
         return Agreed(transaction.ballotNumber, message.acceptVal)
     }

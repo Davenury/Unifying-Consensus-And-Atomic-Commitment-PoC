@@ -48,7 +48,6 @@ data class GpacConfig(
     val maxFTAgreeTries: Int = 5,
     val abortOnElectMe: Boolean = false,
     val phasesTimeouts: PhasesTimeouts = PhasesTimeouts(),
-    val invokeRecovery: Boolean = true,
 )
 
 data class PhasesTimeouts(
