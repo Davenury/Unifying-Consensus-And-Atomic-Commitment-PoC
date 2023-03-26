@@ -55,16 +55,15 @@ class AlvinProtocol(
     override suspend fun begin() {}
 
 
-//  TODO: use transactionBlocker
 
     override suspend fun handleProposalPhase(message: AlvinPropose): AlvinAckPropose {
 //        logger.info("Handle proposal: ${} $message")
         logger.info("Handle proposal: ${message.entry.deps}")
 
         val newDeps: List<HistoryEntry>
-        resetFailureDetector(message.entry.toEntry())
-        updateEntry(message.entry.toEntry())
         mutex.withLock {
+            resetFailureDetector(message.entry.toEntry())
+            updateEntry(message.entry.toEntry())
             newDeps = deliveryQueue.map { it.entry }
         }
         val newPos = getNextNum(message.peerId)
@@ -83,13 +82,15 @@ class AlvinProtocol(
 //        logger.info("Handle accept: $message")
         logger.info("Handle accept: ${message.entry.deps}")
         val entry = message.entry.toEntry()
-
-        checkTransactionBlocker(entry)
-
-        resetFailureDetector(entry)
-        updateEntry(entry)
         val newDeps: List<HistoryEntry>
+
+
         mutex.withLock {
+            checkTransactionBlocker(entry)
+            updateEntry(entry)
+            resetFailureDetector(entry)
+
+
             newDeps = entryIdToAlvinEntry
                 .values
                 .filter { it.transactionId < message.entry.transactionId }
@@ -104,10 +105,11 @@ class AlvinProtocol(
         logger.info("Handle stable: ${message.entry.deps.map { HistoryEntry.deserialize(it).getId() }}")
         val entry = message.entry.toEntry()
         val entryId = entry.entry.getId()
-        checkTransactionBlocker(entry)
-
-        entryIdToFailureDetector[entryId]?.cancelCounting()
-        updateEntry(entry)
+        mutex.withLock {
+            checkTransactionBlocker(entry)
+            entryIdToFailureDetector[entryId]?.cancelCounting()
+            updateEntry(entry)
+        }
         deliverTransaction()
 
         return AlvinAckStable(globalPeerId.peerId)
@@ -129,14 +131,13 @@ class AlvinProtocol(
                 )
             }
             updatedEntry = messageEntry.copy(epoch = message.entry.epoch)
-            entryIdToAlvinEntry[entryId] = updatedEntry
+            updateEntry(updatedEntry)
         }
-        updateEntry(updatedEntry)
+
         return AlvinPromise(updatedEntry.toDto())
     }
 
     override suspend fun handleCommit(message: AlvinCommit): Unit = mutex.withLock {
-        logger.debug("Handle commit: ${message.result} from peer: ${message.peerId}")
         val messageEntry = message.entry.toEntry()
 
         val change = Change.fromHistoryEntry(messageEntry.entry)!!
@@ -157,10 +158,12 @@ class AlvinProtocol(
         val commitVotes = entryIdToVotesCommit[entryId]!!
         val abortVotes = entryIdToVotesAbort[entryId]!!
 
+        logger.info("Handle commit: ${message.result} from peer: ${message.peerId}, votes: ($commitVotes,$abortVotes) for entry $entryId")
+
         val commitDecision = if (myselfVotesForCommit) isMoreThanHalf(commitVotes) else isMoreThanHalf(commitVotes - 1)
         val abortDecision = if (myselfVotesForCommit) isMoreThanHalf(abortVotes - 1) else isMoreThanHalf(abortVotes)
 
-        if ((commitDecision || abortDecision) && !changeIdToCompletableFuture[change.id]!!.isDone ) {
+        if ((commitDecision || abortDecision) && !changeIdToCompletableFuture[change.id]!!.isDone) {
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             entryIdToAlvinEntry.remove(entryId)
             entryIdToFailureDetector[entryId]?.cancelCounting()
@@ -279,7 +282,10 @@ class AlvinProtocol(
         val historyEntry = change.toHistoryEntry(globalPeerId.peersetId)
         val myDeps = listOf(history.getCurrentEntry())
         val entry = AlvinEntry(historyEntry, getNextNum(), myDeps)
-        updateEntry(entry)
+
+        mutex.withLock {
+            updateEntry(entry)
+        }
 
         val jobs = scheduleMessages(historyEntry, proposeChannel, entry.epoch) { peerAddress ->
             protocolClient.sendProposal(peerAddress, AlvinPropose(globalPeerId.peerId, entry.toDto()))
@@ -303,7 +309,9 @@ class AlvinProtocol(
     private suspend fun decisionPhase(historyEntry: HistoryEntry, pos: Int, deps: List<HistoryEntry>) {
         var entry = entryIdToAlvinEntry[historyEntry.getId()]!!
         entry = entry.copy(transactionId = pos, deps = deps, status = AlvinStatus.ACCEPTED)
-        updateEntry(entry)
+        mutex.withLock {
+            updateEntry(entry)
+        }
         logger.info("Starts decision phase $entry")
 
         val jobs = scheduleMessages(historyEntry, acceptChannel, entry.epoch) { peerAddress ->
@@ -327,7 +335,9 @@ class AlvinProtocol(
     private suspend fun deliveryPhase(historyEntry: HistoryEntry, newDeps: List<HistoryEntry>) {
         var entry = entryIdToAlvinEntry[historyEntry.getId()]!!
         entry = entry.copy(deps = newDeps, status = AlvinStatus.STABLE)
-        updateEntry(entry)
+        mutex.withLock {
+            updateEntry(entry)
+        }
 
         logger.info("Starts delivery phase $entry")
 
@@ -349,9 +359,8 @@ class AlvinProtocol(
 
         logger.info("Starts recovery phase for $entry")
 
-        val entryId = entry.entry.getId()
         var newEntry = entry.copy(epoch = entry.epoch + 1, status = AlvinStatus.UNKNOWN)
-        entryIdToAlvinEntry[entryId] = newEntry
+        updateEntry(newEntry)
 
         logger.info("Send prepare messages")
 
@@ -377,21 +386,27 @@ class AlvinProtocol(
             responses.any { it.entry?.status == AlvinStatus.STABLE } -> {
                 logger.info("Entry is in Stable status, start delivery phase")
                 newEntry = newEntry.copy(status = AlvinStatus.STABLE)
-                updateEntry(newEntry)
+                mutex.withLock {
+                    updateEntry(newEntry)
+                }
                 deliveryPhase(newEntry.entry, newEntry.deps)
             }
 
             responses.any { it.entry?.status == AlvinStatus.ACCEPTED } -> {
                 logger.info("Entry is in Accepted status, start decision phase")
                 newEntry = newEntry.copy(status = AlvinStatus.ACCEPTED)
-                updateEntry(newEntry)
+                mutex.withLock {
+                    updateEntry(newEntry)
+                }
                 decisionPhase(newEntry.entry, newEntry.transactionId, newEntry.deps)
             }
 
             else -> {
                 logger.info("Entry is in no status, start proposal phase")
                 newEntry = newEntry.copy(status = AlvinStatus.PENDING)
-                updateEntry(newEntry)
+                mutex.withLock {
+                    updateEntry(newEntry)
+                }
                 proposalPhase(Change.fromHistoryEntry(newEntry.entry)!!)
             }
         }
@@ -536,7 +551,37 @@ class AlvinProtocol(
     //  TODO: Check if any transaction from delivery queue can be commited or aborted
 //  If can be committed send commit message to all other peers and wait for qurom commit messages.
     private suspend fun deliverTransaction() {
-        val entry = cleanDeps(deliveryQueue.poll())
+
+        var resultEntry: AlvinEntry
+        do {
+            if(deliveryQueue.size == 0){
+                logger.info("Delivered all transactions")
+                return
+            }
+            val entry = cleanDeps(deliveryQueue.poll())
+            resultEntry = entry
+            if(history.containsEntry(entry.entry.getId())) {
+                scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
+                    protocolClient.sendCommit(
+                        peerAddress,
+                        AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId.peerId)
+                    )
+                }
+            }
+        }while (history.containsEntry(entry.entry.getId()))
+
+
+        val entry: AlvinEntry = resultEntry
+
+        if (history.containsEntry(entry.entry.getId())) {
+            scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
+                protocolClient.sendCommit(
+                    peerAddress,
+                    AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId.peerId)
+                )
+            }
+            return
+        }
 
         if (entry.status != AlvinStatus.STABLE) {
             logger.info("Entry is not stable yet (id: ${entry.entry.getId()}")
@@ -627,7 +672,8 @@ class AlvinProtocol(
         return entry.copy(deps = unknownDeps + finalDeps)
     }
 
-    private suspend fun resetFailureDetector(entry: AlvinEntry) = mutex.withLock {
+    //  mutex function
+    private suspend fun resetFailureDetector(entry: AlvinEntry) {
         val entryId = entry.entry.getId()
         entryIdToFailureDetector[entryId]?.cancelCounting()
         entryIdToFailureDetector.putIfAbsent(entryId, getFailureDetectorTimer())
@@ -636,16 +682,20 @@ class AlvinProtocol(
         }
     }
 
-    private suspend fun updateEntry(entry: AlvinEntry) = mutex.withLock {
+    //  Mutex function
+    private fun updateEntry(entry: AlvinEntry) {
         val entryId = entry.entry.getId()
         val oldEntry = entryIdToAlvinEntry[entryId]
 
-        if(oldEntry?.status == AlvinStatus.STABLE) return@withLock
+        var updatedEntry = entry
+        if (oldEntry?.status == AlvinStatus.STABLE) {
+            updatedEntry = updatedEntry.copy(status = AlvinStatus.STABLE)
+        }
 
-        if (entry.status == AlvinStatus.STABLE || oldEntry?.status == AlvinStatus.PENDING || oldEntry?.status == AlvinStatus.UNKNOWN || oldEntry?.status == null) {
-            entryIdToAlvinEntry[entryId] = entry
-            deliveryQueue.removeIf { it.entry == entry.entry }
-            deliveryQueue.add(entry)
+        if (updatedEntry.status == AlvinStatus.STABLE || oldEntry?.status == AlvinStatus.PENDING || oldEntry?.status == AlvinStatus.UNKNOWN || oldEntry?.status == null) {
+            entryIdToAlvinEntry[entryId] = updatedEntry
+            deliveryQueue.removeIf { it.entry == updatedEntry.entry }
+            deliveryQueue.add(updatedEntry)
         }
     }
 
