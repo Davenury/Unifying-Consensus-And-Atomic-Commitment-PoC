@@ -59,8 +59,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         requestBody: T,
         urlPath: String,
         crossinline errorMessage: (PeerAddress, Throwable) -> String
-    ): List<List<Deferred<K?>>> {
-        return otherPeers.map { peerset ->
+    ): List<List<Deferred<K?>>> = otherPeers.map { peerset ->
             peerset.map { peer ->
                 CoroutineScope(Dispatchers.IO).async(MDCContext()) {
                     gpacHttpCall<K, T>(
@@ -70,7 +69,6 @@ class GPACProtocolClientImpl : GPACProtocolClient {
                 }
             }
         }
-    }
 
     private suspend inline fun <reified Response, Message> gpacHttpCall(
         url: String,
