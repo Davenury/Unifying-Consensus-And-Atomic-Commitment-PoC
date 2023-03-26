@@ -26,7 +26,7 @@ class TwoPCHandleException(msg: String) : Exception("In 2PC occurs error: $msg")
 class GPACInstanceNotFoundException(changeId: String) : Exception("GPAC instance for change $changeId wasn't found!")
 class AlvinLeaderBecameOutdatedException(changeId: String) : Exception("I as a leader become outdated for entry $changeId")
 class AlvinOutdatedPrepareException(prevEpoch: Int, currEpoch: Int) : Exception("Receive prepare from previous epoch $prevEpoch, current: $currEpoch")
-class AlvinHistoryBlocked(changeId: String) : Exception("TransactionBlocker is blocked on different change: $changeId")
+class AlvinHistoryBlocked(changeId: String, protocol: ProtocolName) : Exception("TransactionBlocker is blocked on change: $changeId with protocol $protocol")
 
 data class ErrorMessage(val msg: String)
 enum class ChangeCreationStatus {

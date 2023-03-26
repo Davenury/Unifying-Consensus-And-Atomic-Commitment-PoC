@@ -171,6 +171,8 @@ class AlvinProtocol(
                 change.id
             )
         }
+
+//        TODO after commiting / aborting change check if there are not waiting for committing
     }
 
     override suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse = mutex.withLock {
@@ -390,7 +392,7 @@ class AlvinProtocol(
     private fun checkTransactionBlocker(entry: AlvinEntry) {
         when {
             isBlockedOnDifferentProtocol() ->
-                throw AlvinHistoryBlocked(transactionBlocker.getChangeId()!!)
+                throw AlvinHistoryBlocked(transactionBlocker.getChangeId()!!, transactionBlocker.getProtocolName()!!)
 
             !transactionBlocker.isAcquired() ->
                 transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, Change.fromHistoryEntry(entry.entry)!!.id)
