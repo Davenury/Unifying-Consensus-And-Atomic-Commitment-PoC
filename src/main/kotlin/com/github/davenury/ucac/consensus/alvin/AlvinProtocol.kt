@@ -146,18 +146,28 @@ class AlvinProtocol(
         val entryId = messageEntry.entry.getId()
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
 
+        entryIdToVotesCommit.putIfAbsent(entryId, 0)
+        entryIdToVotesAbort.putIfAbsent(entryId, 0)
+
         val votesContainer = if (message.result == AlvinResult.COMMIT) entryIdToVotesCommit else entryIdToVotesAbort
         votesContainer[entryId] = votesContainer.getOrDefault(entryId, 0) + 1
-        val isCommitted = isMoreThanHalf(votesContainer[entryId]!!)
 
-        if (isCommitted || message.result == AlvinResult.ABORT) {
+        val myselfVotesForCommit = history.isEntryCompatible(messageEntry.entry)
+
+        val commitVotes = entryIdToVotesCommit[entryId]!!
+        val abortVotes = entryIdToVotesAbort[entryId]!!
+
+        val commitDecision = if (myselfVotesForCommit) isMoreThanHalf(commitVotes) else isMoreThanHalf(commitVotes - 1)
+        val abortDecision = if (myselfVotesForCommit) isMoreThanHalf(abortVotes - 1) else isMoreThanHalf(abortVotes)
+
+        if (commitDecision || abortDecision) {
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             entryIdToAlvinEntry.remove(entryId)
             entryIdToFailureDetector[entryId]?.cancelCounting()
             entryIdToFailureDetector.remove(entryId)
             votesContainer.remove(entryId)
 
-            val (changeResult, signal) = if (isCommitted) {
+            val (changeResult, signal) = if (commitDecision) {
                 history.addEntry(messageEntry.entry)
                 Pair(ChangeResult.Status.SUCCESS, Signal.AlvinCommitChange)
             } else {
@@ -179,7 +189,6 @@ class AlvinProtocol(
         val historyEntry = history.getEntryFromHistory(message.entryId)
 
         val alvinEntry = entryIdToAlvinEntry[message.entryId]
-
 
         return AlvinFastRecoveryResponse(alvinEntry?.toDto(), historyEntry?.serialize())
     }
@@ -390,13 +399,13 @@ class AlvinProtocol(
 
 
     private fun checkTransactionBlocker(entry: AlvinEntry) {
+        val changeId = Change.fromHistoryEntry(entry.entry)!!.id
         when {
             isBlockedOnDifferentProtocol() ->
                 throw AlvinHistoryBlocked(transactionBlocker.getChangeId()!!, transactionBlocker.getProtocolName()!!)
 
-            !transactionBlocker.isAcquired() ->
+            !transactionBlocker.isAcquired() && changeIdToCompletableFuture[changeId]?.isDone != true ->
                 transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, Change.fromHistoryEntry(entry.entry)!!.id)
-
         }
     }
 
@@ -536,14 +545,14 @@ class AlvinProtocol(
         }
 
         val depsResult = entry.deps.map {
-            isEntryCommitted(it.getId())
-        } + listOf(history.isEntryCompatible(entry.entry))
+            isEntryFinished(it.getId())
+        }
 
 
         logger.info("EntryId: ${entry.entry.getId()}, its deps: ${entry.deps.map { it.getId() }}")
 
         when {
-            depsResult.any { it == false } -> {
+            depsResult.all { it } && !history.isEntryCompatible(entry.entry) -> {
                 scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(
                         peerAddress,
@@ -552,7 +561,7 @@ class AlvinProtocol(
                 }
             }
 
-            depsResult.all { it == true } -> {
+            depsResult.all { it } -> {
                 scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(
                         peerAddress,
@@ -568,11 +577,14 @@ class AlvinProtocol(
         }
     }
 
-    private suspend fun isEntryCommitted(entryId: String): Boolean? {
+
+//  FIXME: we should only wait until all deps are finished not necessarily committed
+
+    private suspend fun isEntryFinished(entryId: String): Boolean {
         if (history.containsEntry(entryId)) return true
         if (entryIdToAlvinEntry[entryId] != null) {
             resetFailureDetector(entryIdToAlvinEntry[entryId]!!)
-            return null
+            return false
         }
 
 //      epoch 1 because we don't current value
@@ -580,45 +592,26 @@ class AlvinProtocol(
             protocolClient.sendFastRecovery(it, AlvinFastRecovery(entryId))
         }
 
-        val responses = gatherResponses(entryId, fastRecoveryChannel)
+        val responses: List<AlvinFastRecoveryResponse?> = gatherResponses(entryId, fastRecoveryChannel)
 
         val historyEntry =
             responses.find { it?.historyEntry != null }?.historyEntry?.let { HistoryEntry.deserialize(it) }
         val alvinEntry = responses.find { it?.entry != null }?.entry?.toEntry()
 
-        when {
-            historyEntry != null -> {
-                if (historyEntry.getParentId() == null) {
-                    mutex.withLock {
-                        logger.info("Add missing history entry: ${historyEntry.getId()}")
-                        history.addEntry(historyEntry)
-                        return true
-                    }
+        return when {
+            historyEntry != null && isEntryFinished(historyEntry.getParentId()!!) ->
+                mutex.withLock {
+                    logger.info("Add missing history entry: ${historyEntry.getId()}")
+                    history.addEntry(historyEntry)
+                    true
                 }
-
-                when (isEntryCommitted(historyEntry.getParentId()!!)) {
-                    true ->
-                        mutex.withLock {
-                            logger.info("Add missing history entry: ${historyEntry.getId()}")
-                            history.addEntry(historyEntry)
-                            return true
-                        }
-
-                    false ->
-                        return false
-
-                    null ->
-                        return null
-                }
-            }
 
             alvinEntry != null -> {
                 resetFailureDetector(alvinEntry)
-                return null
+                false
             }
 
-            else ->
-                return false
+            else -> true
         }
     }
 
