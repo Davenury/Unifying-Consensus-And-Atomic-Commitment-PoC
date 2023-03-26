@@ -160,7 +160,7 @@ class AlvinProtocol(
         val commitDecision = if (myselfVotesForCommit) isMoreThanHalf(commitVotes) else isMoreThanHalf(commitVotes - 1)
         val abortDecision = if (myselfVotesForCommit) isMoreThanHalf(abortVotes - 1) else isMoreThanHalf(abortVotes)
 
-        if (commitDecision || abortDecision) {
+        if ((commitDecision || abortDecision) && !changeIdToCompletableFuture[change.id]!!.isDone ) {
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             entryIdToAlvinEntry.remove(entryId)
             entryIdToFailureDetector[entryId]?.cancelCounting()
@@ -539,7 +539,7 @@ class AlvinProtocol(
         val entry = cleanDeps(deliveryQueue.poll())
 
         if (entry.status != AlvinStatus.STABLE) {
-            logger.info("Entry is not stable yet")
+            logger.info("Entry is not stable yet (id: ${entry.entry.getId()}")
             deliveryQueue.add(entry)
             return
         }
@@ -639,6 +639,8 @@ class AlvinProtocol(
     private suspend fun updateEntry(entry: AlvinEntry) = mutex.withLock {
         val entryId = entry.entry.getId()
         val oldEntry = entryIdToAlvinEntry[entryId]
+
+        if(oldEntry?.status == AlvinStatus.STABLE) return@withLock
 
         if (entry.status == AlvinStatus.STABLE || oldEntry?.status == AlvinStatus.PENDING || oldEntry?.status == AlvinStatus.UNKNOWN || oldEntry?.status == null) {
             entryIdToAlvinEntry[entryId] = entry
