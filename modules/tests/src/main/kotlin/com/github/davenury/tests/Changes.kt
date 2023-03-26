@@ -16,7 +16,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 
 class Changes(
-    peers: Map<PeersetId, List<PeerAddress>>,
+    private val peers: Map<PeersetId, List<PeerAddress>>,
     private val sender: Sender,
     private val getPeersStrategy: GetPeersStrategy,
     private val createChangeStrategy: CreateChangeStrategy,

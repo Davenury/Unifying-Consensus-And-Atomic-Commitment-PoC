@@ -5,6 +5,7 @@ import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.Changes
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
+import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.PeersetProtocols
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.future.await
@@ -16,8 +17,9 @@ import java.util.concurrent.CompletableFuture
 class ApiV2Service(
     private val config: Config,
     private val peersetProtocols: PeersetProtocols,
+    changeNotifier: ChangeNotifier,
 ) {
-    private val worker = Worker(peersetProtocols)
+    private val worker = Worker(peersetProtocols, changeNotifier)
 
     init {
         worker.startThread()

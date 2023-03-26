@@ -34,7 +34,7 @@ class DummySender(
             Notification(
                 change = change,
                 result = ChangeResult(ChangeResult.Status.SUCCESS),
-                sender = PeerAddress(GlobalPeerId(0, 0), "peer0-peerset0-service")
+                sender = PeerAddress(PeerId("peer0"), "peer0-peerset0-service")
             )
         )
     }
