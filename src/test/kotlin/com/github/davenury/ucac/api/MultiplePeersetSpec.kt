@@ -597,7 +597,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         }
 
     @Test
-    fun `should commit change if super-set agrees to commit`(): Unit =
+    fun `should commit change if super-set agrees to commit`(): Unit = repeat(100) {
         runBlocking {
             val phaser = Phaser(7)
             val electSignal = mapOf(
@@ -619,7 +619,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 signalListeners = mapOf(
                     "peer2" to electSignal,
                     "peer5" to electSignal,
-                ),
+                ) + (0..5).map { "peer$it" }.associateWith { applySignal },
                 configOverrides = (0..5).map { "peer$it" }.associateWith { mapOf("raft.isEnabled" to false) }
             )
 
@@ -635,6 +635,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 expectThat(changes.size).isEqualTo(1)
             }
         }
+    }
 
     @Test
     fun `should commit change if super-set agrees to commit, even though someone yells abort`(): Unit = runBlocking {
