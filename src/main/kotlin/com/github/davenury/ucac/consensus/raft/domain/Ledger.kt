@@ -14,8 +14,8 @@ data class Ledger(
     private val mutex: Mutex = Mutex(),
 ) {
 
-    var commitIndex: String = InitialHistoryEntry.getId()
-    var lastApplied: String = InitialHistoryEntry.getId()
+    var commitIndex: String = history.getCurrentEntryId()
+    var lastApplied: String = history.getCurrentEntryId()
 
     suspend fun updateLedger(leaderCommitHistoryEntryId: String, proposedItems: List<LedgerItem>): LedgerUpdateResult =
         mutex.withLock {
