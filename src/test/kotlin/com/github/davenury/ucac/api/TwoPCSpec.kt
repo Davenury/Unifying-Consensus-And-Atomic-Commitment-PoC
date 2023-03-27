@@ -615,6 +615,27 @@ class TwoPCSpec : IntegrationTestBase() {
             }
         }
 
+    @Test
+    fun `atomic commitment between one-peer peersets`(): Unit = runBlocking {
+        apps = TestApplicationSet(
+            mapOf(
+                "peerset0" to listOf("peer0"),
+                "peerset1" to listOf("peer1"),
+            ),
+        )
+
+        expectCatching {
+            val change1 = change(0, 1)
+            val change2 = twoPeersetChange(change1)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?use_2pc=true", change1)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?use_2pc=true", change2)
+        }.isSuccess()
+
+        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach { changes ->
+            expectThat(changes.size).isEqualTo(4)
+        }
+    }
+
     private suspend fun executeChange(uri: String, change: Change): HttpResponse =
         testHttpClient.post(uri) {
             contentType(ContentType.Application.Json)

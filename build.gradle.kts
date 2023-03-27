@@ -73,9 +73,6 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers:1.17.5")
     testImplementation("org.testcontainers:junit-jupiter:1.17.5")
 
-    // wiremock
-    testImplementation("com.github.tomakehurst:wiremock-jre8:2.33.2")
-
     // for disabling AnsiConsole in tests
     testImplementation("org.fusesource.jansi:jansi:2.4.0")
 }
