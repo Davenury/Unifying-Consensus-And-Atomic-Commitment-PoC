@@ -23,6 +23,8 @@ class ChangeDoesntExist(changeId: String) : Exception("Change with id: $changeId
 class TwoPCConflictException(msg: String) : Exception("During 2PC occurs error: $msg")
 class TwoPCHandleException(msg: String) : Exception("In 2PC occurs error: $msg")
 class GPACInstanceNotFoundException(changeId: String) : Exception("GPAC instance for change $changeId wasn't found!")
+class MissingPeersetParameterException : Exception("Missing peerset parameter")
+class UnknownPeersetException(val peersetId: PeersetId) : Exception("Unknown peerset: $peersetId")
 
 data class ErrorMessage(val msg: String)
 enum class ChangeCreationStatus {

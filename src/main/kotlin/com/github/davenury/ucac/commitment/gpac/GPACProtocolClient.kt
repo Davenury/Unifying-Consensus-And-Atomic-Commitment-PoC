@@ -66,11 +66,11 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         requestBody: T,
         urlPath: String,
         crossinline errorMessage: (PeerAddress, Throwable) -> String
-    ): Map<PeersetId, List<Deferred<K?>>> = otherPeers.mapValues { (_, peerset) ->
+    ): Map<PeersetId, List<Deferred<K?>>> = otherPeers.mapValues { (peersetId, peerset) ->
         peerset.map { peer ->
             CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
                 gpacHttpCall<K, T>(
-                    "http://${peer.address}/$urlPath",
+                    "http://${peer.address}/$urlPath?peerset=${peersetId}",
                     requestBody,
                 ) { throwable -> errorMessage(peer, throwable) }
             }

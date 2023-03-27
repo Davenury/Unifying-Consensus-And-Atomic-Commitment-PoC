@@ -1,26 +1,25 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.common.ChangeDoesntExist
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.common.Metrics
-import com.github.davenury.common.ProtocolName
+import com.github.davenury.common.*
 import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.PeersetProtocols
 import com.zopa.ktor.opentracing.span
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
-import kotlinx.coroutines.runBlocking
-import okhttp3.internal.notifyAll
+import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import java.lang.AssertionError
 import java.util.concurrent.CompletableFuture
 
 
 class Worker(
+    private val coroutineScope: CoroutineScope,
+    private val peersetId: PeersetId,
     private val peersetProtocols: PeersetProtocols,
     private val changeNotifier: ChangeNotifier,
-) : Runnable {
-    private var mdc: MutableMap<String, String> = MDC.getCopyOfContextMap()
+) {
     private val queue: Channel<ProcessorJob> = Channel(Channel.Factory.UNLIMITED)
 
     fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> =
@@ -29,12 +28,20 @@ class Worker(
             ?: peersetProtocols.twoPC.getChangeResult(changeId)
             ?: throw ChangeDoesntExist(changeId)
 
-    fun startThread() {
-        Thread(this).start()
+    fun startAsync() {
+        MDC.putCloseable("peerset", peersetId.toString()).use {
+            coroutineScope.launch(MDCContext()) {
+                try {
+                    run()
+                } catch (e: Exception) {
+                    logger.error("Error while running worker for $peersetId", e)
+                    throw e
+                }
+            }
+        }
     }
 
-    override fun run() = runBlocking {
-        MDC.setContextMap(mdc)
+    private suspend fun run() {
         processQueue()
     }
 
@@ -49,6 +56,7 @@ class Worker(
             }
         } catch (e: InterruptedException) {
             logger.info("Worker interrupted")
+            Thread.currentThread().interrupt()
         }
     }
 
@@ -75,6 +83,11 @@ class Worker(
     }
 
     suspend fun send(job: ProcessorJob) {
+        val peersetIds = job.change.peersets.map { it.peersetId }
+        if (peersetId !in peersetIds) {
+            throw AssertionError("Job is not related to my peerset: $job")
+        }
+
         queue.send(job)
     }
 

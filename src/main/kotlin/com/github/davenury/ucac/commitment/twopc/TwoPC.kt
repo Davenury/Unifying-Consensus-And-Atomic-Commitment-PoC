@@ -41,10 +41,11 @@ class TwoPC(
                 change = change,
             )
 
-            val otherPeers = updatedChange.peersets
+            val otherPeersets = updatedChange.peersets
                 .map { it.peersetId }
                 .filter { it != peersetId }
-                .map { peerResolver.getPeersFromPeerset(it)[0] }
+            val otherPeers: Map<PeersetId, PeerAddress> =
+                otherPeersets.associateWith { peerResolver.getPeersFromPeerset(it)[0] }
 
             signal(Signal.TwoPCBeforeProposePhase, change)
             val decision = proposePhase(acceptChange, mainChangeId, otherPeers)
@@ -110,11 +111,12 @@ class TwoPC(
     }
 
     private suspend fun askForDecisionChange(change: Change): Unit = span("TwoPc.askForDecisionChange") {
+        val otherPeerset = change.peersets.map { it.peersetId }
+            .first { it != peersetId }
         val resultChange = protocolClient.askForChangeStatus(
-            change.peersets.map { it.peersetId }
-                .first { it != peersetId }
-                .let { peerResolver.getPeersFromPeerset(it)[0] },
-            change
+            otherPeerset.let { peerResolver.getPeersFromPeerset(it)[0] },
+            change,
+            otherPeerset,
         )
 
         if (resultChange != null) {
@@ -201,7 +203,7 @@ class TwoPC(
     private suspend fun proposePhase(
         acceptChange: TwoPCChange,
         mainChangeId: String,
-        otherPeers: List<PeerAddress>
+        otherPeers: Map<PeersetId, PeerAddress>,
     ): Boolean = span("TwoPc.proposePhase") {
         val acceptResult = checkChangeAndProposeToConsensus(acceptChange, mainChangeId).await()
 
@@ -221,9 +223,8 @@ class TwoPC(
     private suspend fun decisionPhase(
         acceptChange: TwoPCChange,
         decision: Boolean,
-        otherPeersets: List<PeerAddress>,
+        otherPeers: Map<PeersetId, PeerAddress>,
     ): Unit = span("TwoPc.decisionPhase") {
-
         val change = acceptChange.change
         val acceptChangeId = acceptChange.toHistoryEntry(peersetId).getId()
 
@@ -238,7 +239,7 @@ class TwoPC(
         }
 //      Asynchronous commit change to consensuses
 
-        protocolClient.sendDecision(otherPeersets, commitChange)
+        protocolClient.sendDecision(otherPeers, commitChange)
         val changeResult = checkChangeAndProposeToConsensus(
             commitChange.copyWithNewParentId(
                 peersetId,

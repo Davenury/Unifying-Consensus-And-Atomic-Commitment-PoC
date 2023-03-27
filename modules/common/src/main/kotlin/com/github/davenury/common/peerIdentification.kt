@@ -23,4 +23,12 @@ data class PeersetId constructor(
     }
 }
 
-data class PeerAddress(val peerId: PeerId, val address: String)
+data class PeerAddress(val peerId: PeerId, val address: String) {
+    override fun toString(): String {
+        return "($peerId at $address)"
+    }
+
+    companion object {
+        fun of(peerId: String, address: String) = PeerAddress(PeerId(peerId), address)
+    }
+}
