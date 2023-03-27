@@ -1,7 +1,6 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.common.*
-import com.github.davenury.ucac.common.HistoryFactory
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
@@ -9,6 +8,7 @@ import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.ucac.common.HistoryFactory
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
@@ -134,13 +134,11 @@ class ApplicationUcac constructor(
         consensusProtocol = RaftConsensusProtocolImpl(
             peersetId,
             history,
-            config.host + ":" + config.port,
+            config,
             ctx,
             peerResolver,
             signalPublisher,
             raftProtocolClientImpl,
-            heartbeatTimeout = config.raft.heartbeatTimeout,
-            heartbeatDelay = config.raft.leaderTimeout,
             transactionBlocker = transactionBlocker,
             config.metricTest,
             config.raft.maxChangesPerMessage

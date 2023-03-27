@@ -37,8 +37,34 @@ class RaftConsensusProtocolImpl(
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
     private val transactionBlocker: TransactionBlocker,
     private val isMetricTest: Boolean,
-    private val limitSize: Int
+    private val maxChangesPerMessage: Int
 ) : RaftConsensusProtocol, SignalSubject {
+
+    constructor(
+        peersetId: PeersetId,
+        history: History,
+        config: Config,
+        ctx: ExecutorCoroutineDispatcher,
+        peerResolver: PeerResolver,
+        signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
+        protocolClient: RaftProtocolClient,
+        transactionBlocker: TransactionBlocker,
+    ) : this(
+        peersetId,
+        history,
+        config.host + ":" + config.port,
+        ctx,
+        peerResolver,
+        signalPublisher,
+        protocolClient,
+        heartbeatTimeout = config.raft.heartbeatTimeout,
+        heartbeatDelay = config.raft.leaderTimeout,
+        transactionBlocker = transactionBlocker,
+        config.metricTest,
+        config.raft.maxChangesPerMessage
+    )
+
+
     private val peerId = peerResolver.currentPeer()
 
     private var currentTerm: Int = 0
@@ -428,7 +454,7 @@ class RaftConsensusProtocolImpl(
         }
 
 
-        if (shouldISendHeartbeatToPeer(peer) && isRegular) {
+        if (isRegular) {
             launchHeartBeatToPeer(peer, true)
         }
 
@@ -466,7 +492,7 @@ class RaftConsensusProtocolImpl(
 
                 val isPeerMissingSomeEntries = peerUrlToNextIndex[peer]?.acceptedEntryId != state.lastApplied
 
-                if (shouldISendHeartbeatToPeer(peer) && isPeerMissingSomeEntries) {
+                if (isPeerMissingSomeEntries) {
                     launchHeartBeatToPeer(peer, delay = heartbeatDelay, sendInstantly = true)
                 }
             }
@@ -491,7 +517,7 @@ class RaftConsensusProtocolImpl(
             !response.message.success -> {
                 logger.info("Peer doesn't accept heartbeat, because I have outdated history")
 
-                if (shouldISendHeartbeatToPeer(peer) && isRegular) {
+                if (isRegular) {
                     launchHeartBeatToPeer(peer, delay = heartbeatDelay)
                 }
 
@@ -605,7 +631,7 @@ class RaftConsensusProtocolImpl(
         if (newProposedChanges.isNotEmpty())
             logger.info("Leader sends a message to $peerAddress $allChanges")
 
-        val limitedCommittedChanges = newCommittedChanges.take(limitSize)
+        val limitedCommittedChanges = newCommittedChanges.take(maxChangesPerMessage)
         val lastLimitedCommittedChange = newCommittedChanges.lastOrNull()
         val lastId = lastLimitedCommittedChange?.entry?.getId()
 
@@ -836,7 +862,7 @@ class RaftConsensusProtocolImpl(
                     logger.info("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
                     delay(delay.toMillis())
                 }
-                sendHeartbeatToPeer(peer, isRegular)
+                if(shouldISendHeartbeatToPeer(peer))sendHeartbeatToPeer(peer, isRegular)
             }
         }
 
