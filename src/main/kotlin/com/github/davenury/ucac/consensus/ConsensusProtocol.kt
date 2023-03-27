@@ -2,8 +2,8 @@ package com.github.davenury.ucac.consensus
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import java.util.concurrent.CompletableFuture
