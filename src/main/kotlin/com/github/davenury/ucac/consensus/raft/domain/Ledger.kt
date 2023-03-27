@@ -132,6 +132,9 @@ data class Ledger(
     }
 
     suspend fun isNotApplied(entryId: String): Boolean = mutex.withLock { !history.containsEntry(entryId) }
+    suspend fun isOlderThanCurrentEntryId(entryId: String): Boolean = mutex.withLock {
+        history.containsEntry(entryId) && entryId != history.getCurrentEntryId()
+    }
     suspend fun isNotAppliedNorProposed(entryId: String): Boolean =
         mutex.withLock { !history.containsEntry(entryId) && !proposedEntries.any { it.entry.getId() == entryId } }
 
