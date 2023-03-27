@@ -5,6 +5,7 @@ import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.httpClient
 import com.github.davenury.ucac.raftHttpClient
+import com.zopa.ktor.opentracing.asyncTraced
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
@@ -59,7 +60,7 @@ class RaftProtocolClientImpl : RaftProtocolClient {
         peer: PeerAddress, message: ConsensusHeartbeat,
     ): RaftResponse<ConsensusHeartbeatResponse?> {
 
-        return CoroutineScope(Dispatchers.IO).async(MDCContext()) {
+        return CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
             sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(peer, "consensus/heartbeat", message)
         }.let {
             val result = try {
