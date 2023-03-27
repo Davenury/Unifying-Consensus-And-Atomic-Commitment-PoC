@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.consensus.alvin
 
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.raftHttpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -48,13 +48,13 @@ interface AlvinProtocolClient {
     ): ConsensusResponse<AlvinFastRecoveryResponse?>
 }
 
-class AlvinProtocolClientImpl : AlvinProtocolClient {
+public class AlvinProtocolClientImpl : AlvinProtocolClient {
 
     override suspend fun sendProposal(
         peer: PeerAddress,
         message: AlvinPropose
     ): ConsensusResponse<AlvinAckPropose?> {
-        logger.debug("Sending proposal request to ${peer.globalPeerId}")
+        logger.debug("Sending proposal request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "alvin/proposal")
     }
 
@@ -62,22 +62,22 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
         peer: PeerAddress,
         message: AlvinAccept
     ): ConsensusResponse<AlvinAckAccept?> {
-        logger.debug("Sending accept request to ${peer.globalPeerId}")
+        logger.debug("Sending accept request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "alvin/accept")
     }
 
     override suspend fun sendStable(peer: PeerAddress, message: AlvinStable): ConsensusResponse<AlvinAckStable?> {
-        logger.debug("Sending stable request to ${peer.globalPeerId}")
+        logger.debug("Sending stable request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "alvin/stable")
     }
 
     override suspend fun sendPrepare(peer: PeerAddress, message: AlvinAccept): ConsensusResponse<AlvinPromise?> {
-        logger.debug("Sending prepare request to ${peer.globalPeerId}")
+        logger.debug("Sending prepare request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "alvin/prepare")
     }
 
     override suspend fun sendCommit(peer: PeerAddress, message: AlvinCommit): ConsensusResponse<String?> {
-        logger.debug("Sending commit request to ${peer.globalPeerId}")
+        logger.debug("Sending commit request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "alvin/commit")
     }
 
@@ -85,7 +85,7 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
         peer: PeerAddress,
         message: AlvinFastRecovery
     ): ConsensusResponse<AlvinFastRecoveryResponse?> {
-        logger.debug("Sending fastRecovery request to ${peer.globalPeerId}")
+        logger.debug("Sending fastRecovery request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "alvin/fast-recovery")
     }
 
@@ -109,7 +109,7 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
                 }
 
                 else -> {
-                    logger.error("Error while evaluating response from ${peerWithBody.first.globalPeerId}", e)
+                    logger.error("Error while evaluating response from ${peerWithBody.first.peerId}", e)
                     ConsensusResponse(peerWithBody.first.address, null)
                 }
             }
@@ -121,7 +121,7 @@ class AlvinProtocolClientImpl : AlvinProtocolClient {
         suffix: String,
         message: Message,
     ): Response? {
-        logger.debug("Sending request to: ${peer.globalPeerId} ${peer.address}, message: $message")
+        logger.debug("Sending request to: ${peer.peerId} ${peer.address}, message: $message")
         return raftHttpClient.post<Response>("http://${peer.address}/${suffix}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
