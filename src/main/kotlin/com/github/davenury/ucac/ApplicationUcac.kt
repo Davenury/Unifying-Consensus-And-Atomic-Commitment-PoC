@@ -140,8 +140,6 @@ class ApplicationUcac constructor(
             signalPublisher,
             raftProtocolClientImpl,
             transactionBlocker = transactionBlocker,
-            config.metricTest,
-            config.raft.maxChangesPerMessage
         )
 
         twoPC = TwoPC(

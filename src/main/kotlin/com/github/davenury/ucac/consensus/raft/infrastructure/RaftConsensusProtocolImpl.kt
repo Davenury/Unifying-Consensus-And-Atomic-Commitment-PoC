@@ -46,7 +46,7 @@ class RaftConsensusProtocolImpl(
         config: Config,
         ctx: ExecutorCoroutineDispatcher,
         peerResolver: PeerResolver,
-        signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
+        signalPublisher: SignalPublisher = SignalPublisher(emptyMap(), peerResolver),
         protocolClient: RaftProtocolClient,
         transactionBlocker: TransactionBlocker,
     ) : this(
@@ -165,10 +165,10 @@ class RaftConsensusProtocolImpl(
     override suspend fun handleRequestVote(
         peerId: PeerId,
         iteration: Int,
-        candidateLastLogId: String
+        lastLogId: String
     ): ConsensusElectedYou {
         logger.debug(
-            "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$candidateLastLogId, " +
+            "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogId, " +
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
         )
 
@@ -187,10 +187,10 @@ class RaftConsensusProtocolImpl(
                 state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId()
                     ?: state.lastApplied
 
-            val candidateIsUpToDate: Boolean = !state.isOlderThanCurrentEntryId(candidateLastLogId)
+            val candidateIsUpToDate: Boolean = !state.isOlderThanCurrentEntryId(lastLogId)
 
             if (!candidateIsUpToDate) {
-                logger.info("Denying vote for $peerId due to an old index ($candidateLastLogId vs $lastEntryId)")
+                logger.info("Denying vote for $peerId due to an old index ($lastLogId vs $lastEntryId)")
                 return ConsensusElectedYou(this.peerId, currentTerm, false)
             }
             val peerAddress = peerResolver.resolve(peerId).address
@@ -490,7 +490,7 @@ class RaftConsensusProtocolImpl(
                     peerMessage.logEntries
                 )
 
-                val isPeerMissingSomeEntries = peerUrlToNextIndex[peer]?.acceptedEntryId != state.lastApplied
+                val isPeerMissingSomeEntries = peerToNextIndex[peer]?.acceptedEntryId != state.lastApplied
 
                 if (isPeerMissingSomeEntries) {
                     launchHeartBeatToPeer(peer, delay = heartbeatDelay, sendInstantly = true)
@@ -528,8 +528,8 @@ class RaftConsensusProtocolImpl(
         checkIfQueuedChanges()
     }
 
-    private fun shouldISendHeartbeatToPeer(peer: GlobalPeerId): Boolean =
-        role == RaftRole.Leader && otherConsensusPeers().any { it.globalPeerId == peer } && executorService != null
+    private fun shouldISendHeartbeatToPeer(peer: PeerId): Boolean =
+        role == RaftRole.Leader && otherConsensusPeers().any { it.peerId == peer } && executorService != null
 
     private suspend fun applyAcceptedChanges(additionalAcceptedIds: List<String>) {
         val acceptedItems: List<LedgerItem>
