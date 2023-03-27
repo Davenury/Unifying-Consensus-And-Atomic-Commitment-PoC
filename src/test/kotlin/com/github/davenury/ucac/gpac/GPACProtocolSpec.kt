@@ -16,6 +16,7 @@ import strikt.api.expect
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.isEqualTo
+import java.lang.IllegalStateException
 import java.util.concurrent.Executors
 
 @ExtendWith(TestLogExtension::class)
