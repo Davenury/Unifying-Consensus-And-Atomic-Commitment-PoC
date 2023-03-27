@@ -597,38 +597,51 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         }
 
     @Test
-    fun `should commit change if super-set agrees to commit`(): Unit = runBlocking {
-        val electSignal = mapOf(
-            Signal.OnHandlingElectBegin to SignalListener {
-                throw RuntimeException("Should not respond to elect me")
+    fun `should commit change if super-set agrees to commit`(): Unit =
+        runBlocking {
+            val phaser = Phaser(7)
+            val electSignal = mapOf(
+                Signal.OnHandlingElectBegin to SignalListener {
+                    throw RuntimeException("Should not respond to elect me")
+                }
+            )
+            val applySignal = mapOf(
+                Signal.OnHandlingApplyEnd to SignalListener {
+                    phaser.arrive()
+                }
+            )
+
+            apps = TestApplicationSet(
+                mapOf(
+                    "peerset0" to listOf("peer0", "peer1", "peer2"),
+                    "peerset1" to listOf("peer3", "peer4", "peer5"),
+                ),
+                signalListeners = mapOf(
+                    "peer2" to electSignal,
+                    "peer5" to electSignal,
+                ),
+                configOverrides = (0..5).map { "peer$it" }.associateWith { mapOf("raft.isEnabled" to false) }
+            )
+
+            val change: Change = change(0, 1)
+
+            expectCatching {
+                executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
+            }.isSuccess()
+
+            phaser.arriveAndAwaitAdvanceWithTimeout()
+
+            askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+                expectThat(changes.size).isEqualTo(1)
             }
-        )
-
-        apps = TestApplicationSet(
-            mapOf(
-                "peerset0" to listOf("peer0", "peer1", "peer2"),
-                "peerset1" to listOf("peer3", "peer4", "peer5"),
-            ),
-            signalListeners = mapOf(
-                "peer2" to electSignal,
-                "peer5" to electSignal,
-            ),
-            configOverrides = (0..5).map { "peer$it" }.associateWith { mapOf("raft.isEnabled" to false) }
-        )
-
-        val change: Change = change(0, 1)
-
-        expectCatching {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
-        }.isSuccess()
-
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
-            expectThat(changes.size).isEqualTo(1)
         }
-    }
 
     @Test
     fun `should commit change if super-set agrees to commit, even though someone yells abort`(): Unit = runBlocking {
+        val phaser = Phaser(7)
+        val applyAction = mapOf(Signal.OnHandlingApplyEnd to SignalListener {
+            phaser.arrive()
+        })
         apps = TestApplicationSet(
             mapOf(
                 "peerset0" to listOf("peer0", "peer1", "peer2"),
@@ -636,7 +649,8 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ),
             configOverrides = (0..5).map { "peer$it" }.associateWith {
                 mapOf("raft.isEnabled" to false)
-            } + mapOf("peer2" to mapOf("gpac.abortOnElectMe" to true))
+            } + mapOf("peer2" to mapOf("gpac.abortOnElectMe" to true)),
+            signalListeners = (0..5).map { "peer$it" }.associateWith { applyAction }
         )
 
         val change: Change = change(0, 1)
@@ -644,6 +658,8 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         expectCatching {
             executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
         }.isSuccess()
+
+        phaser.arriveAndAwaitAdvanceWithTimeout()
 
         askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
             expectThat(changes.size).isEqualTo(1)
