@@ -1,7 +1,7 @@
 package com.github.davenury.ucac.commitment.twopc
 
 import com.github.davenury.common.Change
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -17,8 +17,7 @@ interface TwoPCProtocolClient {
     suspend fun askForChangeStatus(peer: PeerAddress, change: Change): Change?
 }
 
-class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
-
+class TwoPCProtocolClientImpl : TwoPCProtocolClient {
 
     override suspend fun sendAccept(peers: List<PeerAddress>, change: Change): List<Boolean> =
         sendMessages(peers, change, "2pc/accept")
@@ -70,7 +69,7 @@ class TwoPCProtocolClientImpl(private val id: Int) : TwoPCProtocolClient {
         url: String,
         message: Message
     ): Response? {
-        logger.info("$id - Sending to: $url")
+        logger.info("Sending to: $url")
         return httpClient.post<Response>(url) {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)

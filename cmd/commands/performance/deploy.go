@@ -200,8 +200,10 @@ func createJob(clientset *kubernetes.Clientset, config Config) {
 
 func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 
+	peers, peersets := utils.GenerateServicesForPeersStaticPort(config.PerformanceNumberOfPeers, 8080)
 	data := map[string]string{
-		"TEST_PEERS":                      utils.GenerateServicesForPeersStaticPort(config.PerformanceNumberOfPeers, 8080),
+		"TEST_PEERS":                      peers,
+		"TEST_PEERSETS":                   peersets,
 		"NOTIFICATION_SERVICE_ADDRESS":    "http://notification-service:8080",
 		"SINGLE_PEERSET_CHANGES_NUMBER":   fmt.Sprintf("%d", config.SingleRequestsNumber),
 		"MULTIPLE_PEERSET_CHANGES_NUMBER": fmt.Sprintf("%d", config.MultipleRequestsNumber),

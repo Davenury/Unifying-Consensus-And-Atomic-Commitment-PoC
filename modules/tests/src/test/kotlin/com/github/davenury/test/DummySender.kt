@@ -15,10 +15,10 @@ class DummySender(
 
     private lateinit var changes: Changes
 
-    val appearedChanges = mutableListOf<Pair<String, Change>>()
+    val appearedChanges = mutableListOf<Pair<PeerAddress, Change>>()
     val mutex = Mutex()
 
-    override suspend fun executeChange(address: String, change: Change): ChangeState {
+    override suspend fun executeChange(address: PeerAddress, change: Change): ChangeState {
         mutex.withLock {
             appearedChanges.add(Pair(address, change))
         }

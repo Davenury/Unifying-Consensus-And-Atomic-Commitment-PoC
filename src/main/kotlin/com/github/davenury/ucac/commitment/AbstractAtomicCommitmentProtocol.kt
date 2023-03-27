@@ -2,7 +2,8 @@ package com.github.davenury.ucac.commitment
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeersetId
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -47,11 +48,16 @@ abstract class AbstractAtomicCommitmentProtocol(
         executorService.close()
     }
 
-    fun getPeersFromChange(change: Change): List<List<PeerAddress>> {
+    fun getPeersFromChange(change: Change): Map<PeersetId, List<PeerAddress>> {
         if (change.peersets.isEmpty()) throw IllegalStateException("Change without peersetIds")
-        return change.peersets.map { peersetInfo ->
-            peerResolver.getPeersFromPeerset(peersetInfo.peersetId)
-        }.map { peerset -> peerset.filter { it.globalPeerId != peerResolver.currentPeerAddress().globalPeerId } }
+        return change.peersets.associateBy(
+            { peersetInfo ->
+                peersetInfo.peersetId
+            },
+            { peersetInfo ->
+                peerResolver.getPeersFromPeerset(peersetInfo.peersetId)
+            }
+        ).mapValues { (_, peerset) -> peerset.filter { it.peerId != peerResolver.currentPeerAddress().peerId } }
     }
 
     fun getPeerName() = peerResolver.currentPeer().toString()

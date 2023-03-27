@@ -19,7 +19,7 @@ internal class ChangeTest {
             "test2",
             peersets = listOf(),
         )
-        val change3 = change1.copyWithNewParentId(0, "")
+        val change3 = change1.copyWithNewParentId(PeersetId("ps"), "")
 
         expectThat(change1.id).isNotEqualTo(change2.id)
         expectThat(change1.id).isEqualTo(change3.id)

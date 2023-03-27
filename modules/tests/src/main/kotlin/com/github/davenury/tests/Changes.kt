@@ -1,9 +1,6 @@
 package com.github.davenury.tests
 
-import com.github.davenury.common.AddUserChange
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.common.Notification
+import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
 import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
@@ -13,12 +10,12 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicReference
 
 class Changes(
-    private val peers: Map<Int, List<String>>,
+    peers: Map<PeersetId, List<PeerAddress>>,
     private val sender: Sender,
     private val getPeersStrategy: GetPeersStrategy,
     private val createChangeStrategy: CreateChangeStrategy
 ) {
-    private val changes = List(peers.size) { it to OnePeersetChanges(peers[it]!!, sender) }.toMap()
+    private val changes = peers.mapValues { OnePeersetChanges(it.value, sender) }
 
     private val handledChanges: MutableList<String> = mutableListOf()
     private val mutex = Mutex()
@@ -62,7 +59,7 @@ class Changes(
 }
 
 class OnePeersetChanges(
-    private val peersAddresses: List<String>,
+    private val peersAddresses: List<PeerAddress>,
     private val sender: Sender
 ) {
     private var parentId = AtomicReference(InitialHistoryEntry.getId())

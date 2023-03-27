@@ -2,8 +2,9 @@ package com.github.davenury.ucac.consensus.ratis
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.PeersetId
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.RatisConfig
+import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -14,8 +15,8 @@ import java.util.concurrent.CompletableFuture
 
 class HistoryRatisNode(
     peerId: Int,
-    private val peersetId: Int,
-    config: RatisConfig,
+    private val peersetId: PeersetId,
+    peerResolver: PeerResolver,
     private val history: History,
 ) :
     RatisNode(
@@ -23,7 +24,7 @@ class HistoryRatisNode(
         HistoryStateMachine(history),
         File("./history-$peerId-$peersetId-${UUID.randomUUID()}"),
         peersetId,
-        config,
+        peerResolver,
     ),
     ConsensusProtocol {
 

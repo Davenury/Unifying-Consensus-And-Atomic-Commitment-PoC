@@ -52,22 +52,25 @@ class SinglePeersetSpec : IntegrationTestBase() {
 
         val signalListener = SignalListener {
             expectCatching {
-                executeChange("http://${it.peers[0][1].address}/v2/change/sync?enforce_gpac=true", change(0))
+                val peer1Address: String = it.peerResolver.resolve("peer1").address
+                executeChange("http://$peer1Address/v2/change/sync?enforce_gpac=true", change())
             }.isSuccess()
             signalExecuted.set(true)
             throw RuntimeException("Stop")
         }
 
         apps = TestApplicationSet(
-            listOf(3),
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2")
+            ),
             signalListeners = mapOf(
-                0 to mapOf(Signal.BeforeSendingAgree to signalListener)
+                "peer0" to mapOf(Signal.BeforeSendingAgree to signalListener)
             ),
         )
 
         // Leader fails due to ballot number check - second leader bumps ballot number to 2, then ballot number of leader 1 is too low - should we handle it?
         expectThrows<ServerResponseException> {
-            executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true", change(0))
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?enforce_gpac=true", change())
         }
     }
 
@@ -77,14 +80,15 @@ class SinglePeersetSpec : IntegrationTestBase() {
             val changeAbortedPhaser = Phaser(1)
             changeAbortedPhaser.register()
 
-            val change1 = change(0)
-            val change2 = change(0)
+            val change1 = change()
+            val change2 = change()
 
             val signalListenersForLeader = mapOf(
                 Signal.BeforeSendingApply to SignalListener {
                     expectCatching {
+                        val peer1Address = it.peerResolver.resolve("peer2").address
                         executeChange(
-                            "http://${it.peers[0][1].address}/v2/change/sync?enforce_gpac=true",
+                            "http://$peer1Address/v2/change/sync?enforce_gpac=true",
                             change2,
                         )
                     }
@@ -107,28 +111,31 @@ class SinglePeersetSpec : IntegrationTestBase() {
             )
 
             apps = TestApplicationSet(
-                listOf(3),
+                mapOf(
+                    "peerset0" to listOf("peer0", "peer1", "peer2")
+                ),
                 signalListeners = mapOf(
-                    0 to signalListenersForLeader,
-                    1 to signalListenersForCohort,
-                    2 to signalListenersForCohort,
+                    "peer0" to signalListenersForLeader,
+                    "peer1" to signalListenersForCohort,
+                    "peer2" to signalListenersForCohort,
                 ),
                 configOverrides = mapOf(
-                    0 to config,
-                    1 to config,
-                    2 to config,
+                    "peer0" to config,
+                    "peer1" to config,
+                    "peer2" to config,
                 )
             )
 
             expectCatching {
-                executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true", change1)
+                executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?enforce_gpac=true", change1)
             }.isSuccess()
 
             changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             try {
+                val peer2Address = apps.getPeer("peer2").address
                 testHttpClient.get<HttpResponse>(
-                    "http://${apps.getPeer(0, 2).address}/v2/change_status/${change2.id}"
+                    "http://$peer2Address/v2/change_status/${change2.id}"
                 ) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Application.Json)
@@ -151,7 +158,8 @@ class SinglePeersetSpec : IntegrationTestBase() {
 
             val firstLeaderAction = SignalListener {
                 runBlocking {
-                    testHttpClient.post<Agreed>("http://${it.peers[0][1].address}/ft-agree") {
+                    val peer1Address = it.peerResolver.resolve("peer1").address
+                    testHttpClient.post<Agreed>("http://$peer1Address/ft-agree") {
                         contentType(ContentType.Application.Json)
                         accept(ContentType.Application.Json)
                         body = Agree(it.transaction!!.ballotNumber, Accept.COMMIT, it.change!!)
@@ -172,21 +180,24 @@ class SinglePeersetSpec : IntegrationTestBase() {
             )
 
             apps = TestApplicationSet(
-                listOf(3),
+                mapOf(
+                    "peerset0" to listOf("peer0", "peer1", "peer2")
+                ),
                 signalListeners = mapOf(
-                    0 to firstLeaderCallbacks,
-                    1 to otherPeersCallbacks,
-                    2 to otherPeersCallbacks,
+                    "peer0" to firstLeaderCallbacks,
+                    "peer1" to otherPeersCallbacks,
+                    "peer2" to otherPeersCallbacks,
                 ),
                 configOverrides = mapOf(
-                    1 to mapOf("gpac.leaderFailTimeout" to Duration.ZERO),
+                    "peer1" to mapOf("gpac.leaderFailTimeout" to Duration.ZERO),
                 ),
             )
 
             // change that will cause leader to fall according to action
-            val change = change(0)
+            val change = change()
             try {
-                executeChange("http://${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true", change)
+                val peer0Address = apps.getPeer("peer0").address
+                executeChange("http://$peer0Address/v2/change/sync?enforce_gpac=true", change)
                 fail("Change passed")
             } catch (e: Exception) {
                 logger.info("Leader 1 fails", e)
@@ -194,7 +205,8 @@ class SinglePeersetSpec : IntegrationTestBase() {
 
             phaser.arriveAndAwaitAdvanceWithTimeout()
 
-            val response = testHttpClient.get<Change>("http://${apps.getPeer(0, 1).address}/change") {
+            val peer1Address = apps.getPeer("peer1").address
+            val response = testHttpClient.get<Change>("http://$peer1Address/change") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }
@@ -211,12 +223,12 @@ class SinglePeersetSpec : IntegrationTestBase() {
         val proposedChange = AddGroupChange(
             "name",
             peersets = listOf(
-                ChangePeersetInfo(0, InitialHistoryEntry.getId())
+                ChangePeersetInfo(PeersetId("peerset0"), InitialHistoryEntry.getId())
             ),
         )
 
         val firstLeaderAction = SignalListener { signalData ->
-            val url = "http://${signalData.peers[0][0].address}/apply"
+            val url = "http://${signalData.peerResolver.resolve("peer1").address}/apply"
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
@@ -249,27 +261,30 @@ class SinglePeersetSpec : IntegrationTestBase() {
             mapOf(Signal.OnHandlingApplyCommitted to peer1Action)
 
         apps = TestApplicationSet(
-            listOf(5),
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4")
+            ),
             signalListeners = mapOf(
-                0 to firstPeerSignals,
-                1 to peer1Signals,
-                2 to peerSignals,
-                3 to peerSignals,
-                4 to peerSignals,
+                "peer0" to firstPeerSignals,
+                "peer1" to peer1Signals,
+                "peer2" to peerSignals,
+                "peer3" to peerSignals,
+                "peer4" to peerSignals,
             ),
             configOverrides = mapOf(
-                0 to mapOf("raft.isEnabled" to false),
-                1 to mapOf("raft.isEnabled" to false),
-                2 to mapOf("raft.isEnabled" to false),
-                3 to mapOf("raft.isEnabled" to false),
-                4 to mapOf("raft.isEnabled" to false),
+                "peer0" to mapOf("raft.isEnabled" to false),
+                "peer1" to mapOf("raft.isEnabled" to false),
+                "peer2" to mapOf("raft.isEnabled" to false),
+                "peer3" to mapOf("raft.isEnabled" to false),
+                "peer4" to mapOf("raft.isEnabled" to false),
             )
         )
 
         // change that will cause leader to fall according to action
         try {
+            val peer0Address = apps.getPeer("peer0").address
             executeChange(
-                "http://${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true",
+                "http://$peer0Address/v2/change/sync?enforce_gpac=true",
                 proposedChange
             )
             fail("Change passed")
@@ -280,7 +295,8 @@ class SinglePeersetSpec : IntegrationTestBase() {
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
         phaserPeer1.arriveAndAwaitAdvanceWithTimeout()
 
-        val change = testHttpClient.get<Change>("http://${apps.getPeer(0, 1).address}/change") {
+        val peer1Address = apps.getPeer("peer1").address
+        val change = testHttpClient.get<Change>("http://$peer1Address/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -293,7 +309,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
         phaserAllPeers.arriveAndAwaitAdvanceWithTimeout()
 
-        apps.getPeers(0).forEach { (_, peerAddress) ->
+        apps.getPeerAddresses("peerset0").forEach { (_, peerAddress) ->
             // and should not execute this change couple of times
             val changes = testHttpClient.get<Changes>("http://${peerAddress.address}/changes") {
                 contentType(ContentType.Application.Json)
@@ -316,10 +332,10 @@ class SinglePeersetSpec : IntegrationTestBase() {
             body = change
         }
 
-    private fun change(vararg peersets: Int) = AddUserChange(
+    private fun change() = AddUserChange(
         "userName",
-        peersets = peersets.map {
-            ChangePeersetInfo(it, InitialHistoryEntry.getId())
-        },
+        peersets = listOf(
+            ChangePeersetInfo(PeersetId("peerset0"), InitialHistoryEntry.getId()),
+        ),
     )
 }

@@ -16,21 +16,23 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 class TwoPC(
+    private val peersetId: PeersetId,
     private val history: History,
     twoPCConfig: TwoPCConfig,
     ctx: ExecutorCoroutineDispatcher,
     private val protocolClient: TwoPCProtocolClient,
     private val consensusProtocol: ConsensusProtocol,
-    private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
     peerResolver: PeerResolver,
+    private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap(), peerResolver),
     private val isMetricTest: Boolean
 ) : SignalSubject, AbstractAtomicCommitmentProtocol(logger, peerResolver) {
+    private val peerId = peerResolver.currentPeer()
 
     private var changeTimer: ProtocolTimer = ProtocolTimerImpl(twoPCConfig.changeDelay, Duration.ZERO, ctx)
 
     override suspend fun performProtocol(change: Change) {
         val updatedChange =
-            updateParentIdFor2PCCompatibility(change, history, peerResolver.currentPeer().peersetId)
+            updateParentIdFor2PCCompatibility(change, history, peersetId)
 
         val mainChangeId = updatedChange.id
         try {
@@ -42,8 +44,8 @@ class TwoPC(
 
             val otherPeers = updatedChange.peersets
                 .map { it.peersetId }
-                .filter { it != peerResolver.currentPeer().peersetId }
-                .map { peerResolver.resolve(GlobalPeerId(it, 0)) }
+                .filter { it != peersetId }
+                .map { peerResolver.getPeersFromPeerset(it)[0] }
 
             signal(Signal.TwoPCBeforeProposePhase, change)
             val decision = proposePhase(acceptChange, mainChangeId, otherPeers)
@@ -51,8 +53,8 @@ class TwoPC(
             if (isMetricTest) {
                 Metrics.bumpChangeMetric(
                     changeId = mainChangeId,
-                    peerId = peerResolver.currentPeer().peerId,
-                    peersetId = peerResolver.currentPeer().peersetId,
+                    peerId = peerId,
+                    peersetId = peersetId,
                     protocolName = ProtocolName.TWO_PC,
                     state = "proposed_decision_$decision"
                 )
@@ -66,8 +68,8 @@ class TwoPC(
             if (isMetricTest) {
                 Metrics.bumpChangeMetric(
                     changeId = mainChangeId,
-                    peerId = peerResolver.currentPeer().peerId,
-                    peersetId = peerResolver.currentPeer().peersetId,
+                    peerId = peerId,
+                    peersetId = peersetId,
                     protocolName = ProtocolName.TWO_PC,
                     state = result.name.lowercase()
                 )
@@ -87,7 +89,7 @@ class TwoPC(
         }
 
         val changeWithProperParentId = change.copyWithNewParentId(
-            peerResolver.currentPeer().peersetId,
+            peersetId,
             history.getCurrentEntryId(),
         )
         val result = consensusProtocol.proposeChangeAsync(changeWithProperParentId).await()
@@ -104,8 +106,8 @@ class TwoPC(
     private suspend fun askForDecisionChange(change: Change) {
         val resultChange = protocolClient.askForChangeStatus(
             change.peersets.map { it.peersetId }
-                .first { it != peerResolver.currentPeer().peersetId }
-                .let { peerResolver.resolve(GlobalPeerId(it, 0)) },
+                .first { it != peersetId }
+                .let { peerResolver.getPeersFromPeerset(it)[0] },
             change
         )
 
@@ -134,7 +136,7 @@ class TwoPC(
             change == currentProcessedChange.change -> {
                 changeTimer.cancelCounting()
                 val updatedChange = change.copyWithNewParentId(
-                    peerResolver.currentPeer().peersetId,
+                    peersetId,
                     history.getCurrentEntryId(),
                 )
                 checkChangeAndProposeToConsensus(updatedChange, currentProcessedChange.change.id)
@@ -205,7 +207,7 @@ class TwoPC(
     ) {
 
         val change = acceptChange.change
-        val acceptChangeId = acceptChange.toHistoryEntry(peerResolver.currentPeer().peersetId).getId()
+        val acceptChangeId = acceptChange.toHistoryEntry(peersetId).getId()
 
         val commitChange = if (decision) {
             change
@@ -221,7 +223,7 @@ class TwoPC(
         protocolClient.sendDecision(otherPeersets, commitChange)
         val changeResult = checkChangeAndProposeToConsensus(
             commitChange.copyWithNewParentId(
-                peerResolver.currentPeer().peersetId,
+                peersetId,
                 acceptChangeId,
             ),
             acceptChange.change.id
@@ -241,13 +243,10 @@ class TwoPC(
     }
 
     private fun checkChangeCompatibility(change: Change, originalChangeId: String) {
-        val peerset = peerResolver.currentPeer().peersetId
-        if (!history.isEntryCompatible(change.toHistoryEntry(peerset))) {
+        if (!history.isEntryCompatible(change.toHistoryEntry(peersetId))) {
             logger.info(
                 "Change $originalChangeId is not compatible with history expected: ${
-                    change.toHistoryEntry(
-                        peerset
-                    ).getParentId()
+                    change.toHistoryEntry(peersetId).getParentId()
                 } is ${history.getCurrentEntryId()}"
             )
             changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.REJECTED))
@@ -270,8 +269,7 @@ class TwoPC(
     companion object {
         private val logger = LoggerFactory.getLogger("2pc")
 
-
-        fun updateParentIdFor2PCCompatibility(change: Change, history: History, peersetId: Int): Change {
+        fun updateParentIdFor2PCCompatibility(change: Change, history: History, peersetId: PeersetId): Change {
             val currentEntry = history.getCurrentEntry()
 
             val grandParentChange: Change =

@@ -62,75 +62,81 @@ type PeerConfig struct {
 }
 
 func ConfigMapName(peerConfig PeerConfig) string {
-	return fmt.Sprintf("peer%s-peerset%s-config", peerConfig.PeerId, peerConfig.PeersetId)
+	return fmt.Sprintf("%s-config", peerConfig.PeerId)
 }
 
 func ContainerName(peerConfig PeerConfig) string {
-	return fmt.Sprintf("peer%s-from-peerset%s", peerConfig.PeerId, peerConfig.PeersetId)
+	return fmt.Sprintf("%s", peerConfig.PeerId)
 }
 
 func ServiceName(peerConfig PeerConfig) string {
-	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
+	return fmt.Sprintf("%s-service", peerConfig.PeerId)
 }
 
 func DeploymentName(peerConfig PeerConfig) string {
-	return fmt.Sprintf("peerset%s-peer%s-dep", peerConfig.PeersetId, peerConfig.PeerId)
+	return fmt.Sprintf("%s-dep", peerConfig.PeerId)
 }
 
-func GenerateServicesForPeers(peersInPeerset []int, startPort int) string {
-	return generateServicesForPeers(peersInPeerset, startPort, true)
-}
-
-func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int) string {
-	return generateServicesForPeers(peersInPeerset, port, false)
+func GenerateServicesForPeersStaticPort(peersInPeerset []int, port int) (string, string) {
+	return generateServicesForPeers(peersInPeerset, port)
 }
 
 func ServiceAddress(peerConfig PeerConfig) string {
-	return fmt.Sprintf("peer%s-peerset%s-service", peerConfig.PeerId, peerConfig.PeersetId)
+	return fmt.Sprintf("%s-service", peerConfig.PeerId)
 }
 
 func PVName(config PeerConfig, namespace string) string {
-	return fmt.Sprintf("peerset%s-peer%s-pv-%s", config.PeersetId, config.PeerId, namespace)
+	return fmt.Sprintf("%s-%s-pv", namespace, config.PeerId)
 }
 func PVCName(config PeerConfig, namespace string) string {
-	return fmt.Sprintf("peerset%s-peer%s-claim-%s", config.PeersetId, config.PeerId, namespace)
+	return fmt.Sprintf("%s-%s-claim", namespace, config.PeerId)
 }
 func RedisConfigmapName(config PeerConfig) string {
-	return fmt.Sprintf("peerset%s-peer%s-rediscf", config.PeersetId, config.PeerId)
+	return fmt.Sprintf("%s-rediscf", config.PeerId)
 }
 
-func generateServicesForPeers(peersInPeerset []int, startPort int, increment bool) string {
-
-	var resultSb strings.Builder
+func generateServicesForPeers(peersInPeerset []int, startPort int) (string, string) {
+	var peersSb strings.Builder
+	var peersetsSb strings.Builder
+	peerCount := 0
 	for idx, peersNumber := range peersInPeerset {
 		var sb strings.Builder
+		var sb2 strings.Builder
 
 		for i := 0; i < peersNumber; i++ {
 			port := startPort
-			if increment {
-				port = port + i
-			}
-			sb.WriteString(fmt.Sprintf("%s:%d,", ServiceAddress(PeerConfig{
-				PeerId:    strconv.Itoa(i),
+			sb.WriteString(fmt.Sprintf("peer%d=%s:%d;", peerCount, ServiceAddress(PeerConfig{
+				PeerId:    fmt.Sprintf("peer%d", peerCount),
 				PeersetId: strconv.Itoa(idx),
 			}), port))
+			sb2.WriteString(fmt.Sprintf("peer%d,", peerCount))
+			peerCount += 1
 		}
 
 		str := sb.String()
+		str2 := sb2.String()
 
 		if len(str) > 0 {
 			str = str[:len(str)-1]
 		}
+		if len(str2) > 0 {
+			str2 = str2[:len(str2)-1]
+		}
 
-		resultSb.WriteString(fmt.Sprintf("%s;", str))
+		peersSb.WriteString(fmt.Sprintf("%s;", str))
+		peersetsSb.WriteString(fmt.Sprintf("peerset%d=%s;", idx, str2))
 	}
 
-	result := resultSb.String()
-	if len(result) > 0 {
-		result = result[:len(result)-1]
+	peers := peersSb.String()
+	if len(peers) > 0 {
+		peers = peers[:len(peers)-1]
+	}
+	peersets := peersetsSb.String()
+	if len(peersets) > 0 {
+		peersets = peersets[:len(peersets)-1]
 	}
 
-	return result
+	return peers, peersets
 }
 
 func CreateNamespace(namespaceName string) {

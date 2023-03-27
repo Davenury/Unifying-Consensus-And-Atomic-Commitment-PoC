@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
+import com.github.davenury.common.PeerId
 import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusHeartbeat
@@ -11,10 +12,8 @@ import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
 import kotlinx.coroutines.future.await
-import kotlinx.coroutines.runBlocking
-import org.slf4j.LoggerFactory
 
-data class CurrentLeaderDto(val currentLeaderPeerId: Int?)
+data class CurrentLeaderDto(val currentLeaderPeerId: PeerId?)
 
 fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
     routing {

@@ -1,5 +1,6 @@
 package com.github.davenury.tests
 
+import com.github.davenury.common.*
 import com.github.davenury.common.parsePeers
 import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
 import com.github.davenury.tests.strategies.changes.DefaultChangeStrategy
@@ -17,7 +18,10 @@ import java.util.*
 import kotlin.reflect.KType
 
 data class Config(
+    // peer1=X;peer2=Y
     val peers: String,
+    // peerset1=peer1,peer2;peerset2=peer3,peer4
+    val peersets: String,
     val notificationServiceAddress: String,
     val numberOfRequestsToSendToSinglePeerset: Int?,
     val numberOfRequestsToSendToMultiplePeersets: Int?,
@@ -31,14 +35,14 @@ data class Config(
     val fixedPeersetsInChange: String? = null,
     val loadGeneratorConfig: LoadGeneratorConfig
 ) {
-    fun peerAddresses(): Map<Int, List<String>> =
-        parsePeers(peers)
-            .withIndex()
-            .associate { it.index to it.value }
+    fun peerAddresses(): Map<PeersetId, List<PeerAddress>> {
+        val parsedPeers = parsePeers(peers)
+        return parsePeersets(peersets)
+            .mapValues { e -> e.value.map { parsedPeers[it]!! } }
+    }
 
     fun getSendingStrategy(): GetPeersStrategy {
-        val range = (0 until peerAddresses().size)
-        return sendingStrategy.getStrategy(range)
+        return sendingStrategy.getStrategy(peerAddresses().keys.toList())
     }
 
     fun getCreateChangeStrategy(): CreateChangeStrategy {
@@ -57,28 +61,32 @@ data class LoadGeneratorConfig(
 
 enum class SendingStrategy {
     RANDOM {
-        override fun getStrategy(range: IntRange): GetPeersStrategy =
-            RandomPeersStrategy(range)
+        override fun getStrategy(peersets: List<PeersetId>): GetPeersStrategy =
+            RandomPeersStrategy(peersets)
     },
     DELAY_ON_CONFLICTS {
-        override fun getStrategy(range: IntRange): GetPeersStrategy =
-            RandomPeersWithDelayOnConflictStrategy(range)
+        override fun getStrategy(peersets: List<PeersetId>): GetPeersStrategy =
+            RandomPeersWithDelayOnConflictStrategy(peersets)
     };
 
-    abstract fun getStrategy(range: IntRange): GetPeersStrategy
+    abstract fun getStrategy(peersets: List<PeersetId>): GetPeersStrategy
 }
 
-class StrategyDecoder: Decoder<SendingStrategy> {
-    override fun decode(node: Node, type: KType, context: DecoderContext): ConfigResult<SendingStrategy>
-        = when (node) {
-            is StringNode ->
-                try {
-                    SendingStrategy.valueOf(node.value.uppercase(Locale.getDefault())).valid()
-                } catch (e: IllegalArgumentException) {
-                    ConfigFailure.Generic("Invalid enum value: ${node.value}. Expected one of ${SendingStrategy.values().map { it.toString() }}").invalid()
-                }
-            else -> ConfigFailure.DecodeError(node, type).invalid()
-        }
+class StrategyDecoder : Decoder<SendingStrategy> {
+    override fun decode(node: Node, type: KType, context: DecoderContext): ConfigResult<SendingStrategy> = when (node) {
+        is StringNode ->
+            try {
+                SendingStrategy.valueOf(node.value.uppercase(Locale.getDefault())).valid()
+            } catch (e: IllegalArgumentException) {
+                ConfigFailure.Generic(
+                    "Invalid enum value: ${node.value}. Expected one of ${
+                        SendingStrategy.values().map { it.toString() }
+                    }"
+                ).invalid()
+            }
+
+        else -> ConfigFailure.DecodeError(node, type).invalid()
+    }
 
     override fun supports(type: KType): Boolean = type.classifier == SendingStrategy::class
 }
@@ -96,15 +104,20 @@ enum class CreatingChangeStrategy {
     abstract fun getStrategy(ownAddress: String): CreateChangeStrategy
 }
 
-class CreatingChangeStrategyDecoder: Decoder<CreatingChangeStrategy> {
-    override fun decode(node: Node, type: KType, context: DecoderContext): ConfigResult<CreatingChangeStrategy>
-        = when (node) {
+class CreatingChangeStrategyDecoder : Decoder<CreatingChangeStrategy> {
+    override fun decode(node: Node, type: KType, context: DecoderContext): ConfigResult<CreatingChangeStrategy> =
+        when (node) {
             is StringNode ->
-            try {
-                CreatingChangeStrategy.valueOf(node.value.uppercase(Locale.getDefault())).valid()
-            } catch (e: IllegalArgumentException) {
-                ConfigFailure.Generic("Invalid enum value: ${node.value}. Expected one of ${CreatingChangeStrategy.values().map { it.toString() }}").invalid()
-            }
+                try {
+                    CreatingChangeStrategy.valueOf(node.value.uppercase(Locale.getDefault())).valid()
+                } catch (e: IllegalArgumentException) {
+                    ConfigFailure.Generic(
+                        "Invalid enum value: ${node.value}. Expected one of ${
+                            CreatingChangeStrategy.values().map { it.toString() }
+                        }"
+                    ).invalid()
+                }
+
             else -> ConfigFailure.DecodeError(node, type).invalid()
         }
 
@@ -114,26 +127,33 @@ class CreatingChangeStrategyDecoder: Decoder<CreatingChangeStrategy> {
 enum class ACProtocol {
     TWO_PC {
         override fun getParam(enforceUsage: Boolean): String = "use_2pc=true"
-    }, GPAC {
+    },
+    GPAC {
         override fun getParam(enforceUsage: Boolean): String = "enforce_gpac=$enforceUsage"
     };
 
     abstract fun getParam(enforceUsage: Boolean): String
 }
+
 data class ACProtocolConfig(
     val enforceUsage: Boolean,
     val protocol: ACProtocol,
 )
 
-class ACProtocolDecoder: Decoder<ACProtocol> {
+class ACProtocolDecoder : Decoder<ACProtocol> {
     override fun decode(node: Node, type: KType, context: DecoderContext): ConfigResult<ACProtocol> =
         when (node) {
             is StringNode ->
                 try {
                     ACProtocol.valueOf(node.value.uppercase(Locale.getDefault())).valid()
                 } catch (e: IllegalArgumentException) {
-                    ConfigFailure.Generic("Invalid enum value: ${node.value}. Expected one of ${ACProtocol.values().map { it.toString() }}").invalid()
+                    ConfigFailure.Generic(
+                        "Invalid enum value: ${node.value}. Expected one of ${
+                            ACProtocol.values().map { it.toString() }
+                        }"
+                    ).invalid()
                 }
+
             else -> ConfigFailure.DecodeError(node, type).invalid()
         }
 
