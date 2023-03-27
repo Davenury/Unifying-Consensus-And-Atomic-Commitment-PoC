@@ -3,6 +3,7 @@ package com.github.davenury.ucac.commitment.gpac
 import com.github.davenury.common.PeerAddress
 import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.httpClient
+import com.zopa.ktor.opentracing.asyncTraced
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -67,7 +68,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         crossinline errorMessage: (PeerAddress, Throwable) -> String
     ): Map<PeersetId, List<Deferred<K?>>> = otherPeers.mapValues { (_, peerset) ->
         peerset.map { peer ->
-            CoroutineScope(Dispatchers.IO).async(MDCContext()) {
+            CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
                 gpacHttpCall<K, T>(
                     "http://${peer.address}/$urlPath",
                     requestBody,

@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.PeersetId
+import com.zopa.ktor.opentracing.span
 import kotlinx.coroutines.*
 import kotlinx.coroutines.future.asCompletableFuture
 import org.slf4j.LoggerFactory
@@ -36,15 +37,15 @@ class GPACResponsesContainer<T>(
     private fun Map<*, List<*>>.flattenedSize() =
         this.values.flatten().size
 
-    fun awaitForMessages(condition: (Map<PeersetId, List<T>>) -> Boolean): Pair<Map<PeersetId, List<T>>, Boolean> {
-        lock.withLock {
+    fun awaitForMessages(condition: (Map<PeersetId, List<T>>) -> Boolean): Pair<Map<PeersetId, List<T>>, Boolean> = span {
+        return@span lock.withLock {
             ctx.dispatch(Dispatchers.IO) { timeout() }
             while (true) {
                 logger.trace("Responses size: ${responses.flattenedSize()}, $responses, current resolved: $overallResponses")
                 when {
                     !condition(currentState) && shouldWait.get() && overallResponses < responses.flattenedSize() -> {
                         logger.debug("Waiting for responses, current state: $currentState")
-                        this.condition.await()
+                        this@GPACResponsesContainer.condition.await()
                     }
                     condition(currentState) -> {
                         logger.warn("Got condition, responses: $currentState")
@@ -66,7 +67,7 @@ class GPACResponsesContainer<T>(
                     }
                 }
             }
-            return Pair(currentState, success)
+            return@withLock Pair(currentState, success)
         }
     }
 
