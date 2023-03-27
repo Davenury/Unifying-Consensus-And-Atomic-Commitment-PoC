@@ -21,10 +21,11 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 class AlvinProtocol(
+    private val peersetId: PeersetId,
     private val history: History,
     private val ctx: ExecutorCoroutineDispatcher,
     private var peerResolver: PeerResolver,
-    private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap()),
+    private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap(), peerResolver),
     private val protocolClient: AlvinProtocolClient,
     private val heartbeatTimeout: Duration = Duration.ofSeconds(4),
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
@@ -71,7 +72,7 @@ class AlvinProtocol(
         signalPublisher.signal(
             Signal.AlvinReceiveProposal,
             this,
-            listOf(otherConsensusPeers()),
+            mapOf(peersetId to otherConsensusPeers()),
             change = Change.fromHistoryEntry(HistoryEntry.deserialize(message.entry.serializedEntry))
         )
 
@@ -112,7 +113,7 @@ class AlvinProtocol(
         }
         deliverTransaction()
 
-        return AlvinAckStable(globalPeerId.peerId)
+        return AlvinAckStable(globalPeerId)
     }
 
     override suspend fun handlePrepare(message: AlvinAccept): AlvinPromise {
@@ -178,7 +179,7 @@ class AlvinProtocol(
             }
             logger.info("The result of change (${change.id}) is $changeResult")
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(changeResult))
-            signalPublisher.signal(signal, this, listOf(otherConsensusPeers()), change = change)
+            signalPublisher.signal(signal, this, mapOf(peersetId to otherConsensusPeers()), change = change)
             if (transactionBlocker.getChangeId() == change.id) transactionBlocker.tryToReleaseBlockerChange(
                 ProtocolName.CONSENSUS,
                 change.id
@@ -216,7 +217,7 @@ class AlvinProtocol(
         changeIdToCompletableFuture[changeId]
 
     override fun otherConsensusPeers(): List<PeerAddress> {
-        return peerResolver.getPeersFromCurrentPeerset().filter { it.globalPeerId != globalPeerId }
+        return peerResolver.getPeersFromPeerset(peersetId).filter { it.peerId != globalPeerId }
     }
 
 
@@ -236,7 +237,7 @@ class AlvinProtocol(
     }
 
     override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
-        val entry = change.toHistoryEntry(globalPeerId.peersetId)
+        val entry = change.toHistoryEntry(peersetId)
         mutex.withLock {
             if (entryIdToAlvinEntry.containsKey(entry.getId()) || history.containsEntry(entry.getId())) {
                 logger.info("Already proposed that change: $change")
@@ -264,7 +265,7 @@ class AlvinProtocol(
                     "Proposed change is incompatible. \n CurrentChange: ${
                         history.getCurrentEntry().getId()
                     } \n Change.parentId: ${
-                        change.toHistoryEntry(peerResolver.currentPeer().peersetId).getParentId()
+                        change.toHistoryEntry(peersetId).getParentId()
                     }"
                 )
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
@@ -279,7 +280,7 @@ class AlvinProtocol(
 
     private suspend fun proposalPhase(change: Change) {
         logger.info("Starts proposal phase $change")
-        val historyEntry = change.toHistoryEntry(globalPeerId.peersetId)
+        val historyEntry = change.toHistoryEntry(peersetId)
         val myDeps = listOf(history.getCurrentEntry())
         val entry = AlvinEntry(historyEntry, getNextNum(), myDeps)
 
@@ -288,7 +289,7 @@ class AlvinProtocol(
         }
 
         val jobs = scheduleMessages(historyEntry, proposeChannel, entry.epoch) { peerAddress ->
-            protocolClient.sendProposal(peerAddress, AlvinPropose(globalPeerId.peerId, entry.toDto()))
+            protocolClient.sendProposal(peerAddress, AlvinPropose(globalPeerId, entry.toDto()))
         }
         val responses: List<AlvinAckPropose> =
             waitForQuorom(historyEntry, jobs, proposeChannel, AlvinStatus.PENDING)
@@ -299,7 +300,7 @@ class AlvinProtocol(
         signalPublisher.signal(
             Signal.AlvinAfterProposalPhase,
             this,
-            listOf(peers()),
+            mapOf(peersetId to otherConsensusPeers()),
             change = change
         )
 
@@ -315,13 +316,13 @@ class AlvinProtocol(
         logger.info("Starts decision phase $entry")
 
         val jobs = scheduleMessages(historyEntry, acceptChannel, entry.epoch) { peerAddress ->
-            protocolClient.sendAccept(peerAddress, AlvinAccept(globalPeerId.peerId, entry.toDto()))
+            protocolClient.sendAccept(peerAddress, AlvinAccept(globalPeerId, entry.toDto()))
         }
 
         signalPublisher.signal(
             Signal.AlvinAfterAcceptPhase,
             this,
-            listOf(peers()),
+            mapOf(peersetId to otherConsensusPeers()),
             change = Change.fromHistoryEntry(historyEntry)
         )
 
@@ -342,13 +343,13 @@ class AlvinProtocol(
         logger.info("Starts delivery phase $entry")
 
         scheduleMessages(historyEntry, null, entry.epoch) { peerAddress ->
-            protocolClient.sendStable(peerAddress, AlvinStable(globalPeerId.peerId, entry.toDto()))
+            protocolClient.sendStable(peerAddress, AlvinStable(globalPeerId, entry.toDto()))
         }
 
         signalPublisher.signal(
             Signal.AlvinAfterStablePhase,
             this,
-            listOf(peers()),
+            mapOf(peersetId to otherConsensusPeers()),
             change = Change.fromHistoryEntry(historyEntry)
         )
 
@@ -367,7 +368,7 @@ class AlvinProtocol(
         val jobs = scheduleMessages(entry.entry, promiseChannel, newEntry.epoch) { peerAddress ->
             protocolClient.sendPrepare(
                 peerAddress,
-                AlvinAccept(globalPeerId.peerId, newEntry.toDto())
+                AlvinAccept(globalPeerId, newEntry.toDto())
             )
         }
 
@@ -564,7 +565,7 @@ class AlvinProtocol(
                 scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(
                         peerAddress,
-                        AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId.peerId)
+                        AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId)
                     )
                 }
             }
@@ -577,7 +578,7 @@ class AlvinProtocol(
             scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                 protocolClient.sendCommit(
                     peerAddress,
-                    AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId.peerId)
+                    AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId)
                 )
             }
             return
@@ -601,7 +602,7 @@ class AlvinProtocol(
                 scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(
                         peerAddress,
-                        AlvinCommit(entry.toDto(), AlvinResult.ABORT, globalPeerId.peerId)
+                        AlvinCommit(entry.toDto(), AlvinResult.ABORT, globalPeerId)
                     )
                 }
             }
@@ -610,7 +611,7 @@ class AlvinProtocol(
                 scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(
                         peerAddress,
-                        AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId.peerId)
+                        AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId)
                     )
                 }
             }
@@ -699,15 +700,22 @@ class AlvinProtocol(
         }
     }
 
-    private fun peers() = peerResolver.getPeersFromCurrentPeerset()
+    private fun peers() = peerResolver.getPeersFromPeerset(peersetId)
 
-    private suspend fun getNextNum(peerId: Int = globalPeerId.peerId): Int = mutex.withLock {
+
+
+
+    private suspend fun getNextNum(peerId: PeerId = globalPeerId): Int = mutex.withLock {
+        val addresses = peerResolver.getPeersFromPeerset(peersetId)
+        val peerAddress = peerResolver.resolve(peerId)
+        val index = addresses.indexOf(peerAddress)
+
         val previousMod = lastTransactionId % peers().size
         val removeMod = lastTransactionId - previousMod
-        if (peerId > previousMod)
-            lastTransactionId = removeMod + peerId
+        if (index > previousMod)
+            lastTransactionId = removeMod + index
         else
-            lastTransactionId = removeMod + peers().size + peerId
+            lastTransactionId = removeMod + peers().size + index
 
         return lastTransactionId
     }

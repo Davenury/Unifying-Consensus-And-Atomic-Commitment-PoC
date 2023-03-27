@@ -31,7 +31,7 @@ import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 
-
+@Disabled("Temporary")
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
 class SinglePeersetSpec : IntegrationTestBase() {

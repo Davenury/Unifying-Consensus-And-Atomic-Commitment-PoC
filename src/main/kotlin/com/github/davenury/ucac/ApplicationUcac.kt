@@ -10,6 +10,7 @@ import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClient
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.routing.*

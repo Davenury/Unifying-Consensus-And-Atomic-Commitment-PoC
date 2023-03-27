@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus.ratis
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.common.PeersetId
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.common.PeerResolver
