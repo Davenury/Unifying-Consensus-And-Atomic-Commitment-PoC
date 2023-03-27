@@ -105,7 +105,7 @@ class RaftConsensusProtocolImpl(
 
     override fun getPeerName() = peerId.toString()
 
-    private suspend fun sendLeaderRequest(): Unit = span {
+    private suspend fun sendLeaderRequest(): Unit = span("Raft.sendLeaderRequest") {
         if (executorService != null) {
             mutex.withLock {
                 restartTimer(RaftRole.Candidate)
@@ -204,7 +204,7 @@ class RaftConsensusProtocolImpl(
         return ConsensusElectedYou(this@RaftConsensusProtocolImpl.peerId, currentTerm, true)
     }
 
-    private suspend fun newLeaderElected(leaderId: PeerId, term: Int) = span {
+    private suspend fun newLeaderElected(leaderId: PeerId, term: Int) = span("Raft.newLeaderElected") {
         logger.info("A leader has been elected: $leaderId (in term $term)")
         votedFor = VotedFor(leaderId, true)
 //          DONE: Check if stop() function make sure if you need to wait to all job finish ->
@@ -228,7 +228,7 @@ class RaftConsensusProtocolImpl(
         tryPropagatingChangesToLeader()
     }
 
-    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse = span {
+    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse = span("Raft.handleHeartbeat") {
         return mutex.withLock {
             heartbeat.logEntries.forEach {
                 val entry = HistoryEntry.deserialize(it.serializedEntry)
@@ -339,7 +339,7 @@ class RaftConsensusProtocolImpl(
         heartbeat: ConsensusHeartbeat,
         leaderCommitId: String,
         proposedChanges: List<LedgerItem> = listOf()
-    ): Unit = span {
+    ): Unit = span("Raft.updateLedger") {
         val updateResult: LedgerUpdateResult = state.updateLedger(leaderCommitId, proposedChanges)
 
         updateResult.acceptedItems.forEach { acceptedItem ->
@@ -418,7 +418,7 @@ class RaftConsensusProtocolImpl(
                 history.toEntryList() + entries.take(index + 1).map { it.entry }
             }.mapNotNull { Change.fromHistoryEntry(it) }
 
-    private suspend fun sendHeartbeatToPeer(peer: PeerId, isRegular: Boolean): Unit = span {
+    private suspend fun sendHeartbeatToPeer(peer: PeerId, isRegular: Boolean): Unit = span("Raft.sendHeartbeatToPeer") {
         val peerAddress: PeerAddress
         val peerMessage: ConsensusHeartbeat
         mutex.withLock {
@@ -684,7 +684,7 @@ class RaftConsensusProtocolImpl(
     }
 
     //  TODO: sync change will have to use Condition/wait/notifyAll
-    private suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change): Unit = span {
+    private suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change): Unit = span("Raft.proposeChangeToLedger") {
         var entry = change.toHistoryEntry(peersetId)
         changeIdToCompletableFuture[change.id] = result
 
@@ -778,7 +778,7 @@ class RaftConsensusProtocolImpl(
     }
 
 
-    private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit = span {
+    private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit = span("Raft.sendRequestToLeader") {
         with(CoroutineScope(leaderRequestExecutorService)) {
             launch(MDCContext()) {
                 var result: ChangeResult? = null

@@ -492,7 +492,7 @@ class GPACProtocolImpl(
         return true
     }
 
-    private suspend fun applyPhase(change: Change, acceptVal: Accept) = span("GPAC.applyPhase") {
+    private suspend fun applyPhase(change: Change, acceptVal: Accept): Unit = span("GPAC.applyPhase") {
         val applyMessages = sendApplyMessages(change, getPeersFromChange(change), acceptVal)
 
         val (responses, _) = GPACResponsesContainer(applyMessages, gpacConfig.phasesTimeouts.applyTimeout).awaitForMessages {
