@@ -329,6 +329,12 @@ class RaftConsensusProtocolImpl(
 
         updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
 
+        withContext(leaderRequestExecutorService){
+            launch {
+                tryPropagatingChangesToLeader()
+            }
+        }
+
         return ConsensusHeartbeatResponse(true, currentTerm)
     }
 
@@ -795,22 +801,24 @@ class RaftConsensusProtocolImpl(
                 var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
                 while (result == null) {
+                    val address: String
+                    mutex.withLock {
+                        if (votedFor == null) {
+                            changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
+                            return@launch
+                        } else {
+                            address = votedFor!!.address
+                        }
+                    }
                     logger.info("Send request to leader again")
+
                     result = try {
-                        val response =
-                            httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
-                                contentType(ContentType.Application.Json)
-                                accept(ContentType.Application.Json)
-                                body = change
-                            }
-                        logger.info("Response from leader: $response")
-                        response
+                        protocolClient.sendRequestApplyChange(address, change)
                     } catch (e: Exception) {
-                        logger.info("Request to leader (${votedFor!!.address}) failed", e.message)
+                        logger.info("Request to leader ($address) failed", e.message)
                         null
                     }
                 }
-
                 if (result.status != ChangeResult.Status.SUCCESS) {
                     cf.complete(result)
                 }
@@ -862,7 +870,7 @@ class RaftConsensusProtocolImpl(
                     logger.info("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
                     delay(delay.toMillis())
                 }
-                if(shouldISendHeartbeatToPeer(peer))sendHeartbeatToPeer(peer, isRegular)
+                if (shouldISendHeartbeatToPeer(peer)) sendHeartbeatToPeer(peer, isRegular)
             }
         }
 
