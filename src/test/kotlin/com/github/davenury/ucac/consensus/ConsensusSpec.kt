@@ -129,6 +129,7 @@ class ConsensusSpec : IntegrationTestBase() {
     @Test
     fun `1000 change processed sequentially`(): Unit = runBlocking {
         val peersWithoutLeader = 4
+        var iter = 0
 
         val leaderElectedPhaser = Phaser(peersWithoutLeader)
         leaderElectedPhaser.register()
@@ -143,7 +144,7 @@ class ConsensusSpec : IntegrationTestBase() {
         }
 
         val peerChangeAccepted = SignalListener {
-            logger.info("Arrived change: ${it.change}")
+            logger.info("Arrived change$iter: ${it.change}")
             phaser.arrive()
         }
 
@@ -177,6 +178,7 @@ class ConsensusSpec : IntegrationTestBase() {
                 }.isSuccess()
             }
             phaser.arriveAndAwaitAdvanceWithTimeout()
+            iter+=1
             change = createChange(null, parentId = change.toHistoryEntry(PeersetId("peerset0")).getId())
         }
         // when: peer1 executed change
