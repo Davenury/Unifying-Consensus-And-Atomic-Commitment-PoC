@@ -806,7 +806,7 @@ class RaftConsensusProtocolImpl(
                         logger.info("Response from leader: $response")
                         response
                     } catch (e: Exception) {
-                        logger.info("Request to leader (${votedFor!!.address}) failed", e)
+                        logger.info("Request to leader (${votedFor!!.address}) failed", e.message)
                         null
                     }
                 }
