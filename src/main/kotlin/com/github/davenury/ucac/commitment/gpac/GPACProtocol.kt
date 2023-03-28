@@ -564,8 +564,10 @@ class GPACProtocolImpl(
         responses: Map<PeersetId, List<T>>,
         peers: Map<PeersetId, List<PeerAddress>>,
         condition: (T) -> Boolean = { true }
-    ): Boolean =
-        (peers.size == responses.size) && superFunction(responses, peers, condition)
+    ): Boolean {
+        val allPeersetsResponded = peers.count { it.value.isNotEmpty() } == responses.count { it.value.isNotEmpty() }
+        return allPeersetsResponded && superFunction(responses, peers, condition)
+    }
 
     private fun <T> superFunction(
         responses: Map<PeersetId, List<T>>,

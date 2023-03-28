@@ -111,7 +111,7 @@ class RaftConsensusProtocolImpl(
 
         val positiveResponses = responses.filterNotNull().count { it.voteGranted }
 
-        if (!isMoreThanHalf(positiveResponses) || otherConsensusPeers().isEmpty()) {
+        if (!isMoreThanHalf(positiveResponses)) {
             mutex.withLock {
                 restartTimer(RaftRole.Candidate)
             }
@@ -503,12 +503,12 @@ class RaftConsensusProtocolImpl(
         checkIfQueuedChanges()
     }
 
-    private suspend fun applyAcceptedChanges() {
-
+    private suspend fun applyAcceptedChanges(additionalAcceptedIds: List<String>) {
         val acceptedItems: List<LedgerItem>
 
         mutex.withLock {
-            val acceptedIds: List<String> = voteContainer.getAcceptedChanges { isMoreThanHalf(it) }
+            val acceptedIds: List<String> =
+                voteContainer.getAcceptedChanges { isMoreThanHalf(it) } + additionalAcceptedIds
             acceptedItems = state.getLogEntries(acceptedIds)
 
             state.acceptItems(acceptedIds)
@@ -584,7 +584,7 @@ class RaftConsensusProtocolImpl(
                 newPeerIndices.copy(acceptedEntryId = leaderCommitId)
         }
 
-        applyAcceptedChanges()
+        applyAcceptedChanges(listOf())
     }
 
     private suspend fun getMessageForPeer(peerAddress: PeerAddress): ConsensusHeartbeat {
@@ -675,9 +675,7 @@ class RaftConsensusProtocolImpl(
                 return
             }
 
-            val updatedChange: Change
-
-            updatedChange = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
+            val updatedChange: Change = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
             entry = updatedChange.toHistoryEntry(peersetId)
 
             try {
@@ -705,6 +703,11 @@ class RaftConsensusProtocolImpl(
             state.proposeEntry(entry, updatedChange.id)
             voteContainer.initializeChange(entry.getId())
             scheduleHeartbeatToPeers(false)
+        }
+
+        if (otherConsensusPeers().isEmpty()) {
+            logger.info("No other consensus peers, applying change")
+            applyAcceptedChanges(listOf(entry.getId()))
         }
     }
 
@@ -750,7 +753,7 @@ class RaftConsensusProtocolImpl(
             launch(MDCContext()) {
                 var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
-                while(result == null) {
+                while (result == null) {
                     logger.info("Send request to leader again")
                     result = try {
                         val response =

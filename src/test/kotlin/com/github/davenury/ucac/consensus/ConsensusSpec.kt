@@ -1075,6 +1075,27 @@ class ConsensusSpec : IntegrationTestBase() {
         }
     }
 
+    @Test
+    fun `one peer consensus`(): Unit = runBlocking {
+        apps = TestApplicationSet(
+            mapOf(
+                "peerset0" to listOf("peer0"),
+            ),
+        )
+
+        expectCatching {
+            val change1 = createChange(null)
+            val peerAddress = apps.getPeer("peer0").address
+            val change2 = createChange(null, parentId = change1.toHistoryEntry(PeersetId("peerset0")).getId())
+            executeChange("$peerAddress/v2/change/sync", change1)
+            executeChange("$peerAddress/v2/change/sync", change2)
+        }.isSuccess()
+
+        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach { changes ->
+            expectThat(changes.size).isEqualTo(2)
+        }
+    }
+
     private fun createChange(
         acceptNum: Int?,
         userName: String = "userName",
