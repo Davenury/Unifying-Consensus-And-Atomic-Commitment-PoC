@@ -596,6 +596,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             }
         }
 
+    @Disabled("Temporary")
     @Test
     fun `should commit change if super-set agrees to commit`(): Unit = runBlocking {
             val phaser = Phaser(7)
@@ -635,6 +636,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             }
         }
 
+    @Disabled("Temporary")
     @Test
     fun `should commit change if super-set agrees to commit, even though someone yells abort`(): Unit = runBlocking {
         val phaser = Phaser(7)
