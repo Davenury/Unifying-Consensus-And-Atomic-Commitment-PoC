@@ -857,16 +857,19 @@ class RaftConsensusProtocolImpl(
         isRegular: Boolean = false,
         sendInstantly: Boolean = false,
         delay: Duration = heartbeatDelay
-    ): Job =
-        with(CoroutineScope(executorService!!)) {
-            launch(MDCContext()) {
-                if (!sendInstantly) {
-                    logger.info("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
-                    delay(delay.toMillis())
+    ): Unit {
+        if (shouldISendHeartbeatToPeer(peer)) {
+            with(CoroutineScope(executorService!!)) {
+                launch(MDCContext()) {
+                    if (!sendInstantly) {
+                        logger.info("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
+                        delay(delay.toMillis())
+                    }
+                    sendHeartbeatToPeer(peer, isRegular)
                 }
-                if (shouldISendHeartbeatToPeer(peer)) sendHeartbeatToPeer(peer, isRegular)
             }
         }
+    }
 
     override fun getState(): History {
         val history: History
