@@ -6,9 +6,6 @@ import com.github.davenury.common.history.History
 import java.util.concurrent.CompletableFuture
 
 interface ConsensusProtocol {
-    @Deprecated("use proposeChangeAsync")
-    suspend fun proposeChange(change: Change): ChangeResult
-
     suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult>
 
     fun getState(): History

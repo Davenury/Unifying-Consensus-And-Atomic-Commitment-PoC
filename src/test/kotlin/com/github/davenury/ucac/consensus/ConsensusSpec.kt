@@ -8,7 +8,6 @@ import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
-import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
@@ -38,8 +37,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.reflect.full.declaredMemberProperties
-import kotlin.reflect.jvm.isAccessible
 import kotlin.system.measureTimeMillis
 
 @ExtendWith(TestLogExtension::class)
@@ -889,13 +886,14 @@ class ConsensusSpec : IntegrationTestBase() {
             .associateBy { it.peerId }
             .toMutableMap()
 
-        val peerResolver = PeerResolver(PeerId("peer0"), peers, mapOf(
-            PeersetId("peerset0") to listOf(PeerId("peer0"), PeerId("peer1"), PeerId("peer2"))
-        ))
+        val peerResolver = PeerResolver(
+            PeerId("peer0"), peers, mapOf(
+                PeersetId("peerset0") to listOf(PeerId("peer0"), PeerId("peer1"), PeerId("peer2"))
+            )
+        )
         val consensus = RaftConsensusProtocolImpl(
             PeersetId("peerset0"),
             InMemoryHistory(),
-            "1",
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
             protocolClient = RaftProtocolClientImpl(),
@@ -1147,24 +1145,14 @@ class ConsensusSpec : IntegrationTestBase() {
     private suspend fun askForAcceptedChanges(peerAddress: PeerAddress) =
         genericAskForChange("accepted_changes", peerAddress)
 
-    private suspend fun askForLeaderAddress(app: ApplicationUcac): String? {
-        val consensusProperty =
-            ApplicationUcac::class.declaredMemberProperties.single { it.name == "consensusProtocol" }
-        val consensusOldAccessible = consensusProperty.isAccessible
-        try {
-            consensusProperty.isAccessible = true
-            val consensusProtocol = consensusProperty.get(app) as RaftConsensusProtocolImpl
-            return consensusProtocol.getLeaderAddress()
-        } finally {
-            consensusProperty.isAccessible = consensusOldAccessible
-        }
+    private fun askForLeaderAddress(app: ApplicationUcac): String? {
+        val leaderId = app.getConsensusProtocol().getLeaderId()
+        return leaderId?.let { apps.getPeer(it).address }
     }
 
-    private suspend fun getLeaderAddress(peer: ApplicationUcac): PeerAddress {
-        val address = askForLeaderAddress(peer)!!
-        expectThat(address).isNotEqualTo(noneLeader)
-        val id = apps.getPeerAddresses().values.find { it.address == address }!!.peerId
-        return PeerAddress(id, address)
+    private fun getLeaderAddress(app: ApplicationUcac): PeerAddress {
+        val leaderId = app.getConsensusProtocol().getLeaderId()!!
+        return apps.getPeer(leaderId)
     }
 
     companion object {

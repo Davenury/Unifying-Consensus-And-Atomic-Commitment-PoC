@@ -30,14 +30,7 @@ class HistoryRatisNode(
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
-    @Deprecated("use proposeChangeAsync")
-    override suspend fun proposeChange(change: Change): ChangeResult {
-        val result = applyTransaction(change.toHistoryEntry(peersetId).serialize())
-        return if (result == "ERROR") ChangeResult(ChangeResult.Status.CONFLICT) else ChangeResult(ChangeResult.Status.SUCCESS)
-    }
-
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
-
         val cf = CompletableFuture<ChangeResult>()
         val changeId = change.id
         changeIdToCompletableFuture[changeId] = cf
