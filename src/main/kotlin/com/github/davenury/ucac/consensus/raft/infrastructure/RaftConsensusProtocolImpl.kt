@@ -329,7 +329,7 @@ class RaftConsensusProtocolImpl(
 
         updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
 
-        withContext(leaderRequestExecutorService){
+        withContext(leaderRequestExecutorService) {
             launch {
                 tryPropagatingChangesToLeader()
             }
@@ -802,13 +802,11 @@ class RaftConsensusProtocolImpl(
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
                 while (result == null) {
                     val address: String
-                    mutex.withLock {
-                        if (votedFor == null) {
-                            changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
-                            return@launch
-                        } else {
-                            address = votedFor!!.address
-                        }
+                    if (votedFor == null) {
+                        changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
+                        return@launch
+                    } else {
+                        address = votedFor!!.address
                     }
                     logger.info("Send request to leader again")
 
