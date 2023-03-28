@@ -678,7 +678,7 @@ class AlvinProtocol(
         val entryId = entry.entry.getId()
         entryIdToFailureDetector[entryId]?.cancelCounting()
         entryIdToFailureDetector.putIfAbsent(entryId, getFailureDetectorTimer())
-        entryIdToFailureDetector[entryId]!!.startCounting(entry.epoch) {
+        if(entryIdToAlvinEntry.containsKey(entryId))entryIdToFailureDetector[entryId]!!.startCounting(entry.epoch) {
             recoveryPhase(entry)
         }
     }
@@ -687,6 +687,9 @@ class AlvinProtocol(
     private fun updateEntry(entry: AlvinEntry) {
         val entryId = entry.entry.getId()
         val oldEntry = entryIdToAlvinEntry[entryId]
+        val changeId: String = Change.fromHistoryEntry(entry.entry)!!.id
+
+        if(changeIdToCompletableFuture[changeId]?.isDone == true && entry.status != AlvinStatus.STABLE) return
 
         var updatedEntry = entry
         if (oldEntry?.status == AlvinStatus.STABLE) {
