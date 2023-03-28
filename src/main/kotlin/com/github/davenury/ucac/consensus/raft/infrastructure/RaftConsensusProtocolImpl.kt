@@ -329,11 +329,7 @@ class RaftConsensusProtocolImpl(
 
         updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
 
-        withContext(leaderRequestExecutorService) {
-            launch {
-                tryPropagatingChangesToLeader()
-            }
-        }
+        tryPropagatingChangesToLeader()
 
         return ConsensusHeartbeatResponse(true, currentTerm)
     }
