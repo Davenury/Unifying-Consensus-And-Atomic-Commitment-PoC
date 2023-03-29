@@ -7,7 +7,10 @@ import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
-import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.common.ProtocolTimer
+import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.TransactionBlocker
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.delay
@@ -15,11 +18,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.lang.IllegalStateException
-import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import kotlin.math.floor
-import kotlin.math.max
 
 abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) : SignalSubject,
     AbstractAtomicCommitmentProtocol(logger, peerResolver) {
@@ -104,7 +104,7 @@ class GPACProtocolImpl(
         if (isMetricTest) {
             Metrics.bumpChangeMetric(
                 changeId = message.change.id,
-                peerId = peerResolver.currentPeer(),
+                peerId = peerId,
                 peersetId = peersetId,
                 protocolName = ProtocolName.GPAC,
                 state = "leader_elected"
@@ -166,7 +166,7 @@ class GPACProtocolImpl(
         if (isMetricTest) {
             Metrics.bumpChangeMetric(
                 changeId = message.change.id,
-                peerId = peerResolver.currentPeer(),
+                peerId = peerId,
                 peersetId = peersetId,
                 protocolName = ProtocolName.GPAC,
                 state = "agreed"
@@ -231,7 +231,7 @@ class GPACProtocolImpl(
             if (isMetricTest) {
                 Metrics.bumpChangeMetric(
                     changeId = message.change.id,
-                    peerId = peerResolver.currentPeer(),
+                    peerId = peerId,
                     peersetId = peersetId,
                     protocolName = ProtocolName.GPAC,
                     state = changeResult.name.lowercase()
@@ -342,9 +342,8 @@ class GPACProtocolImpl(
     }
 
     private fun Map<PeersetId, List<ElectedYou>>.getAcceptVal(change: Change): Accept? {
-
-        val shouldCommit = superSet(this, getPeersFromChange(change)) { (it as ElectedYou).initVal == Accept.COMMIT }
-        val shouldAbort = superSet(this, getPeersFromChange(change)) { (it as ElectedYou).initVal == Accept.ABORT }
+        val shouldCommit = superSet(this, getPeersFromChange(change)) { it.initVal == Accept.COMMIT }
+        val shouldAbort = superSet(this, getPeersFromChange(change)) { it.initVal == Accept.ABORT }
 
         return when {
             shouldCommit -> Accept.COMMIT

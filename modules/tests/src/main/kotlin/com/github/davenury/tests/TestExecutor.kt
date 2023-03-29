@@ -1,12 +1,7 @@
 package com.github.davenury.tests
 
 import com.github.davenury.tests.strategies.load.LoadGenerator
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.ticker
 import org.slf4j.LoggerFactory
-import java.time.Duration
-import java.util.concurrent.Executors
 import kotlin.random.Random
 
 class TestExecutor(

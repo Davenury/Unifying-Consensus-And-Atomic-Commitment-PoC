@@ -4,16 +4,9 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
-import com.github.davenury.ucac.commitment.gpac.GPACFactory
-import com.github.davenury.ucac.commitment.twopc.TwoPC
-import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
-import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.common.HistoryFactory
-import com.github.davenury.ucac.common.PeerResolver
-import com.github.davenury.ucac.common.TransactionBlocker
+import com.github.davenury.ucac.common.PeersetProtocols
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
-import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.routing.consensusProtocolRouting
 import com.github.davenury.ucac.routing.gpacProtocolRouting
 import com.github.davenury.ucac.routing.metaRouting
@@ -30,14 +23,11 @@ import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics
 import io.netty.channel.socket.nio.NioServerSocketChannel
-import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.slf4j.event.Level
-import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -76,21 +66,15 @@ fun createApplication(
 class ApplicationUcac constructor(
     private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
     private val config: Config,
-    inheritMdc: Boolean = true,
 ) {
     private val mdc: MutableMap<String, String> = HashMap(mapOf("peer" to config.peerId().toString()))
-    private val engine: NettyApplicationEngine
-    private var consensusProtocol: RaftConsensusProtocol? = null
-    private var twoPC: TwoPC? = null
-    private val ctx: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
-    private lateinit var gpacFactory: GPACFactory
-    private var service: ApiV2Service? = null
     private val peerResolver = config.newPeerResolver()
+    private val engine: NettyApplicationEngine
+    private lateinit var service: ApiV2Service
+    private lateinit var peersetProtocols: PeersetProtocols
 
     init {
-        if (inheritMdc) {
-            MDC.getCopyOfContextMap()?.let { mdc.putAll(it) }
-        }
+        MDC.getCopyOfContextMap()?.let { mdc.putAll(it) }
     }
 
     private fun <R> withMdc(action: () -> R): R {
@@ -114,53 +98,18 @@ class ApplicationUcac constructor(
 
     private fun createServer() = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
         val peersetId = config.peersetId()
+        logger.info("My peerset: $peersetId")
 
-        val history = HistoryFactory().createForConfig(config)
         val signalPublisher = SignalPublisher(signalListeners, peerResolver)
 
-        val raftProtocolClientImpl = RaftProtocolClientImpl()
-
-        val transactionBlocker = TransactionBlocker()
-        gpacFactory = GPACFactory(
+        peersetProtocols = PeersetProtocols(
             peersetId,
-            transactionBlocker,
-            history,
             config,
-            ctx,
-            signalPublisher,
-            peerResolver,
-        )
-
-        consensusProtocol = RaftConsensusProtocolImpl(
-            peersetId,
-            history,
-            config,
-            ctx,
             peerResolver,
             signalPublisher,
-            raftProtocolClientImpl,
-            transactionBlocker = transactionBlocker,
         )
 
-        twoPC = TwoPC(
-            peersetId,
-            history,
-            config.twoPC,
-            ctx,
-            TwoPCProtocolClientImpl(),
-            consensusProtocol as RaftConsensusProtocolImpl,
-            peerResolver,
-            signalPublisher,
-            config.metricTest,
-        )
-
-        service = ApiV2Service(
-            gpacFactory,
-            consensusProtocol as RaftConsensusProtocolImpl,
-            twoPC!!,
-            history,
-            config,
-        )
+        service = ApiV2Service(config, peersetProtocols)
 
         install(CallLogging) {
             level = Level.DEBUG
@@ -265,14 +214,14 @@ class ApplicationUcac constructor(
         }
 
         metaRouting()
-        historyRouting(history)
-        apiV2Routing(service!!, peersetId)
-        gpacProtocolRouting(gpacFactory)
-        consensusProtocolRouting(consensusProtocol!!)
-        twoPCRouting(twoPC!!)
+        historyRouting(peersetProtocols.history)
+        apiV2Routing(service, peersetId)
+        gpacProtocolRouting(peersetProtocols.gpacFactory)
+        consensusProtocolRouting(peersetProtocols.consensusProtocol)
+        twoPCRouting(peersetProtocols.twoPC)
 
         runBlocking {
-            if (config.raft.isEnabled) consensusProtocol!!.begin()
+            if (config.raft.isEnabled) peersetProtocols.consensusProtocol.begin()
         }
     }
 
@@ -292,16 +241,15 @@ class ApplicationUcac constructor(
     fun startNonblocking() {
         withMdc {
             engine.start(wait = false)
-            val address = "${config.host}:${getBoundPort()}"
-            consensusProtocol?.setPeerAddress(address)
         }
     }
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
         withMdc {
-            ctx.close()
+            if (this::peersetProtocols.isInitialized) {
+                peersetProtocols.close()
+            }
             engine.stop(gracePeriodMillis, timeoutMillis)
-            consensusProtocol?.stop()
         }
     }
 
@@ -320,6 +268,10 @@ class ApplicationUcac constructor(
     }
 
     fun getPeerId(): PeerId = config.peerId()
+
+    fun getConsensusProtocol(): RaftConsensusProtocol {
+        return peersetProtocols.consensusProtocol
+    }
 
     companion object {
         val logger: Logger = LoggerFactory.getLogger("ucac")

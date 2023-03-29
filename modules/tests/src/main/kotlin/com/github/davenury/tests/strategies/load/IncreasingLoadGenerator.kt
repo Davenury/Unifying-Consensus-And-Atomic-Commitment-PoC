@@ -1,17 +1,13 @@
 package com.github.davenury.tests.strategies.load
 
 import com.github.davenury.common.meterRegistry
-import com.github.davenury.tests.Metrics
 import io.micrometer.core.instrument.Counter
-import io.micrometer.core.instrument.Gauge
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.ticker
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicReference
-import java.util.function.Supplier
 
 class IncreasingLoadGenerator(
     private val bound: Double,

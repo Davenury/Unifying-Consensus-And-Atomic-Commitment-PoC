@@ -1,6 +1,5 @@
 package com.github.davenury.ucac.commitment.gpac
 
-import com.github.davenury.common.GPACInstanceNotFoundException
 import com.github.davenury.common.PeersetId
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config

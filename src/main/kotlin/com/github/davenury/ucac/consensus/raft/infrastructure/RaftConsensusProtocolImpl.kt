@@ -14,7 +14,6 @@ import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -31,7 +30,6 @@ import kotlin.collections.set
 class RaftConsensusProtocolImpl(
     private val peersetId: PeersetId,
     private val history: History,
-    private var peerAddress: String,
     private val ctx: ExecutorCoroutineDispatcher,
     private var peerResolver: PeerResolver,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap(), peerResolver),
@@ -55,7 +53,6 @@ class RaftConsensusProtocolImpl(
     ) : this(
         peersetId,
         history,
-        config.host + ":" + config.port,
         ctx,
         peerResolver,
         signalPublisher,
@@ -98,7 +95,7 @@ class RaftConsensusProtocolImpl(
     }
 
     override suspend fun begin() {
-        logger.info("Starting raft on address $peerAddress, other peers: ${otherConsensusPeers()}")
+        logger.info("Starting raft, other peers: ${otherConsensusPeers()}")
         timer.startCounting { sendLeaderRequest() }
     }
 
@@ -120,7 +117,7 @@ class RaftConsensusProtocolImpl(
         mutex.withLock {
             currentTerm += 1
             role = RaftRole.Candidate
-            votedFor = VotedFor(peerId, peerAddress)
+            votedFor = VotedFor(peerId)
         }
 
         logger.info("Trying to become a leader in term $currentTerm")
@@ -196,8 +193,7 @@ class RaftConsensusProtocolImpl(
                 logger.info("Denying vote for $peerId due to an old index ($lastLogId vs $lastEntryId)")
                 return ConsensusElectedYou(this.peerId, currentTerm, false)
             }
-            val peerAddress = peerResolver.resolve(peerId).address
-            votedFor = VotedFor(peerId, peerAddress)
+            votedFor = VotedFor(peerId)
         }
         restartTimer()
         logger.info("Voted for $peerId in term $iteration")
@@ -206,8 +202,7 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun newLeaderElected(leaderId: PeerId, term: Int) {
         logger.info("A leader has been elected: $leaderId (in term $term)")
-        val leaderAddress = peerResolver.resolve(leaderId).address
-        votedFor = VotedFor(leaderId, leaderAddress, true)
+        votedFor = VotedFor(leaderId, true)
 //          DONE: Check if stop() function make sure if you need to wait to all job finish ->
 //          fixed by setting executor to null and adding null condition in if
         if (role == RaftRole.Leader) stopBeingLeader(term)
@@ -406,20 +401,6 @@ class RaftConsensusProtocolImpl(
 
     override suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult> =
         proposeChangeAsync(change)
-
-    override fun setPeerAddress(address: String) {
-        this.peerAddress = address
-    }
-
-    //    DONE: It should return null if votedFor haven't yet became leader
-    override suspend fun getLeaderAddress(): String? =
-        mutex.withLock {
-            return if (votedFor != null && votedFor!!.elected) {
-                votedFor!!.address
-            } else {
-                null
-            }
-        }
 
     override suspend fun getProposedChanges(): List<Change> = state.getLogEntries()
         .reversed()
@@ -669,7 +650,7 @@ class RaftConsensusProtocolImpl(
 
             RaftRole.Follower -> {
                 timer = getHeartbeatTimer()
-                "leader ${votedFor?.id}/-/${votedFor?.address}  doesn't send heartbeat, start try to become leader"
+                "leader ${votedFor?.id} doesn't send heartbeat, start try to become leader"
             }
 
             else -> {
@@ -805,7 +786,7 @@ class RaftConsensusProtocolImpl(
                         changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
                         return@launch
                     } else {
-                        address = votedFor!!.address
+                        address = peerResolver.resolve(votedFor!!.id).address
                     }
                     logger.info("Send request to leader again")
 
@@ -824,9 +805,6 @@ class RaftConsensusProtocolImpl(
     }
 
     //   TODO: only one change can be proposed at the same time
-    @Deprecated("use proposeChangeAsync")
-    override suspend fun proposeChange(change: Change): ChangeResult = proposeChangeAsync(change).await()
-
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         val result = changeIdToCompletableFuture[change.id]!!
@@ -941,7 +919,7 @@ data class PeerIndices(
         .let { PeerIndices(it, it) }
 }
 
-data class VotedFor(val id: PeerId, val address: String, val elected: Boolean = false)
+data class VotedFor(val id: PeerId, val elected: Boolean = false)
 
 data class ChangeToBePropagatedToLeader(
     val change: Change,
