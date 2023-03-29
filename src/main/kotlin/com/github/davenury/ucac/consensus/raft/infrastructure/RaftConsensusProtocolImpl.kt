@@ -57,11 +57,11 @@ class RaftConsensusProtocolImpl(
         peerResolver,
         signalPublisher,
         protocolClient,
-        heartbeatTimeout = config.raft.heartbeatTimeout,
-        heartbeatDelay = config.raft.leaderTimeout,
+        heartbeatTimeout = config.consensus.heartbeatTimeout,
+        heartbeatDelay = config.consensus.leaderTimeout,
         transactionBlocker = transactionBlocker,
         config.metricTest,
-        config.raft.maxChangesPerMessage
+        config.consensus.maxChangesPerMessage
     )
 
 
