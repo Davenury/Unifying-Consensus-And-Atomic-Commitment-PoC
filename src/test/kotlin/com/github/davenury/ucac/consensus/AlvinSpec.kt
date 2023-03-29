@@ -39,7 +39,6 @@ import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 import kotlin.system.measureTimeMillis
 
-//@Disabled
 @ExtendWith(TestLogExtension::class)
 class AlvinSpec : IntegrationTestBase() {
 
