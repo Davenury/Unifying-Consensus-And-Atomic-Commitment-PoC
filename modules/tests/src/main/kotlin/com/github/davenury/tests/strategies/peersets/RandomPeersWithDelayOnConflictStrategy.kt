@@ -22,7 +22,8 @@ class RandomPeersWithDelayOnConflictStrategy(
             lateinit var ids: List<PeersetId>
             var metricBumped = false
             while (true) {
-                ids = peersets.filter { it !in changeToLockedPeersets.values.flatten() }.shuffled().take(numberOfPeersets)
+                val lockedPeersets = changeToLockedPeersets.values.flatten()
+                ids = peersets.filter { it !in lockedPeersets }.shuffled().take(numberOfPeersets)
                 if (ids.size < numberOfPeersets) {
                     if (!metricBumped) {
                         Metrics.bumpDelayInSendingChange()
