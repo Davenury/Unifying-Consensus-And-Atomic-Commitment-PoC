@@ -79,13 +79,13 @@ class RaftConsensusProtocolImpl(
 
     @Volatile
     private var role: RaftRole = RaftRole.Candidate
-    private var timer = ProtocolTimerImpl(Duration.ofMillis(500), Duration.ofSeconds(2), ctx)
+    private var timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(2), ctx)
     private var lastHeartbeatTime = Instant.now()
 
     init {
         // TODO - after adding being in many peersets - check if my affinity is in desired peerset!
         if (peerId in consensusAffinity.values) {
-            timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofMillis(200), ctx)
+           timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofMillis(50), ctx)
         }
     }
 

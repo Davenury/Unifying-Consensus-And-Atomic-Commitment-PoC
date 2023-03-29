@@ -23,7 +23,7 @@ import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics
 import io.netty.channel.socket.nio.NioServerSocketChannel
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -222,9 +222,7 @@ class ApplicationUcac constructor(
         consensusProtocolRouting(peersetProtocols.consensusProtocol)
         twoPCRouting(peersetProtocols.twoPC)
 
-        runBlocking {
-            if (config.raft.isEnabled) peersetProtocols.consensusProtocol.begin()
-        }
+        peersetProtocols.beginConsensusProtocol()
     }
 
     fun setPeerAddresses(peerAddresses: Map<PeerId, PeerAddress>) {

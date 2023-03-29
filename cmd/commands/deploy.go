@@ -384,6 +384,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 			"NAMESPACE":                    config.DeployNamespace,
 			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
+			"RAFT_INIT_DELAY":              "PT5S",
 			"CONSENSUS_AFFINITY":           config.ConsensusAffinity,
 		},
 	}

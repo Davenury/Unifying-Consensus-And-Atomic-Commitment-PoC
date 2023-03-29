@@ -9,8 +9,7 @@ import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
-import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.*
 import java.util.concurrent.Executors
 
 /**
@@ -18,7 +17,7 @@ import java.util.concurrent.Executors
  */
 class PeersetProtocols(
     val peersetId: PeersetId,
-    config: Config,
+    val config: Config,
     val peerResolver: PeerResolver,
     signalPublisher: SignalPublisher,
     changeNotifier: ChangeNotifier
@@ -32,6 +31,18 @@ class PeersetProtocols(
     val consensusProtocol: RaftConsensusProtocol
     val twoPC: TwoPC
     val gpacFactory: GPACFactory
+
+    fun beginConsensusProtocol() {
+        ctx.dispatch(Dispatchers.IO) {
+            runBlocking {
+                if (config.raft.isEnabled) {
+                    // to make sure everyone has started and is well, so preferred leader won't bump into wall
+                    delay(config.raft.initialDelay.toMillis())
+                    consensusProtocol.begin()
+                }
+            }
+        }
+    }
 
     init {
         gpacFactory = GPACFactory(
