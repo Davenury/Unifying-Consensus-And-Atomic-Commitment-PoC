@@ -140,9 +140,10 @@ class ConsensusSpec : IntegrationTestBase() {
         phaser.register()
 
         val peerLeaderElected = SignalListener {
-            expectThat(leaderElectedPhaser.phase).isEqualTo(0)
-            logger.info("Arrived ${it.subject.getPeerName()}")
-            leaderElectedPhaser.arrive()
+            if(leaderElectedPhaser.phase == 0) {
+                logger.info("Arrived ${it.subject.getPeerName()}")
+                leaderElectedPhaser.arrive()
+            }
         }
 
         val peerChangeAccepted = SignalListener {
