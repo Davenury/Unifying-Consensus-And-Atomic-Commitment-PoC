@@ -187,7 +187,7 @@ class RaftConsensusProtocolImpl(
                 state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId()
                     ?: state.lastApplied
 
-            val candidateIsOutdated: Boolean = state.isOlderThanCurrentEntryId(lastLogId)
+            val candidateIsOutdated: Boolean = state.isOlderEntryThanLastEntry(lastLogId)
 
             if (candidateIsOutdated) {
                 logger.info("Denying vote for $peerId due to an old index ($lastLogId vs $lastEntryId)")
