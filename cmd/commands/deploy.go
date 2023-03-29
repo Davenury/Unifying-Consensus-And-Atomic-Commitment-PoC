@@ -26,6 +26,7 @@ type DeployConfig struct {
 	ProxyDelay              string
 	ProxyLimit              string
 	MonitoringNamespace     string
+	ConsensusAffinity       string
 }
 
 const ratisPort = 10024
@@ -52,6 +53,7 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().StringVar(&config.ProxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	deployCommand.Flags().StringVar(&config.ProxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
 	deployCommand.Flags().StringVar(&config.MonitoringNamespace, "monitoring-namespace", "ddebowski", "Namespace with monitoring deployed")
+	deployCommand.Flags().StringVar(&config.ConsensusAffinity, "consensus-affinity", "", "Consensus affinity = likeliness that peer will be consensus leader in peerset, e.g. peerset0=peer0;peerset1=peer0")
 
 	return deployCommand
 
@@ -382,6 +384,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 			"NAMESPACE":                    config.DeployNamespace,
 			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
+			"CONSENSUS_AFFINITY":           config.ConsensusAffinity,
 		},
 	}
 

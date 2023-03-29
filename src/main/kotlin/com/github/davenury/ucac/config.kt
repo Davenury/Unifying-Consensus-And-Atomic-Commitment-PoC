@@ -34,6 +34,8 @@ data class Config(
     }
 
     fun newPeerResolver() = PeerResolver(peerId(), parsePeers(peers), parsePeersets(peersets))
+
+    fun consensusAffinity() = parseConsensusAffinity(this.raft.consensusAffinity)
 }
 
 data class TwoPCConfig(val changeDelay: Duration = Duration.ofSeconds(120))
@@ -60,7 +62,9 @@ data class RaftConfig(
     val heartbeatTimeout: Duration = Duration.ofSeconds(2),
     val leaderTimeout: Duration = Duration.ofSeconds(1),
     val isEnabled: Boolean = true,
-    val maxChangesPerMessage: Int = 200
+    val maxChangesPerMessage: Int = 200,
+    // peerset1=peer1;peerset2=peer3
+    val consensusAffinity: String = "",
 )
 
 

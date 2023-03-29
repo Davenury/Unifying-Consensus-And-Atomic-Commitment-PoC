@@ -42,6 +42,7 @@ type Config struct {
 	increasingLoadBound            float64
 	increasingLoadIncreaseDelay    string
 	increasingLoadIncreaseStep     float64
+	consensusAffinity              string
 }
 
 func CreateWholeCommand() *cobra.Command {
@@ -87,6 +88,7 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().Float64Var(&config.increasingLoadBound, "load-bound", float64(100), "Bound of changes per second for increasing load generator")
 	cmd.Flags().StringVar(&config.increasingLoadIncreaseDelay, "load-increase-delay", "PT60S", "Determines how long load should be constant before increasing")
 	cmd.Flags().Float64Var(&config.increasingLoadIncreaseStep, "load-increase-step", float64(1), "Determines how much load should change after load-increase-delay time")
+	cmd.Flags().StringVar(&config.consensusAffinity, "consensus-affinity", "", "Consensus affinity = likeliness that peer will be consensus leader in peerset, e.g. peerset0=peer0;peerset1=peer0")
 
 	return cmd
 }
@@ -108,6 +110,7 @@ func perform(config Config) {
 		ProxyDelay:              config.proxyDelay,
 		ProxyLimit:              config.proxyLimit,
 		MonitoringNamespace:     config.monitoringNamespace,
+		ConsensusAffinity:       config.consensusAffinity,
 	})
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
 	time.Sleep(30 * time.Second)

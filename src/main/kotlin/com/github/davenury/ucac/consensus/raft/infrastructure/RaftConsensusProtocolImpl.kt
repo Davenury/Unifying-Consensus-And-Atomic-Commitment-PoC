@@ -37,8 +37,9 @@ class RaftConsensusProtocolImpl(
     private val heartbeatTimeout: Duration = Duration.ofSeconds(4),
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
     private val transactionBlocker: TransactionBlocker,
-    private val isMetricTest: Boolean,
-    private val maxChangesPerMessage: Int
+    private val maxChangesPerMessage: Int,
+    private val isMetricTest: Boolean = false,
+    private val consensusAffinity: Map<PeersetId, PeerId> = mapOf(),
 ) : RaftConsensusProtocol, SignalSubject {
 
     constructor(
@@ -60,8 +61,9 @@ class RaftConsensusProtocolImpl(
         heartbeatTimeout = config.raft.heartbeatTimeout,
         heartbeatDelay = config.raft.leaderTimeout,
         transactionBlocker = transactionBlocker,
+        config.raft.maxChangesPerMessage,
         config.metricTest,
-        config.raft.maxChangesPerMessage
+        config.consensusAffinity()
     )
 
 
@@ -77,8 +79,15 @@ class RaftConsensusProtocolImpl(
 
     @Volatile
     private var role: RaftRole = RaftRole.Candidate
-    private var timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofSeconds(2), ctx)
+    private var timer = ProtocolTimerImpl(Duration.ofMillis(500), Duration.ofSeconds(2), ctx)
     private var lastHeartbeatTime = Instant.now()
+
+    init {
+        // TODO - after adding being in many peersets - check if my affinity is in desired peerset!
+        if (peerId in consensusAffinity.values) {
+            timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofMillis(200), ctx)
+        }
+    }
 
     //    DONE: Use only one mutex
     private val mutex = Mutex()
