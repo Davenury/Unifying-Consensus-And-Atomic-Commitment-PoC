@@ -167,7 +167,7 @@ class RaftConsensusProtocolImpl(
         iteration: Int,
         lastLogId: String
     ): ConsensusElectedYou {
-        logger.debug(
+        logger.info(
             "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogId, " +
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
         )
