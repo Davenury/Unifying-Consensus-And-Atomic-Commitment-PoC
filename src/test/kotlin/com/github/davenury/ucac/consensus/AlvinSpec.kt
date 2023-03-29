@@ -809,19 +809,6 @@ class AlvinSpec : IntegrationTestBase() {
     private suspend fun askForAcceptedChanges(peerAddress: PeerAddress) =
         genericAskForChange("accepted_changes", peerAddress)
 
-    private suspend fun askForLeaderAddress(app: ApplicationUcac): String? {
-        val consensusProperty =
-            ApplicationUcac::class.declaredMemberProperties.single { it.name == "consensusProtocol" }
-        val consensusOldAccessible = consensusProperty.isAccessible
-        try {
-            consensusProperty.isAccessible = true
-            val consensusProtocol = consensusProperty.get(app) as RaftConsensusProtocolImpl
-            return consensusProtocol.getLeaderAddress()
-        } finally {
-            consensusProperty.isAccessible = consensusOldAccessible
-        }
-    }
-
     companion object {
         private val logger = LoggerFactory.getLogger(AlvinSpec::class.java)
     }
