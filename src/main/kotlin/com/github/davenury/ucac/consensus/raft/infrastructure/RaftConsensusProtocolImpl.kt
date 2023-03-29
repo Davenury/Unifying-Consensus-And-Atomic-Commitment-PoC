@@ -4,13 +4,15 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
-import com.github.davenury.ucac.*
+import com.github.davenury.ucac.Config
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.twopc.TwoPC
-import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.slf4j.MDCContext
@@ -22,6 +24,33 @@ import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
+import kotlin.collections.List
+import kotlin.collections.MutableList
+import kotlin.collections.MutableMap
+import kotlin.collections.any
+import kotlin.collections.count
+import kotlin.collections.emptyMap
+import kotlin.collections.filter
+import kotlin.collections.filterNotNull
+import kotlin.collections.find
+import kotlin.collections.first
+import kotlin.collections.forEach
+import kotlin.collections.indexOfFirst
+import kotlin.collections.isNotEmpty
+import kotlin.collections.last
+import kotlin.collections.lastOrNull
+import kotlin.collections.listOf
+import kotlin.collections.map
+import kotlin.collections.mapNotNull
+import kotlin.collections.mapOf
+import kotlin.collections.maxOfOrNull
+import kotlin.collections.mutableListOf
+import kotlin.collections.mutableMapOf
+import kotlin.collections.plus
+import kotlin.collections.reversed
+import kotlin.collections.set
+import kotlin.collections.take
+import kotlin.collections.takeWhile
 
 
 /** @author Kamil Jarosz */
@@ -798,7 +827,7 @@ class RaftConsensusProtocolImpl(
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
                 while (result == null) {
                     val address: String
-                    if (votedFor == null) {
+                    if (votedFor == null || votedFor!!.id == peerId) {
                         changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
                         return@launch
                     } else {
@@ -809,7 +838,7 @@ class RaftConsensusProtocolImpl(
                     result = try {
                         protocolClient.sendRequestApplyChange(address, change)
                     } catch (e: Exception) {
-                        logger.info("Request to leader ($address) failed", e.message)
+                        logger.info("Request to leader ($address) failed", e.cause)
                         null
                     }
                 }
