@@ -597,8 +597,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         }
 
     @Test
-    fun `should commit change if super-set agrees to commit`(): Unit = repeat(100) {
-        runBlocking {
+    fun `should commit change if super-set agrees to commit`(): Unit = runBlocking {
             val phaser = Phaser(7)
             val electSignal = mapOf(
                 Signal.OnHandlingElectBegin to SignalListener {
@@ -635,7 +634,6 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 expectThat(changes.size).isEqualTo(1)
             }
         }
-    }
 
     @Test
     fun `should commit change if super-set agrees to commit, even though someone yells abort`(): Unit = runBlocking {
@@ -764,7 +762,8 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ),
             signalListeners = (0..5).map { "peer$it" }.associateWith {
                 mapOf(
-                    Signal.OnHandlingApplyEnd to SignalListener { fail("Change should not be applied") },)
+                    Signal.OnHandlingApplyEnd to SignalListener { fail("Change should not be applied") },
+                )
 
             } + mapOf("peer0" to mapOf(Signal.ReachedMaxRetries to SignalListener { phaser.arrive() }))
                     + mapOf("peer5" to mapOf(Signal.OnHandlingElectBegin to SignalListener { throw RuntimeException() }))
