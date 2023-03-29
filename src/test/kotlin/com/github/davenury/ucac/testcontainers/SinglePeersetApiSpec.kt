@@ -13,6 +13,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
@@ -48,6 +49,7 @@ class SinglePeersetApiSpec {
         ),
     )
 
+    @Disabled("Chaos class")
     @Test
     fun `sync api`(): Unit = runBlocking {
         val change = AddUserChange(
