@@ -21,7 +21,8 @@ class TwoPC(
     private val consensusProtocol: ConsensusProtocol,
     peerResolver: PeerResolver,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap(), peerResolver),
-    private val isMetricTest: Boolean
+    private val isMetricTest: Boolean,
+    private val changeNotifier: ChangeNotifier,
 ) : SignalSubject, AbstractAtomicCommitmentProtocol(logger, peerResolver) {
     private val peerId = peerResolver.currentPeer()
 
@@ -159,7 +160,7 @@ class TwoPC(
 
         changeIdToCompletableFuture[change.id]!!
             .complete(ChangeResult(ChangeResult.Status.SUCCESS))
-        ChangeNotifier.get(peerResolver).notify(change, ChangeResult(ChangeResult.Status.SUCCESS))
+        changeNotifier.notify(change, ChangeResult(ChangeResult.Status.SUCCESS))
     }
 
     fun getChange(changeId: String): Change {

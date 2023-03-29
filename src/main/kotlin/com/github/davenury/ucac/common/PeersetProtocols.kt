@@ -21,6 +21,7 @@ class PeersetProtocols(
     config: Config,
     val peerResolver: PeerResolver,
     signalPublisher: SignalPublisher,
+    changeNotifier: ChangeNotifier
 ) : AutoCloseable {
     val history = HistoryFactory().createForConfig(config)
     private val transactionBlocker = TransactionBlocker()
@@ -64,6 +65,7 @@ class PeersetProtocols(
             peerResolver,
             signalPublisher,
             config.metricTest,
+            changeNotifier = changeNotifier
         )
     }
 

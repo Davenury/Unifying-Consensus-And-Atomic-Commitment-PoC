@@ -99,6 +99,7 @@ class ApplicationUcac constructor(
     private fun createServer() = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
         val peersetId = config.peersetId()
         logger.info("My peerset: $peersetId")
+        val changeNotifier = ChangeNotifier(peerResolver)
 
         val signalPublisher = SignalPublisher(signalListeners, peerResolver)
 
@@ -107,9 +108,10 @@ class ApplicationUcac constructor(
             config,
             peerResolver,
             signalPublisher,
+            changeNotifier,
         )
 
-        service = ApiV2Service(config, peersetProtocols, ChangeNotifier(peerResolver))
+        service = ApiV2Service(config, peersetProtocols, changeNotifier)
 
         install(CallLogging) {
             level = Level.DEBUG

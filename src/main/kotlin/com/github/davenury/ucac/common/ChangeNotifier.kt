@@ -45,14 +45,4 @@ class ChangeNotifier(
     }
 
     private val logger = LoggerFactory.getLogger("ChangeNotifier")
-
-    companion object {
-        private var instance: ChangeNotifier? = null
-        fun get(peerResolver: PeerResolver): ChangeNotifier {
-            if (instance == null) {
-                instance = ChangeNotifier(peerResolver)
-            }
-            return instance!!
-        }
-    }
 }
