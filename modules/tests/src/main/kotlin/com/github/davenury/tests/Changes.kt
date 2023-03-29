@@ -34,16 +34,7 @@ class Changes(
         logger.info("Handling notification: $notification")
         if (shouldStartHandlingNotification(notification)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
-                val change = if (acProtocol == ACProtocol.TWO_PC) {
-                    try {
-                        httpClient.get("http://${peers[peersetId]!!.first()}/v2/last-change")
-                    } catch (e: Exception) {
-                        logger.error("Could not receive change from ${peers[peersetId]!!.first()}", e)
-                        notification.change
-                    }
-                } else {
-                    notification.change
-                }
+                val change = getChange(notification, peersetId)
                 if (notification.result.status == ChangeResult.Status.SUCCESS) {
                     val parentId = change.toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
@@ -54,6 +45,19 @@ class Changes(
         }
     }
 
+    private suspend fun getChange(notification: Notification, peersetId: PeersetId): Change {
+        return if (acProtocol == ACProtocol.TWO_PC) {
+            try {
+                httpClient.get("http://${peers[peersetId]!!.first()}/v2/last-change")
+            } catch (e: Exception) {
+                logger.error("Could not receive change from ${peers[peersetId]!!.first()}", e)
+                notification.change
+            }
+        } else {
+            notification.change
+        }
+    }
+
     private fun shouldStartHandlingNotification(notification: Notification): Boolean =
         when {
             acProtocol != ACProtocol.TWO_PC && handledChanges.contains(notification.change.id) -> false
@@ -61,10 +65,12 @@ class Changes(
                 handledChanges[notification.change.id] = 1
                 return@run true
             }
+
             notification.result.status != ChangeResult.Status.SUCCESS -> kotlin.run {
                 handledChanges[notification.change.id] = 1
                 return@run true
             }
+
             else -> kotlin.run {
                 handledChanges[notification.change.id] = handledChanges.getOrDefault(notification.change.id, 0) + 1
                 return@run handledChanges[notification.change.id]!! >= notification.change.peersets.size
@@ -78,27 +84,33 @@ class Changes(
             val change = createChangeStrategy.createChange(ids, changes, changeId)
 
             val result = changes[ids[0]]!!.introduceChange(change)
+            handleChangeResult(change, result, ids)
 
-            if (result == ChangeState.ACCEPTED) {
-                val historyEntriesIds = ids.map { it to change.toHistoryEntry(it).getId() }
-                logger.info(
-                    "Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: $historyEntriesIds"
-                )
-            } else {
-                logger.info("Change $change was rejected, freeing peersets $ids")
-                getPeersStrategy.freePeersets(ids, changeId)
-            }
             change
         }
-        executor.dispatch(Dispatchers.IO) {
-            runBlocking {
-                delay(changeTimeout)
-                notificationMutex.withLock {
-                    if (!handledChanges.contains(change.id)) {
-                        logger.error("Change $change timed out from performance tests, freeing peersets")
-                        getPeersStrategy.freePeersets(change.peersets.map { it.peersetId }, change.id)
-                        handledChanges[change.id] = change.peersets.size
-                    }
+        timeoutChange(change)
+    }
+
+    private suspend fun handleChangeResult(change: Change, result: ChangeState, ids: List<PeersetId>) {
+        if (result == ChangeState.ACCEPTED) {
+            val historyEntriesIds = ids.map { it to change.toHistoryEntry(it).getId() }
+            logger.info(
+                "Introduced change $change to peersets with ids $ids with result: $result\n, entries ids will be: $historyEntriesIds"
+            )
+        } else {
+            logger.info("Change $change was rejected, freeing peersets $ids")
+            getPeersStrategy.freePeersets(ids, change.id)
+        }
+    }
+
+    private fun timeoutChange(change: Change) = executor.dispatch(Dispatchers.IO) {
+        runBlocking {
+            delay(changeTimeout)
+            notificationMutex.withLock {
+                if (!handledChanges.contains(change.id)) {
+                    logger.error("Change $change timed out from performance tests, freeing peersets")
+                    getPeersStrategy.freePeersets(change.peersets.map { it.peersetId }, change.id)
+                    handledChanges[change.id] = change.peersets.size
                 }
             }
         }
