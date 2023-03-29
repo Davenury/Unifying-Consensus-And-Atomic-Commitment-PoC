@@ -74,7 +74,7 @@ class RaftProtocolClientImpl : RaftProtocolClient {
     }
 
     override suspend fun sendRequestApplyChange(address: String, change: Change) =
-        httpClient.post<ChangeResult>("http://${address}/consensus/request_apply_change") {
+        httpClient.post<ChangeResult>("http://${address}/raft/request_apply_change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = change

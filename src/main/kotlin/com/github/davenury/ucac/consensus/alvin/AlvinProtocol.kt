@@ -6,10 +6,12 @@ import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
-import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.common.ProtocolTimer
+import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.TransactionBlocker
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -54,7 +56,6 @@ class AlvinProtocol(
     override fun getPeerName() = globalPeerId.toString()
 
     override suspend fun begin() {}
-
 
 
     override suspend fun handleProposalPhase(message: AlvinPropose): AlvinAckPropose {
@@ -225,8 +226,6 @@ class AlvinProtocol(
         executorService.close()
     }
 
-    @Deprecated("use proposeChangeAsync")
-    override suspend fun proposeChange(change: Change): ChangeResult = proposeChangeAsync(change).await()
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
         val result = CompletableFuture<ChangeResult>()
@@ -555,13 +554,13 @@ class AlvinProtocol(
 
         var resultEntry: AlvinEntry
         do {
-            if(deliveryQueue.size == 0){
+            if (deliveryQueue.size == 0) {
                 logger.info("Delivered all transactions")
                 return
             }
             val entry = cleanDeps(deliveryQueue.poll())
             resultEntry = entry
-            if(history.containsEntry(entry.entry.getId())) {
+            if (history.containsEntry(entry.entry.getId())) {
                 scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(
                         peerAddress,
@@ -569,7 +568,7 @@ class AlvinProtocol(
                     )
                 }
             }
-        }while (history.containsEntry(entry.entry.getId()))
+        } while (history.containsEntry(entry.entry.getId()))
 
 
         val entry: AlvinEntry = resultEntry
@@ -678,7 +677,7 @@ class AlvinProtocol(
         val entryId = entry.entry.getId()
         entryIdToFailureDetector[entryId]?.cancelCounting()
         entryIdToFailureDetector.putIfAbsent(entryId, getFailureDetectorTimer())
-        if(entryIdToAlvinEntry.containsKey(entryId))entryIdToFailureDetector[entryId]!!.startCounting(entry.epoch) {
+        if (entryIdToAlvinEntry.containsKey(entryId)) entryIdToFailureDetector[entryId]!!.startCounting(entry.epoch) {
             recoveryPhase(entry)
         }
     }
@@ -689,7 +688,7 @@ class AlvinProtocol(
         val oldEntry = entryIdToAlvinEntry[entryId]
         val changeId: String = Change.fromHistoryEntry(entry.entry)!!.id
 
-        if(changeIdToCompletableFuture[changeId]?.isDone == true && entry.status != AlvinStatus.STABLE) return
+        if (changeIdToCompletableFuture[changeId]?.isDone == true && entry.status != AlvinStatus.STABLE) return
 
         var updatedEntry = entry
         if (oldEntry?.status == AlvinStatus.STABLE) {
@@ -704,8 +703,6 @@ class AlvinProtocol(
     }
 
     private fun peers() = peerResolver.getPeersFromPeerset(peersetId)
-
-
 
 
     private suspend fun getNextNum(peerId: PeerId = globalPeerId): Int = mutex.withLock {
@@ -724,10 +721,6 @@ class AlvinProtocol(
     }
 
     private fun getFailureDetectorTimer() = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout.dividedBy(2), ctx)
-
-    //  TODO: remove it
-    override fun setPeerAddress(address: String) {
-    }
 
 
     companion object {

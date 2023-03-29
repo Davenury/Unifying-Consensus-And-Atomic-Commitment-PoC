@@ -9,6 +9,9 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
+import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -33,7 +36,7 @@ class PeersetProtocols(
     private val ctx: ExecutorCoroutineDispatcher =
         Executors.newCachedThreadPool().asCoroutineDispatcher()
 
-    val consensusProtocol: RaftConsensusProtocol
+    val consensusProtocol: ConsensusProtocol
     val twoPC: TwoPC
     val gpacFactory: GPACFactory
 
@@ -48,16 +51,34 @@ class PeersetProtocols(
             peerResolver,
         )
 
-        consensusProtocol = RaftConsensusProtocolImpl(
-            peersetId,
-            history,
-            config,
-            ctx,
-            peerResolver,
-            signalPublisher,
-            RaftProtocolClientImpl(),
-            transactionBlocker,
-        )
+        consensusProtocol =  when (config.consensus.name) {
+
+            "raft" -> RaftConsensusProtocolImpl(
+                peersetId,
+                history,
+                config,
+                ctx,
+                peerResolver,
+                signalPublisher,
+                RaftProtocolClientImpl(),
+                transactionBlocker = transactionBlocker,
+            )
+
+            "alvin" -> AlvinProtocol(
+                peersetId,
+                history,
+                ctx,
+                peerResolver,
+                signalPublisher,
+                AlvinProtocolClientImpl(),
+                heartbeatTimeout = config.consensus.heartbeatTimeout,
+                heartbeatDelay = config.consensus.leaderTimeout,
+                transactionBlocker = transactionBlocker,
+                config.metricTest,
+            )
+
+            else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
+        }
 
         twoPC = TwoPC(
             peersetId,

@@ -12,6 +12,8 @@ import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.TransactionBlocker
+import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.testHttpClient
@@ -1150,12 +1152,12 @@ class RaftSpec : IntegrationTestBase() {
         genericAskForChange("accepted_changes", peerAddress)
 
     private fun askForLeaderAddress(app: ApplicationUcac): String? {
-        val leaderId = app.getConsensusProtocol().getLeaderId()
+        val leaderId = (app.getConsensusProtocol() as RaftConsensusProtocol).getLeaderId()
         return leaderId?.let { apps.getPeer(it).address }
     }
 
     private fun getLeaderAddress(app: ApplicationUcac): PeerAddress {
-        val leaderId = app.getConsensusProtocol().getLeaderId()!!
+        val leaderId = (app.getConsensusProtocol() as RaftConsensusProtocol).getLeaderId()!!
         return apps.getPeer(leaderId)
     }
 
