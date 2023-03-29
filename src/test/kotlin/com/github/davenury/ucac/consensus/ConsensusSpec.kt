@@ -23,6 +23,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.util.collections.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -473,6 +475,8 @@ class ConsensusSpec : IntegrationTestBase() {
         val proposedPeers = ConcurrentHashMap<String, Boolean>()
         var changePeers: (() -> Unit?)? = null
 
+        val mutex = Mutex()
+
         val leaderAction = SignalListener {
             if (firstLeader) {
                 logger.info("Arrived ${it.subject.getPeerName()}")
@@ -503,14 +507,17 @@ class ConsensusSpec : IntegrationTestBase() {
             changePhaser.arrive()
         }
         val ignoreHeartbeatAfterProposingChange = SignalListener {
-            when {
-                it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> {
-                    proposedPeers[it.subject.getPeerName()] = true
+            runBlocking {
+                mutex.withLock {
+                    when {
+                        it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> {
+                            proposedPeers[it.subject.getPeerName()] = true
+                        }
+
+                        proposedPeers.contains(it.subject.getPeerName()) && firstLeader -> throw Exception("Ignore heartbeat from old leader")
+                        proposedPeers.size > 2 && firstLeader -> throw Exception("Ignore heartbeat from old leader")
+                    }
                 }
-
-                proposedPeers.contains(it.subject.getPeerName()) && firstLeader -> throw Exception("Ignore heartbeat from old leader")
-                proposedPeers.size > 2 && firstLeader -> throw Exception("Ignore heartbeat from old leader")
-
             }
         }
 
