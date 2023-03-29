@@ -4,13 +4,15 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
-import com.github.davenury.ucac.*
+import com.github.davenury.ucac.Config
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.twopc.TwoPC
-import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.raft.domain.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.slf4j.MDCContext
@@ -22,6 +24,7 @@ import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
+import kotlin.collections.set
 
 
 /** @author Kamil Jarosz */
@@ -36,8 +39,35 @@ class RaftConsensusProtocolImpl(
     private val heartbeatTimeout: Duration = Duration.ofSeconds(4),
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
     private val transactionBlocker: TransactionBlocker,
-    private val isMetricTest: Boolean
+    private val isMetricTest: Boolean,
+    private val maxChangesPerMessage: Int
 ) : RaftConsensusProtocol, SignalSubject {
+
+    constructor(
+        peersetId: PeersetId,
+        history: History,
+        config: Config,
+        ctx: ExecutorCoroutineDispatcher,
+        peerResolver: PeerResolver,
+        signalPublisher: SignalPublisher = SignalPublisher(emptyMap(), peerResolver),
+        protocolClient: RaftProtocolClient,
+        transactionBlocker: TransactionBlocker,
+    ) : this(
+        peersetId,
+        history,
+        config.host + ":" + config.port,
+        ctx,
+        peerResolver,
+        signalPublisher,
+        protocolClient,
+        heartbeatTimeout = config.raft.heartbeatTimeout,
+        heartbeatDelay = config.raft.leaderTimeout,
+        transactionBlocker = transactionBlocker,
+        config.metricTest,
+        config.raft.maxChangesPerMessage
+    )
+
+
     private val peerId = peerResolver.currentPeer()
 
     private var currentTerm: Int = 0
@@ -138,10 +168,10 @@ class RaftConsensusProtocolImpl(
     override suspend fun handleRequestVote(
         peerId: PeerId,
         iteration: Int,
-        candidateLastLogId: String
+        lastLogId: String
     ): ConsensusElectedYou {
-        logger.debug(
-            "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$candidateLastLogId, " +
+        logger.info(
+            "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogId, " +
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
         )
 
@@ -160,11 +190,10 @@ class RaftConsensusProtocolImpl(
                 state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId()
                     ?: state.lastApplied
 
-            val candidateIsUpToDate: Boolean =
-                state.isNotApplied(candidateLastLogId) || candidateLastLogId == lastEntryId
+            val candidateIsOutdated: Boolean = state.isOlderEntryThanLastEntry(lastLogId)
 
-            if (!candidateIsUpToDate) {
-                logger.info("Denying vote for $peerId due to an old index ($candidateLastLogId vs $lastEntryId)")
+            if (candidateIsOutdated) {
+                logger.info("Denying vote for $peerId due to an old index ($lastLogId vs $lastEntryId)")
                 return ConsensusElectedYou(this.peerId, currentTerm, false)
             }
             val peerAddress = peerResolver.resolve(peerId).address
@@ -303,6 +332,8 @@ class RaftConsensusProtocolImpl(
 
         updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
 
+        tryPropagatingChangesToLeader()
+
         return ConsensusHeartbeatResponse(true, currentTerm)
     }
 
@@ -428,11 +459,7 @@ class RaftConsensusProtocolImpl(
         }
 
 
-        if (role == RaftRole.Leader
-            && otherConsensusPeers().any { it.peerId == peer }
-            && executorService != null
-            && isRegular
-        ) {
+        if (isRegular && shouldISendHeartbeatToPeer(peer)) {
             launchHeartBeatToPeer(peer, true)
         }
 
@@ -467,6 +494,12 @@ class RaftConsensusProtocolImpl(
                     peerMessage.leaderCommitId,
                     peerMessage.logEntries
                 )
+
+                val isPeerMissingSomeEntries = peerToNextIndex[peer]?.acceptedEntryId != state.lastApplied
+
+                if (isPeerMissingSomeEntries) {
+                    launchHeartBeatToPeer(peer, delay = heartbeatDelay, sendInstantly = true)
+                }
             }
 
             response.message.term > currentTerm -> {
@@ -489,19 +522,19 @@ class RaftConsensusProtocolImpl(
             !response.message.success -> {
                 logger.info("Peer doesn't accept heartbeat, because I have outdated history")
 
-                if (role == RaftRole.Leader
-                    && otherConsensusPeers().any { it.peerId == peer }
-                    && executorService != null
-                    && isRegular
-                ) {
+                if (isRegular) {
                     launchHeartBeatToPeer(peer, delay = heartbeatDelay)
                 }
 
             }
         }
 
+
         checkIfQueuedChanges()
     }
+
+    private fun shouldISendHeartbeatToPeer(peer: PeerId): Boolean =
+        role == RaftRole.Leader && otherConsensusPeers().any { it.peerId == peer } && executorService != null
 
     private suspend fun applyAcceptedChanges(additionalAcceptedIds: List<String>) {
         val acceptedItems: List<LedgerItem>
@@ -595,19 +628,32 @@ class RaftConsensusProtocolImpl(
             }
         }
 
-        val peerIndices = peerToNextIndex.getOrDefault(peerAddress.peerId, PeerIndices()) // TODO
+        val peerIndices = peerToNextIndex.getOrDefault(peerAddress.peerId, PeerIndices())
+        val newCommittedChanges = state.getCommittedItems(peerIndices.acknowledgedEntryId)
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
+        val allChanges = newCommittedChanges + newProposedChanges
         val lastAppliedChangeId = peerIndices.acceptedEntryId
         if (newProposedChanges.isNotEmpty())
-            logger.info("Leader sends a message to $peerAddress $newProposedChanges")
+            logger.info("Leader sends a message to $peerAddress $allChanges")
+
+        val limitedCommittedChanges = newCommittedChanges.take(maxChangesPerMessage)
+        val lastLimitedCommittedChange = newCommittedChanges.lastOrNull()
+        val lastId = lastLimitedCommittedChange?.entry?.getId()
+
+        val (currentEntryId, leaderCommitId, changesToSend) =
+            if (limitedCommittedChanges.size < allChanges.size && lastId != null)
+                Triple(lastId, lastId, limitedCommittedChanges)
+            else
+                Triple(history.getCurrentEntryId(), state.commitIndex, allChanges)
+
 
         return ConsensusHeartbeat(
             peerId,
             currentTerm,
-            newProposedChanges.map { it.toDto() },
+            changesToSend.map { it.toDto() },
             lastAppliedChangeId,
-            history.getCurrentEntryId(),
-            state.commitIndex
+            currentEntryId,
+            leaderCommitId
         )
     }
 
@@ -754,22 +800,22 @@ class RaftConsensusProtocolImpl(
                 var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
                 while (result == null) {
+                    val address: String
+                    if (votedFor == null || votedFor!!.id == peerId) {
+                        changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
+                        return@launch
+                    } else {
+                        address = votedFor!!.address
+                    }
                     logger.info("Send request to leader again")
+
                     result = try {
-                        val response =
-                            httpClient.post<ChangeResult>("http://${votedFor!!.address}/consensus/request_apply_change") {
-                                contentType(ContentType.Application.Json)
-                                accept(ContentType.Application.Json)
-                                body = change
-                            }
-                        logger.info("Response from leader: $response")
-                        response
+                        protocolClient.sendRequestApplyChange(address, change)
                     } catch (e: Exception) {
-                        logger.info("Request to leader (${votedFor!!.address}) failed", e)
+                        logger.error("Request to leader ($address) failed", e.cause)
                         null
                     }
                 }
-
                 if (result.status != ChangeResult.Status.SUCCESS) {
                     cf.complete(result)
                 }
@@ -811,18 +857,22 @@ class RaftConsensusProtocolImpl(
 
     private fun launchHeartBeatToPeer(
         peer: PeerId,
-        isRegular: Boolean = false, sendInstantly: Boolean = false,
+        isRegular: Boolean = false,
+        sendInstantly: Boolean = false,
         delay: Duration = heartbeatDelay
-    ): Job =
-        with(CoroutineScope(executorService!!)) {
-            launch(MDCContext()) {
-                if (!sendInstantly) {
-                    logger.info("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
-                    delay(delay.toMillis())
+    ): Unit {
+        if (shouldISendHeartbeatToPeer(peer)) {
+            with(CoroutineScope(executorService!!)) {
+                launch(MDCContext()) {
+                    if (!sendInstantly) {
+                        logger.debug("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
+                        delay(delay.toMillis())
+                    }
+                    sendHeartbeatToPeer(peer, isRegular)
                 }
-                sendHeartbeatToPeer(peer, isRegular)
             }
         }
+    }
 
     override fun getState(): History {
         val history: History

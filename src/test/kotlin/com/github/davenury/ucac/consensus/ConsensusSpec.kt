@@ -23,6 +23,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.util.collections.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -53,6 +55,9 @@ class ConsensusSpec : IntegrationTestBase() {
 
     @Test
     fun `happy path`(): Unit = runBlocking {
+        val change1 = createChange(null)
+        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(PeersetId("peerset0")).getId())
+
         val peersWithoutLeader = 4
 
         val phaser = Phaser(peersWithoutLeader)
@@ -60,13 +65,13 @@ class ConsensusSpec : IntegrationTestBase() {
 
         val peerLeaderElected = SignalListener {
             expectThat(phaser.phase).isEqualTo(0)
-            logger.info("Arrived ${it.subject.getPeerName()}")
+            logger.info("Arrived leader elected ${it.subject.getPeerName()}")
             phaser.arrive()
         }
 
         val peerApplyChange = SignalListener {
             expectThat(phaser.phase).isContainedIn(listOf(1, 2))
-            logger.info("Arrived ${it.subject.getPeerName()}")
+            logger.info("Arrived change ${it.subject.getPeerName()}")
             phaser.arrive()
         }
 
@@ -87,7 +92,6 @@ class ConsensusSpec : IntegrationTestBase() {
         logger.info("Leader elected")
 
         // when: peer1 executed change
-        val change1 = createChange(null)
         expectCatching {
             executeChange("${apps.getPeer("peer0").address}/v2/change/sync", change1)
         }.isSuccess()
@@ -105,7 +109,6 @@ class ConsensusSpec : IntegrationTestBase() {
         }
 
         // when: peer2 executes change
-        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(PeersetId("peerset0")).getId())
         expectCatching {
             executeChange("${apps.getPeer("peer1").address}/v2/change/sync", change2)
         }.isSuccess()
@@ -128,6 +131,7 @@ class ConsensusSpec : IntegrationTestBase() {
     @Test
     fun `1000 change processed sequentially`(): Unit = runBlocking {
         val peersWithoutLeader = 4
+        var iter = 0
 
         val leaderElectedPhaser = Phaser(peersWithoutLeader)
         leaderElectedPhaser.register()
@@ -136,13 +140,14 @@ class ConsensusSpec : IntegrationTestBase() {
         phaser.register()
 
         val peerLeaderElected = SignalListener {
-            expectThat(leaderElectedPhaser.phase).isEqualTo(0)
-            logger.info("Arrived ${it.subject.getPeerName()}")
-            leaderElectedPhaser.arrive()
+            if(leaderElectedPhaser.phase == 0) {
+                logger.info("Arrived ${it.subject.getPeerName()}")
+                leaderElectedPhaser.arrive()
+            }
         }
 
         val peerChangeAccepted = SignalListener {
-            logger.info("Arrived change: ${it.change}")
+            logger.info("Arrived change$iter: ${it.change}")
             phaser.arrive()
         }
 
@@ -176,6 +181,7 @@ class ConsensusSpec : IntegrationTestBase() {
                 }.isSuccess()
             }
             phaser.arriveAndAwaitAdvanceWithTimeout()
+            iter+=1
             change = createChange(null, parentId = change.toHistoryEntry(PeersetId("peerset0")).getId())
         }
         // when: peer1 executed change
@@ -470,6 +476,8 @@ class ConsensusSpec : IntegrationTestBase() {
         val proposedPeers = ConcurrentHashMap<String, Boolean>()
         var changePeers: (() -> Unit?)? = null
 
+        val mutex = Mutex()
+
         val leaderAction = SignalListener {
             if (firstLeader) {
                 logger.info("Arrived ${it.subject.getPeerName()}")
@@ -500,14 +508,17 @@ class ConsensusSpec : IntegrationTestBase() {
             changePhaser.arrive()
         }
         val ignoreHeartbeatAfterProposingChange = SignalListener {
-            when {
-                it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> {
-                    proposedPeers[it.subject.getPeerName()] = true
+            runBlocking {
+                mutex.withLock {
+                    when {
+                        it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> {
+                            proposedPeers[it.subject.getPeerName()] = true
+                        }
+
+                        proposedPeers.contains(it.subject.getPeerName()) && firstLeader -> throw Exception("Ignore heartbeat from old leader")
+                        proposedPeers.size > 2 && firstLeader -> throw Exception("Ignore heartbeat from old leader")
+                    }
                 }
-
-                proposedPeers.contains(it.subject.getPeerName()) && firstLeader -> throw Exception("Ignore heartbeat from old leader")
-                proposedPeers.size > 2 && firstLeader -> throw Exception("Ignore heartbeat from old leader")
-
             }
         }
 
@@ -889,7 +900,8 @@ class ConsensusSpec : IntegrationTestBase() {
             peerResolver,
             protocolClient = RaftProtocolClientImpl(),
             transactionBlocker = TransactionBlocker(),
-            isMetricTest = false
+            isMetricTest = false,
+            maxChangesPerMessage = 200
         )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()

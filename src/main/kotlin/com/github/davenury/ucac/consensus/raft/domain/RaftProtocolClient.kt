@@ -1,6 +1,9 @@
 package com.github.davenury.ucac.consensus.raft.domain
 
+import com.github.davenury.common.Change
+import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.ucac.httpClient
 import com.github.davenury.ucac.raftHttpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -27,6 +30,12 @@ interface RaftProtocolClient {
         peer: PeerAddress,
         message: ConsensusHeartbeat,
     ): RaftResponse<ConsensusHeartbeatResponse?>
+
+
+    suspend fun sendRequestApplyChange(
+        address: String,
+        change: Change
+    ): ChangeResult
 }
 
 class RaftProtocolClientImpl : RaftProtocolClient {
@@ -62,6 +71,13 @@ class RaftProtocolClientImpl : RaftProtocolClient {
             RaftResponse(peer.address, result)
         }
     }
+
+    override suspend fun sendRequestApplyChange(address: String, change: Change) =
+        httpClient.post<ChangeResult>("http://${address}/consensus/request_apply_change") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            body = change
+        }
 
     private suspend inline fun <T, reified K> sendRequests(
         peersWithBody: List<Pair<PeerAddress, T>>,
