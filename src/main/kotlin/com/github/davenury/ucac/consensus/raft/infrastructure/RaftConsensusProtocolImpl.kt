@@ -456,7 +456,7 @@ class RaftConsensusProtocolImpl(
         }
 
 
-        if (isRegular) {
+        if (isRegular && shouldISendHeartbeatToPeer(peer)) {
             launchHeartBeatToPeer(peer, true)
         }
 
@@ -862,7 +862,7 @@ class RaftConsensusProtocolImpl(
             with(CoroutineScope(executorService!!)) {
                 launch(MDCContext()) {
                     if (!sendInstantly) {
-                        logger.info("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
+                        logger.debug("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
                         delay(delay.toMillis())
                     }
                     sendHeartbeatToPeer(peer, isRegular)
