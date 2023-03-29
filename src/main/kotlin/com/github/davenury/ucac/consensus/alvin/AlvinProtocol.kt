@@ -63,8 +63,8 @@ class AlvinProtocol(
 
         val newDeps: List<HistoryEntry>
         mutex.withLock {
-            resetFailureDetector(message.entry.toEntry())
             updateEntry(message.entry.toEntry())
+            resetFailureDetector(message.entry.toEntry())
             newDeps = deliveryQueue.map { it.entry }
         }
         val newPos = getNextNum(message.peerId)
@@ -108,8 +108,8 @@ class AlvinProtocol(
         val entryId = entry.entry.getId()
         mutex.withLock {
             checkTransactionBlocker(entry)
-            entryIdToFailureDetector[entryId]?.cancelCounting()
             updateEntry(entry)
+            entryIdToFailureDetector[entryId]?.cancelCounting()
         }
         deliverTransaction()
 
