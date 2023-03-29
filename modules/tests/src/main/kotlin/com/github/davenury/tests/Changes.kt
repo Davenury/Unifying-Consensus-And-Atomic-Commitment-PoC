@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
+import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 
@@ -72,9 +73,9 @@ class Changes(
 
     suspend fun introduceChange(numberOfPeersets: Int) {
         val change = mutex.withLock {
-            val ids = getPeersStrategy.getPeersets(numberOfPeersets)
-            val change = createChangeStrategy.createChange(ids, changes)
-            getPeersStrategy.setCurrentChange(change.id)
+            val changeId = UUID.randomUUID().toString()
+            val ids = getPeersStrategy.getPeersets(numberOfPeersets, changeId)
+            val change = createChangeStrategy.createChange(ids, changes, changeId)
 
             val result = changes[ids[0]]!!.introduceChange(change)
 
@@ -85,7 +86,7 @@ class Changes(
                 )
             } else {
                 logger.info("Change $change was rejected, freeing peersets $ids")
-                getPeersStrategy.freePeersets(ids)
+                getPeersStrategy.freePeersets(ids, changeId)
             }
             change
         }
@@ -95,7 +96,7 @@ class Changes(
                 notificationMutex.withLock {
                     if (!handledChanges.contains(change.id)) {
                         logger.error("Change $change timed out from performance tests, freeing peersets")
-                        getPeersStrategy.freePeersets(change.peersets.map { it.peersetId })
+                        getPeersStrategy.freePeersets(change.peersets.map { it.peersetId }, change.id)
                         handledChanges[change.id] = change.peersets.size
                     }
                 }

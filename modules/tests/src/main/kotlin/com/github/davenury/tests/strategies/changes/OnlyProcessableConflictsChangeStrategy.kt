@@ -13,7 +13,7 @@ class OnlyProcessableConflictsChangeStrategy(
 
     private var counter = AtomicInteger(0)
 
-    override fun createChange(ids: List<PeersetId>, changes: Map<PeersetId, OnePeersetChanges>): Change {
+    override fun createChange(ids: List<PeersetId>, changes: Map<PeersetId, OnePeersetChanges>, changeId: String): Change {
 
         val peersets = List(ids.size) {
             if (it == 0) {
@@ -24,6 +24,7 @@ class OnlyProcessableConflictsChangeStrategy(
         }
 
         return AddUserChange(
+            id = changeId,
             userName = "user${counter.incrementAndGet()}",
             peersets = peersets,
             notificationUrl = "$ownAddress/api/v1/notification",

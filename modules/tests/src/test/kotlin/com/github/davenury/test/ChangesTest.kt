@@ -187,16 +187,14 @@ class ChangesTest {
         val peersets = (1..10).map { PeersetId("peerset$it") }
         val counter = AtomicInteger(0)
         val strategy = object : GetPeersStrategy {
-            override suspend fun getPeersets(numberOfPeersets: Int): List<PeersetId> =
+            override suspend fun getPeersets(numberOfPeersets: Int, changeId: String): List<PeersetId> =
                 peersets.shuffled().take(numberOfPeersets)
 
-            override suspend fun freePeersets(peersetsId: List<PeersetId>) {}
+            override suspend fun freePeersets(peersetsId: List<PeersetId>, changeId: String) {}
 
             override suspend fun handleNotification(notification: Notification) {
                 counter.incrementAndGet()
             }
-
-            override fun setCurrentChange(changeId: String) {}
         }
 
         val changes = Changes(

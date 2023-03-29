@@ -1,10 +1,9 @@
 package com.github.davenury.tests.strategies.peersets
 
-import com.github.davenury.common.PeersetId
 import com.github.davenury.common.Notification
+import com.github.davenury.common.PeersetId
 import com.github.davenury.tests.Metrics
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.Condition
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
@@ -15,16 +14,15 @@ class RandomPeersWithDelayOnConflictStrategy(
     private val lock: Lock = ReentrantLock(),
     private val condition: Condition = lock.newCondition()
 ) : GetPeersStrategy {
-    private val lockedPeersets: ConcurrentHashMap<PeersetId, Boolean> =
-        ConcurrentHashMap(peersets.zip(List(peersets.count()) { false }).toMap())
-    private val currentlyBlockedOnChange = AtomicReference<String>()
 
-    override suspend fun getPeersets(numberOfPeersets: Int): List<PeersetId> =
+    private val changeToLockedPeersets: ConcurrentHashMap<String, List<PeersetId>> = ConcurrentHashMap()
+
+    override suspend fun getPeersets(numberOfPeersets: Int, changeId: String): List<PeersetId> =
         lock.withLock {
             lateinit var ids: List<PeersetId>
             var metricBumped = false
             while (true) {
-                ids = peersets.filter { lockedPeersets[it] == false }.shuffled().take(numberOfPeersets)
+                ids = peersets.filter { it !in changeToLockedPeersets.values.flatten() }.shuffled().take(numberOfPeersets)
                 if (ids.size < numberOfPeersets) {
                     if (!metricBumped) {
                         Metrics.bumpDelayInSendingChange()
@@ -35,31 +33,21 @@ class RandomPeersWithDelayOnConflictStrategy(
                     break
                 }
             }
-            ids.forEach { lockedPeersets[it] = true }
+            changeToLockedPeersets[changeId] = ids
             return@withLock ids
         }
 
-    override suspend fun freePeersets(peersetsId: List<PeersetId>) {
+    override suspend fun freePeersets(peersetsId: List<PeersetId>, changeId: String) {
         lock.withLock {
-            peersetsId.forEach {
-                lockedPeersets[it] = false
-            }
+            changeToLockedPeersets[changeId] = listOf()
             condition.signalAll()
         }
     }
 
     override suspend fun handleNotification(notification: Notification) {
         lock.withLock {
-            if (currentlyBlockedOnChange.get() == notification.change.id) {
-                notification.change.peersets.forEach {
-                    lockedPeersets[it.peersetId] = false
-                }
-                condition.signalAll()
-            }
+            changeToLockedPeersets[notification.change.id] = listOf()
+            condition.signalAll()
         }
-    }
-
-    override fun setCurrentChange(changeId: String) {
-        this.currentlyBlockedOnChange.set(changeId)
     }
 }

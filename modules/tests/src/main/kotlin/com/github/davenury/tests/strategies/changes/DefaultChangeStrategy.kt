@@ -13,8 +13,9 @@ class DefaultChangeStrategy(
 
     private var counter = AtomicInteger(0)
 
-    override fun createChange(ids: List<PeersetId>, changes: Map<PeersetId, OnePeersetChanges>): Change =
+    override fun createChange(ids: List<PeersetId>, changes: Map<PeersetId, OnePeersetChanges>, changeId: String): Change =
         AddUserChange(
+            id = changeId,
             userName = "user${counter.incrementAndGet()}",
             peersets = ids.map { ChangePeersetInfo(it, changes[it]!!.getCurrentParentId()) },
             notificationUrl = "$ownAddress/api/v1/notification",
