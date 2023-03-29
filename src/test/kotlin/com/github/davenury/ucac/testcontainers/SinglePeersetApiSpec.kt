@@ -49,7 +49,6 @@ class SinglePeersetApiSpec {
         ),
     )
 
-    @Disabled("Chaos class")
     @Test
     fun `sync api`(): Unit = runBlocking {
         val change = AddUserChange(
