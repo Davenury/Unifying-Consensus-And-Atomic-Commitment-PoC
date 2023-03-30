@@ -706,16 +706,16 @@ class AlvinProtocol(
 
 
     private suspend fun getNextNum(peerId: PeerId = globalPeerId): Int = mutex.withLock {
-        val addresses = peerResolver.getPeersFromPeerset(peersetId)
+        val addresses = peerResolver.getPeersFromPeerset(peersetId).sortedBy { it.peerId.peerId }
         val peerAddress = peerResolver.resolve(peerId)
         val index = addresses.indexOf(peerAddress)
 
         val previousMod = lastTransactionId % peers().size
         val removeMod = lastTransactionId - previousMod
-        if (index > previousMod)
-            lastTransactionId = removeMod + index
+        lastTransactionId = if (index > previousMod)
+            removeMod + index
         else
-            lastTransactionId = removeMod + peers().size + index
+            removeMod + peers().size + index
 
         return lastTransactionId
     }
