@@ -795,7 +795,7 @@ class RaftConsensusProtocolImpl(
                     result = try {
                         protocolClient.sendRequestApplyChange(address, change)
                     } catch (e: Exception) {
-                        logger.error("Request to leader ($address) failed", e)
+                        logger.error("Request to leader ($address) failed", e.message)
                         null
                     }
                 }
