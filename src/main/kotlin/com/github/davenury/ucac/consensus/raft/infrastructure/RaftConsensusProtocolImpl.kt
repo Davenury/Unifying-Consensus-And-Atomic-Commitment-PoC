@@ -149,7 +149,7 @@ class RaftConsensusProtocolImpl(
             role = RaftRole.Leader
             votedFor = votedFor!!.copy(elected = true)
             assert(executorService == null)
-            executorService = Executors.newCachedThreadPool().asCoroutineDispatcher()
+            executorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
         }
 
         logger.info("I have been selected as a leader (in term $currentTerm)")
