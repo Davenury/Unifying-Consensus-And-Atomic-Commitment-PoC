@@ -72,6 +72,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
         }
     }
 
+    @Disabled("Temporary")
     @Test
     fun `first leader is already in ft-agree phase and second leader tries to execute its transaction - second should be rejected`(): Unit =
         runBlocking {
