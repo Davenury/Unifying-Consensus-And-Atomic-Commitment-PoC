@@ -619,7 +619,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     "peer2" to electSignal,
                     "peer5" to electSignal,
                 ) + (0..5).map { "peer$it" }.associateWith { applySignal },
-                configOverrides = (0..5).map { "peer$it" }.associateWith { mapOf("raft.isEnabled" to false) }
+                configOverrides = (0..5).map { "peer$it" }.associateWith { mapOf("consensus.isEnabled" to false) }
             )
 
             val change: Change = change(0, 1)
@@ -647,7 +647,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 "peerset1" to listOf("peer3", "peer4", "peer5"),
             ),
             configOverrides = (0..5).map { "peer$it" }.associateWith {
-                mapOf("raft.isEnabled" to false)
+                mapOf("consensus.isEnabled" to false)
             } + mapOf("peer2" to mapOf("gpac.abortOnElectMe" to true)),
             signalListeners = (0..5).map { "peer$it" }.associateWith { applyAction }
         )
@@ -675,7 +675,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ),
             configOverrides = (0..5).map { "peer$it" }.associateWith {
                 mapOf(
-                    "raft.isEnabled" to false,
+                    "consensus.isEnabled" to false,
                     "gpac.abortOnElectMe" to true
                 )
             } + mapOf(
@@ -710,7 +710,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ),
             configOverrides = (0..5).map { "peer$it" }.associateWith {
                 mapOf(
-                    "raft.isEnabled" to false,
+                    "consensus.isEnabled" to false,
                 )
             } + (3..5).map { "peer$it" }.associateWith { mapOf("gpac.abortOnElectMe" to true) }
                     + mapOf(
@@ -750,7 +750,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ),
             configOverrides = (0..5).map { "peer$it" }.associateWith {
                 mapOf(
-                    "raft.isEnabled" to false,
+                    "consensus.isEnabled" to false,
                 )
             } + mapOf("peer3" to mapOf("gpac.abortOnElectMe" to true))
                     + mapOf(
