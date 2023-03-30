@@ -262,7 +262,7 @@ class ApplicationUcac constructor(
         apiV2Routing(service, peersetId)
         gpacProtocolRouting(peersetProtocols.gpacFactory)
         when (config.consensus.name){
-            "raft" -> raftProtocolRouting(peersetProtocols.consensusProtocol as RaftConsensusProtocol)
+            "raft" -> raftProtocolRouting(peersetProtocols.consensusProtocol as RaftConsensusProtocol, logger)
             "alvin" -> alvinProtocolRouting(peersetProtocols.consensusProtocol as AlvinProtocol)
             else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
         }
