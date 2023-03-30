@@ -798,6 +798,7 @@ class RaftConsensusProtocolImpl(
                         logger.error("Request to leader ($address, ${votedFor?.id}) failed", e.message)
                         null
                     }
+                    if(result == null) delay(heartbeatDelay.toMillis())
                 }
                 if (result.status != ChangeResult.Status.SUCCESS) {
                     cf.complete(result)
