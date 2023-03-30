@@ -4,14 +4,9 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
-import com.github.davenury.ucac.common.HistoryFactory
-import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.PeersetProtocols
-import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
-import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClient
-import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.routing.*
 import io.ktor.application.*
@@ -229,7 +224,7 @@ class ApplicationUcac constructor(
         apiV2Routing(service, peersetId)
         gpacProtocolRouting(peersetProtocols.gpacFactory)
         when (config.consensus.name){
-            "raft" -> raftProtocolRouting(peersetProtocols.consensusProtocol as RaftConsensusProtocol)
+            "raft" -> raftProtocolRouting(peersetProtocols.consensusProtocol as RaftConsensusProtocol, logger)
             "alvin" -> alvinProtocolRouting(peersetProtocols.consensusProtocol as AlvinProtocol)
             else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
         }
