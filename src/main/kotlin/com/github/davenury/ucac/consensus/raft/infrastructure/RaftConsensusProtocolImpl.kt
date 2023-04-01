@@ -917,7 +917,7 @@ class RaftConsensusProtocolImpl(
 
     private fun amILeader(): Boolean = role == RaftRole.Leader
 
-    private fun getHeartbeatTimer(offset: Duration = Duration.ZERO) = ProtocolTimerImpl(heartbeatTimeout.plus(offset), if (affinityHandler.amIAffinityLeader()) Duration.ZERO else heartbeatTimeout.dividedBy(2), ctx)
+    private fun getHeartbeatTimer(offset: Duration = Duration.ZERO) = ProtocolTimerImpl(heartbeatTimeout.plus(offset), if (affinityHandler.amITrueAffinityLeader()) Duration.ZERO else heartbeatTimeout.dividedBy(2), ctx)
 
     private suspend fun tryPropagatingChangesToLeader() {
         // TODO mutex?

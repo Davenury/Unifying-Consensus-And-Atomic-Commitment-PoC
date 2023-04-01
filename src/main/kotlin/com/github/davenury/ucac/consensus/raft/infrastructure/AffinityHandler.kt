@@ -6,6 +6,8 @@ import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.raftHttpClient
 import io.ktor.client.request.*
+import io.ktor.client.response.*
+import io.ktor.client.statement.*
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import java.time.Duration
@@ -39,11 +41,10 @@ class AffinityHandler(
 
     suspend fun waitForAffinityLeaderToBeAlive(): AffinityWaitingResult {
         ctx.dispatch(Dispatchers.IO) {
-            runBlocking {
-                timeout()
-            }
+            timeout()
         }
 
+        logger.info("Passed timeout")
         if (consensusAffinity.isEmpty()) {
             return AffinityWaitingResult.NO_AFFINITY.also {
                 waitingForAffinityResult = it
@@ -60,6 +61,7 @@ class AffinityHandler(
         while (!isAlive && shouldTryToCheckLeader) {
             delay(leaderAliveInterval.toMillis())
             isAlive = checkAffinityLeader(consensusAffinity[peersetId]!!)
+            logger.info("Is alive: $isAlive")
         }
 
         if (!shouldTryToCheckLeader) {
@@ -74,18 +76,20 @@ class AffinityHandler(
         }
     }
 
-    private suspend fun timeout() {
-        logger.info("Leader Alive Timeout: $leaderAliveTimeout")
-        delay(leaderAliveTimeout.toMillis())
-        shouldTryToCheckLeader = false
-    }
-
     private suspend fun checkAffinityLeader(peerId: PeerId): Boolean {
         return try {
-            raftHttpClient.get<HttpResponseData>("http://${peerResolver.resolve(peerId).address}/_meta/health")
+            raftHttpClient.get<HttpStatement>("http://${peerResolver.resolve(peerId).address}/_meta/health").execute()
             true
         } catch (e: Exception) {
+            logger.error("Couldn't get $peerId", e)
             false
+        }
+    }
+
+    private fun timeout() {
+        runBlocking {
+            delay(leaderAliveTimeout.toMillis())
+            shouldTryToCheckLeader = false
         }
     }
 
