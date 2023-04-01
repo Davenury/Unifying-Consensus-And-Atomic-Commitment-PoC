@@ -68,6 +68,7 @@ class AffinityHandler(
     }
 
     private suspend fun timeout() {
+        logger.info("Leader Alive Timeout: $leaderAliveTimeout")
         delay(leaderAliveTimeout.toMillis())
         shouldTryToCheckLeader = false
     }
@@ -83,8 +84,10 @@ class AffinityHandler(
 
     fun shouldRestartAffinityTimer(peerId: PeerId): Boolean {
         if (waitingForAffinityResult != AffinityWaitingResult.LEADER_ALIVE) {
+            logger.info("Waiting for affinity result is not LEADER ALIVE, so I won't restart affinity timer")
             return false
         }
+        logger.info("Consensus affinity: ${consensusAffinity[peersetId]}, peer in ask: $peerId")
         return consensusAffinity[peersetId] == peerId
     }
 

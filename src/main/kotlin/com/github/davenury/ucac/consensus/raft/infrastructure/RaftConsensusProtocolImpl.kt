@@ -110,8 +110,10 @@ class RaftConsensusProtocolImpl(
                     val result = affinityHandler.waitForAffinityLeaderToBeAlive()
                     logger.debug("I'm done waiting for affinity leader, result: {}", result)
                     if (result == AffinityWaitingResult.LEADER_ALIVE) {
+                        logger.debug("Leader is alive, waiting for his messages")
                         leaderAffinityWaiterTimer.startCounting { sendLeaderRequest() }
                     } else {
+                        logger.debug("Leader is not alive, trying to become a leader")
                         sendLeaderRequest()
                     }
                 } else {
@@ -195,7 +197,7 @@ class RaftConsensusProtocolImpl(
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
         )
 
-        logger.info("Should restart affinity timer for $peerId: ${affinityHandler.shouldRestartAffinityTimer(peerId)}")
+        logger.info("Got handle vote should restart affinity timer for $peerId: ${affinityHandler.shouldRestartAffinityTimer(peerId)}")
         if (affinityHandler.shouldRestartAffinityTimer(peerId)) {
             leaderAffinityWaiterTimer.cancelCounting()
             leaderAffinityWaiterTimer.startCounting { sendLeaderRequest() }
