@@ -58,6 +58,8 @@ class AlvinProtocol(
     override suspend fun begin() {}
 
 
+//  FIXME: Add change notifier and forwarding metrics
+
     override suspend fun handleProposalPhase(message: AlvinPropose): AlvinAckPropose {
 //        logger.info("Handle proposal: ${} $message")
         logger.info("Handle proposal: ${message.entry.deps}")
