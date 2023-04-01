@@ -65,10 +65,12 @@ class GPACProtocolImpl(
     override fun getBallotNumber(): Int = myBallotNumber
 
     override suspend fun handleElect(message: ElectMe): ElectedYou = phaseMutex.withLock {
+        logger.debug("Handling elect {}", message)
         val decision = message.acceptNum?.let { acceptNum ->
             Changes.fromHistory(history).find { it.acceptNum == acceptNum }
         }
         if (decision != null) {
+            logger.debug("Decision is not null")
             // meaning that I'm the cohort that got apply for transaction of original leader
             return ElectedYou(
                 message.ballotNumber,
@@ -82,16 +84,18 @@ class GPACProtocolImpl(
         signal(Signal.OnHandlingElectBegin, null, message.change)
 
         if (transactionBlocker.isAcquired() && transactionBlocker.getChangeId() != message.change.id) {
-            logger.info("Tried to respond to elect me when semaphore acquired!")
+            logger.error("Tried to respond to elect me when semaphore acquired!")
             throw AlreadyLockedException(ProtocolName.GPAC)
         }
 
         if (!isValidBallotNumber(message.ballotNumber)) {
+            logger.error("Ballot number is invalid - my ballot number: $myBallotNumber, received: ${message.ballotNumber}")
             throw NotElectingYou(myBallotNumber, message.ballotNumber)
         }
 
         val entry = message.change.toHistoryEntry(peersetId)
         var initVal = if (history.isEntryCompatible(entry)) Accept.COMMIT else Accept.ABORT
+        logger.debug("Elect init val: {}", initVal)
         if (gpacConfig.abortOnElectMe) {
             initVal = Accept.ABORT
         }
