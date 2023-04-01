@@ -60,7 +60,8 @@ class ChangesTest {
             peers,
             sender,
             RandomPeersWithDelayOnConflictStrategy(peers.keys.toList(), lockMock, conditionMock),
-            DefaultChangeStrategy(ownAddress)
+            DefaultChangeStrategy(ownAddress),
+            null
         )
         sender.setChanges(subject)
         val phaser = Phaser(peers.keys.size)
@@ -73,7 +74,8 @@ class ChangesTest {
                     subject.handleNotification(
                         Notification(
                             sender.getLastChange(),
-                            ChangeResult(ChangeResult.Status.SUCCESS)
+                            ChangeResult(ChangeResult.Status.SUCCESS),
+                            PeerAddress(PeerId("peer0"), "peer0-peerset0-service")
                         )
                     )
                 }
@@ -120,7 +122,8 @@ class ChangesTest {
             peers,
             sender,
             RandomPeersWithDelayOnConflictStrategy(peers.keys.toList()),
-            DefaultChangeStrategy(ownAddress)
+            DefaultChangeStrategy(ownAddress),
+            null
         )
         sender.setChanges(subject)
 
@@ -159,7 +162,8 @@ class ChangesTest {
         val subject = Changes(
             peers, sender, RandomPeersWithDelayOnConflictStrategy(peers.keys.toList()), DefaultChangeStrategy(
                 ownAddress
-            )
+            ),
+            null
         )
         sender.setChanges(subject)
 
@@ -183,12 +187,12 @@ class ChangesTest {
         val peersets = (1..10).map { PeersetId("peerset$it") }
         val counter = AtomicInteger(0)
         val strategy = object : GetPeersStrategy {
-            override suspend fun getPeersets(numberOfPeersets: Int): List<PeersetId> =
+            override suspend fun getPeersets(numberOfPeersets: Int, changeId: String): List<PeersetId> =
                 peersets.shuffled().take(numberOfPeersets)
 
-            override suspend fun freePeersets(peersetsId: List<PeersetId>) {}
+            override suspend fun freePeersets(peersetsId: List<PeersetId>, changeId: String) {}
 
-            override suspend fun handleNotification(peersetId: PeersetId) {
+            override suspend fun handleNotification(notification: Notification) {
                 counter.incrementAndGet()
             }
         }
@@ -196,7 +200,8 @@ class ChangesTest {
         val changes = Changes(
             peers, DummySender(shouldNotify = false), strategy, DefaultChangeStrategy(
                 ownAddress
-            )
+            ),
+            null
         )
 
         val singleChange = AddUserChange(
@@ -208,7 +213,8 @@ class ChangesTest {
                 changes.handleNotification(
                     Notification(
                         singleChange,
-                        ChangeResult(ChangeResult.Status.SUCCESS)
+                        ChangeResult(ChangeResult.Status.SUCCESS),
+                        PeerAddress(PeerId("peer0"), "peer0-peerset0-service")
                     )
                 )
             }

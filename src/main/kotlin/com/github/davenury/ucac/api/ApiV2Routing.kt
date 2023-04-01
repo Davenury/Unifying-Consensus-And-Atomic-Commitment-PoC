@@ -121,5 +121,9 @@ fun Application.apiV2Routing(
         get("/v2/change") {
             call.respond(service.getChanges())
         }
+
+        get("/v2/last-change") {
+            call.respond(service.getLastChange() ?: HttpStatusCode.NotFound)
+        }
     }
 }

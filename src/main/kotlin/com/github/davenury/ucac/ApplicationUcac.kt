@@ -4,7 +4,7 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
-import com.github.davenury.ucac.common.HistoryFactory
+import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.PeersetProtocols
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.routing.consensusProtocolRouting
@@ -99,6 +99,7 @@ class ApplicationUcac constructor(
     private fun createServer() = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
         val peersetId = config.peersetId()
         logger.info("My peerset: $peersetId")
+        val changeNotifier = ChangeNotifier(peerResolver)
 
         val signalPublisher = SignalPublisher(signalListeners, peerResolver)
 
@@ -107,9 +108,10 @@ class ApplicationUcac constructor(
             config,
             peerResolver,
             signalPublisher,
+            changeNotifier,
         )
 
-        service = ApiV2Service(config, peersetProtocols)
+        service = ApiV2Service(config, peersetProtocols, changeNotifier)
 
         install(CallLogging) {
             level = Level.DEBUG

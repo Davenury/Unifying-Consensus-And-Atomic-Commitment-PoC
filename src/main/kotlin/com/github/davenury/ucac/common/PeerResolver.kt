@@ -3,7 +3,6 @@ package com.github.davenury.ucac.common
 import com.github.davenury.common.PeerAddress
 import com.github.davenury.common.PeerId
 import com.github.davenury.common.PeersetId
-
 /**
  * @author Kamil Jarosz
  */

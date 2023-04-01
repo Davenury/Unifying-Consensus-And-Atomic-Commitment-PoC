@@ -5,5 +5,5 @@ import com.github.davenury.common.PeersetId
 import com.github.davenury.tests.OnePeersetChanges
 
 interface CreateChangeStrategy {
-    fun createChange(ids: List<PeersetId>, changes: Map<PeersetId, OnePeersetChanges>): Change
+    fun createChange(ids: List<PeersetId>, changes: Map<PeersetId, OnePeersetChanges>, changeId: String): Change
 }

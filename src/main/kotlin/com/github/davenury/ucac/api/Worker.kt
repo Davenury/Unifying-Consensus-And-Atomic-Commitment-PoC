@@ -16,6 +16,7 @@ import java.util.concurrent.CompletableFuture
 
 class Worker(
     private val peersetProtocols: PeersetProtocols,
+    private val changeNotifier: ChangeNotifier,
 ) : Runnable {
     private var mdc: MutableMap<String, String> = MDC.getCopyOfContextMap()
     private val queue: Channel<ProcessorJob> = Channel(Channel.Factory.UNLIMITED)
@@ -64,7 +65,7 @@ class Worker(
             job.completableFuture.complete(it)
             Metrics.stopTimer(job.change.id, job.protocolName.name.lowercase(), it)
             Metrics.bumpChangeProcessed(it, job.protocolName.name.lowercase())
-            ChangeNotifier.notify(job.change, it)
+            changeNotifier.notify(job.change, it)
         }.await()
     }
 

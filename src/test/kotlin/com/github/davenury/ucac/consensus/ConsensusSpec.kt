@@ -1017,7 +1017,8 @@ class ConsensusSpec : IntegrationTestBase() {
         val peer1Signals =
             mapOf(
                 Signal.OnHandlingApplyCommitted to peerGPACAction,
-                Signal.ConsensusLeaderElected to leaderElectedAction
+                Signal.ConsensusLeaderElected to leaderElectedAction,
+                Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") },
             )
 
         apps = TestApplicationSet(

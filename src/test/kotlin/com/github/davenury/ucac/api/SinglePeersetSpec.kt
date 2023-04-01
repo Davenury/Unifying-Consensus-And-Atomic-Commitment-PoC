@@ -76,8 +76,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
     @Test
     fun `first leader is already in ft-agree phase and second leader tries to execute its transaction - second should be rejected`(): Unit =
         runBlocking {
-            val changeAbortedPhaser = Phaser(1)
-            changeAbortedPhaser.register()
+            val waitForAbortChangePhaser = Phaser(2)
 
             val change1 = change()
             val change2 = change()
@@ -86,18 +85,20 @@ class SinglePeersetSpec : IntegrationTestBase() {
                 Signal.BeforeSendingApply to SignalListener {
                     expectCatching {
                         val peer1Address = it.peerResolver.resolve("peer2").address
+                        logger.info("Sending change to $peer1Address")
                         executeChange(
                             "http://$peer1Address/v2/change/sync?enforce_gpac=true",
                             change2,
                         )
-                    }
+                    }.isFailure()
+                    waitForAbortChangePhaser.arrive()
                 },
             )
 
             val signalListenersForCohort = mapOf(
                 Signal.ReachedMaxRetries to SignalListener {
                     logger.info("Arrived ${it.subject.getPeerName()}")
-                    changeAbortedPhaser.arrive()
+                    waitForAbortChangePhaser.arrive()
                 },
             )
 
@@ -106,7 +107,6 @@ class SinglePeersetSpec : IntegrationTestBase() {
                 "gpac.initialRetriesDelay" to Duration.ZERO,
                 "gpac.leaderFailDelay" to Duration.ofSeconds(1),
                 "gpac.leaderFailBackoff" to Duration.ZERO,
-
             )
 
             apps = TestApplicationSet(
@@ -115,12 +115,10 @@ class SinglePeersetSpec : IntegrationTestBase() {
                 ),
                 signalListeners = mapOf(
                     "peer0" to signalListenersForLeader,
-                    "peer1" to signalListenersForCohort,
                     "peer2" to signalListenersForCohort,
                 ),
                 configOverrides = mapOf(
                     "peer0" to config,
-                    "peer1" to config,
                     "peer2" to config,
                 )
             )
@@ -128,8 +126,6 @@ class SinglePeersetSpec : IntegrationTestBase() {
             expectCatching {
                 executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?enforce_gpac=true", change1)
             }.isSuccess()
-
-            changeAbortedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
             try {
                 val peer2Address = apps.getPeer("peer2").address
@@ -142,6 +138,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
                 fail("executing change didn't fail")
             } catch (e: Exception) {
                 expect {
+                    logger.error("Error", e)
                     that(e).isA<ServerResponseException>()
                     that(e.message).isNotNull()
                         .contains("Transaction failed due to too many retries of becoming a leader.")
@@ -272,7 +269,7 @@ class SinglePeersetSpec : IntegrationTestBase() {
             ),
             configOverrides = mapOf(
                 "peer0" to mapOf("raft.isEnabled" to false),
-                "peer1" to mapOf("raft.isEnabled" to false),
+                "peer1" to mapOf("raft.isEnabled" to false, "gpac.leaderFailDelay" to java.time.Duration.ZERO),
                 "peer2" to mapOf("raft.isEnabled" to false),
                 "peer3" to mapOf("raft.isEnabled" to false),
                 "peer4" to mapOf("raft.isEnabled" to false),

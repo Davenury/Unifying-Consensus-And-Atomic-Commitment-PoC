@@ -33,7 +33,8 @@ class DummySender(
         changes.handleNotification(
             Notification(
                 change = change,
-                result = ChangeResult(ChangeResult.Status.SUCCESS)
+                result = ChangeResult(ChangeResult.Status.SUCCESS),
+                sender = PeerAddress(PeerId("peer0"), "peer0-peerset0-service")
             )
         )
     }

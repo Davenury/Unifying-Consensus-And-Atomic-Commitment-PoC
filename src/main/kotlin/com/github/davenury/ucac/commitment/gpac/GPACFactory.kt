@@ -47,8 +47,7 @@ class GPACFactory(
         getOrCreateGPAC(message.change.id).handleAgree(message)
 
     suspend fun handleApply(message: Apply) {
-        getOrCreateGPAC(message.change.id)
-            .handleApply(message)
+        getOrCreateGPAC(message.change.id).handleApply(message)
     }
 
     fun getChangeStatus(changeId: String) =

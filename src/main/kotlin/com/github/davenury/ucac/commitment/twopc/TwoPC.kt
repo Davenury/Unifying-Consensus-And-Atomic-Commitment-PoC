@@ -2,10 +2,7 @@ package com.github.davenury.ucac.commitment.twopc
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalPublisher
-import com.github.davenury.ucac.SignalSubject
-import com.github.davenury.ucac.TwoPCConfig
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
@@ -24,7 +21,8 @@ class TwoPC(
     private val consensusProtocol: ConsensusProtocol,
     peerResolver: PeerResolver,
     private val signalPublisher: SignalPublisher = SignalPublisher(emptyMap(), peerResolver),
-    private val isMetricTest: Boolean
+    private val isMetricTest: Boolean,
+    private val changeNotifier: ChangeNotifier,
 ) : SignalSubject, AbstractAtomicCommitmentProtocol(logger, peerResolver) {
     private val peerId = peerResolver.currentPeer()
 
@@ -88,6 +86,9 @@ class TwoPC(
             throw TwoPCHandleException("Received change of not TwoPCChange in handleAccept: $change")
         }
 
+        logger.info("Change id for change: $change, id: ${change.change.id}")
+        changeIdToCompletableFuture.putIfAbsent(change.change.id, CompletableFuture<ChangeResult>())
+
         val changeWithProperParentId = change.copyWithNewParentId(
             peersetId,
             history.getCurrentEntryId(),
@@ -120,34 +121,46 @@ class TwoPC(
 
     suspend fun handleDecision(change: Change) {
         signal(Signal.TwoPCOnHandleDecision, change)
+        val mainChangeId =
+            updateParentIdFor2PCCompatibility(change, history, peersetId).id
+        logger.info("Change id for change: $change, id: $mainChangeId")
 
         val currentProcessedChange = Change.fromHistoryEntry(history.getCurrentEntry())
 
-        val cf: CompletableFuture<ChangeResult> = when {
-            currentProcessedChange !is TwoPCChange || currentProcessedChange.twoPCStatus != TwoPCStatus.ACCEPTED -> {
-                throw TwoPCHandleException("Received change in handleDecision even though we didn't received 2PC-Accept earlier")
-            }
+        try {
+            val cf: CompletableFuture<ChangeResult> = when {
+                currentProcessedChange !is TwoPCChange || currentProcessedChange.twoPCStatus != TwoPCStatus.ACCEPTED -> {
+                    throw TwoPCHandleException("Received change in handleDecision even though we didn't received 2PC-Accept earlier")
+                }
 
-            change is TwoPCChange && change.twoPCStatus == TwoPCStatus.ABORTED && change.change == currentProcessedChange.change -> {
-                changeTimer.cancelCounting()
-                checkChangeAndProposeToConsensus(change, currentProcessedChange.change.id)
-            }
+                change is TwoPCChange && change.twoPCStatus == TwoPCStatus.ABORTED && change.change == currentProcessedChange.change -> {
+                    changeTimer.cancelCounting()
+                    checkChangeAndProposeToConsensus(change, currentProcessedChange.change.id)
+                }
 
-            change == currentProcessedChange.change -> {
-                changeTimer.cancelCounting()
-                val updatedChange = change.copyWithNewParentId(
-                    peersetId,
-                    history.getCurrentEntryId(),
+                change == currentProcessedChange.change -> {
+                    changeTimer.cancelCounting()
+                    val updatedChange = change.copyWithNewParentId(
+                        peersetId,
+                        history.getCurrentEntryId(),
+                    )
+                    checkChangeAndProposeToConsensus(updatedChange, currentProcessedChange.change.id)
+                }
+
+                else -> throw TwoPCHandleException(
+                    "In 2PC handleDecision received change in different type than TwoPCChange: $change \n" +
+                            "currentProcessedChange: $currentProcessedChange"
                 )
-                checkChangeAndProposeToConsensus(updatedChange, currentProcessedChange.change.id)
             }
-
-            else -> throw TwoPCHandleException(
-                "In 2PC handleDecision received change in different type than TwoPCChange: $change \n" +
-                        "currentProcessedChange: $currentProcessedChange"
-            )
+            cf.await()
+        } catch (e: Exception) {
+            changeConflict(mainChangeId, "Change conflicted in decision phase, ${e.message}")
+            throw e
         }
-        cf.await()
+
+        changeIdToCompletableFuture[change.id]!!
+            .complete(ChangeResult(ChangeResult.Status.SUCCESS))
+        changeNotifier.notify(change, ChangeResult(ChangeResult.Status.SUCCESS))
     }
 
     fun getChange(changeId: String): Change {

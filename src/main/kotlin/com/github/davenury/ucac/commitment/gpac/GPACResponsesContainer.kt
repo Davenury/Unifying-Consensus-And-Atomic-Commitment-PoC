@@ -40,26 +40,26 @@ class GPACResponsesContainer<T>(
         lock.withLock {
             ctx.dispatch(Dispatchers.IO) { timeout() }
             while (true) {
-                logger.debug("Responses size: ${responses.flattenedSize()}, $responses, current resolved: $overallResponses")
+                logger.trace("Responses size: ${responses.flattenedSize()}, $responses, current resolved: $overallResponses")
                 when {
                     !condition(currentState) && shouldWait.get() && overallResponses < responses.flattenedSize() -> {
                         logger.debug("Waiting for responses, current state: $currentState")
                         this.condition.await()
                     }
                     condition(currentState) -> {
-                        logger.debug("Got condition, responses: $currentState")
+                        logger.warn("Got condition, responses: $currentState")
                         success = true
                         waitingForResponses.set(false)
                         break
                     }
                     !shouldWait.get() -> {
-                        logger.debug("Waiter timeout")
+                        logger.warn("Waiter timeout")
                         success = false
                         waitingForResponses.set(false)
                         break
                     }
                     overallResponses >= responses.flattenedSize() -> {
-                        logger.debug("Got all responses and condition wasn't satisfied")
+                        logger.warn("Got all responses and condition wasn't satisfied")
                         success = false
                         waitingForResponses.set(false)
                         break

@@ -23,9 +23,6 @@ abstract class AbstractAtomicCommitmentProtocol(
 ) : AtomicCommitmentProtocol {
 
     val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
-    private val executorService: ExecutorCoroutineDispatcher =
-        Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-
     abstract suspend fun performProtocol(change: Change)
 
     abstract fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>?
@@ -61,4 +58,9 @@ abstract class AbstractAtomicCommitmentProtocol(
     }
 
     fun getPeerName() = peerResolver.currentPeer().toString()
+
+    companion object {
+        private val executorService: ExecutorCoroutineDispatcher =
+            Executors.newCachedThreadPool().asCoroutineDispatcher()
+    }
 }
