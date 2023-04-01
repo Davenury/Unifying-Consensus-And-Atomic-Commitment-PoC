@@ -234,6 +234,7 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun newLeaderElected(leaderId: PeerId, term: Int) {
         logger.info("A leader has been elected: $leaderId (in term $term)")
+        leaderAffinityWaiterTimer.cancelCounting()
         votedFor = VotedFor(leaderId, true)
 //          DONE: Check if stop() function make sure if you need to wait to all job finish ->
 //          fixed by setting executor to null and adding null condition in if
