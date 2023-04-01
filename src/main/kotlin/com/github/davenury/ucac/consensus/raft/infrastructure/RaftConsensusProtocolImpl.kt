@@ -197,7 +197,6 @@ class RaftConsensusProtocolImpl(
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
         )
 
-        logger.info("Got handle vote should restart affinity timer for $peerId: ${affinityHandler.shouldRestartAffinityTimer(peerId)}")
         if (affinityHandler.shouldRestartAffinityTimer(peerId)) {
             timer.cancelCounting()
             leaderAffinityWaiterTimer.cancelCounting()
@@ -693,7 +692,6 @@ class RaftConsensusProtocolImpl(
         }
 
         timer.startCounting {
-
             val differenceFromLastHeartbeat: Duration
             mutex.withLock {
                 differenceFromLastHeartbeat = Duration.between(lastHeartbeatTime, Instant.now())

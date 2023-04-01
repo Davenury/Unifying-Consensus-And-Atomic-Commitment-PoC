@@ -44,7 +44,6 @@ class AffinityHandler(
             timeout()
         }
 
-        logger.info("Passed timeout")
         if (consensusAffinity.isEmpty()) {
             return AffinityWaitingResult.NO_AFFINITY.also {
                 waitingForAffinityResult = it
@@ -61,11 +60,11 @@ class AffinityHandler(
         while (!isAlive && shouldTryToCheckLeader) {
             delay(leaderAliveInterval.toMillis())
             isAlive = checkAffinityLeader(consensusAffinity[peersetId]!!)
-            logger.info("Is alive: $isAlive")
+            logger.warn("Leader is alive: $isAlive")
         }
 
         if (!shouldTryToCheckLeader) {
-            logger.error("Leader is not alive during the timeout")
+            logger.warn("Leader is not alive during the timeout")
             return AffinityWaitingResult.TIMEOUT.also {
                 waitingForAffinityResult = it
             }
@@ -81,7 +80,7 @@ class AffinityHandler(
             raftHttpClient.get<HttpStatement>("http://${peerResolver.resolve(peerId).address}/_meta/health").execute()
             true
         } catch (e: Exception) {
-            logger.error("Couldn't get $peerId", e)
+            logger.warn("Couldn't get $peerId", e)
             false
         }
     }
@@ -98,10 +97,13 @@ class AffinityHandler(
             return true
         }
         if (waitingForAffinityResult != AffinityWaitingResult.LEADER_ALIVE) {
-            logger.info("Waiting for affinity result is not LEADER ALIVE, so I won't restart affinity timer, result is: $waitingForAffinityResult")
+            logger.debug(
+                "Waiting for affinity result is not LEADER ALIVE, so I won't restart affinity timer, result is: {}",
+                waitingForAffinityResult
+            )
             return false
         }
-        logger.info("Consensus affinity: ${consensusAffinity[peersetId]}, peer in ask: $peerId")
+        logger.debug("Consensus affinity: {}, peer in ask: {}", consensusAffinity[peersetId], peerId)
         return consensusAffinity[peersetId] == peerId
     }
 
