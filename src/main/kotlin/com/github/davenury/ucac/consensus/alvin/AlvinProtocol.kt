@@ -36,7 +36,7 @@ class AlvinProtocol(
 ) : AlvinBroadcastProtocol, SignalSubject {
     //  General consesnus
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
-    private val globalPeerId = peerResolver.currentPeer()
+    private val peerId = peerResolver.currentPeer()
     private val mutex = Mutex()
 
     //  Alvin specific fields
@@ -53,9 +53,11 @@ class AlvinProtocol(
     private val promiseChannel = Channel<RequestResult<AlvinPromise>>()
     private val fastRecoveryChannel = Channel<RequestResult<AlvinFastRecoveryResponse?>>()
 
-    override fun getPeerName() = globalPeerId.toString()
+    override fun getPeerName() = peerId.toString()
 
-    override suspend fun begin() {}
+    override suspend fun begin() {
+        logger.info("Start alvin protocol")
+    }
 
 
 //  FIXME: Add change notifier and forwarding metrics
@@ -87,6 +89,7 @@ class AlvinProtocol(
         logger.info("Handle accept: ${message.entry.deps}")
         val entry = message.entry.toEntry()
         val newDeps: List<HistoryEntry>
+        val changeId = Change.fromHistoryEntry(entry.entry)!!.id
 
 
         mutex.withLock {
@@ -94,6 +97,15 @@ class AlvinProtocol(
             updateEntry(entry)
             resetFailureDetector(entry)
 
+            if(isMetricTest){
+                Metrics.bumpChangeMetric(
+                    changeId = changeId,
+                    peerId = peerId,
+                    peersetId = peersetId,
+                    protocolName = ProtocolName.CONSENSUS,
+                    state = "proposed"
+                )
+            }
 
             newDeps = entryIdToAlvinEntry
                 .values
@@ -116,7 +128,7 @@ class AlvinProtocol(
         }
         deliverTransaction()
 
-        return AlvinAckStable(globalPeerId)
+        return AlvinAckStable(peerId)
     }
 
     override suspend fun handlePrepare(message: AlvinAccept): AlvinPromise {
@@ -175,6 +187,15 @@ class AlvinProtocol(
             votesContainer.remove(entryId)
 
             val (changeResult, signal) = if (commitDecision) {
+                if (isMetricTest) {
+                    Metrics.bumpChangeMetric(
+                        changeId = change.id,
+                        peerId = peerId,
+                        peersetId = peersetId,
+                        protocolName = ProtocolName.CONSENSUS,
+                        state = "accepted"
+                    )
+                }
                 history.addEntry(messageEntry.entry)
                 Pair(ChangeResult.Status.SUCCESS, Signal.AlvinCommitChange)
             } else {
@@ -220,7 +241,7 @@ class AlvinProtocol(
         changeIdToCompletableFuture[changeId]
 
     override fun otherConsensusPeers(): List<PeerAddress> {
-        return peerResolver.getPeersFromPeerset(peersetId).filter { it.peerId != globalPeerId }
+        return peerResolver.getPeersFromPeerset(peersetId).filter { it.peerId != peerId }
     }
 
 
@@ -290,7 +311,7 @@ class AlvinProtocol(
         }
 
         val jobs = scheduleMessages(historyEntry, proposeChannel, entry.epoch) { peerAddress ->
-            protocolClient.sendProposal(peerAddress, AlvinPropose(globalPeerId, entry.toDto()))
+            protocolClient.sendProposal(peerAddress, AlvinPropose(peerId, entry.toDto()))
         }
         val responses: List<AlvinAckPropose> =
             waitForQuorom(historyEntry, jobs, proposeChannel, AlvinStatus.PENDING)
@@ -317,7 +338,7 @@ class AlvinProtocol(
         logger.info("Starts decision phase $entry")
 
         val jobs = scheduleMessages(historyEntry, acceptChannel, entry.epoch) { peerAddress ->
-            protocolClient.sendAccept(peerAddress, AlvinAccept(globalPeerId, entry.toDto()))
+            protocolClient.sendAccept(peerAddress, AlvinAccept(peerId, entry.toDto()))
         }
 
         signalPublisher.signal(
@@ -344,7 +365,7 @@ class AlvinProtocol(
         logger.info("Starts delivery phase $entry")
 
         scheduleMessages(historyEntry, null, entry.epoch) { peerAddress ->
-            protocolClient.sendStable(peerAddress, AlvinStable(globalPeerId, entry.toDto()))
+            protocolClient.sendStable(peerAddress, AlvinStable(peerId, entry.toDto()))
         }
 
         signalPublisher.signal(
@@ -369,7 +390,7 @@ class AlvinProtocol(
         val jobs = scheduleMessages(entry.entry, promiseChannel, newEntry.epoch) { peerAddress ->
             protocolClient.sendPrepare(
                 peerAddress,
-                AlvinAccept(globalPeerId, newEntry.toDto())
+                AlvinAccept(peerId, newEntry.toDto())
             )
         }
 
@@ -566,7 +587,7 @@ class AlvinProtocol(
                 scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(
                         peerAddress,
-                        AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId)
+                        AlvinCommit(entry.toDto(), AlvinResult.COMMIT, peerId)
                     )
                 }
             }
@@ -579,7 +600,7 @@ class AlvinProtocol(
             scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                 protocolClient.sendCommit(
                     peerAddress,
-                    AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId)
+                    AlvinCommit(entry.toDto(), AlvinResult.COMMIT, peerId)
                 )
             }
             return
@@ -603,7 +624,7 @@ class AlvinProtocol(
                 scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(
                         peerAddress,
-                        AlvinCommit(entry.toDto(), AlvinResult.ABORT, globalPeerId)
+                        AlvinCommit(entry.toDto(), AlvinResult.ABORT, peerId)
                     )
                 }
             }
@@ -612,7 +633,7 @@ class AlvinProtocol(
                 scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
                     protocolClient.sendCommit(
                         peerAddress,
-                        AlvinCommit(entry.toDto(), AlvinResult.COMMIT, globalPeerId)
+                        AlvinCommit(entry.toDto(), AlvinResult.COMMIT, peerId)
                     )
                 }
             }
@@ -707,7 +728,7 @@ class AlvinProtocol(
     private fun peers() = peerResolver.getPeersFromPeerset(peersetId)
 
 
-    private suspend fun getNextNum(peerId: PeerId = globalPeerId): Int = mutex.withLock {
+    private suspend fun getNextNum(peerId: PeerId = this.peerId): Int = mutex.withLock {
         val addresses = peerResolver.getPeersFromPeerset(peersetId).sortedBy { it.peerId.peerId }
         val peerAddress = peerResolver.resolve(peerId)
         val index = addresses.indexOf(peerAddress)
