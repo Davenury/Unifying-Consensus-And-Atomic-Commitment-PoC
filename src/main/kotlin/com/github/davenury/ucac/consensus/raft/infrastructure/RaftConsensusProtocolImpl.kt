@@ -85,7 +85,7 @@ class RaftConsensusProtocolImpl(
     private var lastHeartbeatTime = Instant.now()
 
     private val affinityHandler = AffinityHandler(consensusAffinity, peerResolver, peersetId, consensusAffinityLeaderAliveTimeout)
-    private val leaderAffinityWaiterTimer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ZERO, ctx)
+    private val leaderAffinityWaiterTimer = ProtocolTimerImpl(Duration.ofMillis(heartbeatTimeout.toMillis()).plus(Duration.ofSeconds(1)), Duration.ZERO, ctx)
 
     //    DONE: Use only one mutex
     private val mutex = Mutex()
@@ -195,6 +195,7 @@ class RaftConsensusProtocolImpl(
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
         )
 
+        logger.info("Should restart affinity timer for $peerId: ${affinityHandler.shouldRestartAffinityTimer(peerId)}")
         if (affinityHandler.shouldRestartAffinityTimer(peerId)) {
             leaderAffinityWaiterTimer.cancelCounting()
             leaderAffinityWaiterTimer.startCounting { sendLeaderRequest() }
