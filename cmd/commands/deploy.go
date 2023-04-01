@@ -386,7 +386,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"GPAC_FTAGREE_REPEAT_DELAY":               "PT0.5S",
 			"RAFT_INIT_DELAY":                         "PT5S",
 			"CONSENSUS_AFFINITY":                      config.ConsensusAffinity,
-			"CONSENSUS_AFFINITY_LEADER_ALIVE_TIMEOUT": "PT10S",
+			"CONSENSUS_AFFINITY_LEADER_ALIVE_TIMEOUT": "PT30S",
 		},
 	}
 

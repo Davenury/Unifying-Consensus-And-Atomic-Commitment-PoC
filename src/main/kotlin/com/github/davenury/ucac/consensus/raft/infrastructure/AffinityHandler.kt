@@ -30,6 +30,13 @@ class AffinityHandler(
     fun amIAffinityLeader(): Boolean =
         consensusAffinity.isEmpty() || consensusAffinity[peersetId] == null || consensusAffinity[peersetId] == peerResolver.currentPeer()
 
+    fun amITrueAffinityLeader(): Boolean {
+        if (consensusAffinity.isEmpty() || consensusAffinity[peersetId] == null) {
+            return false
+        }
+        return consensusAffinity[peersetId] == peerResolver.currentPeer()
+    }
+
     suspend fun waitForAffinityLeaderToBeAlive(): AffinityWaitingResult {
         ctx.dispatch(Dispatchers.IO) {
             runBlocking {
@@ -83,8 +90,11 @@ class AffinityHandler(
     }
 
     fun shouldRestartAffinityTimer(peerId: PeerId): Boolean {
+        if (waitingForAffinityResult == null && consensusAffinity[peersetId] == peerId) {
+            return true
+        }
         if (waitingForAffinityResult != AffinityWaitingResult.LEADER_ALIVE) {
-            logger.info("Waiting for affinity result is not LEADER ALIVE, so I won't restart affinity timer")
+            logger.info("Waiting for affinity result is not LEADER ALIVE, so I won't restart affinity timer, result is: $waitingForAffinityResult")
             return false
         }
         logger.info("Consensus affinity: ${consensusAffinity[peersetId]}, peer in ask: $peerId")

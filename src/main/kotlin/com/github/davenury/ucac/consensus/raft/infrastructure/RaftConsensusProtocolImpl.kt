@@ -85,7 +85,7 @@ class RaftConsensusProtocolImpl(
     private var lastHeartbeatTime = Instant.now()
 
     private val affinityHandler = AffinityHandler(consensusAffinity, peerResolver, peersetId, consensusAffinityLeaderAliveTimeout)
-    private val leaderAffinityWaiterTimer = ProtocolTimerImpl(Duration.ofMillis(heartbeatTimeout.toMillis()).plus(Duration.ofSeconds(1)), Duration.ZERO, ctx)
+    private val leaderAffinityWaiterTimer = ProtocolTimerImpl(heartbeatTimeout.plus(Duration.ofSeconds(2)), Duration.ZERO, ctx)
 
     //    DONE: Use only one mutex
     private val mutex = Mutex()
@@ -199,6 +199,7 @@ class RaftConsensusProtocolImpl(
 
         logger.info("Got handle vote should restart affinity timer for $peerId: ${affinityHandler.shouldRestartAffinityTimer(peerId)}")
         if (affinityHandler.shouldRestartAffinityTimer(peerId)) {
+            timer.cancelCounting()
             leaderAffinityWaiterTimer.cancelCounting()
             leaderAffinityWaiterTimer.startCounting { sendLeaderRequest() }
         }
@@ -680,7 +681,7 @@ class RaftConsensusProtocolImpl(
             }
 
             RaftRole.Follower -> {
-                timer = getHeartbeatTimer()
+                timer = getHeartbeatTimer(offset=Duration.ofSeconds(1))
                 "leader ${votedFor?.id} doesn't send heartbeat, start try to become leader"
             }
 
@@ -915,7 +916,7 @@ class RaftConsensusProtocolImpl(
 
     private fun amILeader(): Boolean = role == RaftRole.Leader
 
-    private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout.dividedBy(2), ctx)
+    private fun getHeartbeatTimer(offset: Duration = Duration.ZERO) = ProtocolTimerImpl(heartbeatTimeout.plus(offset), if (affinityHandler.amIAffinityLeader()) Duration.ZERO else heartbeatTimeout.dividedBy(2), ctx)
 
     private suspend fun tryPropagatingChangesToLeader() {
         // TODO mutex?
