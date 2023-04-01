@@ -26,6 +26,7 @@ type DeployConfig struct {
 	ProxyDelay              string
 	ProxyLimit              string
 	MonitoringNamespace     string
+	ConsensusProtocol       string
 }
 
 const ratisPort = 10024
@@ -382,6 +383,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 			"NAMESPACE":                    config.DeployNamespace,
 			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
+			"CONSENSUS_NAME":               config.ConsensusProtocol,
 		},
 	}
 
