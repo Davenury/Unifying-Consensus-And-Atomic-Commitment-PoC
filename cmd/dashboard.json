@@ -24,7 +24,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -122,8 +121,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\"peerset.*\", namespace=~\"$namespace\", container!=\"\"}[30s])) by (pod)",
-          "hide": false,
+          "expr": "rate(container_cpu_usage_seconds_total{pod=~\"peer.*\", namespace=~\"$namespace\"}[30s])",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -215,8 +213,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"peer.*\", namespace=\"$namespace\"}[30s])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"peer.*\", namespace=\"$namespace\"}[30s]))",
+          "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         },
@@ -324,18 +322,6 @@
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "sum(jvm_memory_used_bytes{area=\"nonheap\", app_name=~\"peer.*\", kubernetes_namespace=~\"$namespace\"}) by (app_name)",
-          "hide": false,
-          "legendFormat": "{{app_name}} - nonheap",
-          "range": true,
-          "refId": "B"
         }
       ],
       "title": "AVG Container memory usage - only application",
@@ -425,8 +411,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(container_memory_usage_bytes{pod=~\"peerset.*\", namespace=~\"$namespace\", container!=\"\"}) by (pod)",
-          "hide": false,
+          "expr": "sum(container_memory_usage_bytes{pod=~\"peer.*\", namespace=~\"$namespace\"}) by (pod)",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -494,8 +479,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 24,
+        "h": 11,
+        "w": 12,
         "x": 0,
         "y": 17
       },
@@ -519,8 +504,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_network_receive_bytes_total{pod=~\"peerset.*\", namespace=~\"$namespace\"}[30s])) by (pod)",
-          "hide": false,
+          "expr": "rate(container_network_receive_bytes_total{pod=~\"peer.*\", namespace=~\"$namespace\"}[30s])",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -530,11 +514,104 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 29,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "rate(container_network_transmit_bytes_total{pod=~\"peer.*\", namespace=~\"$namespace\"}[30s])",
+          "legendFormat": "{{pod}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Network bytes transmit",
+      "type": "timeseries"
+    },
+    {
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 28
       },
       "id": 23,
       "title": "Performance",
@@ -603,7 +680,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 28
+        "y": 29
       },
       "id": 2,
       "options": {
@@ -697,7 +774,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 28
+        "y": 29
       },
       "id": 4,
       "options": {
@@ -719,8 +796,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(change_processed_total{kubernetes_namespace=~\"$namespace\", result=\"success\"}[1m]))",
-          "legendFormat": "changes per second",
+          "expr": "sum(rate(change_processed_total{kubernetes_namespace=~\"$namespace\"}[1m]))",
+          "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
@@ -736,8 +813,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "fixedColor": "semi-dark-green",
-            "mode": "fixed"
+            "mode": "thresholds"
           },
           "mappings": [],
           "thresholds": {
@@ -757,7 +833,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 38
       },
       "id": 6,
       "options": {
@@ -772,7 +848,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": false
       },
-      "pluginVersion": "9.3.8",
+      "pluginVersion": "9.4.3",
       "targets": [
         {
           "datasource": {
@@ -852,7 +928,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 48
       },
       "id": 12,
       "options": {
@@ -875,40 +951,103 @@
           },
           "editorMode": "code",
           "expr": "avg(rate(change_processing_time_seconds_sum{result=\"success\", kubernetes_namespace=~\"$namespace\"}[1m]) / rate(change_processing_time_seconds_count{result=\"success\", kubernetes_namespace=~\"$namespace\"}[1m]))",
-          "legendFormat": "avg commit latency",
+          "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
       "title": "Avg commit latency",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 55
+      },
+      "id": 10,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "9.3.8",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "kube_pod_container_status_restarts_total{kubernetes_namespace=~\"$namespace\"}",
+          "legendFormat": "{{pod}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pods restarts",
+      "type": "gauge"
     }
   ],
   "refresh": "10s",
-  "schemaVersion": 37,
+  "revision": 1,
+  "schemaVersion": 38,
   "style": "dark",
   "tags": [],
   "templating": {
     "list": [
       {
         "current": {
-          "selected": true,
-          "text": "kjarosz",
-          "value": "kjarosz"
+          "selected": false,
+          "text": "ddebowski",
+          "value": "ddebowski"
         },
         "datasource": {
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "definition": "label_values(change_processed_total, kubernetes_namespace)",
-        "description": "label_values(change_processed_total, namespace)",
+        "definition": "label_values(container_cpu_usage_seconds_total, namespace)",
+        "description": "label_values(container_cpu_usage_seconds_total, namespace)",
         "hide": 0,
         "includeAll": false,
         "multi": false,
         "name": "namespace",
         "options": [],
         "query": {
-          "query": "label_values(change_processed_total, kubernetes_namespace)",
+          "query": "label_values(container_cpu_usage_seconds_total, namespace)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -927,6 +1066,6 @@
   "timezone": "",
   "title": "PoC",
   "uid": "HSUzSq2Vk",
-  "version": 2,
+  "version": 1,
   "weekStart": ""
 }
