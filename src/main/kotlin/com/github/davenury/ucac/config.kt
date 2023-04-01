@@ -65,6 +65,7 @@ data class RaftConfig(
     val maxChangesPerMessage: Int = 200,
     // peerset1=peer1;peerset2=peer3
     val consensusAffinity: String = "",
+    val consensusAffinityLeaderAliveTimeout: Duration = Duration.ofSeconds(10),
     val initialDelay: Duration = Duration.ofMillis(200)
 )
 

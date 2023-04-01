@@ -36,8 +36,6 @@ class PeersetProtocols(
         ctx.dispatch(Dispatchers.IO) {
             runBlocking {
                 if (config.raft.isEnabled) {
-                    // to make sure everyone has started and is well, so preferred leader won't bump into wall
-                    delay(config.raft.initialDelay.toMillis())
                     consensusProtocol.begin()
                 }
             }

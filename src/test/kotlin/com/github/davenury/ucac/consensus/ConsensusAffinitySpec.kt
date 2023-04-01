@@ -14,6 +14,7 @@ import strikt.api.expect
 import strikt.api.expectThat
 import strikt.assertions.isEqualTo
 import strikt.assertions.isNotEqualTo
+import java.time.Duration
 import java.util.concurrent.Phaser
 
 class ConsensusAffinitySpec: IntegrationTestBase() {
@@ -65,7 +66,7 @@ class ConsensusAffinitySpec: IntegrationTestBase() {
                 )
             },
             configOverrides = (0..4).map { "peer$it" }
-                .associateWith { mapOf("raft.consensusAffinity" to "peerset0=peer3") }
+                .associateWith { mapOf("raft.consensusAffinity" to "peerset0=peer3", "raft.consensusAffinityLeaderAliveTimeout" to Duration.ofSeconds(1)) }
         )
 
         phaser.arriveAndAwaitAdvanceWithTimeout()

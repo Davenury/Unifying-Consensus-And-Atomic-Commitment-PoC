@@ -40,6 +40,7 @@ class RaftConsensusProtocolImpl(
     private val maxChangesPerMessage: Int,
     private val isMetricTest: Boolean = false,
     private val consensusAffinity: Map<PeersetId, PeerId> = mapOf(),
+    private val consensusAffinityLeaderAliveTimeout: Duration = Duration.ofSeconds(1),
 ) : RaftConsensusProtocol, SignalSubject {
 
     constructor(
@@ -63,7 +64,8 @@ class RaftConsensusProtocolImpl(
         transactionBlocker = transactionBlocker,
         config.raft.maxChangesPerMessage,
         config.metricTest,
-        config.consensusAffinity()
+        config.consensusAffinity(),
+        config.raft.consensusAffinityLeaderAliveTimeout,
     )
 
 
@@ -82,12 +84,8 @@ class RaftConsensusProtocolImpl(
     private var timer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ofSeconds(2), ctx)
     private var lastHeartbeatTime = Instant.now()
 
-    init {
-        // TODO - after adding being in many peersets - check if my affinity is in desired peerset!
-        if (peerId in consensusAffinity.values) {
-           timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofMillis(50), ctx)
-        }
-    }
+    private val affinityHandler = AffinityHandler(consensusAffinity, peerResolver, peersetId, consensusAffinityLeaderAliveTimeout)
+    private val leaderAffinityWaiterTimer = ProtocolTimerImpl(Duration.ofSeconds(1), Duration.ZERO, ctx)
 
     //    DONE: Use only one mutex
     private val mutex = Mutex()
@@ -105,7 +103,23 @@ class RaftConsensusProtocolImpl(
 
     override suspend fun begin() {
         logger.info("Starting raft, other peers: ${otherConsensusPeers()}")
-        timer.startCounting { sendLeaderRequest() }
+        ctx.dispatch(Dispatchers.IO) {
+            runBlocking {
+                if (!affinityHandler.amIAffinityLeader()) {
+                    logger.debug("I am not affinity leader")
+                    val result = affinityHandler.waitForAffinityLeaderToBeAlive()
+                    logger.debug("I'm done waiting for affinity leader, result: {}", result)
+                    if (result == AffinityWaitingResult.LEADER_ALIVE) {
+                        leaderAffinityWaiterTimer.startCounting { sendLeaderRequest() }
+                    } else {
+                        sendLeaderRequest()
+                    }
+                } else {
+                    logger.debug("I am affinity leader")
+                    sendLeaderRequest()
+                }
+            }
+        }
     }
 
     override fun getPeerName() = peerId.toString()
@@ -139,7 +153,7 @@ class RaftConsensusProtocolImpl(
             ConsensusElectMe(peerId, currentTerm, lastIndex)
         ).map { it.message }
 
-        logger.debug("Responses from leader request: $responses in iteration $currentTerm")
+        logger.debug("Responses from leader request: {} in iteration {}", responses, currentTerm)
 
         val maxTerm = responses.filterNotNull().maxOfOrNull { it.myTerm } ?: currentTerm
         assert(maxTerm >= currentTerm)
@@ -180,6 +194,11 @@ class RaftConsensusProtocolImpl(
             "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogId, " +
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
         )
+
+        if (affinityHandler.shouldRestartAffinityTimer(peerId)) {
+            leaderAffinityWaiterTimer.cancelCounting()
+            leaderAffinityWaiterTimer.startCounting { sendLeaderRequest() }
+        }
 
         mutex.withLock {
             if (iteration < currentTerm || (iteration == currentTerm && votedFor != null)) {
