@@ -30,7 +30,6 @@ import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 
-@Disabled("Temporary")
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
 class SinglePeersetSpec : IntegrationTestBase() {
@@ -72,7 +71,6 @@ class SinglePeersetSpec : IntegrationTestBase() {
         }
     }
 
-    @Disabled("Temporary")
     @Test
     fun `first leader is already in ft-agree phase and second leader tries to execute its transaction - second should be rejected`(): Unit =
         runBlocking {
@@ -146,7 +144,6 @@ class SinglePeersetSpec : IntegrationTestBase() {
             }
         }
 
-    @Disabled("Temporary")
     @Test
     fun `should be able to execute transaction even if leader fails after first ft-agree`() {
         runBlocking {
