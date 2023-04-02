@@ -14,6 +14,6 @@ interface AlvinBroadcastProtocol : ConsensusProtocol {
     suspend fun handleAcceptPhase(message: AlvinAccept): AlvinAckAccept
     suspend fun handleStable(message: AlvinStable): AlvinAckStable
     suspend fun handlePrepare(message: AlvinAccept): AlvinPromise
-    suspend fun handleCommit(message: AlvinCommit)
+    suspend fun handleCommit(message: AlvinCommit): AlvinCommitResponse
     suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse
 }
