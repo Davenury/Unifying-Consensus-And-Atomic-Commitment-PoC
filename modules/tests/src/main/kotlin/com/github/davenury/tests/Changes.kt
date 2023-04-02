@@ -130,12 +130,16 @@ class OnePeersetChanges(
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
 
     suspend fun introduceChange(change: Change): ChangeState {
-        val senderAddress = peersAddresses.first()
+        val consensusLeaderId = getConsensusLeader()
+        val address = peersAddresses.find { it.peerId == consensusLeaderId }!!
         return sender.executeChange(
-            senderAddress,
+            address,
             change
         )
     }
+
+    private suspend fun getConsensusLeader(): PeerId =
+        httpClient.get<CurrentLeaderDto>("http://${peersAddresses.first().address}/consensus/current-leader").currentLeaderPeerId!!
 
     fun getCurrentParentId(): String = parentId.get()
 
