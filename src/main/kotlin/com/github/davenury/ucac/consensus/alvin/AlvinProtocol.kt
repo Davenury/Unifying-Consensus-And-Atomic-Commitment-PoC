@@ -531,7 +531,7 @@ class AlvinProtocol(
     }
 
 
-    private fun isBlockedOnDifferentProtocol() =
+    private suspend fun isBlockedOnDifferentProtocol() =
         transactionBlocker.isAcquired() && transactionBlocker.getProtocolName() != ProtocolName.CONSENSUS
 
     //  TODO: Check if any transaction from delivery queue can be commited or aborted

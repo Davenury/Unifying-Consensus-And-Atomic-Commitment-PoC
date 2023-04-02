@@ -26,7 +26,6 @@ import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.measureTimeMillis
 
-@Disabled("Temporary")
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
 class TwoPCSpec : IntegrationTestBase() {

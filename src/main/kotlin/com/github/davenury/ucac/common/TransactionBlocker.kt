@@ -13,8 +13,11 @@ class TransactionBlocker {
     private var protocol: ProtocolName? = null
     private var changeId: String? = null
 
-    suspend fun isAcquired() = mutex.withLock {  semaphore.availablePermits < 1 }
-    suspend fun isAcquiredByProtocol(protocol: ProtocolName) = isAcquired() && mutex.withLock {  this.protocol == protocol}
+    suspend fun isAcquired() = mutex.withLock { acquiringCondition() }
+
+    private fun acquiringCondition() = semaphore.availablePermits < 1
+    suspend fun isAcquiredByProtocol(protocol: ProtocolName) =
+        mutex.withLock { acquiringCondition() && this.protocol == protocol }
 
     suspend fun releaseBlock() = mutex.withLock {
         try {
@@ -36,14 +39,14 @@ class TransactionBlocker {
         this.changeId = changeId
     }
 
-    suspend fun getProtocolName(): ProtocolName? = mutex.withLock {  protocol}
+    suspend fun getProtocolName(): ProtocolName? = mutex.withLock { protocol }
     suspend fun getChangeId(): String? = mutex.withLock { changeId }
 
     //    TODO: Add changeId as parameter.
     suspend fun tryToReleaseBlockerChange(protocol: ProtocolName, changeId: String) {
         mutex.withLock {
-            if (isAcquired() && (getProtocolName() != protocol || changeId != this.changeId))
-                throw Exception("I tried to release TransactionBlocker from ${protocol.name} and change $changeId during being blocked by ${getProtocolName()?.name} and change ${this.changeId}")
+            if (acquiringCondition() && (this.protocol != protocol || changeId != this.changeId))
+                throw Exception("I tried to release TransactionBlocker from ${protocol.name} and change $changeId during being blocked by ${this.protocol} and change ${this.changeId}")
         }
         releaseBlock()
     }
