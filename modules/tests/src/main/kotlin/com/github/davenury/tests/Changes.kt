@@ -48,7 +48,9 @@ class Changes(
     private suspend fun getChange(notification: Notification, peersetId: PeersetId): Change {
         return if (acProtocol == ACProtocol.TWO_PC) {
             try {
-                httpClient.get("http://${peers[peersetId]!!.first().address}/v2/last-change")
+                val consensusLeader = changes[peersetId]!!.getConsensusLeader()
+                    .let { consensusLeaderId -> peers[peersetId]!!.find { it.peerId == consensusLeaderId } }!!
+                httpClient.get("http://${consensusLeader.address}/v2/last-change")
             } catch (e: Exception) {
                 logger.error("Could not receive change from ${peers[peersetId]!!.first()}", e)
                 notification.change
@@ -138,7 +140,7 @@ class OnePeersetChanges(
         )
     }
 
-    private suspend fun getConsensusLeader(): PeerId =
+    suspend fun getConsensusLeader(): PeerId =
         sender.getConsensusLeaderId(peersAddresses.first())!!
 
 
