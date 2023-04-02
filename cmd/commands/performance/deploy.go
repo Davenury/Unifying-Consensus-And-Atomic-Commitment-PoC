@@ -111,7 +111,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 
 	cmd.Flags().BoolVarP(&enforceAcUsage, "enforce-ac", "", false, "Determines if usage of AC protocol should be enforced even if it isn't required (GPAC)")
 	cmd.Flags().StringVarP(&acProtocol, "ac-protocol", "", "gpac", "AC protocol to use in case it's needed. two_pc or gpac")
-	cmd.Flags().StringVarP(&consensusProtocol, "consensus-protocol", "", "Consensus protocol to use. For now it's one protocol")
+	cmd.Flags().StringVarP(&consensusProtocol, "consensus-protocol", "", "raft", "Consensus protocol to use. For now it's one protocol")
 	cmd.Flags().StringVar(&constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
 	cmd.Flags().StringVar(&fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
 
