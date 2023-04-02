@@ -53,6 +53,8 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().StringVar(&config.ProxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	deployCommand.Flags().StringVar(&config.ProxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
 	deployCommand.Flags().StringVar(&config.MonitoringNamespace, "monitoring-namespace", "ddebowski", "Namespace with monitoring deployed")
+	cmd.Flags().StringVarP(&config.ConsensusProtocol, "consensus-protocol", "raft", "Consensus protocol to use. For now it's one protocol")
+
 
 	return deployCommand
 
