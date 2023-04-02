@@ -139,7 +139,8 @@ class OnePeersetChanges(
     }
 
     private suspend fun getConsensusLeader(): PeerId =
-        httpClient.get<CurrentLeaderDto>("http://${peersAddresses.first().address}/consensus/current-leader").currentLeaderPeerId!!
+        sender.getConsensusLeaderId(peersAddresses.first())!!
+
 
     fun getCurrentParentId(): String = parentId.get()
 

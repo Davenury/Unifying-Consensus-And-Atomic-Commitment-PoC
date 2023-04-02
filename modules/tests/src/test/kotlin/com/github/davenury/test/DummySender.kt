@@ -39,6 +39,10 @@ class DummySender(
         )
     }
 
+    override suspend fun getConsensusLeaderId(address: PeerAddress): PeerId? {
+        return PeerId("peer0")
+    }
+
     fun setChanges(changes: Changes) {
         this.changes = changes
     }
