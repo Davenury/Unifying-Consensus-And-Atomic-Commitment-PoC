@@ -10,6 +10,7 @@ import java.util.concurrent.Phaser
 
 class DummySender(
     private val shouldNotify: Boolean,
+    private val peersets: Map<PeersetId, List<PeerAddress>>,
     private val phaser: Phaser? = null
 ) : Sender {
 
@@ -40,7 +41,7 @@ class DummySender(
     }
 
     override suspend fun getConsensusLeaderId(address: PeerAddress): PeerId? {
-        return PeerId("peer0")
+        return peersets.values.find { address in it }?.first()?.peerId
     }
 
     fun setChanges(changes: Changes) {
