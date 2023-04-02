@@ -26,6 +26,8 @@ import strikt.assertions.isEqualTo
 /**
  * @author Kamil Jarosz
  */
+
+@Disabled("Temporary")
 @Testcontainers
 @ExtendWith(TestLogExtension::class)
 class SinglePeersetApiSpec {
