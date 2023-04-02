@@ -399,7 +399,7 @@ class AlvinProtocol(
     }
 
 
-    private fun checkTransactionBlocker(entry: AlvinEntry) {
+    private suspend fun checkTransactionBlocker(entry: AlvinEntry) {
         val changeId = Change.fromHistoryEntry(entry.entry)!!.id
         when {
             isBlockedOnDifferentProtocol() ->
@@ -621,7 +621,7 @@ class AlvinProtocol(
 
 
 //  Mutex function
-    private fun checkVotes(entry: AlvinEntry, change: Change) {
+    private suspend fun checkVotes(entry: AlvinEntry, change: Change) {
         val entryId = entry.entry.getId()
         val myselfVotesForCommit = history.isEntryCompatible(entry.entry)
 

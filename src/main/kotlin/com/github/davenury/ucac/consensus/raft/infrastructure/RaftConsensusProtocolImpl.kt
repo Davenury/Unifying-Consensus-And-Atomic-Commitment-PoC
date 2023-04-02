@@ -476,7 +476,7 @@ class RaftConsensusProtocolImpl(
                     peerMessage.logEntries
                 )
 
-                val isPeerMissingSomeEntries = peerToNextIndex[peer]?.acceptedEntryId != state.lastApplied
+                val isPeerMissingSomeEntries = peerToNextIndex[peer]?.acknowledgedEntryId != history.getCurrentEntryId()
 
                 if (isPeerMissingSomeEntries) {
                     launchHeartBeatToPeer(peer, delay = heartbeatDelay, sendInstantly = true)
@@ -759,7 +759,7 @@ class RaftConsensusProtocolImpl(
         return isDuring2PC && !(changeIsAbortingOf2PC || changeIsApplyingOf2PC)
     }
 
-    private fun releaseBlockerFromPreviousTermChanges() {
+    private suspend fun releaseBlockerFromPreviousTermChanges() {
 
         val blockedChange = state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }
 
