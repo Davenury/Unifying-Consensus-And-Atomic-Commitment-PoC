@@ -38,8 +38,8 @@ fun Application.alvinProtocolRouting(protocol: AlvinProtocol) {
 
         post("/alvin/commit") {
             val message: AlvinCommit = call.receive()
-            protocol.handleCommit(message)
-            call.respond(HttpStatusCode.OK,"OK")
+            val result = protocol.handleCommit(message)
+            call.respond(HttpStatusCode.OK,result)
         }
 
         post("/alvin/fast-recovery") {

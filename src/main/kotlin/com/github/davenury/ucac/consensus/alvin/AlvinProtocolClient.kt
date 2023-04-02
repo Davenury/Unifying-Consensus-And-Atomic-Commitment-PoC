@@ -40,7 +40,7 @@ interface AlvinProtocolClient {
     suspend fun sendCommit(
         peer: PeerAddress,
         message: AlvinCommit
-    ): ConsensusResponse<String?>
+    ): ConsensusResponse<AlvinCommitResponse?>
 
     suspend fun sendFastRecovery(
         peer: PeerAddress,
@@ -76,7 +76,7 @@ public class AlvinProtocolClientImpl : AlvinProtocolClient {
         return sendRequest(Pair(peer, message), "alvin/prepare")
     }
 
-    override suspend fun sendCommit(peer: PeerAddress, message: AlvinCommit): ConsensusResponse<String?> {
+    override suspend fun sendCommit(peer: PeerAddress, message: AlvinCommit): ConsensusResponse<AlvinCommitResponse?> {
         logger.debug("Sending commit request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "alvin/commit")
     }

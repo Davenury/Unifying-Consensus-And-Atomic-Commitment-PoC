@@ -12,6 +12,7 @@ data class AlvinAckStable(val peerId: PeerId)
 data class AlvinPromise(val entry: AlvinEntryDto?)
 
 data class AlvinCommit(val entry: AlvinEntryDto, val result: AlvinResult, val peerId: PeerId)
+data class AlvinCommitResponse(val result: AlvinResult?, val peerId: PeerId)
 
 data class AlvinFastRecovery(val entryId: String)
 data class AlvinFastRecoveryResponse(val entry: AlvinEntryDto?, val historyEntry: String?)
