@@ -155,9 +155,8 @@ class AlvinProtocol(
     }
 
     override suspend fun handleCommit(message: AlvinCommit): AlvinCommitResponse = mutex.withLock {
-        logger.info("Handle commit: ${message.result} from peer: ${message.peerId}")
-
         val messageEntry = message.entry.toEntry()
+        logger.info("Handle commit: ${message.result} from peer: ${message.peerId}, for entry: ${messageEntry.entry.getId()}")
 
         val change = Change.fromHistoryEntry(messageEntry.entry)!!
         if (changeIdToCompletableFuture[change.id]?.isDone == true)
@@ -553,7 +552,7 @@ class AlvinProtocol(
             }else if(changeIdToCompletableFuture[changeId]?.isDone == true){
                 scheduleCommitMessages(entry, AlvinResult.ABORT)
             }
-        } while (history.containsEntry(entry.entry.getId()))
+        } while (changeIdToCompletableFuture[changeId]?.isDone == true)
 
 
         val entry: AlvinEntry = resultEntry
@@ -580,10 +579,12 @@ class AlvinProtocol(
 
         when {
             depsResult.all { it } && !history.isEntryCompatible(entry.entry) -> {
+                logger.info("Entry ${entry.entry.getId()} is incompatible, send abort")
                 scheduleCommitMessages(entry, AlvinResult.ABORT)
             }
 
             depsResult.all { it } -> {
+                logger.info("Entry ${entry.entry.getId()} is compatible, send commit")
                 scheduleCommitMessages(entry, AlvinResult.COMMIT)
             }
 
