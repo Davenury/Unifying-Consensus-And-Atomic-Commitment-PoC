@@ -48,7 +48,7 @@ class Changes(
     private suspend fun getChange(notification: Notification, peersetId: PeersetId): Change {
         return if (acProtocol == ACProtocol.TWO_PC) {
             try {
-                httpClient.get("http://${peers[peersetId]!!.first()}/v2/last-change")
+                httpClient.get("http://${peers[peersetId]!!.first().address}/v2/last-change")
             } catch (e: Exception) {
                 logger.error("Could not receive change from ${peers[peersetId]!!.first()}", e)
                 notification.change
