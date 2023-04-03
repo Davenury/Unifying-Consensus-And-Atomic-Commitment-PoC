@@ -331,6 +331,8 @@ class RaftConsensusProtocolImpl(
 
             updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
 
+            tryPropagatingChangesToLeader()
+
             return@withLock ConsensusHeartbeatResponse(true, currentTerm)
         }
     }
