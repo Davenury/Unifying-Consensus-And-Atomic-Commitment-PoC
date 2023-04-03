@@ -3,6 +3,7 @@ package com.github.davenury.ucac.common
 import com.github.davenury.common.PeersetId
 import com.github.davenury.common.history.MeteredHistory
 import com.github.davenury.common.history.PersistentHistory
+import com.github.davenury.common.txblocker.PersistentTransactionBlocker
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
@@ -27,7 +28,7 @@ class PeersetProtocols(
 ) : AutoCloseable {
     private val persistence = PersistenceFactory().createForConfig(config)
     val history = MeteredHistory(PersistentHistory(persistence))
-    private val transactionBlocker = TransactionBlocker()
+    private val transactionBlocker = PersistentTransactionBlocker(persistence)
 
     private val ctx: ExecutorCoroutineDispatcher =
         Executors.newCachedThreadPool().asCoroutineDispatcher()

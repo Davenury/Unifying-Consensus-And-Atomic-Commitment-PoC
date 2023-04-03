@@ -1,7 +1,6 @@
 package com.github.davenury.common.persistence
 
 import org.slf4j.LoggerFactory
-import redis.clients.jedis.JedisPooled
 import java.util.concurrent.ConcurrentHashMap
 
 /**
