@@ -6,6 +6,7 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.zopa.ktor.opentracing.span
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.future.await
 import org.slf4j.LoggerFactory
@@ -28,7 +29,7 @@ class TwoPC(
 
     private var changeTimer: ProtocolTimer = ProtocolTimerImpl(twoPCConfig.changeDelay, Duration.ZERO, ctx)
 
-    override suspend fun performProtocol(change: Change) {
+    override suspend fun performProtocol(change: Change): Unit = span("TwoPC.performProtocol") {
         val updatedChange =
             updateParentIdFor2PCCompatibility(change, history, peersetId)
 
@@ -80,7 +81,7 @@ class TwoPC(
         }
     }
 
-    suspend fun handleAccept(change: Change) {
+    suspend fun handleAccept(change: Change) = span("TwoPc.handleAccept") {
         if (change !is TwoPCChange) {
             logger.info("Received not 2PC change $change")
             throw TwoPCHandleException("Received change of not TwoPCChange in handleAccept: $change")
@@ -104,7 +105,7 @@ class TwoPC(
         }
     }
 
-    private suspend fun askForDecisionChange(change: Change) {
+    private suspend fun askForDecisionChange(change: Change): Unit = span("TwoPc.askForDecisionChange") {
         val resultChange = protocolClient.askForChangeStatus(
             change.peersets.map { it.peersetId }
                 .first { it != peersetId }
@@ -119,7 +120,7 @@ class TwoPC(
         }
     }
 
-    suspend fun handleDecision(change: Change) {
+    suspend fun handleDecision(change: Change): Unit = span("TwoPc.handleDecision") {
         signal(Signal.TwoPCOnHandleDecision, change)
         val mainChangeId =
             updateParentIdFor2PCCompatibility(change, history, peersetId).id
@@ -197,7 +198,7 @@ class TwoPC(
         acceptChange: TwoPCChange,
         mainChangeId: String,
         otherPeers: List<PeerAddress>
-    ): Boolean {
+    ): Boolean = span("TwoPc.proposePhase") {
         val acceptResult = checkChangeAndProposeToConsensus(acceptChange, mainChangeId).await()
 
         if (acceptResult.status != ChangeResult.Status.SUCCESS) {
@@ -217,7 +218,7 @@ class TwoPC(
         acceptChange: TwoPCChange,
         decision: Boolean,
         otherPeersets: List<PeerAddress>,
-    ) {
+    ): Unit = span("TwoPc.decisionPhase") {
 
         val change = acceptChange.change
         val acceptChangeId = acceptChange.toHistoryEntry(peersetId).getId()

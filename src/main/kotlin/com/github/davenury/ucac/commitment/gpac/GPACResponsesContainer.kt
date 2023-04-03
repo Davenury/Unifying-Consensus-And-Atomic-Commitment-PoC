@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.commitment.gpac
 
 import com.github.davenury.common.PeersetId
+import com.zopa.ktor.opentracing.span
 import kotlinx.coroutines.*
 import kotlinx.coroutines.future.asCompletableFuture
 import org.slf4j.LoggerFactory
@@ -36,39 +37,42 @@ class GPACResponsesContainer<T>(
     private fun Map<*, List<*>>.flattenedSize() =
         this.values.flatten().size
 
-    fun awaitForMessages(condition: (Map<PeersetId, List<T>>) -> Boolean): Pair<Map<PeersetId, List<T>>, Boolean> {
-        lock.withLock {
-            ctx.dispatch(Dispatchers.IO) { timeout() }
-            while (true) {
-                logger.trace("Responses size: ${responses.flattenedSize()}, $responses, current resolved: $overallResponses")
-                when {
-                    !condition(currentState) && shouldWait.get() && overallResponses < responses.flattenedSize() -> {
-                        logger.debug("Waiting for responses, current state: $currentState")
-                        this.condition.await()
-                    }
-                    condition(currentState) -> {
-                        logger.warn("Got condition, responses: $currentState")
-                        success = true
-                        waitingForResponses.set(false)
-                        break
-                    }
-                    !shouldWait.get() -> {
-                        logger.warn("Waiter timeout")
-                        success = false
-                        waitingForResponses.set(false)
-                        break
-                    }
-                    overallResponses >= responses.flattenedSize() -> {
-                        logger.warn("Got all responses and condition wasn't satisfied")
-                        success = false
-                        waitingForResponses.set(false)
-                        break
+    fun awaitForMessages(condition: (Map<PeersetId, List<T>>) -> Boolean): Pair<Map<PeersetId, List<T>>, Boolean> = span("GPAC.awaitForMessages") {
+            return lock.withLock {
+                ctx.dispatch(Dispatchers.IO) { timeout() }
+                while (true) {
+                    logger.trace("Responses size: ${responses.flattenedSize()}, $responses, current resolved: $overallResponses")
+                    when {
+                        !condition(currentState) && shouldWait.get() && overallResponses < responses.flattenedSize() -> {
+                            logger.debug("Waiting for responses, current state: $currentState")
+                            this@GPACResponsesContainer.condition.await()
+                        }
+
+                        condition(currentState) -> {
+                            logger.warn("Got condition, responses: $currentState")
+                            success = true
+                            waitingForResponses.set(false)
+                            break
+                        }
+
+                        !shouldWait.get() -> {
+                            logger.warn("Waiter timeout")
+                            success = false
+                            waitingForResponses.set(false)
+                            break
+                        }
+
+                        overallResponses >= responses.flattenedSize() -> {
+                            logger.warn("Got all responses and condition wasn't satisfied")
+                            success = false
+                            waitingForResponses.set(false)
+                            break
+                        }
                     }
                 }
+                return@withLock Pair(currentState, success)
             }
-            return Pair(currentState, success)
         }
-    }
 
     private fun timeout() {
         runBlocking {
@@ -84,7 +88,8 @@ class GPACResponsesContainer<T>(
         lock.withLock {
             if (waitingForResponses.get()) {
                 if (value != null) {
-                    currentState[peersetId] = currentState.getOrDefault(peersetId, mutableListOf()).also { it.add(value) }
+                    currentState[peersetId] =
+                        currentState.getOrDefault(peersetId, mutableListOf()).also { it.add(value) }
                 }
                 overallResponses++
                 condition.signalAll()

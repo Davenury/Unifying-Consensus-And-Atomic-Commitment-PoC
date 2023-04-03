@@ -85,6 +85,16 @@ func DoInit(namespace string, createNamespace bool) {
 						"url":  fmt.Sprintf("http://loki.%s:3100", namespace),
 						"type": "loki",
 					},
+					{
+						"name": "Tempo",
+						"url":  fmt.Sprintf("http://tempo.%s:3100", namespace),
+						"type": "tempo",
+						"jsonData": map[string]interface{}{
+							"serviceMap": map[string]interface{}{
+								"datasourceUid": "PBFA97CFB590B2093",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -150,6 +160,18 @@ func DoInit(namespace string, createNamespace bool) {
 	}
 
 	installChart(namespace, "grafana", "loki", "loki", lokiValues)
+
+	tempoValues := map[string]interface{}{
+		"tempo": map[string]interface{}{
+			"metricsGenerator": map[string]interface{}{
+				"enabled":        true,
+				"remoteWriteUrl": fmt.Sprintf("http://victoria-victoria-metrics-single-server.%s:8428/api/v1/write", namespace),
+			},
+			"reportingEnabled": false,
+		},
+	}
+
+	installChart(namespace, "grafana", "tempo", "tempo", tempoValues)
 }
 
 func installChart(namespace string, repoName string, chartName string, releaseName string, values map[string]interface{}) {

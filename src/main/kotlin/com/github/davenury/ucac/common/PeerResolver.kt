@@ -44,4 +44,6 @@ class PeerResolver(
     fun addPeerToPeerset(peersetId: PeersetId, peerId: PeerId) {
         peersets[peersetId]!!.add(peerId)
     }
+
+    fun peerName(): String = currentPeer.peerId
 }

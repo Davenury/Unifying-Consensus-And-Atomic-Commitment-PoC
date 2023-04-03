@@ -3,11 +3,13 @@ package com.github.davenury.ucac.commitment.twopc
 import com.github.davenury.common.Change
 import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.httpClient
+import com.zopa.ktor.opentracing.asyncTraced
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
 interface TwoPCProtocolClient {
@@ -48,7 +50,7 @@ class TwoPCProtocolClientImpl : TwoPCProtocolClient {
         urlPath: String
     ): List<Boolean> =
         peersWithBody.map {
-            CoroutineScope(Dispatchers.IO).async {
+            CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
                 send2PCMessage<T, Unit>("http://${it.first.address}/$urlPath", it.second)
             }.let { coroutine ->
                 Pair(it.first, coroutine)
