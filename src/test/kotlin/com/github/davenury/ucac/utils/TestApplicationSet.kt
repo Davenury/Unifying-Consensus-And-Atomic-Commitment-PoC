@@ -7,6 +7,9 @@ import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.createApplication
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert
 import org.slf4j.LoggerFactory
 
@@ -71,7 +74,10 @@ class TestApplicationSet(
 
     fun stopApps(gracePeriodMillis: Long = 200, timeoutPeriodMillis: Long = 1000) {
         logger.info("Stopping apps")
-        apps.forEach { (_, app) -> app.stop(gracePeriodMillis, timeoutPeriodMillis) }
+        runBlocking {
+            apps.map { (_, app) -> GlobalScope.launch { app.stop(gracePeriodMillis, timeoutPeriodMillis) } }
+                .forEach { it.join() }
+        }
     }
 
     fun getPeer(peerId: String): PeerAddress = getPeer(PeerId(peerId))
