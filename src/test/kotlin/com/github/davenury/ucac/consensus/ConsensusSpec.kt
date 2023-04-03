@@ -1,8 +1,9 @@
 package com.github.davenury.ucac.consensus
 
 import com.github.davenury.common.*
-import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.InitialHistoryEntry
+import com.github.davenury.common.history.PersistentHistory
+import com.github.davenury.common.persistence.InMemoryPersistence
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
@@ -893,7 +894,7 @@ class ConsensusSpec : IntegrationTestBase() {
         )
         val consensus = RaftConsensusProtocolImpl(
             PeersetId("peerset0"),
-            InMemoryHistory(),
+            PersistentHistory(InMemoryPersistence()),
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
             protocolClient = RaftProtocolClientImpl(),

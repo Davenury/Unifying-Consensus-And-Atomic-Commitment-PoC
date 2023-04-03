@@ -1,8 +1,10 @@
 package com.github.davenury.ucac.history
 
 import com.github.davenury.common.history.*
+import com.github.davenury.common.persistence.InMemoryPersistence
 import com.github.davenury.ucac.utils.TestLogExtension
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import strikt.api.expectThrows
@@ -12,16 +14,20 @@ import strikt.api.expectThrows
  */
 @ExtendWith(TestLogExtension::class)
 internal class HistoryTest {
+    private lateinit var history: PersistentHistory
+
+    @BeforeEach
+    fun setUp() {
+        history = PersistentHistory(InMemoryPersistence())
+    }
+
     @Test
     fun `initial entry`(): Unit = runBlocking {
-        val history = InMemoryHistory()
         assert(history.getCurrentEntry() == InitialHistoryEntry)
     }
 
     @Test
     fun `add entry`(): Unit = runBlocking {
-        val history = InMemoryHistory()
-
         val parentId = history.getCurrentEntryId()
         val entry = IntermediateHistoryEntry("test", parentId)
         history.addEntry(entry)
@@ -31,8 +37,6 @@ internal class HistoryTest {
 
     @Test
     fun `add wrong entry`(): Unit = runBlocking {
-        val history = InMemoryHistory()
-
         val entry = IntermediateHistoryEntry("test", "non existent id")
         expectThrows<HistoryException> {
             history.addEntry(entry)
@@ -41,8 +45,6 @@ internal class HistoryTest {
 
     @Test
     fun `add the same entry multiple times`(): Unit = runBlocking {
-        val history = InMemoryHistory()
-
         val parentId = history.getCurrentEntryId()
         val entry1 = IntermediateHistoryEntry("test1", parentId)
         val entry2 = IntermediateHistoryEntry("test2", parentId)
@@ -54,8 +56,6 @@ internal class HistoryTest {
 
     @Test
     fun `get entry from history`(): Unit = runBlocking {
-        val history = InMemoryHistory()
-
         val parentId = history.getCurrentEntryId()
         val entry1 = IntermediateHistoryEntry("test1", parentId)
         val entry2 = IntermediateHistoryEntry("test2", entry1.getId())
