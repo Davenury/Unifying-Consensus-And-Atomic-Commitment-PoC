@@ -135,7 +135,7 @@ class ApplicationUcac constructor(
 
         install(OpenTracingServer) {
             addTag("threadName") { Thread.currentThread().name }
-            filter { call -> call.request.path().startsWith("/_meta") }
+            filter { call -> call.request.path().startsWith("/_meta") || call.request.path().startsWith("/consensus/heartbeat") }
         }
 
         install(CallLogging) {

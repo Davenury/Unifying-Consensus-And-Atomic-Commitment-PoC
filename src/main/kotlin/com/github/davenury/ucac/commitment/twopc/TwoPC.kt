@@ -75,9 +75,13 @@ class TwoPC(
             }
 
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(result))
+            this.setTag("result", result.name.lowercase())
+            this.finish()
             signal(Signal.TwoPCOnChangeApplied, change)
         } catch (e: Exception) {
             changeIdToCompletableFuture[mainChangeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+            this.setTag("result", "conflict")
+            this.finish()
         }
     }
 

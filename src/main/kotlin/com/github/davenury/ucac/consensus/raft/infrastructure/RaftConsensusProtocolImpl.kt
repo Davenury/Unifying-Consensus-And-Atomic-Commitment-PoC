@@ -233,8 +233,7 @@ class RaftConsensusProtocolImpl(
         tryPropagatingChangesToLeader()
     }
 
-    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse =
-        span("Raft.handleHeartbeat") {
+    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
             return mutex.withLock {
                 logger.debug("Handling heartbeat: first change ${heartbeat.logEntries.firstOrNull()}, last change: ${heartbeat.logEntries.lastOrNull()}, overall: ${heartbeat.logEntries.size}")
                 heartbeat.logEntries.forEach {
@@ -572,7 +571,9 @@ class RaftConsensusProtocolImpl(
 
         acceptedItems
             .map { changeIdToCompletableFuture[it.changeId] }
-            .forEach { it!!.complete(ChangeResult(ChangeResult.Status.SUCCESS)) }
+            .forEach {
+                it!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
+            }
 
         if (acceptedItems.isNotEmpty()) scheduleHeartbeatToPeers(false)
     }
@@ -736,6 +737,8 @@ class RaftConsensusProtocolImpl(
                     )
                     result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                     transactionBlocker.release(acquisition)
+                    this.setTag("result", "conflict")
+                    this.finish()
                     return
                 }
 
@@ -784,12 +787,11 @@ class RaftConsensusProtocolImpl(
                 ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
         }
     }
-    
-    private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit =
-        span("Raft.sendRequestToLeader") {
-            with(CoroutineScope(leaderRequestExecutorService)) {
-                launchTraced(MDCContext()) {
-                    var result: ChangeResult? = null
+
+    private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit = span("Raft.sendRequestToLeader") {
+        with(CoroutineScope(leaderRequestExecutorService) + tracingContext()) {
+            launchTraced(MDCContext()) {
+                var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
                     while (result == null) {
                         val address: String
@@ -810,6 +812,8 @@ class RaftConsensusProtocolImpl(
                         if(result == null) delay(heartbeatDelay.toMillis())
                     }
                     if (result.status != ChangeResult.Status.SUCCESS) {
+                        this@span.setTag("result", result.status.name.lowercase())
+                        this@span.finish()
                         cf.complete(result)
                     }
                 }
@@ -817,7 +821,7 @@ class RaftConsensusProtocolImpl(
         }
 
     //   TODO: only one change can be proposed at the same time
-    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
+    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> = span("Raft.proposeChangeAsync") {
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         val result = changeIdToCompletableFuture[change.id]!!
         when {
@@ -852,8 +856,9 @@ class RaftConsensusProtocolImpl(
         delay: Duration = heartbeatDelay
     ): Unit = span("Raft.launchHeartbeatToPeer"){
         if (shouldISendHeartbeatToPeer(peer)) {
-            with(CoroutineScope(executorService!!)) {
-                launchTraced(MDCContext()) {
+            with(CoroutineScope(executorService!!) + tracingContext()) {
+                val context = if(sendInstantly) MDCContext() + tracingContext() else MDCContext()
+                launchTraced(context) {
                     if (!sendInstantly) {
                         logger.debug("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
                         delay(delay.toMillis())
