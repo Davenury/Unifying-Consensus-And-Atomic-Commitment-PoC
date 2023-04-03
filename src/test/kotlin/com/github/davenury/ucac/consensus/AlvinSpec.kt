@@ -4,13 +4,13 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.common.history.PersistentHistory
 import com.github.davenury.common.persistence.InMemoryPersistence
+import com.github.davenury.common.txblocker.PersistentTransactionBlocker
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.PeerResolver
-import com.github.davenury.ucac.common.TransactionBlocker
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -43,7 +43,6 @@ class AlvinSpec : IntegrationTestBase() {
 
     private val knownPeerIp = "localhost"
     private val unknownPeerIp = "198.18.0.0"
-    private val noneLeader = null
 
     @BeforeEach
     fun setUp() {
@@ -118,13 +117,14 @@ class AlvinSpec : IntegrationTestBase() {
     @Test
     fun `1000 change processed sequentially`(): Unit = runBlocking {
         val peers = 5
+        var changeNum = 0
 
         val phaser = Phaser(peers)
         phaser.register()
 
 
         val peerChangeAccepted = SignalListener {
-            logger.info("Arrived change: ${it.change}")
+            logger.info("Arrived $changeNum change: ${it.change}")
             phaser.arrive()
         }
 
@@ -155,6 +155,7 @@ class AlvinSpec : IntegrationTestBase() {
             logger.info("Change $it is processed $newTime ms")
             time += newTime
             phaser.arriveAndAwaitAdvanceWithTimeout()
+            changeNum+=1
             change = createChange(null, parentId = change.toHistoryEntry(peerset(0)).getId())
         }
         // when: peer1 executed change
@@ -563,7 +564,7 @@ class AlvinSpec : IntegrationTestBase() {
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
             protocolClient = AlvinProtocolClientImpl(),
-            transactionBlocker = TransactionBlocker(),
+            transactionBlocker =  PersistentTransactionBlocker(InMemoryPersistence()),
             isMetricTest = false
         )
         expect {

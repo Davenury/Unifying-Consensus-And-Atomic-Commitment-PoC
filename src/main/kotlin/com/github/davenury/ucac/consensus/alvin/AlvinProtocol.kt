@@ -3,13 +3,14 @@ package com.github.davenury.ucac.consensus.alvin
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.common.history.HistoryEntry
+import com.github.davenury.common.txblocker.TransactionAcquisition
+import com.github.davenury.common.txblocker.TransactionBlocker
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimer
 import com.github.davenury.ucac.common.ProtocolTimerImpl
-import com.github.davenury.ucac.common.TransactionBlocker
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.slf4j.MDCContext
@@ -170,7 +171,7 @@ class AlvinProtocol(
 
         val votesContainer = if (message.result == AlvinResult.COMMIT) entryIdToVotesCommit else entryIdToVotesAbort
         votesContainer[entryId] = (votesContainer.getOrDefault(entryId, listOf()) + listOf(message.peerId)).distinct()
-        checkVotes(messageEntry,change)
+        checkVotes(messageEntry, change)
 
         return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
     }
@@ -237,7 +238,7 @@ class AlvinProtocol(
             }
 
             try {
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, change.id)
+                transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
             } catch (ex: AlreadyLockedException) {
                 logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
@@ -253,7 +254,7 @@ class AlvinProtocol(
                     }"
                 )
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                transactionBlocker.tryToReleaseBlockerChange(ProtocolName.CONSENSUS, change.id)
+                transactionBlocker.release(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
                 return
             }
         }
@@ -406,7 +407,12 @@ class AlvinProtocol(
                 throw AlvinHistoryBlocked(transactionBlocker.getChangeId()!!, transactionBlocker.getProtocolName()!!)
 
             !transactionBlocker.isAcquired() && changeIdToCompletableFuture[changeId]?.isDone != true ->
-                transactionBlocker.tryToBlock(ProtocolName.CONSENSUS, Change.fromHistoryEntry(entry.entry)!!.id)
+                transactionBlocker.tryAcquireReentrant(
+                    TransactionAcquisition(
+                        ProtocolName.CONSENSUS,
+                        Change.fromHistoryEntry(entry.entry)!!.id
+                    )
+                )
         }
     }
 
@@ -549,7 +555,7 @@ class AlvinProtocol(
             resultEntry = entry
             if (history.containsEntry(entry.entry.getId())) {
                 scheduleCommitMessages(entry, AlvinResult.COMMIT)
-            }else if(changeIdToCompletableFuture[changeId]?.isDone == true){
+            } else if (changeIdToCompletableFuture[changeId]?.isDone == true) {
                 scheduleCommitMessages(entry, AlvinResult.ABORT)
             }
         } while (changeIdToCompletableFuture[changeId]?.isDone == true)
@@ -561,7 +567,7 @@ class AlvinProtocol(
         if (history.containsEntry(entry.entry.getId())) {
             scheduleCommitMessages(entry, AlvinResult.COMMIT)
             return
-        }else if(changeIdToCompletableFuture[changeId]?.isDone == true){
+        } else if (changeIdToCompletableFuture[changeId]?.isDone == true) {
             scheduleCommitMessages(entry, AlvinResult.ABORT)
             return
         }
@@ -598,7 +604,7 @@ class AlvinProtocol(
     private suspend fun scheduleCommitMessages(entry: AlvinEntry, result: AlvinResult) {
         scheduleMessages(entry.entry, null, entry.epoch) { peerAddress ->
             val response = protocolClient.sendCommit(peerAddress, AlvinCommit(entry.toDto(), result, peerId))
-            if(response.message != null) updateVotes(entry,response.message)
+            if (response.message != null) updateVotes(entry, response.message)
             response
         }
     }
@@ -607,7 +613,7 @@ class AlvinProtocol(
         val change = Change.fromHistoryEntry(entry.entry)!!
         val entryId = entry.entry.getId()
 
-        if(changeIdToCompletableFuture[change.id]?.isDone == true) return
+        if (changeIdToCompletableFuture[change.id]?.isDone == true) return
 
         val entryIdToVotes = when (response.result) {
             AlvinResult.COMMIT -> entryIdToVotesCommit
@@ -620,7 +626,7 @@ class AlvinProtocol(
     }
 
 
-//  Mutex function
+    //  Mutex function
     private suspend fun checkVotes(entry: AlvinEntry, change: Change) {
         val entryId = entry.entry.getId()
         val myselfVotesForCommit = history.isEntryCompatible(entry.entry)
@@ -658,10 +664,7 @@ class AlvinProtocol(
             logger.info("The result of change (${change.id}) is $changeResult")
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(changeResult))
             signalPublisher.signal(signal, this, mapOf(peersetId to otherConsensusPeers()), change = change)
-            if (transactionBlocker.getChangeId() == change.id) transactionBlocker.tryToReleaseBlockerChange(
-                ProtocolName.CONSENSUS,
-                change.id
-            )
+            transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
         }
     }
 
@@ -810,7 +813,6 @@ data class RequestResult<A>(
     val response: A,
     val unauthorized: Boolean = false
 )
-
 
 
 enum class AlvinStatus {

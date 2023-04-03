@@ -779,14 +779,14 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit = span("Raft.sendRequestToLeader") {
         with(CoroutineScope(leaderRequestExecutorService)) {
-            launch(MDCContext()) {
+            async(MDCContext()) {
                 var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
                 while (result == null) {
                     val address: String
                     if (votedFor == null || votedFor!!.id == peerId) {
                         changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
-                        return@launch
+                        return@async
                     } else {
                         address = peerResolver.resolve(votedFor!!.id).address
                     }
@@ -844,7 +844,7 @@ class RaftConsensusProtocolImpl(
     ): Unit {
         if (shouldISendHeartbeatToPeer(peer)) {
             with(CoroutineScope(executorService!!)) {
-                launch(MDCContext()) {
+                async(MDCContext()) {
                     if (!sendInstantly) {
                         logger.debug("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
                         delay(delay.toMillis())
