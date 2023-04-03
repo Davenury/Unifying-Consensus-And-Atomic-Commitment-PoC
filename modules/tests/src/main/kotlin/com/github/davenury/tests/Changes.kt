@@ -5,10 +5,7 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
 import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
 import io.ktor.client.request.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
@@ -29,6 +26,25 @@ class Changes(
     private val mutex = Mutex()
     private val notificationMutex = Mutex()
     private val executor = Executors.newCachedThreadPool().asCoroutineDispatcher()
+    private val consensusLeaders: Map<PeersetId, PeerAddress>
+
+    init {
+        consensusLeaders = peers.map { (peersetId, _) ->
+            val consensusLeaderId = GlobalScope.async {
+                changes[peersetId]!!.getConsensusLeader()
+            }
+            peersetId to consensusLeaderId
+        }.let {
+            val results = runBlocking {
+                it.map { deferred -> deferred.second }.awaitAll()
+            }
+
+            it.map { pair -> pair.first }.zip(results).map { (peersetId, peerId) ->
+                peersetId to peers[peersetId]!!.find { peerAddress -> peerAddress.peerId == peerId }!!
+            }
+
+        }.toMap()
+    }
 
     suspend fun handleNotification(notification: Notification) = notificationMutex.withLock {
         logger.info("Handling notification: $notification")
@@ -48,8 +64,7 @@ class Changes(
     private suspend fun getChange(notification: Notification, peersetId: PeersetId): Change {
         return if (acProtocol == ACProtocol.TWO_PC) {
             try {
-                val consensusLeader = changes[peersetId]!!.getConsensusLeader()
-                    .let { consensusLeaderId -> peers[peersetId]!!.find { it.peerId == consensusLeaderId } }!!
+                val consensusLeader = consensusLeaders[peersetId]!!
                 httpClient.get("http://${consensusLeader.address}/v2/last-change")
             } catch (e: Exception) {
                 logger.error("Could not receive change from ${peers[peersetId]!!.first()}", e)
@@ -127,13 +142,13 @@ class Changes(
 
 class OnePeersetChanges(
     private val peersAddresses: List<PeerAddress>,
-    private val sender: Sender
+    private val sender: Sender,
 ) {
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
+    private var consensusLeader: PeerId? = null
 
     suspend fun introduceChange(change: Change): ChangeState {
-        val consensusLeaderId = getConsensusLeader()
-        val address = peersAddresses.find { it.peerId == consensusLeaderId }!!
+        val address = peersAddresses.find { it.peerId == consensusLeader }!!
         return sender.executeChange(
             address,
             change
@@ -142,6 +157,7 @@ class OnePeersetChanges(
 
     suspend fun getConsensusLeader(): PeerId =
         sender.getConsensusLeaderId(peersAddresses.first())!!
+            .also { this.consensusLeader = it }
 
 
     fun getCurrentParentId(): String = parentId.get()
