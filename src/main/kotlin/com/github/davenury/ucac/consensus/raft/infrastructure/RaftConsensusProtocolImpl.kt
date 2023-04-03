@@ -14,7 +14,12 @@ import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.raft.domain.*
+import com.zopa.ktor.opentracing.launchTraced
 import com.zopa.ktor.opentracing.span
+import com.zopa.ktor.opentracing.tracingContext
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Mutex
@@ -779,18 +784,18 @@ class RaftConsensusProtocolImpl(
                 ?.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
         }
     }
-
+    
     private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit =
         span("Raft.sendRequestToLeader") {
             with(CoroutineScope(leaderRequestExecutorService)) {
-                launch(MDCContext()) {
+                launchTraced(MDCContext()) {
                     var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
                     while (result == null) {
                         val address: String
                         if (votedFor == null || votedFor!!.id == peerId) {
                             changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
-                            return@launch
+                            return@launchTraced
                         } else {
                             address = peerResolver.resolve(votedFor!!.id).address
                         }
@@ -845,10 +850,10 @@ class RaftConsensusProtocolImpl(
         isRegular: Boolean = false,
         sendInstantly: Boolean = false,
         delay: Duration = heartbeatDelay
-    ): Unit {
+    ): Unit = span("Raft.launchHeartbeatToPeer"){
         if (shouldISendHeartbeatToPeer(peer)) {
             with(CoroutineScope(executorService!!)) {
-                launch(MDCContext()) {
+                launchTraced(MDCContext()) {
                     if (!sendInstantly) {
                         logger.debug("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
                         delay(delay.toMillis())

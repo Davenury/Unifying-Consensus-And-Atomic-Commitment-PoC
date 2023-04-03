@@ -87,7 +87,7 @@ class RaftProtocolClientImpl : RaftProtocolClient {
         peersWithBody.map {
             val peer = it.first
             val body = it.second
-            CoroutineScope(Dispatchers.IO).async(MDCContext()) {
+            CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
                 sendConsensusMessage<T, K>(peer, urlPath, body)
             }.let { coroutine ->
                 Pair(peer, coroutine)
