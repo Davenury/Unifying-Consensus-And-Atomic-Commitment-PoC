@@ -43,6 +43,7 @@ class MeteredHistory(
 
     override fun isEntryCompatible(entry: HistoryEntry): Boolean = span("History.isEntryCompatible") {
         meterRegistry.timer("history_is_entry_compatible").record<Boolean> { delegate.isEntryCompatible(entry) }!!
+            .also { this.setTag("result", it.toString()) }
     }
 
     override fun getAllEntriesUntilHistoryEntryId(historyEntryId: String): List<HistoryEntry> = span("History.getAllEntriesUntilHistoryEntryId") {
