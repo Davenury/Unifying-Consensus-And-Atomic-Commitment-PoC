@@ -17,7 +17,6 @@ import io.ktor.http.*
 import io.ktor.util.collections.*
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
@@ -363,9 +362,11 @@ class PigPaxosSpec : IntegrationTestBase() {
             signalListeners = (0..4).map { "peer$it" }.associateWith { signalListener },
         )
 
+
         election1Phaser.arriveAndAwaitAdvanceWithTimeout()
 
-        val firstLeaderAddress = getLeaderAddress(apps.getRunningApps()[0])
+        val firstLeaderAddress =
+            apps.getRunningApps().firstNotNullOf { getLeaderAddress(it) }
 
         changePeers = {
             val peers = apps.getRunningPeers(peerset(0).peersetId).mapValues { entry ->
@@ -579,7 +580,7 @@ class PigPaxosSpec : IntegrationTestBase() {
 
         logger.info("First election finished")
 
-        val firstLeaderAddress = getLeaderAddress(peers[0])
+        val firstLeaderAddress = peers.mapNotNull { getLeaderAddress(it) }.first()
 
         logger.info("First leader: $firstLeaderAddress")
 
@@ -857,9 +858,9 @@ class PigPaxosSpec : IntegrationTestBase() {
         return leaderId?.let { apps.getPeer(it).address }
     }
 
-    private fun getLeaderAddress(app: ApplicationUcac): PeerAddress {
-        val leaderId = (app.getConsensusProtocol() as PigPaxosProtocol).getLeaderId()!!
-        return apps.getPeer(leaderId)
+    private fun getLeaderAddress(app: ApplicationUcac): PeerAddress? {
+        val leaderId = (app.getConsensusProtocol() as PigPaxosProtocol).getLeaderId()
+        return leaderId?.let { apps.getPeer(it) }
     }
 
     private fun peer(peerId: Int): String = "peer$peerId"

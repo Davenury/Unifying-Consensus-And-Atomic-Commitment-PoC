@@ -502,7 +502,7 @@ class PigPaxosProtocolImpl(
         val peers = otherConsensusPeers().size
 
         while (responses.size < peers) {
-            logger.info("Gathered responses: ${responses.size} vs ${peers}")
+            logger.info("Gathered responses: ${responses.size} vs $peers")
             val response = channel.receive()
 
             logger.info("Received response: $response")
@@ -549,7 +549,7 @@ class PigPaxosProtocolImpl(
     private fun isMessageFromNotLeader(round: Int, leaderId: PeerId) =
         votedFor.round > round || (votedFor.round == round && leaderId != votedFor.id)
 
-    private suspend fun amIALeader() = votedFor.id == globalPeerId
+    private fun amIALeader() = votedFor.id == globalPeerId
 
     private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout.dividedBy(2), ctx)
 
