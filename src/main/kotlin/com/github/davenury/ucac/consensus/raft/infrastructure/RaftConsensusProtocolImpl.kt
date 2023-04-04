@@ -157,7 +157,7 @@ class RaftConsensusProtocolImpl(
             executorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
         }
 
-        logger.info("I have been selected as a leader (in term $currentTerm)")
+        logger.info("I have been selected as a leader (in term $currentTerm), peerIndices - ${PeerIndices(state.lastApplied, state.lastApplied)}")
 
         peerToNextIndex.keys.forEach {
             peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
@@ -231,6 +231,7 @@ class RaftConsensusProtocolImpl(
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse = span("Raft.handleHeartbeat") {
         return mutex.withLock {
+            logger.info("Handling heartbeat: $heartbeat")
             heartbeat.logEntries.forEach {
                 val entry = HistoryEntry.deserialize(it.serializedEntry)
                 signalPublisher.signal(
@@ -327,10 +328,11 @@ class RaftConsensusProtocolImpl(
                 notAppliedProposedChanges.isNotEmpty() -> {
                     logger.info("Introduce new changes")
                     val changeId = notAppliedProposedChanges.first().changeId
-                transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
+                    transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
                 }
             }
 
+            logger.info("Updating ledger with $notAppliedProposedChanges")
             updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
 
             tryPropagatingChangesToLeader()
@@ -618,18 +620,20 @@ class RaftConsensusProtocolImpl(
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
         val allChanges = newCommittedChanges + newProposedChanges
         val lastAppliedChangeId = peerIndices.acceptedEntryId
-        if (newProposedChanges.isNotEmpty())
-            logger.info("Leader sends a message to $peerAddress $allChanges")
 
         val limitedCommittedChanges = newCommittedChanges.take(maxChangesPerMessage)
         val lastLimitedCommittedChange = newCommittedChanges.lastOrNull()
         val lastId = lastLimitedCommittedChange?.entry?.getId()
 
         val (currentEntryId, leaderCommitId, changesToSend) =
-            if (limitedCommittedChanges.size < allChanges.size && lastId != null)
+            if (limitedCommittedChanges.size < allChanges.size && lastId != null) {
+                logger.info("Leader sends a message to $peerAddress $limitedCommittedChanges")
                 Triple(lastId, lastId, limitedCommittedChanges)
-            else
+            }
+            else {
+                logger.info("Leader sends a message to $peerAddress $allChanges")
                 Triple(history.getCurrentEntryId(), state.commitIndex, allChanges)
+            }
 
 
         return ConsensusHeartbeat(
