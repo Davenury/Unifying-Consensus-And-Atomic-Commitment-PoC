@@ -112,7 +112,7 @@ class ApplicationUcac constructor(
                 .withType(ConstSampler.TYPE)
                 .withParam(1))
             .withReporter(Configuration.ReporterConfiguration.fromEnv()
-                .withLogSpans(true)
+                .withLogSpans(false)
                 .withSender(
                     Configuration.SenderConfiguration()
                         .withAgentHost("tempo")
