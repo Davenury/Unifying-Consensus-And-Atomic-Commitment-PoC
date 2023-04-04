@@ -622,7 +622,7 @@ class RaftConsensusProtocolImpl(
         val lastAppliedChangeId = peerIndices.acceptedEntryId
 
         val limitedCommittedChanges = newCommittedChanges.take(maxChangesPerMessage)
-        val lastLimitedCommittedChange = newCommittedChanges.lastOrNull()
+        val lastLimitedCommittedChange = limitedCommittedChanges.lastOrNull()
         val lastId = lastLimitedCommittedChange?.entry?.getId()
 
         val (currentEntryId, leaderCommitId, changesToSend) =
