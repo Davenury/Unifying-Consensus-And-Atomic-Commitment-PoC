@@ -2,15 +2,14 @@ package com.github.davenury.ucac.consensus
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
+import com.github.davenury.common.history.PersistentHistory
 import com.github.davenury.common.persistence.InMemoryPersistence
 import com.github.davenury.common.txblocker.PersistentTransactionBlocker
-import com.github.davenury.common.history.PersistentHistory
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
-import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -55,7 +54,8 @@ class ConsensusSpec : IntegrationTestBase() {
     @Test
     fun `happy path`(): Unit = runBlocking {
         val change1 = createChange(null)
-        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(PeersetId("peerset0")).getId())
+        val change2 =
+            createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(PeersetId("peerset0")).getId())
 
         val peersWithoutLeader = 4
 
@@ -139,7 +139,7 @@ class ConsensusSpec : IntegrationTestBase() {
         phaser.register()
 
         val peerLeaderElected = SignalListener {
-            if(leaderElectedPhaser.phase == 0) {
+            if (leaderElectedPhaser.phase == 0) {
                 logger.info("Arrived ${it.subject.getPeerName()}")
                 leaderElectedPhaser.arrive()
             }
@@ -180,7 +180,7 @@ class ConsensusSpec : IntegrationTestBase() {
                 }.isSuccess()
             }
             phaser.arriveAndAwaitAdvanceWithTimeout()
-            iter+=1
+            iter += 1
             change = createChange(null, parentId = change.toHistoryEntry(PeersetId("peerset0")).getId())
         }
         // when: peer1 executed change
@@ -192,6 +192,97 @@ class ConsensusSpec : IntegrationTestBase() {
             expectThat(changes.size).isEqualTo(endRange)
         }
     }
+
+
+    @Test
+    fun `process 50 changes, then one peer doesn't respond on 250 changes and finally synchronize on all`(): Unit =
+        runBlocking {
+            val peersWithoutLeader = 4
+            var iter = 0
+            val isFirstPartCommitted: AtomicBoolean = AtomicBoolean(false)
+            val isAllChangeCommitted: AtomicBoolean = AtomicBoolean(false)
+            var change = createChange(null)
+
+            val leaderElectedPhaser = Phaser(peersWithoutLeader)
+            val allPeerChangePhaser = Phaser(peersWithoutLeader)
+            val changePhaser = Phaser(peersWithoutLeader-1)
+            val endingPhaser = Phaser(1)
+
+            listOf(leaderElectedPhaser,allPeerChangePhaser,changePhaser,endingPhaser).forEach{it.register()}
+
+            val peerLeaderElected = SignalListener {
+                if (leaderElectedPhaser.phase == 0) {
+                    logger.info("Arrived ${it.subject.getPeerName()}")
+                    leaderElectedPhaser.arrive()
+                }
+            }
+
+            val peerChangeAccepted = SignalListener {
+                logger.info("Arrived change$iter: ${it.change}")
+                if(isFirstPartCommitted.get())changePhaser.arrive()
+                else allPeerChangePhaser.arrive()
+            }
+
+            val ignoringPeerChangeAccepted = SignalListener {
+                if (isFirstPartCommitted.get() && !isAllChangeCommitted.get()) throw RuntimeException("Ignore heartbeat")
+                logger.info("Arrived change$iter: ${it.change}")
+                if (isAllChangeCommitted.get() && it.change?.id == change.id) endingPhaser.arrive()
+                else if(!isFirstPartCommitted.get()) allPeerChangePhaser.arrive()
+            }
+
+
+            apps = TestApplicationSet(
+                mapOf(
+                    "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+                ),
+                signalListeners = (0..3).map { "peer$it" }.associateWith {
+                    mapOf(
+                        Signal.ConsensusLeaderElected to peerLeaderElected,
+                        Signal.ConsensusFollowerChangeAccepted to ignoringPeerChangeAccepted
+                    )
+                } + mapOf(
+                    "peer4" to mapOf(
+                        Signal.ConsensusLeaderElected to peerLeaderElected,
+                        Signal.ConsensusFollowerChangeAccepted to peerChangeAccepted
+                    )
+                )
+            )
+            val peerAddresses = apps.getPeerAddresses("peerset0")
+
+            leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
+            logger.info("Leader elected")
+
+            repeat(50) {
+                expectCatching {
+                    executeChange("${apps.getPeer("peer0").address}/v2/change/sync", change)
+                }.isSuccess()
+                allPeerChangePhaser.arriveAndAwaitAdvanceWithTimeout()
+                iter += 1
+                change = createChange(null, parentId = change.toHistoryEntry(PeersetId("peerset0")).getId())
+            }
+            // when: peer1 executed change
+
+            isFirstPartCommitted.set(true)
+
+
+            repeat(200) {
+                expectCatching {
+                    executeChange("${apps.getPeer("peer0").address}/v2/change/sync", change)
+                }.isSuccess()
+                changePhaser.arriveAndAwaitAdvanceWithTimeout()
+                iter += 1
+                change = createChange(null, parentId = change.toHistoryEntry(PeersetId("peerset0")).getId())
+            }
+
+            isAllChangeCommitted.set(true)
+
+            endingPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+            askAllForChanges(peerAddresses.values).forEach { changes ->
+                // then: there are two changes
+                expectThat(changes.size).isEqualTo(250)
+            }
+        }
 
     @Test
     fun `change should be applied without waiting for election`(): Unit = runBlocking {
