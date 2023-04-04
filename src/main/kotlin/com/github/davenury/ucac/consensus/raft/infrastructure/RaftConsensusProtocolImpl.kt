@@ -855,8 +855,9 @@ class RaftConsensusProtocolImpl(
         sendInstantly: Boolean = false,
         delay: Duration = heartbeatDelay
     ): Unit = span("Raft.launchHeartbeatToPeer"){
+        this.setTag("toPeer", peerId.peerId)
         if (shouldISendHeartbeatToPeer(peer)) {
-            with(CoroutineScope(executorService!!) + tracingContext()) {
+            with(CoroutineScope(executorService!!)) {
                 val context = if(sendInstantly) MDCContext() + tracingContext() else MDCContext()
                 launchTraced(context) {
                     if (!sendInstantly) {
