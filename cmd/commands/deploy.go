@@ -473,7 +473,7 @@ func createPVC(namespace string, config utils.PeerConfig) {
 		panic(err)
 	}
 
-	storageClass := ""
+	storageClass := "local-path"
 
 	pvc := &apiv1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
