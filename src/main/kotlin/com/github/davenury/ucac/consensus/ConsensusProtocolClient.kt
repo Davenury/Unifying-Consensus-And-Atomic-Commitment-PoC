@@ -1,6 +1,6 @@
 package com.github.davenury.ucac.consensus
 
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.raftHttpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -29,12 +29,12 @@ open class ConsensusProtocolClient{
         } catch (e: Exception) {
             when {
                 e is ClientRequestException && e.response.status == HttpStatusCode.Unauthorized -> {
-                    logger.error("Received unauthorized response from peer: ${peerWithBody.first.globalPeerId}")
+                    logger.error("Received unauthorized response from peer: ${peerWithBody.first.peerId}")
                     ConsensusResponse(peerWithBody.first.address, null, true)
                 }
 
                 else -> {
-                    logger.error("Error while evaluating response from ${peerWithBody.first.globalPeerId}", e)
+                    logger.error("Error while evaluating response from ${peerWithBody.first.peerId}", e)
                     ConsensusResponse(peerWithBody.first.address, null)
                 }
             }
@@ -46,7 +46,7 @@ open class ConsensusProtocolClient{
         suffix: String,
         message: Message,
     ): Response? {
-        logger.debug("Sending request to: ${peer.globalPeerId} ${peer.address}, message: $message")
+        logger.debug("Sending request to: ${peer.peerId} ${peer.address}, message: $message")
         return raftHttpClient.post<Response>("http://${peer.address}/${suffix}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)

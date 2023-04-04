@@ -1,22 +1,20 @@
 package com.github.davenury.ucac.consensus
 
 import com.github.davenury.common.*
-import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.InitialHistoryEntry
+import com.github.davenury.common.history.PersistentHistory
+import com.github.davenury.common.persistence.InMemoryPersistence
+import com.github.davenury.common.txblocker.PersistentTransactionBlocker
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
-import com.github.davenury.ucac.common.GlobalPeerId
-import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
-import com.github.davenury.ucac.common.TransactionBlocker
-import com.github.davenury.ucac.consensus.raft.RaftProtocolClientImpl
-import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
 import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.IntegrationTestBase
-import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestLogExtension
 import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.request.*
@@ -25,7 +23,6 @@ import io.ktor.http.*
 import io.ktor.util.collections.*
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.fail
@@ -37,17 +34,14 @@ import strikt.assertions.*
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.math.log
-import kotlin.reflect.full.declaredMemberProperties
-import kotlin.reflect.jvm.isAccessible
 import kotlin.system.measureTimeMillis
+import com.github.davenury.ucac.utils.TestApplicationSet
 
 @ExtendWith(TestLogExtension::class)
 class AlvinSpec : IntegrationTestBase() {
 
     private val knownPeerIp = "localhost"
     private val unknownPeerIp = "198.18.0.0"
-    private val noneLeader = null
 
     @BeforeEach
     fun setUp() {
@@ -68,21 +62,23 @@ class AlvinSpec : IntegrationTestBase() {
         }
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith {
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { "peer$it" }.associateWith {
                 mapOf(
                     Signal.AlvinCommitChange to peerApplyChange
                 )
             }
         )
-        val peerAddresses = apps.getPeers(0)
+        val peerAddresses = apps.getRunningPeers("peerset0")
 
         delay(100)
 
         // when: peer1 executed change
         val change1 = createChange(null)
         expectCatching {
-            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change1)
+            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync", change1)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -98,9 +94,9 @@ class AlvinSpec : IntegrationTestBase() {
         }
 
         // when: peer2 executes change
-        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(0).getId())
+        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(peerset(0)).getId())
         expectCatching {
-            executeChange("${apps.getPeer(0, 1).address}/v2/change/sync", change2)
+            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync", change2)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -117,10 +113,10 @@ class AlvinSpec : IntegrationTestBase() {
         }
     }
 
-//    @Disabled("Currently one change is processed 3 seconds")
     @Test
     fun `1000 change processed sequentially`(): Unit = runBlocking {
         val peers = 5
+        var changeNum = 0
 
         val phaser = Phaser(peers)
         phaser.register()
@@ -132,14 +128,16 @@ class AlvinSpec : IntegrationTestBase() {
         }
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith {
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { peer(it) }.associateWith {
                 mapOf(
                     Signal.AlvinCommitChange to peerChangeAccepted
                 )
             }
         )
-        val peerAddresses = apps.getPeers(0)
+        val peerAddresses = apps.getRunningPeers("peerset0")
 
         var change = createChange(null)
 
@@ -150,13 +148,14 @@ class AlvinSpec : IntegrationTestBase() {
         (0 until endRange).forEach {
             val newTime = measureTimeMillis {
                 expectCatching {
-                    executeChange("${apps.getPeer(0, 0).address}/v2/change/async", change)
+                    executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync", change)
                 }.isSuccess()
             }
             logger.info("Change $it is processed $newTime ms")
             time += newTime
             phaser.arriveAndAwaitAdvanceWithTimeout()
-            change = createChange(null, parentId = change.toHistoryEntry(0).getId())
+            changeNum+=1
+            change = createChange(null, parentId = change.toHistoryEntry(peerset(0)).getId())
         }
         // when: peer1 executed change
 
@@ -167,7 +166,6 @@ class AlvinSpec : IntegrationTestBase() {
             expectThat(changes.size).isEqualTo(endRange)
         }
     }
-
 
     @Test
     fun `change leader fails after proposal`(): Unit = runBlocking {
@@ -196,22 +194,24 @@ class AlvinSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith {
-                if (it == 0) firstLeaderListener
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { peer(it) }.associateWith {
+                if (it == peer(0)) firstLeaderListener
                 else signalListener
             },
         )
 
 //      Start processing
         expectCatching {
-            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync?timeout=PT4S", change)
+            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?timeout=PT4S", change)
         }.isFailure()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 
-        apps.getRunningPeers(0)
+        apps.getRunningPeers(peerset(0).peersetId)
             .values
             .forEach {
                 val proposedChanges = askForProposedChanges(it)
@@ -256,22 +256,24 @@ class AlvinSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith {
-                if (it == 0) firstLeaderListener
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { peer(it) }.associateWith {
+                if (it == peer(0)) firstLeaderListener
                 else signalListener
             },
         )
 
 //      Start processing
         expectCatching {
-            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync?timeout=PT4S", change)
+            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?timeout=PT4S", change)
         }.isFailure()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 
-        apps.getRunningPeers(0)
+        apps.getRunningPeers(peerset(0).peersetId)
             .values
             .forEach {
                 val proposedChanges = askForProposedChanges(it)
@@ -314,22 +316,24 @@ class AlvinSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith {
-                if (it == 0) firstLeaderListener
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { peer(it) }.associateWith {
+                if (it == peer(0)) firstLeaderListener
                 else signalListener
             },
         )
 
 //      Start processing
         expectCatching {
-            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync?timeout=PT4S", change)
+            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?timeout=PT4S", change)
         }.isFailure()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 
-        apps.getRunningPeers(0)
+        apps.getRunningPeers(peerset(0).peersetId)
             .values
             .forEach {
                 val proposedChanges = askForProposedChanges(it)
@@ -360,15 +364,17 @@ class AlvinSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { peer(it) }.associateWith { signalListener },
         )
 
-        val peerAddresses = apps.getRunningPeers(0).values
+        val peerAddresses = apps.getRunningPeers(peerset(0).peersetId).values
 
 
         val peersToStop = peerAddresses.take(3)
-        peersToStop.forEach { apps.getApp(it.globalPeerId).stop(0, 0) }
+        peersToStop.forEach { apps.getApp(it.peerId).stop(0, 0) }
         val runningPeers = peerAddresses.filter { address -> address !in peersToStop }
         val change = createChange(null)
 
@@ -405,7 +411,7 @@ class AlvinSpec : IntegrationTestBase() {
         val change2 = createChange(2)
 
 
-        listOf(change1AbortPhaser, change2CommitPhaser,change2PropagatePhaser).forEach { it.register() }
+        listOf(change1AbortPhaser, change2CommitPhaser, change2PropagatePhaser).forEach { it.register() }
 
         val signalListener = mapOf(
             Signal.AlvinCommitChange to SignalListener {
@@ -424,12 +430,14 @@ class AlvinSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { peer(it) }.associateWith { signalListener },
         )
 
-        val peerAddresses = apps.getRunningPeers(0).values
-        val peerAddresses2 = apps.getRunningPeers(0)
+        val peerAddresses = apps.getRunningPeers(peerset(0).peersetId).values
+        val peerAddresses2 = apps.getRunningPeers(peerset(0).peersetId)
 
         val firstHalf: List<PeerAddress> = peerAddresses.take(2)
         val secondHalf: List<PeerAddress> = peerAddresses.drop(2)
@@ -437,7 +445,7 @@ class AlvinSpec : IntegrationTestBase() {
 //      Divide network
 
         firstHalf.forEach { address ->
-            val peers = apps.getRunningPeers(0).mapValues { entry ->
+            val peers = apps.getRunningPeers(peerset(0).peersetId).mapValues { entry ->
                 val peer = entry.value
                 if (secondHalf.contains(peer)) {
                     peer.copy(address = peer.address.replace(knownPeerIp, unknownPeerIp))
@@ -445,11 +453,11 @@ class AlvinSpec : IntegrationTestBase() {
                     peer
                 }
             }
-            apps.getApp(address.globalPeerId).setPeers(peers)
+            apps.getApp(address.peerId).setPeerAddresses(peers)
         }
 
         secondHalf.forEach { address ->
-            val peers = apps.getRunningPeers(0).mapValues { entry ->
+            val peers = apps.getRunningPeers(peerset(0).peersetId).mapValues { entry ->
                 val peer = entry.value
                 if (firstHalf.contains(peer)) {
                     peer.copy(address = peer.address.replace(knownPeerIp, unknownPeerIp))
@@ -457,7 +465,7 @@ class AlvinSpec : IntegrationTestBase() {
                     peer
                 }
             }
-            apps.getApp(address.globalPeerId).setPeers(peers)
+            apps.getApp(address.peerId).setPeerAddresses(peers)
         }
 
         logger.info("Network divided")
@@ -505,7 +513,7 @@ class AlvinSpec : IntegrationTestBase() {
 
 //      Merge network
         peerAddresses.forEach { address ->
-            apps.getApp(address.globalPeerId).setPeers(peerAddresses2)
+            apps.getApp(address.peerId).setPeerAddresses(peerAddresses2)
         }
 
         logger.info("Network merged")
@@ -534,21 +542,28 @@ class AlvinSpec : IntegrationTestBase() {
     @Test
     fun `unit tests of isMoreThanHalf() function`(): Unit = runBlocking {
         val peers = listOf(
-            PeerAddress(GlobalPeerId(0, 0), "1"),
-            PeerAddress(GlobalPeerId(0, 1), "2"),
-            PeerAddress(GlobalPeerId(0, 2), "3"),
+            PeerAddress(PeerId("peer0"), "1"),
+            PeerAddress(PeerId("peer1"), "2"),
+            PeerAddress(PeerId("peer2"), "3"),
+            PeerAddress(PeerId("peer3"), "4"),
+            PeerAddress(PeerId("peer4"), "5"),
+            PeerAddress(PeerId("peer5"), "6"),
         )
-            .associateBy { it.globalPeerId }
+            .associateBy { it.peerId }
             .toMutableMap()
 
-        val peerResolver = PeerResolver(GlobalPeerId(0, 0), peers)
-        val consensus = RaftConsensusProtocolImpl(
-            InMemoryHistory(),
-            "1",
+        val peerResolver = PeerResolver(
+            PeerId("peer0"), peers, mapOf(
+                PeersetId("peerset0") to listOf(PeerId("peer0"), PeerId("peer1"), PeerId("peer2"))
+            )
+        )
+        val consensus = AlvinProtocol(
+            PeersetId("peerset0"),
+            PersistentHistory(InMemoryPersistence()),
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
-            protocolClient = RaftProtocolClientImpl(),
-            transactionBlocker = TransactionBlocker(),
+            protocolClient = AlvinProtocolClientImpl(),
+            transactionBlocker =  PersistentTransactionBlocker(InMemoryPersistence()),
             isMetricTest = false
         )
         expect {
@@ -557,8 +572,10 @@ class AlvinSpec : IntegrationTestBase() {
             that(consensus.isMoreThanHalf(2)).isTrue()
         }
 
-        peers[GlobalPeerId(0, 3)] = PeerAddress(GlobalPeerId(0, 3), "4")
-        peerResolver.setPeers(peers)
+        peerResolver.addPeerToPeerset(
+            PeersetId("peerset0"),
+            PeerId("peer3"),
+        )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()
             that(consensus.isMoreThanHalf(1)).isFalse()
@@ -566,8 +583,10 @@ class AlvinSpec : IntegrationTestBase() {
             that(consensus.isMoreThanHalf(3)).isTrue()
         }
 
-        peers[GlobalPeerId(0, 4)] = PeerAddress(GlobalPeerId(0, 4), "5")
-        peerResolver.setPeers(peers)
+        peerResolver.addPeerToPeerset(
+            PeersetId("peerset0"),
+            PeerId("peer4"),
+        )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()
             that(consensus.isMoreThanHalf(1)).isFalse()
@@ -576,8 +595,10 @@ class AlvinSpec : IntegrationTestBase() {
             that(consensus.isMoreThanHalf(4)).isTrue()
         }
 
-        peers[GlobalPeerId(0, 5)] = PeerAddress(GlobalPeerId(0, 5), "6")
-        peerResolver.setPeers(peers)
+        peerResolver.addPeerToPeerset(
+            PeersetId("peerset0"),
+            PeerId("peer4"),
+        )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()
             that(consensus.isMoreThanHalf(1)).isFalse()
@@ -597,11 +618,27 @@ class AlvinSpec : IntegrationTestBase() {
 
         listOf(phaserGPACPeer, phaserAlvinPeers).forEach { it.register() }
 
-        val change1 = AddGroupChange("name", peersets = listOf(ChangePeersetInfo(0, InitialHistoryEntry.getId())),)
-        val change2 = AddGroupChange("name", peersets = listOf(ChangePeersetInfo(0, change1.toHistoryEntry(0).getId())),)
+        val change1 = AddGroupChange(
+            "name",
+            peersets = listOf(
+                ChangePeersetInfo(
+                    peerset(0),
+                    InitialHistoryEntry.getId()
+                )
+            )
+        )
+        val change2 = AddGroupChange(
+            "name",
+            peersets = listOf(
+                ChangePeersetInfo(
+                    peerset(0),
+                    change1.toHistoryEntry(peerset(0)).getId()
+                )
+            )
+        )
 
         val firstLeaderAction = SignalListener { signalData ->
-            val url = "http://${signalData.peers[0][0].address}/apply"
+            val url = "http://${signalData.peerResolver.resolve(peerId(1)).address}/apply"
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
@@ -658,19 +695,21 @@ class AlvinSpec : IntegrationTestBase() {
             )
 
         apps = TestApplicationSet(
-            listOf(5),
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
             signalListeners = mapOf(
-                0 to firstPeerSignals,
-                1 to peer1Signals,
-                2 to peerSignals,
-                3 to peerRaftSignals,
-                4 to peerRaftSignals,
+                peer(0) to firstPeerSignals,
+                peer(1) to peer1Signals,
+                peer(2) to peerSignals,
+                peer(3) to peerRaftSignals,
+                peer(4) to peerRaftSignals,
             ), configOverrides = mapOf(
-                0 to mapOf("gpac.maxLeaderElectionTries" to 2),
-                1 to mapOf("gpac.maxLeaderElectionTries" to 2),
-                2 to mapOf("gpac.maxLeaderElectionTries" to 2),
-                3 to mapOf("gpac.maxLeaderElectionTries" to 2),
-                4 to mapOf("gpac.maxLeaderElectionTries" to 2),
+                peer(0) to mapOf("gpac.maxLeaderElectionTries" to 2),
+                peer(1) to mapOf("gpac.maxLeaderElectionTries" to 2),
+                peer(2) to mapOf("gpac.maxLeaderElectionTries" to 2),
+                peer(3) to mapOf("gpac.maxLeaderElectionTries" to 2),
+                peer(4) to mapOf("gpac.maxLeaderElectionTries" to 2),
             )
         )
 
@@ -678,7 +717,7 @@ class AlvinSpec : IntegrationTestBase() {
         // change that will cause leader to fall according to action
         try {
             executeChange(
-                "${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true",
+                "${apps.getPeer(peer(0)).address}/v2/change/sync?enforce_gpac=true",
                 change1
             )
             fail("Change passed")
@@ -690,7 +729,7 @@ class AlvinSpec : IntegrationTestBase() {
         phaserGPACPeer.arriveAndAwaitAdvanceWithTimeout()
         isSecondGPAC.set(true)
 
-        val change = testHttpClient.get<Change>("http://${apps.getPeer(0, 1).address}/change") {
+        val change = testHttpClient.get<Change>("http://${apps.getPeer(peer(1)).address}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -701,13 +740,13 @@ class AlvinSpec : IntegrationTestBase() {
         }
 
         executeChange(
-            "${apps.getPeer(0, 1).address}/v2/change/sync",
+            "${apps.getPeer(peer(1)).address}/v2/change/sync",
             change2
         )
 
         phaserAlvinPeers.arriveAndAwaitAdvanceWithTimeout()
 
-        apps.getPeers(0).forEach { (_, peerAddress) ->
+        apps.getPeerAddresses(peerset(0)).forEach { (_, peerAddress) ->
             // and should not execute this change couple of times
             val changes = testHttpClient.get<Changes>("http://${peerAddress.address}/changes") {
                 contentType(ContentType.Application.Json)
@@ -733,7 +772,7 @@ class AlvinSpec : IntegrationTestBase() {
     ) = AddUserChange(
         userName,
         acceptNum,
-        peersets = listOf(ChangePeersetInfo(0, parentId)),
+        peersets = listOf(ChangePeersetInfo(peerset(0), parentId)),
     )
 
     private suspend fun executeChange(uri: String, change: Change) =
@@ -756,6 +795,10 @@ class AlvinSpec : IntegrationTestBase() {
             accept(ContentType.Application.Json)
         }
 
+    private fun peer(peerId: Int): String = "peer$peerId"
+    private fun peerId(peerId: Int): PeerId = PeerId(peer(peerId))
+    private fun peerset(peersetId: Int): PeersetId = PeersetId("peerset$peersetId")
+
     private suspend fun askAllForChanges(peerAddresses: Collection<PeerAddress>) =
         peerAddresses.map { askForChanges(it) }
 
@@ -764,19 +807,6 @@ class AlvinSpec : IntegrationTestBase() {
 
     private suspend fun askForAcceptedChanges(peerAddress: PeerAddress) =
         genericAskForChange("accepted_changes", peerAddress)
-
-    private suspend fun askForLeaderAddress(app: ApplicationUcac): String? {
-        val consensusProperty =
-            ApplicationUcac::class.declaredMemberProperties.single { it.name == "consensusProtocol" }
-        val consensusOldAccessible = consensusProperty.isAccessible
-        try {
-            consensusProperty.isAccessible = true
-            val consensusProtocol = consensusProperty.get(app) as RaftConsensusProtocolImpl
-            return consensusProtocol.getLeaderAddress()
-        } finally {
-            consensusProperty.isAccessible = consensusOldAccessible
-        }
-    }
 
     companion object {
         private val logger = LoggerFactory.getLogger(AlvinSpec::class.java)

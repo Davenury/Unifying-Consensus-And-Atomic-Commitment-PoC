@@ -2,7 +2,7 @@ package com.github.davenury.ucac.consensus.pigpaxos
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.consensus.ConsensusProtocolClient
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.httpClient
@@ -37,7 +37,7 @@ interface PigPaxosProtocolClient {
 class PigPaxosProtocolClientImpl() : PigPaxosProtocolClient, ConsensusProtocolClient() {
 
     override suspend fun sendPropose(peer: PeerAddress, message: PaxosPropose): ConsensusResponse<PaxosPromise?> {
-        logger.debug("Sending proposal request to ${peer.globalPeerId}")
+        logger.debug("Sending proposal request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "pigpaxos/propose")
     }
 
@@ -45,12 +45,12 @@ class PigPaxosProtocolClientImpl() : PigPaxosProtocolClient, ConsensusProtocolCl
         peer: PeerAddress,
         message: PaxosAccept
     ): ConsensusResponse<PaxosAccepted?> {
-        logger.debug("Sending accept request to ${peer.globalPeerId}")
+        logger.debug("Sending accept request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "pigpaxos/accept")
     }
 
     override suspend fun sendCommit(peer: PeerAddress, message: PaxosCommit): ConsensusResponse<String?> {
-        logger.debug("Sending commit request to ${peer.globalPeerId}")
+        logger.debug("Sending commit request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "pigpaxos/commit")
     }
 

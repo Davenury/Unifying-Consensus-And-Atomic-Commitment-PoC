@@ -1,73 +1,30 @@
 package com.github.davenury.tests
 
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.ticker
+import com.github.davenury.tests.strategies.load.LoadGenerator
 import org.slf4j.LoggerFactory
-import java.time.Duration
-import java.util.concurrent.Executors
 import kotlin.random.Random
 
 class TestExecutor(
-    private val numberOfRequestsToSendToSinglePeerset: Int,
-    private val numberOfRequestsToSendToMultiplePeersets: Int,
-    private val timeOfSimulation: Duration,
-    // determines how many peersets can be included in one change
-    private val maxPeersetsInChange: Int,
     private val changes: Changes,
-    private val constantLoad: String?,
-    private val fixedNumberOfPeersets: String?,
+    private val config: Config,
 ) {
-    private val overallNumberOfRequests =
-        numberOfRequestsToSendToMultiplePeersets + numberOfRequestsToSendToSinglePeerset
-    private val sendRequestBreak = timeOfSimulation.dividedBy(overallNumberOfRequests.toLong())
+
     private var sentSinglePeersetChanges = 0
     private var sentMulitplePeersetChanges = 0
 
-    private val channel: ReceiveChannel<Unit> = if (constantLoad != null) {
-        ticker(calculateTickerFromLoad(constantLoad), 0)
-    } else {
-        ticker(sendRequestBreak.toMillis(), 0)
-    }
+    private val loadGenerator: LoadGenerator = LoadGenerator.createFromConfig(config)
 
     suspend fun startTest() {
-        logger.info("Test starts. Number of singlePeerset requests: $numberOfRequestsToSendToSinglePeerset, number of multiplePeersets requests: $numberOfRequestsToSendToMultiplePeersets\n" +
-                "time of simulation: ${timeOfSimulation.toSeconds()}s. Requests are sent in ${sendRequestBreak.toMillis()}ms breaks.")
-        if (constantLoad != null) {
-            executeUnboundTest()
-        } else {
-            executeBoundedTest()
-        }
+        logger.info("Test starts.")
+        loadGenerator.generate()
+        loadGenerator.subscribe { changes.introduceChange(determineNumberOfPeersets()) }
         logger.info("Test Executor sent ended it's work.")
-    }
-
-    private fun calculateTickerFromLoad(load: String) = (1.0 / load.toInt() * 1000).toLong()
-    private suspend fun executeUnboundTest() {
-        withContext(ctx) {
-            while (true) {
-                channel.receive()
-                launch {
-                    changes.introduceChange(determineNumberOfPeersets())
-                }
-            }
-        }
-    }
-    private suspend fun executeBoundedTest() {
-        withContext(ctx) {
-            for (i in (1..overallNumberOfRequests)) {
-                channel.receive()
-                launch {
-                    changes.introduceChange(determineNumberOfPeersets())
-                }
-            }
-            channel.cancel()
-        }
     }
 
     private fun determineNumberOfPeersets(): Int {
 
-        if (fixedNumberOfPeersets != null) {
-            return fixedNumberOfPeersets.toInt().also {
+        if (config.fixedPeersetsInChange != null) {
+            return config.fixedPeersetsInChange.toInt().also {
                 if (it == 1) {
                     sentSinglePeersetChanges++
                 } else {
@@ -76,8 +33,8 @@ class TestExecutor(
             }
         }
 
-        if (sentSinglePeersetChanges < numberOfRequestsToSendToSinglePeerset && sentMulitplePeersetChanges < numberOfRequestsToSendToMultiplePeersets) {
-            return (Random.nextInt(maxPeersetsInChange) + 1).also {
+        if (sentSinglePeersetChanges < config.numberOfRequestsToSendToSinglePeerset!! && sentMulitplePeersetChanges < config.numberOfRequestsToSendToMultiplePeersets!!) {
+            return (Random.nextInt(config.maxPeersetsInChange) + 1).also {
                 if (it == 1) {
                     sentSinglePeersetChanges++
                 } else {
@@ -86,18 +43,16 @@ class TestExecutor(
             }
         }
 
-        if (sentSinglePeersetChanges < numberOfRequestsToSendToSinglePeerset) {
+        if (sentSinglePeersetChanges < config.numberOfRequestsToSendToSinglePeerset) {
             sentSinglePeersetChanges++
             return 1
         }
 
         sentMulitplePeersetChanges++
-        return Random.nextInt(maxPeersetsInChange - 1) + 2
+        return Random.nextInt(config.maxPeersetsInChange - 1) + 2
     }
 
     companion object {
         private val logger = LoggerFactory.getLogger("TestExecutor")
-
-        private val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
     }
 }

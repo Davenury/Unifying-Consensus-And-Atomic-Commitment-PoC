@@ -8,6 +8,7 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"log"
+	"os"
 )
 
 var settings *cli.EnvSettings
@@ -44,7 +45,7 @@ func DoInit(namespace string, createNamespace bool) {
 				"enabled": true,
 			},
 			"persistentVolume": map[string]interface{}{
-				"enabled": true,
+				"enabled": false,
 			},
 		},
 	}
@@ -84,6 +85,41 @@ func DoInit(namespace string, createNamespace bool) {
 						"url":  fmt.Sprintf("http://loki.%s:3100", namespace),
 						"type": "loki",
 					},
+					{
+						"name": "Tempo",
+						"url":  fmt.Sprintf("http://tempo.%s:3100", namespace),
+						"type": "tempo",
+						"jsonData": map[string]interface{}{
+							"serviceMap": map[string]interface{}{
+								"datasourceUid": "PBFA97CFB590B2093",
+							},
+						},
+					},
+				},
+			},
+		},
+		"dashboardProviders": map[string]interface{}{
+			"dashboardproviders.yaml": map[string]interface{}{
+				"apiVersion": 1,
+				"providers": []map[string]interface{}{
+					{
+						"name":            "default",
+						"orgId":           1,
+						"folder":          "",
+						"type":            "file",
+						"disableDeletion": "false",
+						"editable":        true,
+						"options": map[string]string{
+							"path": "/var/lib/grafana/dashboards/default",
+						},
+					},
+				},
+			},
+		},
+		"dashboards": map[string]interface{}{
+			"default": map[string]interface{}{
+				"kubernetes": map[string]interface{}{
+					"json": readFile("dashboard.json"),
 				},
 			},
 		},
@@ -124,6 +160,18 @@ func DoInit(namespace string, createNamespace bool) {
 	}
 
 	installChart(namespace, "grafana", "loki", "loki", lokiValues)
+
+	tempoValues := map[string]interface{}{
+		"tempo": map[string]interface{}{
+			"metricsGenerator": map[string]interface{}{
+				"enabled":        true,
+				"remoteWriteUrl": fmt.Sprintf("http://victoria-victoria-metrics-single-server.%s:8428/api/v1/write", namespace),
+			},
+			"reportingEnabled": false,
+		},
+	}
+
+	installChart(namespace, "grafana", "tempo", "tempo", tempoValues)
 }
 
 func installChart(namespace string, repoName string, chartName string, releaseName string, values map[string]interface{}) {
@@ -150,4 +198,13 @@ func installChart(namespace string, repoName string, chartName string, releaseNa
 		log.Fatal(err)
 	}
 	fmt.Printf("Installed %s release to namespace %s\n", release.Name, namespace)
+}
+
+func readFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+
+	return string(data)
 }

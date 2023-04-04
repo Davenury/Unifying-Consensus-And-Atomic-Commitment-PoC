@@ -26,6 +26,7 @@ type DeployConfig struct {
 	ProxyDelay              string
 	ProxyLimit              string
 	MonitoringNamespace     string
+	ConsensusProtocol       string
 }
 
 const ratisPort = 10024
@@ -51,14 +52,16 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().BoolVar(&config.CreateResources, "create-resources", true, "Determines if pods should have limits and requests")
 	deployCommand.Flags().StringVar(&config.ProxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	deployCommand.Flags().StringVar(&config.ProxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
+	deployCommand.Flags().StringVar(&config.MonitoringNamespace, "monitoring-namespace", "ddebowski", "Namespace with monitoring deployed")
+	deployCommand.Flags().StringVar(&config.ConsensusProtocol, "consensus-protocol", "raft", "Consensus protocol to use. For now it's one protocol")
+
 
 	return deployCommand
 
 }
 
 func DoDeploy(config DeployConfig) {
-	ratisPeers := utils.GenerateServicesForPeers(config.NumberOfPeersInPeersets, ratisPort)
-	gpacPeers := utils.GenerateServicesForPeersStaticPort(config.NumberOfPeersInPeersets, servicePort)
+	peers, peersets := utils.GenerateServicesForPeersStaticPort(config.NumberOfPeersInPeersets, servicePort)
 	ratisGroups := make([]string, len(config.NumberOfPeersInPeersets))
 	for i := 0; i < len(config.NumberOfPeersInPeersets); i++ {
 		ratisGroups[i] = uuid.New().String()
@@ -69,10 +72,12 @@ func DoDeploy(config DeployConfig) {
 	}
 
 	totalPeers := 0
+	peerCount := 0
 	for idx, num := range config.NumberOfPeersInPeersets {
 		totalPeers += num
 		for i := 0; i < num; i++ {
-			peerId := strconv.Itoa(i)
+			peerId := fmt.Sprintf("peer%d", peerCount)
+			peerCount += 1
 
 			peerConfig := utils.PeerConfig{
 				PeerId:         peerId,
@@ -87,7 +92,7 @@ func DoDeploy(config DeployConfig) {
 
 			deploySinglePeerService(config.DeployNamespace, peerConfig, ratisPort+i)
 
-			deploySinglePeerConfigMap(config, peerConfig, ratisPeers, gpacPeers)
+			deploySinglePeerConfigMap(config, peerConfig, peers, peersets)
 
 			deploySinglePeerDeployment(config, peerConfig)
 
@@ -195,7 +200,7 @@ func createPodTemplate(config DeployConfig, peerConfig utils.PeerConfig) apiv1.P
 			Labels: map[string]string{
 				"peerId":    peerConfig.PeerId,
 				"peersetId": peerConfig.PeersetId,
-				"app.name":  fmt.Sprintf("peer%s-peerset%s-app", peerConfig.PeerId, peerConfig.PeersetId),
+				"app.name":  fmt.Sprintf("%s-app", peerConfig.PeerId),
 				"project":   "ucac",
 			},
 			Annotations: map[string]string{
@@ -312,8 +317,8 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 	if config.CreateResources {
 		resources = apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
-				"cpu":    resource.MustParse("700m"),
-				"memory": resource.MustParse("750Mi"),
+				"cpu":    resource.MustParse("1"),
+				"memory": resource.MustParse("550Mi"),
 			},
 			Requests: apiv1.ResourceList{
 				"cpu":    resource.MustParse("500m"),
@@ -345,7 +350,7 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 	}
 }
 
-func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig, ratisPeers string, gpacPeers string) {
+func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig, peers string, peersets string) {
 	clientset, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
@@ -370,10 +375,9 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"JAVA_OPTS":                    "-Xmx200m",
 			"config_host":                  utils.ServiceAddress(peerConfig),
 			"config_port":                  "8081",
-			"config_peersetId":             peerConfig.PeersetId,
 			"config_peerId":                peerConfig.PeerId,
-			"config_ratis_addresses":       ratisPeers,
-			"config_peers":                 gpacPeers,
+			"config_peers":                 peers,
+			"config_peersets":              peersets,
 			"IS_METRIC_TEST":               strconv.FormatBool(config.IsMetricTest),
 			"config_persistence_type":      "REDIS",
 			"config_persistence_redisHost": "localhost",
@@ -381,6 +385,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 			"NAMESPACE":                    config.DeployNamespace,
 			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
+			"CONSENSUS_NAME":               config.ConsensusProtocol,
 		},
 	}
 
@@ -405,7 +410,7 @@ func deploySinglePeerService(namespace string, peerConfig utils.PeerConfig, curr
 		},
 		Spec: apiv1.ServiceSpec{
 			Selector: map[string]string{
-				"app.name": fmt.Sprintf("peer%s-peerset%s-app", peerConfig.PeerId, peerConfig.PeersetId),
+				"app.name": fmt.Sprintf("%s-app", peerConfig.PeerId),
 			},
 			Ports: []apiv1.ServicePort{
 				{

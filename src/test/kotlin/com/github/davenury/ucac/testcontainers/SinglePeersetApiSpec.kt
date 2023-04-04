@@ -1,11 +1,8 @@
 package com.github.davenury.ucac.testcontainers
 
 
-import com.github.davenury.common.AddUserChange
-import com.github.davenury.common.ChangePeersetInfo
-import com.github.davenury.common.Changes
+import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
-import com.github.davenury.common.objectMapper
 import com.github.davenury.ucac.utils.ApplicationTestcontainersEnvironment
 import com.github.davenury.ucac.utils.TestLogExtension
 import io.ktor.client.*
@@ -16,6 +13,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
@@ -28,6 +26,7 @@ import strikt.assertions.isEqualTo
 /**
  * @author Kamil Jarosz
  */
+
 @Testcontainers
 @ExtendWith(TestLogExtension::class)
 class SinglePeersetApiSpec {
@@ -45,20 +44,24 @@ class SinglePeersetApiSpec {
     }
 
     @Container
-    private val environment = ApplicationTestcontainersEnvironment(listOf(3))
+    private val environment = ApplicationTestcontainersEnvironment(
+        mapOf(
+            "peerset0" to listOf("peer0", "peer1", "peer2"),
+        ),
+    )
 
     @Test
     fun `sync api`(): Unit = runBlocking {
         val change = AddUserChange(
             "test user",
             peersets = listOf(
-                ChangePeersetInfo(0, InitialHistoryEntry.getId())
+                ChangePeersetInfo(PeersetId("peerset0"), InitialHistoryEntry.getId())
             ),
         )
 
         logger.info("Sending change $change")
 
-        val peer0Address = environment.getAddress(0, 0)
+        val peer0Address = environment.getAddress("peer0")
         val response = http.post<HttpResponse>("http://${peer0Address}/v2/change/sync") {
             contentType(ContentType.Application.Json)
             body = change

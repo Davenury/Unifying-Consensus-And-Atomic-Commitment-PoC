@@ -1,5 +1,6 @@
 package com.github.davenury.common.history
 
+import com.github.davenury.common.persistence.InMemoryPersistence
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import strikt.api.expectThat
@@ -16,7 +17,7 @@ internal class InMemoryHistoryTest {
 
     @BeforeEach
     fun setUp() {
-        history = InMemoryHistory()
+        history = PersistentHistory(InMemoryPersistence())
         entries = ArrayList()
 
         for (i in 1..10) {

@@ -5,11 +5,24 @@ import com.sksamuel.hoplite.sources.MapPropertySource
 import com.sksamuel.hoplite.addResourceSource
 import com.sksamuel.hoplite.decoder.Decoder
 
-fun parsePeers(peers: String): List<List<String>> {
-    return peers.split(";")
-        .map { peerset -> peerset.split(",").map { it.trim() } }
+fun parsePeersets(peersets: String): Map<PeersetId, List<PeerId>> {
+    return peersets.split(";").associate { parsePeerset(it) }
 }
 
+fun parsePeerset(peerset: String): Pair<PeersetId, List<PeerId>> {
+    val split = peerset.split("=")
+    return PeersetId(split[0].trim()) to split[1].split(",").map { PeerId(it.trim()) }
+}
+
+fun parsePeers(peers: String): Map<PeerId, PeerAddress> {
+    return peers.split(";").associate { parsePeer(it) }
+}
+
+fun parsePeer(peer: String): Pair<PeerId, PeerAddress> {
+    val split = peer.split("=")
+    val peerId = PeerId(split[0].trim())
+    return peerId to PeerAddress(peerId, split[1].trim())
+}
 
 inline fun <reified T>loadConfig(overrides: Map<String, Any> = emptyMap(), decoders: List<Decoder<*>> = listOf()): T {
     val configFile = System.getProperty("configFile")

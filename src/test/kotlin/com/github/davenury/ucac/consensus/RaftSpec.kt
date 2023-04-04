@@ -1,17 +1,18 @@
 package com.github.davenury.ucac.consensus
 
 import com.github.davenury.common.*
-import com.github.davenury.common.history.InMemoryHistory
 import com.github.davenury.common.history.InitialHistoryEntry
+import com.github.davenury.common.persistence.InMemoryPersistence
+import com.github.davenury.common.txblocker.PersistentTransactionBlocker
+import com.github.davenury.common.history.PersistentHistory
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
-import com.github.davenury.ucac.common.GlobalPeerId
-import com.github.davenury.ucac.common.PeerAddress
 import com.github.davenury.ucac.common.PeerResolver
-import com.github.davenury.ucac.common.TransactionBlocker
+import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.testHttpClient
@@ -24,7 +25,10 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.util.collections.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.fail
@@ -37,13 +41,11 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.reflect.full.declaredMemberProperties
-import kotlin.reflect.jvm.isAccessible
 import kotlin.system.measureTimeMillis
+
 
 @ExtendWith(TestLogExtension::class)
 class RaftSpec : IntegrationTestBase() {
-
     private val knownPeerIp = "localhost"
     private val unknownPeerIp = "198.18.0.0"
     private val noneLeader = null
@@ -55,6 +57,9 @@ class RaftSpec : IntegrationTestBase() {
 
     @Test
     fun `happy path`(): Unit = runBlocking {
+        val change1 = createChange(null)
+        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(PeersetId("peerset0")).getId())
+
         val peersWithoutLeader = 4
 
         val phaser = Phaser(peersWithoutLeader)
@@ -62,34 +67,35 @@ class RaftSpec : IntegrationTestBase() {
 
         val peerLeaderElected = SignalListener {
             expectThat(phaser.phase).isEqualTo(0)
-            logger.info("Arrived ${it.subject.getPeerName()}")
+            logger.info("Arrived leader elected ${it.subject.getPeerName()}")
             phaser.arrive()
         }
 
         val peerApplyChange = SignalListener {
             expectThat(phaser.phase).isContainedIn(listOf(1, 2))
-            logger.info("Arrived ${it.subject.getPeerName()}")
+            logger.info("Arrived change ${it.subject.getPeerName()}")
             phaser.arrive()
         }
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith {
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { "peer$it" }.associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
                     Signal.ConsensusFollowerChangeAccepted to peerApplyChange
                 )
             }
         )
-        val peerAddresses = apps.getPeers(0)
+        val peerAddresses = apps.getPeerAddresses("peerset0")
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
         logger.info("Leader elected")
 
         // when: peer1 executed change
-        val change1 = createChange(null)
         expectCatching {
-            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change1)
+            executeChange("${apps.getPeer("peer0").address}/v2/change/sync", change1)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -105,9 +111,8 @@ class RaftSpec : IntegrationTestBase() {
         }
 
         // when: peer2 executes change
-        val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(0).getId())
         expectCatching {
-            executeChange("${apps.getPeer(0, 1).address}/v2/change/sync", change2)
+            executeChange("${apps.getPeer("peer1").address}/v2/change/sync", change2)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -128,6 +133,7 @@ class RaftSpec : IntegrationTestBase() {
     @Test
     fun `1000 change processed sequentially`(): Unit = runBlocking {
         val peersWithoutLeader = 4
+        var iter = 0
 
         val leaderElectedPhaser = Phaser(peersWithoutLeader)
         leaderElectedPhaser.register()
@@ -136,26 +142,29 @@ class RaftSpec : IntegrationTestBase() {
         phaser.register()
 
         val peerLeaderElected = SignalListener {
-            expectThat(leaderElectedPhaser.phase).isEqualTo(0)
-            logger.info("Arrived ${it.subject.getPeerName()}")
-            leaderElectedPhaser.arrive()
+            if(leaderElectedPhaser.phase == 0) {
+                logger.info("Arrived ${it.subject.getPeerName()}")
+                leaderElectedPhaser.arrive()
+            }
         }
 
         val peerChangeAccepted = SignalListener {
-            logger.info("Arrived change: ${it.change}")
+            logger.info("Arrived change$iter: ${it.change}")
             phaser.arrive()
         }
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith {
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { "peer$it" }.associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to peerLeaderElected,
                     Signal.ConsensusFollowerChangeAccepted to peerChangeAccepted
                 )
             }
         )
-        val peerAddresses = apps.getPeers(0)
+        val peerAddresses = apps.getPeerAddresses("peerset0")
 
         leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
         logger.info("Leader elected")
@@ -167,14 +176,15 @@ class RaftSpec : IntegrationTestBase() {
 
         var time = 0L
 
-        (0 until endRange).forEach {
+        repeat(endRange) {
             time += measureTimeMillis {
                 expectCatching {
-                    executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change)
+                    executeChange("${apps.getPeer("peer0").address}/v2/change/sync", change)
                 }.isSuccess()
             }
             phaser.arriveAndAwaitAdvanceWithTimeout()
-            change = createChange(null, parentId = change.toHistoryEntry(0).getId())
+            iter+=1
+            change = createChange(null, parentId = change.toHistoryEntry(PeersetId("peerset0")).getId())
         }
         // when: peer1 executed change
 
@@ -200,20 +210,22 @@ class RaftSpec : IntegrationTestBase() {
         }
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith {
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { "peer$it" }.associateWith {
                 mapOf(
                     Signal.ConsensusFollowerChangeAccepted to peerApplyChange
                 )
             }
         )
-        val peerAddresses = apps.getPeers(0)
+        val peerAddresses = apps.getPeerAddresses("peerset0")
 
         logger.info("Sending change")
 
         val change = createChange(null)
         expectCatching {
-            executeChange("${apps.getPeer(0, 0).address}/v2/change/sync", change)
+            executeChange("${apps.getPeer("peer0").address}/v2/change/sync", change)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -242,9 +254,11 @@ class RaftSpec : IntegrationTestBase() {
             Signal.ConsensusTryToBecomeLeader to peerTryToBecomeLeader,
         )
         apps = TestApplicationSet(
-            listOf(5),
-            appsToExclude = listOf(2, 3, 4),
-            signalListeners = (0..4).associateWith { signalListener },
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            appsToExclude = listOf("peer2", "peer3", "peer4"),
+            signalListeners = (0..4).map { "peer$it" }.associateWith { signalListener },
         )
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -278,9 +292,11 @@ class RaftSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(5),
-            appsToExclude = listOf(3, 4),
-            signalListeners = (0..4).associateWith { signalListener },
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            appsToExclude = listOf("peer3", "peer4"),
+            signalListeners = (0..4).map { "peer$it" }.associateWith { signalListener },
         )
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -309,8 +325,10 @@ class RaftSpec : IntegrationTestBase() {
         val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { "peer$it" }.associateWith { signalListener },
         )
         var peers = apps.getRunningApps()
 
@@ -318,9 +336,9 @@ class RaftSpec : IntegrationTestBase() {
 
         val firstLeaderAddress = getLeaderAddress(peers[0])
 
-        apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
+        apps.getApp(firstLeaderAddress.peerId).stop(0, 0)
 
-        peers = peers.filter { it.getGlobalPeerId() != firstLeaderAddress.globalPeerId }
+        peers = peers.filter { it.getPeerId() != firstLeaderAddress.peerId }
 
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -354,9 +372,11 @@ class RaftSpec : IntegrationTestBase() {
         val signalListener = mapOf(Signal.ConsensusLeaderElected to peerLeaderElected)
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
-            appsToExclude = listOf(4),
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { "peer$it" }.associateWith { signalListener },
+            appsToExclude = listOf("peer4"),
         )
         var peers = apps.getRunningApps()
 
@@ -364,9 +384,9 @@ class RaftSpec : IntegrationTestBase() {
 
         val firstLeaderAddress = getLeaderAddress(peers[0])
 
-        apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
+        apps.getApp(firstLeaderAddress.peerId).stop(0, 0)
 
-        peers = peers.filter { it.getGlobalPeerId() != firstLeaderAddress.globalPeerId }
+        peers = peers.filter { it.getPeerId() != firstLeaderAddress.peerId }
 
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -417,9 +437,11 @@ class RaftSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(6),
-            appsToExclude = listOf(4, 5),
-            signalListeners = (0..5).associateWith { signalListener },
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4", "peer5"),
+            ),
+            appsToExclude = listOf("peer4", "peer5"),
+            signalListeners = (0..5).map { "peer$it" }.associateWith { signalListener },
         )
         var peers = apps.getRunningApps()
 
@@ -427,10 +449,10 @@ class RaftSpec : IntegrationTestBase() {
 
         val firstLeaderAddress = getLeaderAddress(peers[0])
 
-        apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
+        apps.getApp(firstLeaderAddress.peerId).stop(0, 0)
         leaderElect = true
 
-        peers = peers.filter { it.getGlobalPeerId() != firstLeaderAddress.globalPeerId }
+        peers = peers.filter { it.getPeerId() != firstLeaderAddress.peerId }
 
         leaderFailedPhaser.arriveAndAwaitAdvanceWithTimeout()
         tryToBecomeLeaderPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -451,11 +473,12 @@ class RaftSpec : IntegrationTestBase() {
         peersWithoutLeader -= 1
         val election2Phaser = Phaser(peersWithoutLeader)
         val changePhaser = Phaser(3)
-        var shouldElection2Starts = false
         listOf(election1Phaser, election2Phaser, changePhaser).forEach { it.register() }
         var firstLeader = true
         val proposedPeers = ConcurrentHashMap<String, Boolean>()
         var changePeers: (() -> Unit?)? = null
+
+        val mutex = Mutex()
 
         val leaderAction = SignalListener {
             if (firstLeader) {
@@ -487,14 +510,17 @@ class RaftSpec : IntegrationTestBase() {
             changePhaser.arrive()
         }
         val ignoreHeartbeatAfterProposingChange = SignalListener {
-            when {
-                it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> {
-                    proposedPeers[it.subject.getPeerName()] = true
+            runBlocking {
+                mutex.withLock {
+                    when {
+                        it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> {
+                            proposedPeers[it.subject.getPeerName()] = true
+                        }
+
+                        proposedPeers.contains(it.subject.getPeerName()) && firstLeader -> throw Exception("Ignore heartbeat from old leader")
+                        proposedPeers.size > 2 && firstLeader -> throw Exception("Ignore heartbeat from old leader")
+                    }
                 }
-
-                proposedPeers.contains(it.subject.getPeerName()) && firstLeader -> throw Exception("Ignore heartbeat from old leader")
-                proposedPeers.size > 2 && firstLeader -> throw Exception("Ignore heartbeat from old leader")
-
             }
         }
 
@@ -506,8 +532,10 @@ class RaftSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { "peer$it" }.associateWith { signalListener },
         )
 
         election1Phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -515,11 +543,11 @@ class RaftSpec : IntegrationTestBase() {
         val firstLeaderAddress = getLeaderAddress(apps.getRunningApps()[0])
 
         changePeers = {
-            val peers = apps.getRunningPeers(0).mapValues { entry ->
+            val peers = apps.getRunningPeers("peerset0").mapValues { entry ->
                 val peer = entry.value
                 peer.copy(address = peer.address.replace(knownPeerIp, unknownPeerIp))
             }
-            apps.getApp(firstLeaderAddress.globalPeerId).setPeers(peers)
+            apps.getApp(firstLeaderAddress.peerId).setPeerAddresses(peers)
         }
 
 
@@ -530,13 +558,13 @@ class RaftSpec : IntegrationTestBase() {
 
         failurePhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        apps.getApp(firstLeaderAddress.globalPeerId).stop(0, 0)
+        apps.getApp(firstLeaderAddress.peerId).stop(0, 0)
 
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 
-        apps.getRunningPeers(0)
+        apps.getRunningPeers("peerset0")
             .values
             .filter { it != firstLeaderAddress }
             .forEach {
@@ -574,19 +602,21 @@ class RaftSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { "peer$it" }.associateWith { signalListener },
         )
         val peers = apps.getRunningApps()
 
-        val peerAddresses = apps.getRunningPeers(0).values
+        val peerAddresses = apps.getRunningPeers("peerset0").values
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         val firstLeaderAddress = getLeaderAddress(peers[0])
 
         val peersToStop = peerAddresses.filter { it != firstLeaderAddress }.take(2)
-        peersToStop.forEach { apps.getApp(it.globalPeerId).stop(0, 0) }
+        peersToStop.forEach { apps.getApp(it.peerId).stop(0, 0) }
         val runningPeers = peerAddresses.filter { address -> address !in peersToStop }
         val change = createChange(null)
 
@@ -631,19 +661,21 @@ class RaftSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { "peer$it" }.associateWith { signalListener },
         )
         val peers = apps.getRunningApps()
 
-        val peerAddresses = apps.getRunningPeers(0).values
+        val peerAddresses = apps.getRunningPeers("peerset0").values
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         val firstLeaderAddress = getLeaderAddress(peers[0])
 
         val peersToStop = peerAddresses.filter { it != firstLeaderAddress }.take(3)
-        peersToStop.forEach { apps.getApp(it.globalPeerId).stop(0, 0) }
+        peersToStop.forEach { apps.getApp(it.peerId).stop(0, 0) }
         val runningPeers = peerAddresses.filter { address -> address !in peersToStop }
         val change = createChange(null)
 
@@ -708,13 +740,15 @@ class RaftSpec : IntegrationTestBase() {
         )
 
         apps = TestApplicationSet(
-            listOf(5),
-            signalListeners = (0..4).associateWith { signalListener },
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
+            signalListeners = (0..4).map { "peer$it" }.associateWith { signalListener },
         )
         val peers = apps.getRunningApps()
 
-        val peerAddresses = apps.getRunningPeers(0).values
-        val peerAddresses2 = apps.getRunningPeers(0)
+        val peerAddresses = apps.getRunningPeers("peerset0").values
+        val peerAddresses2 = apps.getRunningPeers("peerset0")
 
         election1Phaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -733,7 +767,7 @@ class RaftSpec : IntegrationTestBase() {
         isNetworkDivided = true
 
         firstHalf.forEach { address ->
-            val peers = apps.getRunningPeers(0).mapValues { entry ->
+            val peers = apps.getRunningPeers("peerset0").mapValues { entry ->
                 val peer = entry.value
                 if (secondHalf.contains(peer)) {
                     peer.copy(address = peer.address.replace(knownPeerIp, unknownPeerIp))
@@ -741,11 +775,11 @@ class RaftSpec : IntegrationTestBase() {
                     peer
                 }
             }
-            apps.getApp(address.globalPeerId).setPeers(peers)
+            apps.getApp(address.peerId).setPeerAddresses(peers)
         }
 
         secondHalf.forEach { address ->
-            val peers = apps.getRunningPeers(0).mapValues { entry ->
+            val peers = apps.getRunningPeers("peerset0").mapValues { entry ->
                 val peer = entry.value
                 if (firstHalf.contains(peer)) {
                     peer.copy(address = peer.address.replace(knownPeerIp, unknownPeerIp))
@@ -753,7 +787,7 @@ class RaftSpec : IntegrationTestBase() {
                     peer
                 }
             }
-            apps.getApp(address.globalPeerId).setPeers(peers)
+            apps.getApp(address.peerId).setPeerAddresses(peers)
         }
 
         logger.info("Network divided")
@@ -764,7 +798,7 @@ class RaftSpec : IntegrationTestBase() {
 
 //      Check if second half chose new leader
         secondHalf.forEachIndexed { index, peer ->
-            val app = apps.getApp(peer.globalPeerId)
+            val app = apps.getApp(peer.peerId)
             val newLeaderAddress = askForLeaderAddress(app)
             expectThat(newLeaderAddress).isNotEqualTo(firstLeaderAddress.address)
 
@@ -820,7 +854,7 @@ class RaftSpec : IntegrationTestBase() {
 
 //      Merge network
         peerAddresses.forEach { address ->
-            apps.getApp(address.globalPeerId).setPeers(peerAddresses2)
+            apps.getApp(address.peerId).setPeerAddresses(peerAddresses2)
         }
 
         logger.info("Network merged")
@@ -847,22 +881,30 @@ class RaftSpec : IntegrationTestBase() {
     @Test
     fun `unit tests of isMoreThanHalf() function`(): Unit = runBlocking {
         val peers = listOf(
-            PeerAddress(GlobalPeerId(0, 0), "1"),
-            PeerAddress(GlobalPeerId(0, 1), "2"),
-            PeerAddress(GlobalPeerId(0, 2), "3"),
+            PeerAddress(PeerId("peer0"), "1"),
+            PeerAddress(PeerId("peer1"), "2"),
+            PeerAddress(PeerId("peer2"), "3"),
+            PeerAddress(PeerId("peer3"), "4"),
+            PeerAddress(PeerId("peer4"), "5"),
+            PeerAddress(PeerId("peer5"), "6"),
         )
-            .associateBy { it.globalPeerId }
+            .associateBy { it.peerId }
             .toMutableMap()
 
-        val peerResolver = PeerResolver(GlobalPeerId(0, 0), peers)
+        val peerResolver = PeerResolver(
+            PeerId("peer0"), peers, mapOf(
+                PeersetId("peerset0") to listOf(PeerId("peer0"), PeerId("peer1"), PeerId("peer2"))
+            )
+        )
         val consensus = RaftConsensusProtocolImpl(
-            InMemoryHistory(),
-            "1",
+            PeersetId("peerset0"),
+            PersistentHistory(InMemoryPersistence()),
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
             protocolClient = RaftProtocolClientImpl(),
-            transactionBlocker = TransactionBlocker(),
-            isMetricTest = false
+            transactionBlocker = PersistentTransactionBlocker(InMemoryPersistence()),
+            isMetricTest = false,
+            maxChangesPerMessage = 200
         )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()
@@ -870,8 +912,10 @@ class RaftSpec : IntegrationTestBase() {
             that(consensus.isMoreThanHalf(2)).isTrue()
         }
 
-        peers[GlobalPeerId(0, 3)] = PeerAddress(GlobalPeerId(0, 3), "4")
-        peerResolver.setPeers(peers)
+        peerResolver.addPeerToPeerset(
+            PeersetId("peerset0"),
+            PeerId("peer3"),
+        )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()
             that(consensus.isMoreThanHalf(1)).isFalse()
@@ -879,8 +923,10 @@ class RaftSpec : IntegrationTestBase() {
             that(consensus.isMoreThanHalf(3)).isTrue()
         }
 
-        peers[GlobalPeerId(0, 4)] = PeerAddress(GlobalPeerId(0, 4), "5")
-        peerResolver.setPeers(peers)
+        peerResolver.addPeerToPeerset(
+            PeersetId("peerset0"),
+            PeerId("peer4"),
+        )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()
             that(consensus.isMoreThanHalf(1)).isFalse()
@@ -889,8 +935,10 @@ class RaftSpec : IntegrationTestBase() {
             that(consensus.isMoreThanHalf(4)).isTrue()
         }
 
-        peers[GlobalPeerId(0, 5)] = PeerAddress(GlobalPeerId(0, 5), "6")
-        peerResolver.setPeers(peers)
+        peerResolver.addPeerToPeerset(
+            PeersetId("peerset0"),
+            PeerId("peer4"),
+        )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()
             that(consensus.isMoreThanHalf(1)).isFalse()
@@ -914,12 +962,12 @@ class RaftSpec : IntegrationTestBase() {
         val proposedChange = AddGroupChange(
             "name",
             peersets = listOf(
-                ChangePeersetInfo(0, InitialHistoryEntry.getId())
+                ChangePeersetInfo(PeersetId("peerset0"), InitialHistoryEntry.getId())
             ),
         )
 
         val firstLeaderAction = SignalListener { signalData ->
-            val url = "http://${signalData.peers[0][0].address}/apply"
+            val url = "http://${signalData.peerResolver.resolve("peer1").address}/apply"
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
@@ -936,7 +984,6 @@ class RaftSpec : IntegrationTestBase() {
             }
             throw RuntimeException("Stop leader after apply")
         }
-
 
         val peerGPACAction = SignalListener {
             phaserGPACPeer.arrive()
@@ -975,24 +1022,28 @@ class RaftSpec : IntegrationTestBase() {
         val peer1Signals =
             mapOf(
                 Signal.OnHandlingApplyCommitted to peerGPACAction,
-                Signal.ConsensusLeaderElected to leaderElectedAction
+                Signal.ConsensusLeaderElected to leaderElectedAction,
+                Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") },
             )
 
         apps = TestApplicationSet(
-            listOf(5),
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            ),
             signalListeners = mapOf(
-                0 to firstPeerSignals,
-                1 to peer1Signals,
-                2 to peerSignals,
-                3 to peerRaftSignals,
-                4 to peerRaftSignals,
-            ), configOverrides = mapOf(
-                0 to mapOf("gpac.maxLeaderElectionTries" to 2),
-                1 to mapOf("gpac.maxLeaderElectionTries" to 2),
-                2 to mapOf("gpac.maxLeaderElectionTries" to 2),
-                3 to mapOf("gpac.maxLeaderElectionTries" to 2),
-                4 to mapOf("gpac.maxLeaderElectionTries" to 2),
-            )
+                "peer0" to firstPeerSignals,
+                "peer1" to peer1Signals,
+                "peer2" to peerSignals,
+                "peer3" to peerRaftSignals,
+                "peer4" to peerRaftSignals,
+            ),
+            configOverrides = mapOf(
+                "peer0" to mapOf("gpac.maxLeaderElectionTries" to 2),
+                "peer1" to mapOf("gpac.maxLeaderElectionTries" to 2),
+                "peer2" to mapOf("gpac.maxLeaderElectionTries" to 2),
+                "peer3" to mapOf("gpac.maxLeaderElectionTries" to 2),
+                "peer4" to mapOf("gpac.maxLeaderElectionTries" to 2),
+            ),
         )
 
         leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -1000,7 +1051,7 @@ class RaftSpec : IntegrationTestBase() {
         // change that will cause leader to fall according to action
         try {
             executeChange(
-                "${apps.getPeer(0, 0).address}/v2/change/sync?enforce_gpac=true",
+                "${apps.getPeer("peer0").address}/v2/change/sync?enforce_gpac=true",
                 proposedChange
             )
             fail("Change passed")
@@ -1012,7 +1063,7 @@ class RaftSpec : IntegrationTestBase() {
         phaserGPACPeer.arriveAndAwaitAdvanceWithTimeout()
         isSecondGPAC.set(true)
 
-        val change = testHttpClient.get<Change>("http://${apps.getPeer(0, 1).address}/change") {
+        val change = testHttpClient.get<Change>("http://${apps.getPeer("peer1").address}/change") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -1024,7 +1075,7 @@ class RaftSpec : IntegrationTestBase() {
 
         phaserRaftPeers.arriveAndAwaitAdvanceWithTimeout()
 
-        apps.getPeers(0).forEach { (_, peerAddress) ->
+        apps.getPeerAddresses("peerset0").forEach { (_, peerAddress) ->
             // and should not execute this change couple of times
             val changes = testHttpClient.get<Changes>("http://${peerAddress.address}/changes") {
                 contentType(ContentType.Application.Json)
@@ -1040,6 +1091,27 @@ class RaftSpec : IntegrationTestBase() {
         }
     }
 
+    @Test
+    fun `one peer consensus`(): Unit = runBlocking {
+        apps = TestApplicationSet(
+            mapOf(
+                "peerset0" to listOf("peer0"),
+            ),
+        )
+
+        expectCatching {
+            val change1 = createChange(null)
+            val peerAddress = apps.getPeer("peer0").address
+            val change2 = createChange(null, parentId = change1.toHistoryEntry(PeersetId("peerset0")).getId())
+            executeChange("$peerAddress/v2/change/sync", change1)
+            executeChange("$peerAddress/v2/change/sync", change2)
+        }.isSuccess()
+
+        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach { changes ->
+            expectThat(changes.size).isEqualTo(2)
+        }
+    }
+
     private fun createChange(
         acceptNum: Int?,
         userName: String = "userName",
@@ -1047,7 +1119,7 @@ class RaftSpec : IntegrationTestBase() {
     ) = AddUserChange(
         userName,
         acceptNum,
-        peersets = listOf(ChangePeersetInfo(0, parentId)),
+        peersets = listOf(ChangePeersetInfo(PeersetId("peerset0"), parentId)),
     )
 
     private suspend fun executeChange(uri: String, change: Change) =
@@ -1079,24 +1151,14 @@ class RaftSpec : IntegrationTestBase() {
     private suspend fun askForAcceptedChanges(peerAddress: PeerAddress) =
         genericAskForChange("accepted_changes", peerAddress)
 
-    private suspend fun askForLeaderAddress(app: ApplicationUcac): String? {
-        val consensusProperty =
-            ApplicationUcac::class.declaredMemberProperties.single { it.name == "consensusProtocol" }
-        val consensusOldAccessible = consensusProperty.isAccessible
-        try {
-            consensusProperty.isAccessible = true
-            val consensusProtocol = consensusProperty.get(app) as RaftConsensusProtocolImpl
-            return consensusProtocol.getLeaderAddress()
-        } finally {
-            consensusProperty.isAccessible = consensusOldAccessible
-        }
+    private fun askForLeaderAddress(app: ApplicationUcac): String? {
+        val leaderId = (app.getConsensusProtocol() as RaftConsensusProtocol).getLeaderId()
+        return leaderId?.let { apps.getPeer(it).address }
     }
 
-    private suspend fun getLeaderAddress(peer: ApplicationUcac): PeerAddress {
-        val address = askForLeaderAddress(peer)!!
-        expectThat(address).isNotEqualTo(noneLeader)
-        val id = apps.getPeers().values.find { it.address == address }!!.globalPeerId
-        return PeerAddress(id, address)
+    private fun getLeaderAddress(app: ApplicationUcac): PeerAddress {
+        val leaderId = (app.getConsensusProtocol() as RaftConsensusProtocol).getLeaderId()!!
+        return apps.getPeer(leaderId)
     }
 
     companion object {

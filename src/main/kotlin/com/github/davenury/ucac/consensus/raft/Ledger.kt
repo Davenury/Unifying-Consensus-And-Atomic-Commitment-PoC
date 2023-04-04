@@ -14,8 +14,8 @@ data class Ledger(
     private val mutex: Mutex = Mutex(),
 ) {
 
-    var commitIndex: String = InitialHistoryEntry.getId()
-    var lastApplied: String = InitialHistoryEntry.getId()
+    var commitIndex: String = history.getCurrentEntryId()
+    var lastApplied: String = history.getCurrentEntryId()
 
     suspend fun updateLedger(leaderCommitHistoryEntryId: String, proposedItems: List<LedgerItem>): LedgerUpdateResult =
         mutex.withLock {
@@ -30,20 +30,21 @@ data class Ledger(
         }
 
 
+    suspend fun getCommittedItems(historyEntryId: String): List<LedgerItem> =
+        mutex.withLock {
+            history.getAllEntriesUntilHistoryEntryId(historyEntryId)
+                .map {
+                    val change = Change.fromHistoryEntry(it)
+                    LedgerItem(it, change?.id ?: it.getId())
+                }
+        }
+
     suspend fun getNewProposedItems(historyEntryId: String): List<LedgerItem> =
         mutex.withLock {
-            val entries =
-                history.getAllEntriesUntilHistoryEntryId(historyEntryId)
-                    .map {
-                        val change = Change.fromHistoryEntry(it)
-                        LedgerItem(it, change?.id ?: it.getId())
-                    }
-
             if (history.containsEntry(historyEntryId))
-                entries + proposedEntries
+                proposedEntries
             else
                 proposedEntries.dropWhile { it.entry.getId() != historyEntryId }.drop(1)
-
         }
 
     private fun updateCommitIndex(commitHistoryEntryId: String): List<LedgerItem> {
@@ -131,6 +132,11 @@ data class Ledger(
     }
 
     suspend fun isNotApplied(entryId: String): Boolean = mutex.withLock { !history.containsEntry(entryId) }
+    suspend fun isOlderEntryThanLastEntry(entryId: String): Boolean = mutex.withLock {
+        val lastKnownEntryId = proposedEntries.lastOrNull()?.entry?.getId() ?: history.getCurrentEntryId()
+        val isKnownEntry = history.containsEntry(entryId) || proposedEntries.any { it.entry.getId() == entryId }
+        return isKnownEntry && lastKnownEntryId != entryId
+    }
     suspend fun isNotAppliedNorProposed(entryId: String): Boolean =
         mutex.withLock { !history.containsEntry(entryId) && !proposedEntries.any { it.entry.getId() == entryId } }
 

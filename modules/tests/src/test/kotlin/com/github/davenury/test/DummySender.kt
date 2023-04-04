@@ -15,10 +15,10 @@ class DummySender(
 
     private lateinit var changes: Changes
 
-    val appearedChanges = mutableListOf<Pair<String, Change>>()
+    val appearedChanges = mutableListOf<Pair<PeerAddress, Change>>()
     val mutex = Mutex()
 
-    override suspend fun executeChange(address: String, change: Change): ChangeState {
+    override suspend fun executeChange(address: PeerAddress, change: Change): ChangeState {
         mutex.withLock {
             appearedChanges.add(Pair(address, change))
         }
@@ -33,7 +33,8 @@ class DummySender(
         changes.handleNotification(
             Notification(
                 change = change,
-                result = ChangeResult(ChangeResult.Status.SUCCESS)
+                result = ChangeResult(ChangeResult.Status.SUCCESS),
+                sender = PeerAddress(PeerId("peer0"), "peer0-peerset0-service")
             )
         )
     }

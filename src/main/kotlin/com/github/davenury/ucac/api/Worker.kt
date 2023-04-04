@@ -4,10 +4,8 @@ import com.github.davenury.common.ChangeDoesntExist
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.Metrics
 import com.github.davenury.common.ProtocolName
-import com.github.davenury.ucac.commitment.gpac.GPACFactory
-import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.ChangeNotifier
-import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.github.davenury.ucac.common.PeersetProtocols
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
@@ -17,26 +15,24 @@ import java.util.concurrent.CompletableFuture
 
 
 class Worker(
-    private val queue: Channel<ProcessorJob>,
-    private val gpacFactory: GPACFactory,
-    private val consensusProtocol: ConsensusProtocol,
-    private val twoPC: TwoPC,
-    passMdc: Boolean = true
+    private val peersetProtocols: PeersetProtocols,
+    private val changeNotifier: ChangeNotifier,
 ) : Runnable {
-    private var mdc: MutableMap<String, String>? = if (passMdc) {
-        MDC.getCopyOfContextMap()
-    } else {
-        null
-    }
+    private var mdc: MutableMap<String, String> = MDC.getCopyOfContextMap()
+    private val queue: Channel<ProcessorJob> = Channel(Channel.Factory.UNLIMITED)
 
     fun getChangeStatus(changeId: String): CompletableFuture<ChangeResult> =
-        consensusProtocol.getChangeResult(changeId)
-            ?: gpacFactory.getChangeStatus(changeId)
-            ?: twoPC.getChangeResult(changeId)
+        peersetProtocols.consensusProtocol.getChangeResult(changeId)
+            ?: peersetProtocols.gpacFactory.getChangeStatus(changeId)
+            ?: peersetProtocols.twoPC.getChangeResult(changeId)
             ?: throw ChangeDoesntExist(changeId)
 
+    fun startThread() {
+        Thread(this).start()
+    }
+
     override fun run() = runBlocking {
-        mdc?.let { MDC.setContextMap(it) }
+        MDC.setContextMap(mdc)
         processQueue()
     }
 
@@ -60,17 +56,21 @@ class Worker(
         Metrics.startTimer(job.change.id)
         val result =
             when (job.protocolName) {
-                ProtocolName.CONSENSUS -> consensusProtocol.proposeChangeAsync(job.change)
-                ProtocolName.TWO_PC -> twoPC.proposeChangeAsync(job.change)
-                ProtocolName.GPAC -> gpacFactory.getOrCreateGPAC(job.change.id)
+                ProtocolName.CONSENSUS -> peersetProtocols.consensusProtocol.proposeChangeAsync(job.change)
+                ProtocolName.TWO_PC -> peersetProtocols.twoPC.proposeChangeAsync(job.change)
+                ProtocolName.GPAC -> peersetProtocols.gpacFactory.getOrCreateGPAC(job.change.id)
                     .proposeChangeAsync(job.change)
             }
         result.thenAccept {
             job.completableFuture.complete(it)
             Metrics.stopTimer(job.change.id, job.protocolName.name.lowercase(), it)
             Metrics.bumpChangeProcessed(it, job.protocolName.name.lowercase())
-            ChangeNotifier.notify(job.change, it)
+            changeNotifier.notify(job.change, it)
         }.await()
+    }
+
+    suspend fun send(job: ProcessorJob) {
+        queue.send(job)
     }
 
     companion object {

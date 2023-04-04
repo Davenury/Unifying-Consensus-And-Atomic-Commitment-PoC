@@ -1,6 +1,7 @@
 package com.github.davenury.tests
 
 import com.github.davenury.common.Change
+import com.github.davenury.common.PeerAddress
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -9,17 +10,17 @@ import org.slf4j.LoggerFactory
 import java.lang.Exception
 
 interface Sender {
-    suspend fun executeChange(address: String, change: Change): ChangeState
+    suspend fun executeChange(address: PeerAddress, change: Change): ChangeState
 }
 
 class HttpSender(
     private val acProtocolConfig: ACProtocolConfig
 ): Sender {
-    override suspend fun executeChange(address: String, change: Change): ChangeState {
+    override suspend fun executeChange(address: PeerAddress, change: Change): ChangeState {
         return try {
             logger.info("Sending $change to $address")
             Metrics.bumpSentChanges()
-            val response = httpClient.post<HttpStatement>("http://$address/v2/change/async?${acProtocolConfig.protocol.getParam(acProtocolConfig.enforceUsage)}") {
+            val response = httpClient.post<HttpStatement>("http://${address.address}/v2/change/async?${acProtocolConfig.protocol.getParam(acProtocolConfig.enforceUsage)}") {
                 accept(ContentType.Application.Json)
                 contentType(ContentType.Application.Json)
                 body = change

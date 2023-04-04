@@ -65,7 +65,7 @@ object Metrics {
         lastHearbeat = now
     }
 
-    fun bumpChangeMetric(changeId: String, peerId: Int, peersetId: Int, protocolName: ProtocolName, state: String) {
+    fun bumpChangeMetric(changeId: String, peerId: PeerId, peersetId: PeersetId, protocolName: ProtocolName, state: String) {
         Counter.builder("change_state_changed")
             .tag("change_id", changeId)
             .tag("peer_id", peerId.toString())

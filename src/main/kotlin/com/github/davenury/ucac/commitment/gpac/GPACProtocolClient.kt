@@ -1,102 +1,87 @@
 package com.github.davenury.ucac.commitment.gpac
 
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
+import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.httpClient
-import io.ktor.client.features.*
+import com.zopa.ktor.opentracing.asyncTraced
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.utils.io.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
-data class ResponsesWithErrorAggregation<K>(
-    val responses: List<List<K>>,
-    val aggregatedValue: Int?
-)
-
 interface GPACProtocolClient {
     suspend fun sendElectMe(
-        otherPeers: List<List<PeerAddress>>,
+        otherPeers: Map<PeersetId, List<PeerAddress>>,
         message: ElectMe
-    ): ResponsesWithErrorAggregation<ElectedYou>
+    ): Map<PeersetId, List<Deferred<ElectedYou?>>>
 
-    suspend fun sendFTAgree(otherPeers: List<List<PeerAddress>>, message: Agree): List<List<Agreed>>
-    suspend fun sendApply(otherPeers: List<List<PeerAddress>>, message: Apply): List<Int>
+    suspend fun sendFTAgree(
+        otherPeers: Map<PeersetId, List<PeerAddress>>,
+        message: Agree
+    ): Map<PeersetId, List<Deferred<Agreed?>>>
+
+    suspend fun sendApply(
+        otherPeers: Map<PeersetId, List<PeerAddress>>,
+        message: Apply
+    ): Map<PeersetId, List<Deferred<HttpResponse?>>>
 }
 
 class GPACProtocolClientImpl : GPACProtocolClient {
 
     override suspend fun sendElectMe(
-        otherPeers: List<List<PeerAddress>>,
+        otherPeers: Map<PeersetId, List<PeerAddress>>,
         message: ElectMe
-    ): ResponsesWithErrorAggregation<ElectedYou> =
+    ): Map<PeersetId, List<Deferred<ElectedYou?>>> =
         sendRequests<ElectMe, ElectedYou>(
             otherPeers,
             message,
             "elect",
-            { peer, e -> "Peer ${peer.globalPeerId} responded with exception: $e - election" },
-            { accs: List<Int?> -> accs.filterNotNull().maxOfOrNull { it } }
-        )
+        ) { peer, e -> "Peer ${peer.peerId} responded with exception: $e - election" }
 
-    override suspend fun sendFTAgree(otherPeers: List<List<PeerAddress>>, message: Agree): List<List<Agreed>> =
+    override suspend fun sendFTAgree(
+        otherPeers: Map<PeersetId, List<PeerAddress>>,
+        message: Agree
+    ): Map<PeersetId, List<Deferred<Agreed?>>> =
         sendRequests<Agree, Agreed>(
             otherPeers,
             message,
-            "ft-agree",
-            { peer, e -> "Peer ${peer.globalPeerId} responded with exception: $e - ft agreement" }
-        ).responses
+            "ft-agree"
+        ) { peer, e -> "Peer ${peer.peerId} responded with exception: $e - ft agreement" }
 
-    override suspend fun sendApply(otherPeers: List<List<PeerAddress>>, message: Apply): List<Int> =
+    override suspend fun sendApply(
+        otherPeers: Map<PeersetId, List<PeerAddress>>,
+        message: Apply
+    ): Map<PeersetId, List<Deferred<HttpResponse?>>> =
         sendRequests<Apply, HttpResponse>(
-            otherPeers, message, "apply",
-            { peer, e -> "Peer: ${peer.globalPeerId} didn't apply transaction: $e" }
-        ).responses.flatten().map { it.status.value }
+            otherPeers, message, "apply"
+        ) { peer, e -> "Peer: ${peer.peerId} didn't apply transaction: $e" }
 
     private suspend inline fun <T, reified K> sendRequests(
-        otherPeers: List<List<PeerAddress>>,
+        otherPeers: Map<PeersetId, List<PeerAddress>>,
         requestBody: T,
         urlPath: String,
-        crossinline errorMessage: (PeerAddress, Throwable) -> String,
-        crossinline aggregateErrors: (accs: List<Int>) -> Int? = { _: List<Int> -> 0 }
-    ): ResponsesWithErrorAggregation<K> {
-        val acc = mutableListOf<Int?>()
-        val responses: List<List<K>> = otherPeers.map { peerset ->
-            peerset.map { peer ->
-                CoroutineScope(Dispatchers.IO).async(MDCContext()) {
-                    val (httpResult, value) = gpacHttpCall<K, T>(
-                        "http://${peer.address}/$urlPath",
-                        requestBody,
-                    ) { throwable -> errorMessage(peer, throwable) }
-                    acc.add(value)
-                    httpResult
-                }
+        crossinline errorMessage: (PeerAddress, Throwable) -> String
+    ): Map<PeersetId, List<Deferred<K?>>> = otherPeers.mapValues { (_, peerset) ->
+        peerset.map { peer ->
+            CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
+                gpacHttpCall<K, T>(
+                    "http://${peer.address}/$urlPath",
+                    requestBody,
+                ) { throwable -> errorMessage(peer, throwable) }
             }
-        }.map { jobs ->
-            jobs.mapNotNull { job ->
-                try {
-                    job.await()
-                } catch (e: Exception) {
-                    logger.error("Error while evaluating responses", e)
-                    null
-                }
-            }
-        }.also { logger.info("Got responses: $it") }
-
-        return ResponsesWithErrorAggregation(
-            responses,
-            aggregateErrors(acc.filterNotNull())
-        )
+        }
     }
 
     private suspend inline fun <reified Response, Message> gpacHttpCall(
         url: String,
         requestBody: Message,
         errorMessage: (Throwable) -> String
-    ): Pair<Response?, Int> =
+    ): Response? =
         try {
             logger.debug("Sending $requestBody to: $url")
             val response = httpClient.post<Response>(url) {
@@ -104,26 +89,10 @@ class GPACProtocolClientImpl : GPACProtocolClient {
                 accept(ContentType.Application.Json)
                 body = requestBody!!
             }
-            Pair(response, 0)
-        } catch (e: ClientRequestException) {
-            // since we're updating ballot number in electing phase, this mechanism lets us
-            // get any aggregation from all responses from "Not electing you" response, so we can get
-            // max of all ballotNumbers sent back to the leader
-            logger.error(errorMessage(e), e)
-            if (e.response.status.value == 422) {
-                val value = e.response.content.readUTF8Line()?.let { line ->
-                    return@let Regex("[0-9]+").findAll(line)
-                        .map(MatchResult::value)
-                        .toList()
-                        .map { it.toInt() }
-                }?.get(0) ?: 0
-                Pair(null, value)
-            } else {
-                Pair(null, 0)
-            }
+            response
         } catch (e: Exception) {
             logger.error(errorMessage(e), e)
-            Pair(null, 0)
+            null
         }
 
     companion object {

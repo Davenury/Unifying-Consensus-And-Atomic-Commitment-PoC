@@ -46,12 +46,12 @@ func test() {
 	}
 
 	pods, err := client.CoreV1().Pods(testNamespace).List(context.Background(), metav1.ListOptions{
-		LabelSelector: "app.name=peer0-peerset0-app",
+		LabelSelector: "app.name=peer0-app",
 	})
 
-    if len(pods.Items) != 1 {
-        panic(fmt.Sprintf("Expected one pod for application, got %n", len(pods.Items)))
-    }
+	if len(pods.Items) != 1 {
+		panic(fmt.Sprintf("Expected one pod for application, got %d", len(pods.Items)))
+	}
 
 	var podName = pods.Items[0].Name
 
@@ -79,7 +79,7 @@ func test() {
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			panic(err)
-        }
+		}
 
 		fmt.Printf("Response from post - Status Code: %d, Response body: %s\n", resp.StatusCode, string(body))
 		resp.Body.Close()

@@ -35,9 +35,6 @@ fun Application.pigPaxosProtocolRouting(protocol: PigPaxosProtocol) {
         post("/pigpaxos/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
             val result = protocol.handleProposeChange(message).await()
-                .also {
-                    ChangeNotifier.notify(message, it)
-                }
             call.respond(result)
         }
 

@@ -37,15 +37,10 @@ class TestNotificationService {
     }
 
     private val peers = config.peerAddresses()
-    private val changes = Changes(peers, HttpSender(config.acProtocol), config.getSendingStrategy(), config.getCreateChangeStrategy())
+    private val changes = Changes(peers, HttpSender(config.acProtocol), config.getSendingStrategy(), config.getCreateChangeStrategy(), config.acProtocol.protocol)
     private val testExecutor = TestExecutor(
-        config.numberOfRequestsToSendToSinglePeerset,
-        config.numberOfRequestsToSendToMultiplePeersets,
-        config.durationOfTest,
-        config.maxPeersetsInChange,
         changes,
-        config.constantLoad,
-        config.fixedPeersetsInChange
+        config
     )
 
     private val server: NettyApplicationEngine = embeddedServer(Netty, port=8080, host = "0.0.0.0") {

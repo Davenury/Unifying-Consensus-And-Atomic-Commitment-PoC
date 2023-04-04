@@ -46,9 +46,9 @@ helm list -n <namespace>
 ```
 As deploy command, init command comes with `--create-namespace` flag.
 
-Before that make sure, that you have `prometheus-community` and `grafana` charts repositories:
+Before that make sure, that you have `victoria metrics` and `grafana` charts repositories:
 ```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add vm https://victoriametrics.github.io/helm-charts/
 helm repo add stable https://charts.helm.sh/stable
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
@@ -58,4 +58,17 @@ helm repo update
 What command actually deploys?
 Each peer is a pod, managed by a deployment (one deployment for one pod). Each pod has service, that forwards requests.
 Using services gives us simplicity of creating in-cluster urls even if pod restarts for some reason. There's one service for one pod.
-Command also deploys configmap, which supplys pod with env variables. One configmap for one pod.
+Command also deploys configmap, which supplies pod with env variables. One configmap for one pod.
+
+# Instruction on how to performance tests
+1. Make sure you have helm charts installed:
+```bash
+helm repo add vm https://victoriametrics.github.io/helm-charts/
+helm repo add stable https://charts.helm.sh/stable
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+```
+2. Make sure the script you want to execute from `scripts` directory is executable.
+3. Execute script from `cmd` directory, e.g `./scripts/gpac.sh 3 0`, where the first number is number of peers in peersets, the second number is (number of peersets-1). Example will produce two peersets with 3 peers in each.
+4. To see the metrics on grafana, do port-forward. Grafana does not require login, the dashboard is loaded. Loki (for logs) is accessible from explore page.
+5. Don't forget to cleanup after yourself. Pods - `ucac cleanup -n <namespace>`; monitoring - `helm delele grafana victoria loki`.

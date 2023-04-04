@@ -2,9 +2,10 @@ package com.github.davenury.ucac.consensus.raft
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
-import com.github.davenury.ucac.common.PeerAddress
+import com.github.davenury.common.PeerAddress
 import com.github.davenury.ucac.httpClient
 import com.github.davenury.ucac.raftHttpClient
+import com.zopa.ktor.opentracing.asyncTraced
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,7 @@ interface RaftProtocolClient {
         message: ConsensusHeartbeat,
     ): RaftResponse<ConsensusHeartbeatResponse?>
 
+
     suspend fun sendRequestApplyChange(
         address: String,
         change: Change
@@ -43,7 +45,7 @@ class RaftProtocolClientImpl : RaftProtocolClient {
         otherPeers: List<PeerAddress>,
         message: ConsensusElectMe
     ): List<RaftResponse<ConsensusElectedYou?>> {
-        logger.debug("Sending elect me requests to ${otherPeers.map { it.globalPeerId }}")
+        logger.debug("Sending elect me requests to ${otherPeers.map { it.peerId }}")
         return otherPeers
             .map { Pair(it, message) }
             .let { sendRequests(it, "raft/request_vote") }
@@ -58,13 +60,13 @@ class RaftProtocolClientImpl : RaftProtocolClient {
         peer: PeerAddress, message: ConsensusHeartbeat,
     ): RaftResponse<ConsensusHeartbeatResponse?> {
 
-        return CoroutineScope(Dispatchers.IO).async(MDCContext()) {
+        return CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
             sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(peer, "raft/heartbeat", message)
         }.let {
             val result = try {
                 it.await()
             } catch (e: Exception) {
-                logger.error("Error while evaluating response from ${peer.globalPeerId}", e)
+                logger.error("Error while evaluating response from ${peer.peerId}", e)
                 null
             }
             RaftResponse(peer.address, result)
@@ -106,7 +108,7 @@ class RaftProtocolClientImpl : RaftProtocolClient {
         suffix: String,
         message: Message,
     ): Response? {
-        logger.debug("Sending request to: ${peer.globalPeerId}, message: $message")
+        logger.debug("Sending request to: ${peer.peerId}, message: $message")
         return raftHttpClient.post<Response>("http://${peer.address}/${suffix}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)

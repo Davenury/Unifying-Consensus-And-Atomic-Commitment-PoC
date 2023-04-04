@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.consensus.ratis
 
-import com.github.davenury.ucac.RatisConfig
+import com.github.davenury.common.PeersetId
+import com.github.davenury.ucac.common.PeerResolver
 import org.apache.ratis.client.RaftClient
 import org.apache.ratis.conf.Parameters
 import org.apache.ratis.conf.RaftProperties
@@ -20,8 +21,8 @@ abstract class RatisNode(
     peerId: Int,
     stateMachine: StateMachine<*>,
     storageDir: File?,
-    peersetId: Int,
-    config: RatisConfig
+    peersetId: PeersetId,
+    peerResolver: PeerResolver,
 ) : Closeable {
     private val server: RaftServer
     private val client: RaftClient
@@ -32,13 +33,12 @@ abstract class RatisNode(
         //create a property object
         val properties = RaftProperties()
 
-        clusterGroupId = UUID(0, peersetId.toLong())
-        val peers = config.peerAddresses()
-            .filter { it.key.peersetId == peersetId }
+        clusterGroupId = UUID(0, peersetId.hashCode().toLong())
+        val peers = peerResolver.getPeersFromPeerset(peersetId)
             .map {
                 RaftPeer.newBuilder()
-                    .setId("n${it.key}")
-                    .setAddress(it.value.address)
+                    .setId("n${it.peerId}")
+                    .setAddress(it.address)
                     .build()
             }
         peer = peers[peerId]

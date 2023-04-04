@@ -1,16 +1,17 @@
 package com.github.davenury.ucac.commitment.gpac
 
-import com.github.davenury.common.GPACInstanceNotFoundException
+import com.github.davenury.common.PeersetId
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.common.PeerResolver
-import com.github.davenury.ucac.common.TransactionBlocker
+import com.github.davenury.common.txblocker.TransactionBlocker
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class GPACFactory(
+    private val peersetId: PeersetId,
     private val transactionBlocker: TransactionBlocker,
     private val history: History,
     private val config: Config,
@@ -25,13 +26,14 @@ class GPACFactory(
     suspend fun getOrCreateGPAC(changeId: String): GPACProtocolAbstract =
         mutex.withLock {
             changeIdToGpacInstance[changeId] ?: GPACProtocolImpl(
+                peersetId,
                 history,
                 config.gpac,
                 context,
                 GPACProtocolClientImpl(),
                 transactionBlocker,
-                signalPublisher,
                 peerResolver,
+                signalPublisher,
                 config.metricTest
             ).also {
                 changeIdToGpacInstance[changeId] = it
@@ -42,16 +44,10 @@ class GPACFactory(
         getOrCreateGPAC(message.change.id).handleElect(message)
 
     suspend fun handleAgree(message: Agree) =
-        changeIdToGpacInstance[message.change.id]?.handleAgree(message)
-            ?: throw GPACInstanceNotFoundException(message.change.id)
+        getOrCreateGPAC(message.change.id).handleAgree(message)
 
     suspend fun handleApply(message: Apply) {
-        changeIdToGpacInstance[message.change.id]
-            ?.handleApply(message)
-            ?.also {
-                changeIdToGpacInstance.remove(message.change.id)
-            }
-            ?: throw GPACInstanceNotFoundException(message.change.id)
+        getOrCreateGPAC(message.change.id).handleApply(message)
     }
 
     fun getChangeStatus(changeId: String) =

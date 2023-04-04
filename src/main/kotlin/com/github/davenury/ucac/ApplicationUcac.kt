@@ -4,28 +4,31 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
-import com.github.davenury.ucac.commitment.gpac.GPACFactory
-import com.github.davenury.ucac.commitment.twopc.TwoPC
-import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
-import com.github.davenury.ucac.common.GlobalPeerId
-import com.github.davenury.ucac.common.HistoryFactory
-import com.github.davenury.ucac.common.PeerAddress
-import com.github.davenury.ucac.common.TransactionBlocker
+import com.github.davenury.ucac.common.ChangeNotifier
+import com.github.davenury.ucac.common.PeersetProtocols
+import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClient
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
+import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocol
-import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocolClientImpl
-import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocolImpl
 import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.RaftProtocolClientImpl
-import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.routing.gpacProtocolRouting
+import com.github.davenury.ucac.routing.metaRouting
+import com.github.davenury.ucac.routing.twoPCRouting
+import com.zopa.ktor.opentracing.OpenTracingServer
+import com.zopa.ktor.opentracing.ThreadContextElementScopeManager
+import io.jaegertracing.Configuration
+import io.jaegertracing.internal.samplers.ConstSampler
+import io.ktor.application.*
 import com.github.davenury.ucac.routing.*
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
 import io.ktor.metrics.micrometer.*
+import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -33,14 +36,12 @@ import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics
 import io.netty.channel.socket.nio.NioServerSocketChannel
-import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import kotlinx.coroutines.asCoroutineDispatcher
+import io.opentracing.util.GlobalTracer
 import kotlinx.coroutines.runBlocking
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.slf4j.event.Level
-import java.util.concurrent.Executors
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -79,21 +80,15 @@ fun createApplication(
 class ApplicationUcac constructor(
     private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
     private val config: Config,
-    inheritMdc: Boolean = true,
 ) {
-    private val mdc: MutableMap<String, String> = HashMap(mapOf("peer" to config.globalPeerId().toString()))
-    private val engine: NettyApplicationEngine
-    private var consensusProtocol: ConsensusProtocol? = null
-    private var twoPC: TwoPC? = null
-    private val ctx: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
-    private lateinit var gpacFactory: GPACFactory
-    private var service: ApiV2Service? = null
+    private val mdc: MutableMap<String, String> = HashMap(mapOf("peer" to config.peerId().toString()))
     private val peerResolver = config.newPeerResolver()
+    private val engine: NettyApplicationEngine
+    private lateinit var service: ApiV2Service
+    private lateinit var peersetProtocols: PeersetProtocols
 
     init {
-        if (inheritMdc) {
-            MDC.getCopyOfContextMap()?.let { mdc.putAll(it) }
-        }
+        MDC.getCopyOfContextMap()?.let { mdc.putAll(it) }
     }
 
     private fun <R> withMdc(action: () -> R): R {
@@ -116,74 +111,41 @@ class ApplicationUcac constructor(
     }
 
     private fun createServer() = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
-        val history = HistoryFactory().createForConfig(config)
-        val signalPublisher = SignalPublisher(signalListeners)
+        val peersetId = config.peersetId()
 
-        val raftProtocolClientImpl = RaftProtocolClientImpl()
+        logger.info("My peerset: $peersetId")
+        val changeNotifier = ChangeNotifier(peerResolver)
+        val tracer = Configuration(peerResolver.peerName())
+            .withSampler(Configuration.SamplerConfiguration.fromEnv()
+                .withType(ConstSampler.TYPE)
+                .withParam(1))
+            .withReporter(Configuration.ReporterConfiguration.fromEnv()
+                .withLogSpans(true)
+                .withSender(
+                    Configuration.SenderConfiguration()
+                        .withAgentHost("tempo")
+                        .withAgentPort(6831))).tracerBuilder
+            .withScopeManager(ThreadContextElementScopeManager())
+            .build()
+        GlobalTracer.registerIfAbsent(tracer)
 
-        val transactionBlocker = TransactionBlocker()
-        gpacFactory = GPACFactory(transactionBlocker, history, config, ctx, signalPublisher, peerResolver)
+        val signalPublisher = SignalPublisher(signalListeners, peerResolver)
 
-        consensusProtocol = when (config.consensus.name) {
-
-            "raft" -> RaftConsensusProtocolImpl(
-                history,
-                config.host + ":" + config.port,
-                ctx,
-                peerResolver,
-                signalPublisher,
-                raftProtocolClientImpl,
-                heartbeatTimeout = config.consensus.heartbeatTimeout,
-                heartbeatDelay = config.consensus.leaderTimeout,
-                transactionBlocker = transactionBlocker,
-                config.metricTest
-            )
-
-            "alvin" -> AlvinProtocol(
-                history,
-                ctx,
-                peerResolver,
-                signalPublisher,
-                AlvinProtocolClientImpl(),
-                heartbeatTimeout = config.consensus.heartbeatTimeout,
-                heartbeatDelay = config.consensus.leaderTimeout,
-                transactionBlocker = transactionBlocker,
-                config.metricTest
-            )
-
-            "pigpaxos" -> PigPaxosProtocolImpl(
-                history,
-                ctx,
-                peerResolver,
-                signalPublisher,
-                PigPaxosProtocolClientImpl(),
-                heartbeatTimeout = config.consensus.heartbeatTimeout,
-                heartbeatDelay = config.consensus.leaderTimeout,
-                transactionBlocker = transactionBlocker,
-                config.metricTest
-            )
-
-            else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
-        }
-
-        twoPC = TwoPC(
-            history,
-            config.twoPC,
-            ctx,
-            TwoPCProtocolClientImpl(config.peerId),
-            consensusProtocol as ConsensusProtocol,
-            signalPublisher,
-            peerResolver,
-            config.metricTest
-        )
-
-        service = ApiV2Service(
-            gpacFactory,
-            consensusProtocol as ConsensusProtocol,
-            twoPC!!,
-            history,
+        peersetProtocols = PeersetProtocols(
+            peersetId,
             config,
+            peerResolver,
+            signalPublisher,
+            changeNotifier,
         )
+
+        service = ApiV2Service(config, peersetProtocols, changeNotifier)
+
+
+        install(OpenTracingServer) {
+            addTag("threadName") { Thread.currentThread().name }
+            filter { call -> call.request.path().startsWith("/_meta") }
+        }
 
 
         install(CallLogging) {
@@ -255,11 +217,10 @@ class ApplicationUcac constructor(
             }
 
             exception<ChangeDoesntExist> { cause ->
+                logger.error("Change doesn't exist", cause)
                 call.respond(
                     status = HttpStatusCode.NotFound,
-                    ErrorMessage(
-                        cause.message!!
-                    )
+                    ErrorMessage(cause.message ?: "Change doesn't exists")
                 )
             }
 
@@ -273,6 +234,7 @@ class ApplicationUcac constructor(
             }
 
             exception<GPACInstanceNotFoundException> { cause ->
+                logger.error("GPAC instance not found", cause)
                 call.respond(
                     status = HttpStatusCode.NotFound,
                     ErrorMessage(cause.message ?: "GPAC instance not found")
@@ -296,47 +258,48 @@ class ApplicationUcac constructor(
         }
 
         metaRouting()
-        historyRouting(history)
-        apiV2Routing(service!!, peerResolver.currentPeer())
-        gpacProtocolRouting(gpacFactory)
-
+        historyRouting(peersetProtocols.history)
+        apiV2Routing(service, peersetId)
+        gpacProtocolRouting(peersetProtocols.gpacFactory)
         when (config.consensus.name){
-            "raft" -> raftProtocolRouting(consensusProtocol as RaftConsensusProtocol)
-            "alvin" -> alvinProtocolRouting(consensusProtocol as AlvinProtocol)
-            "pigpaxos" -> pigPaxosProtocolRouting(consensusProtocol as PigPaxosProtocol)
+            "raft" -> raftProtocolRouting(peersetProtocols.consensusProtocol as RaftConsensusProtocol, logger)
+            "alvin" -> alvinProtocolRouting(peersetProtocols.consensusProtocol as AlvinProtocol)
+            "pigpaxos" -> pigPaxosProtocolRouting(peersetProtocols.consensusProtocol as PigPaxosProtocol)
             else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
         }
-
-        twoPCRouting(twoPC!!)
+        twoPCRouting(peersetProtocols.twoPC)
 
         runBlocking {
-            if (config.consensus.isEnabled) consensusProtocol!!.begin()
+            if (config.consensus.isEnabled) peersetProtocols.consensusProtocol.begin()
         }
     }
 
-    fun setPeers(peers: Map<GlobalPeerId, PeerAddress>) {
+    fun setPeerAddresses(peerAddresses: Map<PeerId, PeerAddress>) {
+        peerAddresses.forEach { (peerId, address) -> setPeerAddress(peerId, address) }
+    }
+
+    fun setPeerAddress(peerId: PeerId, address: PeerAddress) {
         withMdc {
-            val oldPeers = peerResolver.getPeersPrintable()
-            peerResolver.setPeers(peers)
-            val newPeers = peerResolver.getPeersPrintable()
-            logger.info("Set peers $oldPeers -> $newPeers")
+            val oldAddress = peerResolver.resolve(peerId)
+            peerResolver.setPeerAddress(peerId, address)
+            val newAddress = peerResolver.resolve(peerId)
+            logger.info("Updated peer address $peerId $oldAddress -> $newAddress")
         }
     }
 
     fun startNonblocking() {
         withMdc {
             engine.start(wait = false)
-            val address = "${config.host}:${getBoundPort()}"
-            consensusProtocol?.setPeerAddress(address)
         }
     }
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
         withMdc {
             logger.info("Stop app ${peerResolver.currentPeer()}")
-            ctx.close()
+            if (this::peersetProtocols.isInitialized) {
+                peersetProtocols.close()
+            }
             engine.stop(gracePeriodMillis, timeoutMillis)
-            consensusProtocol?.stop()
         }
     }
 
@@ -354,7 +317,11 @@ class ApplicationUcac constructor(
         }
     }
 
-    fun getGlobalPeerId() = config.globalPeerId()
+    fun getPeerId(): PeerId = config.peerId()
+
+    fun getConsensusProtocol(): ConsensusProtocol {
+        return peersetProtocols.consensusProtocol
+    }
 
     companion object {
         val logger: Logger = LoggerFactory.getLogger("ucac")

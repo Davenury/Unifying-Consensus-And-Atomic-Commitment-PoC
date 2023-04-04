@@ -22,6 +22,10 @@ dependencies {
     implementation("io.ktor:ktor-client-jackson:$ktor_version")
 
     implementation("io.micrometer:micrometer-registry-prometheus:1.9.2")
+    // traces
+    implementation("io.jaegertracing:jaeger-client:1.8.1")
+    implementation("com.zopa:ktor-opentracing:0.3.6")
+
     implementation("io.ktor:ktor-metrics-micrometer:$ktor_version")
 
     // config reading
@@ -35,6 +39,8 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.8.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("io.strikt:strikt-core:0.34.0")
+    testImplementation("org.testcontainers:testcontainers:1.17.6")
+    testImplementation("org.testcontainers:junit-jupiter:1.17.6")
 }
 repositories {
     mavenCentral()

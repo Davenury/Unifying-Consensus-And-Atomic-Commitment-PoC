@@ -38,6 +38,10 @@ type Config struct {
 	fixedPeersetsInChange          string
 	proxyDelay                     string
 	proxyLimit                     string
+	loadGeneratorType              string
+	increasingLoadBound            float64
+	increasingLoadIncreaseDelay    string
+	increasingLoadIncreaseStep     float64
 }
 
 func CreateWholeCommand() *cobra.Command {
@@ -69,7 +73,7 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.pushgatewayAddress, "pushgateway-address", "prometheus-prometheus-pushgateway:9091", "Pushgateway address")
 	cmd.Flags().BoolVar(&config.enforceAcUsage, "enforce-ac", false, "Determines if usage of AC protocol should be enforced even if it isn't required (GPAC)")
 	cmd.Flags().StringVar(&config.acProtocol, "ac-protocol", "gpac", "AC protocol to use in case it's needed. two_pc or gpac")
-	cmd.Flags().StringVar(&config.consensusProtocol, "consensus-protocol", "", "Consensus protocol to use. For now it's one protocol")
+	cmd.Flags().StringVar(&config.consensusProtocol, "consensus-protocol", "raft", "Consensus protocol to use. For now it's one protocol")
 	cmd.Flags().StringVar(&config.performanceTestTimeoutDeadline, "performance-test-timeout-deadline", "PT0S", "Additional duration after which test job should be force ended")
 	cmd.Flags().BoolVar(&config.cleanupAfterWork, "cleanup-after-work", true, "Determines if command should clean ucac resources after work (doesn't appy to grafana and prometheus)")
 	cmd.Flags().BoolVar(&config.isMetricTest, "is-metric-test", false, "Metric tests adds multiple metrics for changes per id. DON'T USE WITH NORMAL TESTS!")
@@ -78,6 +82,11 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
 	cmd.Flags().StringVar(&config.proxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	cmd.Flags().StringVar(&config.proxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
+
+	cmd.Flags().StringVar(&config.loadGeneratorType, "load-generator-type", "", "Load Generator Type - one of constant, bound or increasing")
+	cmd.Flags().Float64Var(&config.increasingLoadBound, "load-bound", float64(100), "Bound of changes per second for increasing load generator")
+	cmd.Flags().StringVar(&config.increasingLoadIncreaseDelay, "load-increase-delay", "PT60S", "Determines how long load should be constant before increasing")
+	cmd.Flags().Float64Var(&config.increasingLoadIncreaseStep, "load-increase-step", float64(1), "Determines how much load should change after load-increase-delay time")
 
 	return cmd
 }
@@ -99,6 +108,7 @@ func perform(config Config) {
 		ProxyDelay:              config.proxyDelay,
 		ProxyLimit:              config.proxyLimit,
 		MonitoringNamespace:     config.monitoringNamespace,
+		ConsensusProtocol:       config.consensusProtocol,
 	})
 	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
 	time.Sleep(30 * time.Second)
@@ -109,7 +119,6 @@ func perform(config Config) {
 		PerformanceImage:            config.performanceImage,
 		SingleRequestsNumber:        config.singleRequestsNumber,
 		MultipleRequestsNumber:      config.multipleRequestsNumber,
-		TestDuration:                config.testDuration,
 		MaxPeersetsInChange:         config.maxPeersetsInChange,
 		TestsSendingStrategy:        config.testsSendingStrategy,
 		TestsCreatingChangeStrategy: config.testsCreatingChangeStrategy,
@@ -117,9 +126,15 @@ func perform(config Config) {
 		EnforceAcUsage:              config.enforceAcUsage,
 		AcProtocol:                  config.acProtocol,
 		ConsensusProtocol:           config.consensusProtocol,
-		ConstantLoad:                config.constantLoad,
 		FixedPeersetsInChange:       config.fixedPeersetsInChange,
 		MonitoringNamespace:         config.monitoringNamespace,
+
+		LoadGeneratorType:           config.loadGeneratorType,
+		ConstantLoad:                config.constantLoad,
+		TestDuration:                config.testDuration,
+		IncreasingLoadBound:         config.increasingLoadBound,
+		IncreasingLoadIncreaseDelay: config.increasingLoadIncreaseDelay,
+		IncreasingLoadIncreaseStep:  config.increasingLoadIncreaseStep,
 	})
 	fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
 	waitUntilJobPodCompleted(config)
