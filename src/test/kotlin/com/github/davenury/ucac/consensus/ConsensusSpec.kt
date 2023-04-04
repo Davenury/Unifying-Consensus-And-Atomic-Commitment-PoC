@@ -202,12 +202,13 @@ class ConsensusSpec : IntegrationTestBase() {
             val isFirstPartCommitted: AtomicBoolean = AtomicBoolean(false)
             val isAllChangeCommitted: AtomicBoolean = AtomicBoolean(false)
             var change = createChange(null)
+            val firstPart = 100
+            val secondPart = 400
 
             val leaderElectedPhaser = Phaser(peersWithoutLeader)
             val allPeerChangePhaser = Phaser(peersWithoutLeader)
             val changePhaser = Phaser(peersWithoutLeader-1)
             val endingPhaser = Phaser(1)
-
             listOf(leaderElectedPhaser,allPeerChangePhaser,changePhaser,endingPhaser).forEach{it.register()}
 
             val peerLeaderElected = SignalListener {
@@ -218,16 +219,19 @@ class ConsensusSpec : IntegrationTestBase() {
             }
 
             val peerChangeAccepted = SignalListener {
-                logger.info("Arrived change$iter: ${it.change}")
+                logger.info("Arrived change: ${it.change?.acceptNum}")
                 if(isFirstPartCommitted.get())changePhaser.arrive()
                 else allPeerChangePhaser.arrive()
             }
 
             val ignoringPeerChangeAccepted = SignalListener {
-                if (isFirstPartCommitted.get() && !isAllChangeCommitted.get()) throw RuntimeException("Ignore heartbeat")
-                logger.info("Arrived change$iter: ${it.change}")
-                if (isAllChangeCommitted.get() && it.change?.id == change.id) endingPhaser.arrive()
+                logger.info("Arrived change: ${it.change?.acceptNum}")
+                if (isAllChangeCommitted.get() && it.change?.acceptNum == firstPart+secondPart-1) endingPhaser.arrive()
                 else if(!isFirstPartCommitted.get()) allPeerChangePhaser.arrive()
+            }
+
+            val ignoreHeartbeat = SignalListener {
+                if (isFirstPartCommitted.get() && !isAllChangeCommitted.get()) throw RuntimeException("Ignore heartbeat")
             }
 
 
@@ -238,12 +242,14 @@ class ConsensusSpec : IntegrationTestBase() {
                 signalListeners = (0..3).map { "peer$it" }.associateWith {
                     mapOf(
                         Signal.ConsensusLeaderElected to peerLeaderElected,
-                        Signal.ConsensusFollowerChangeAccepted to ignoringPeerChangeAccepted
+                        Signal.ConsensusFollowerChangeAccepted to peerChangeAccepted
                     )
                 } + mapOf(
                     "peer4" to mapOf(
                         Signal.ConsensusLeaderElected to peerLeaderElected,
-                        Signal.ConsensusFollowerChangeAccepted to peerChangeAccepted
+                        Signal.ConsensusFollowerChangeAccepted to ignoringPeerChangeAccepted,
+                        Signal.ConsensusFollowerHeartbeatReceived to ignoreHeartbeat,
+                        Signal.ConsensusTryToBecomeLeader to SignalListener{ throw RuntimeException("Don't try to become a leader")}
                     )
                 )
             )
@@ -252,26 +258,27 @@ class ConsensusSpec : IntegrationTestBase() {
             leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
             logger.info("Leader elected")
 
-            repeat(50) {
+            repeat(firstPart) {
                 expectCatching {
                     executeChange("${apps.getPeer("peer0").address}/v2/change/sync", change)
                 }.isSuccess()
                 allPeerChangePhaser.arriveAndAwaitAdvanceWithTimeout()
                 iter += 1
-                change = createChange(null, parentId = change.toHistoryEntry(PeersetId("peerset0")).getId())
+                change = createChange(it, parentId = change.toHistoryEntry(PeersetId("peerset0")).getId())
             }
             // when: peer1 executed change
 
             isFirstPartCommitted.set(true)
 
 
-            repeat(200) {
+            repeat(secondPart) {
                 expectCatching {
                     executeChange("${apps.getPeer("peer0").address}/v2/change/sync", change)
                 }.isSuccess()
                 changePhaser.arriveAndAwaitAdvanceWithTimeout()
                 iter += 1
-                change = createChange(null, parentId = change.toHistoryEntry(PeersetId("peerset0")).getId())
+                logger.info("Change second part moved $it")
+                change = createChange(it+1+firstPart, parentId = change.toHistoryEntry(PeersetId("peerset0")).getId())
             }
 
             isAllChangeCommitted.set(true)
@@ -280,7 +287,7 @@ class ConsensusSpec : IntegrationTestBase() {
 
             askAllForChanges(peerAddresses.values).forEach { changes ->
                 // then: there are two changes
-                expectThat(changes.size).isEqualTo(250)
+                expectThat(changes.size).isEqualTo(firstPart+secondPart)
             }
         }
 
