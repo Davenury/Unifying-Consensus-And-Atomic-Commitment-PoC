@@ -293,7 +293,7 @@ class RaftConsensusProtocolImpl(
             when {
                 !commitIndexEntryExists -> {
                     logger.info("I miss some entries to commit (I am behind)")
-                    return@withLock ConsensusHeartbeatResponse(false, currentTerm)
+                    return@withLock ConsensusHeartbeatResponse(false, currentTerm, missingValues = true)
                 }
 
                 !prevLogEntryExists -> {
