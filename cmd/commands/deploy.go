@@ -84,7 +84,7 @@ func DoDeploy(config DeployConfig) {
 			}
 
 			createPV(config.DeployNamespace, peerConfig)
-			createPVC(config.DeployNamespace, peerConfig)
+			createPVC(config.DeployNamespace, peerConfig, config.CreateResources)
 			createRedisConfigmap(config.DeployNamespace, peerConfig)
 
 			deploySinglePeerService(config.DeployNamespace, peerConfig, ratisPort+i)
@@ -467,13 +467,18 @@ func createPV(namespace string, peerConfig utils.PeerConfig) {
 	}
 }
 
-func createPVC(namespace string, config utils.PeerConfig) {
+func createPVC(namespace string, config utils.PeerConfig, createResources bool) {
 	clientset, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
 	}
 
-	storageClass := "local-path"
+	var storageClass string
+	if createResources {
+		storageClass = "local-path"
+	} else {
+		storageClass = ""
+	}
 
 	pvc := &apiv1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
