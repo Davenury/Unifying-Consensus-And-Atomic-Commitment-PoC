@@ -54,6 +54,29 @@ open class ConsensusProtocolClient{
         }
     }
 
+    suspend inline fun <T, reified K> sendRequests(
+        peersWithBody: List<Pair<PeerAddress, T>>,
+        urlPath: String,
+    ): List<ConsensusResponse<K?>> =
+        peersWithBody.map {
+            val peer = it.first
+            val body = it.second
+            CoroutineScope(Dispatchers.IO).async(MDCContext()) {
+                sendConsensusMessage<T, K>(peer, urlPath, body)
+            }.let { coroutine ->
+                Pair(peer, coroutine)
+            }
+        }.map {
+            val result = try {
+                it.second.await()
+            } catch (e: Exception) {
+                logger.error("Error while evaluating response from ${it.first}", e)
+                null
+            }
+
+            ConsensusResponse(it.first.address, result)
+        }
+
     companion object {
         val logger = LoggerFactory.getLogger("consensus-client")
     }

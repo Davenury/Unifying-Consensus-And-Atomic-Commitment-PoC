@@ -3,6 +3,8 @@ package com.github.davenury.ucac.consensus.raft
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.ucac.consensus.ConsensusProtocolClient
+import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.httpClient
 import com.github.davenury.ucac.raftHttpClient
 import com.zopa.ktor.opentracing.asyncTraced
@@ -20,17 +22,17 @@ interface RaftProtocolClient {
     suspend fun sendConsensusElectMe(
         otherPeers: List<PeerAddress>,
         message: ConsensusElectMe
-    ): List<RaftResponse<ConsensusElectedYou?>>
+    ): List<ConsensusResponse<ConsensusElectedYou?>>
 
 
     suspend fun sendConsensusHeartbeat(
         peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>,
-    ): List<RaftResponse<ConsensusHeartbeatResponse?>>
+    ): List<ConsensusResponse<ConsensusHeartbeatResponse?>>
 
     suspend fun sendConsensusHeartbeat(
         peer: PeerAddress,
         message: ConsensusHeartbeat,
-    ): RaftResponse<ConsensusHeartbeatResponse?>
+    ): ConsensusResponse<ConsensusHeartbeatResponse?>
 
 
     suspend fun sendRequestApplyChange(
@@ -39,12 +41,12 @@ interface RaftProtocolClient {
     ): ChangeResult
 }
 
-class RaftProtocolClientImpl : RaftProtocolClient {
+class RaftProtocolClientImpl : RaftProtocolClient, ConsensusProtocolClient() {
 
     override suspend fun sendConsensusElectMe(
         otherPeers: List<PeerAddress>,
         message: ConsensusElectMe
-    ): List<RaftResponse<ConsensusElectedYou?>> {
+    ): List<ConsensusResponse<ConsensusElectedYou?>> {
         logger.debug("Sending elect me requests to ${otherPeers.map { it.peerId }}")
         return otherPeers
             .map { Pair(it, message) }
@@ -53,12 +55,12 @@ class RaftProtocolClientImpl : RaftProtocolClient {
 
     override suspend fun sendConsensusHeartbeat(
         peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>
-    ): List<RaftResponse<ConsensusHeartbeatResponse?>> =
+    ): List<ConsensusResponse<ConsensusHeartbeatResponse?>> =
         sendRequests(peersWithMessage, "raft/heartbeat")
 
     override suspend fun sendConsensusHeartbeat(
         peer: PeerAddress, message: ConsensusHeartbeat,
-    ): RaftResponse<ConsensusHeartbeatResponse?> {
+    ): ConsensusResponse<ConsensusHeartbeatResponse?> {
 
         return CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
             sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(peer, "raft/heartbeat", message)
@@ -69,7 +71,7 @@ class RaftProtocolClientImpl : RaftProtocolClient {
                 logger.error("Error while evaluating response from ${peer.peerId}", e)
                 null
             }
-            RaftResponse(peer.address, result)
+            ConsensusResponse(peer.address, result)
         }
     }
 
@@ -80,45 +82,9 @@ class RaftProtocolClientImpl : RaftProtocolClient {
             body = change
         }
 
-    private suspend inline fun <T, reified K> sendRequests(
-        peersWithBody: List<Pair<PeerAddress, T>>,
-        urlPath: String,
-    ): List<RaftResponse<K?>> =
-        peersWithBody.map {
-            val peer = it.first
-            val body = it.second
-            CoroutineScope(Dispatchers.IO).async(MDCContext()) {
-                sendConsensusMessage<T, K>(peer, urlPath, body)
-            }.let { coroutine ->
-                Pair(peer, coroutine)
-            }
-        }.map {
-            val result = try {
-                it.second.await()
-            } catch (e: Exception) {
-                logger.error("Error while evaluating response from ${it.first}", e)
-                null
-            }
 
-            RaftResponse(it.first.address, result)
-        }
-
-    private suspend inline fun <Message, reified Response> sendConsensusMessage(
-        peer: PeerAddress,
-        suffix: String,
-        message: Message,
-    ): Response? {
-        logger.debug("Sending request to: ${peer.peerId}, message: $message")
-        return raftHttpClient.post<Response>("http://${peer.address}/${suffix}") {
-            contentType(ContentType.Application.Json)
-            accept(ContentType.Application.Json)
-            body = message!!
-        }
-    }
 
     companion object {
         private val logger = LoggerFactory.getLogger("raft-client")
     }
 }
-
-data class RaftResponse<K>(val from: String, val message: K)

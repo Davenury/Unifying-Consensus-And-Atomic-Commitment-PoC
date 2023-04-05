@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.consensus.alvin
 
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.raftHttpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -133,5 +134,3 @@ public class AlvinProtocolClientImpl : AlvinProtocolClient {
         private val logger = LoggerFactory.getLogger("alvin-client")
     }
 }
-
-data class ConsensusResponse<K>(val from: String, val message: K, val unauthorized: Boolean = false)

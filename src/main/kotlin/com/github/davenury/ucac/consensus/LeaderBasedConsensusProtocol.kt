@@ -8,3 +8,5 @@ interface LeaderBasedConsensusProtocol: ConsensusProtocol {
 }
 
 typealias ConsensusProposeChange = Change
+
+data class VotedFor(val id: PeerId, val elected: Boolean = false)

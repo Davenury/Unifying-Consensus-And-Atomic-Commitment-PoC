@@ -13,6 +13,7 @@ import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.consensus.VotedFor
 import com.zopa.ktor.opentracing.span
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -917,8 +918,6 @@ data class PeerIndices(
         .getPreviousEntryId(acceptedEntryId)
         .let { PeerIndices(it, it) }
 }
-
-data class VotedFor(val id: PeerId, val elected: Boolean = false)
 
 data class ChangeToBePropagatedToLeader(
     val change: Change,

@@ -12,10 +12,10 @@ import io.ktor.http.*
 
 interface PigPaxosProtocolClient {
 
-    suspend fun sendPropose(
-        peer: PeerAddress,
+    suspend fun sendProposes(
+        peers: List<PeerAddress>,
         message: PaxosPropose
-    ): ConsensusResponse<PaxosPromise?>
+    ): List<ConsensusResponse<PaxosPromise?>>
 
     suspend fun sendAccept(
         peer: PeerAddress,
@@ -36,9 +36,14 @@ interface PigPaxosProtocolClient {
 
 class PigPaxosProtocolClientImpl() : PigPaxosProtocolClient, ConsensusProtocolClient() {
 
-    override suspend fun sendPropose(peer: PeerAddress, message: PaxosPropose): ConsensusResponse<PaxosPromise?> {
-        logger.debug("Sending proposal request to ${peer.peerId}")
-        return sendRequest(Pair(peer, message), "pigpaxos/propose")
+    override suspend fun sendProposes(
+        peers: List<PeerAddress>,
+        message: PaxosPropose
+    ): List<ConsensusResponse<PaxosPromise?>> {
+        logger.debug("Sending proposes requestes to ${peers.map { it.peerId }}")
+        return peers
+            .map { Pair(it, message) }
+            .let { sendRequests(it, "pigpaxos/propose") }
     }
 
     override suspend fun sendAccept(

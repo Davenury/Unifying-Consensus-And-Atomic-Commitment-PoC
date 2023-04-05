@@ -538,7 +538,8 @@ class PigPaxosSpec : IntegrationTestBase() {
         val election2Phaser = Phaser(1)
         val change1Phaser = Phaser(3)
         val change2Phaser = Phaser(2)
-        listOf(election1Phaser, election2Phaser, change1Phaser, change2Phaser).forEach { it.register() }
+        val abortChangePhaser = Phaser(5)
+        listOf(election1Phaser, election2Phaser, change1Phaser, change2Phaser, abortChangePhaser).forEach { it.register() }
 
         val signalListener = mapOf(
             Signal.PigPaxosLeaderElected to SignalListener {
@@ -562,7 +563,11 @@ class PigPaxosSpec : IntegrationTestBase() {
                     logger.info("Arrived at change 2 ${it.subject.getPeerName()}")
                     change2Phaser.arrive()
                 }
-            }
+            },
+            Signal.PigPaxosChangeAborted to SignalListener{
+                logger.info("Arrived at abortChange ${it.subject.getPeerName()}")
+                abortChangePhaser.arrive()
+            },
         )
 
         apps = TestApplicationSet(
@@ -686,13 +691,14 @@ class PigPaxosSpec : IntegrationTestBase() {
         logger.info("Network merged")
 
         change2Phaser.arriveAndAwaitAdvanceWithTimeout()
+//        abortChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
         logger.info("After change 2")
 
         peerAddresses.forEach {
             val proposedChanges = askForProposedChanges(it)
             val acceptedChanges = askForAcceptedChanges(it)
-            logger.debug("Checking $it proposed: $proposedChanges accepted: $acceptedChanges")
+            logger.info("Checking ${it.peerId} proposed: $proposedChanges accepted: $acceptedChanges")
             expect {
                 that(proposedChanges.size).isEqualTo(0)
                 that(acceptedChanges.size).isEqualTo(1)
