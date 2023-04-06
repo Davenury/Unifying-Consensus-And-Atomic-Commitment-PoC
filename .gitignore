@@ -40,3 +40,5 @@ history-*
 
 **/*.png
 env
+
+**/__pycache__
