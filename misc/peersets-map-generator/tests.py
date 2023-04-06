@@ -24,5 +24,18 @@ class PeersetGeneratorSpec(unittest.TestCase):
         calculated = generator._sort_distances(distances)
         self.assertEqual(calculated, [("peer1", 25), ("peer0", 30), ("peer2", 68)])
 
+    def test_peers_should_be_able_to_repeat(self):
+        generator = PeersetsGenerator(number_of_peers=10, number_of_peersets=50)
+        peersets = generator.get_peersets()
+        calculated = {}
+        for peerset in peersets:
+            for peer in peerset:
+                calculated[peer] = calculated.get(peer, 0) + 1
+
+        import functools
+        sum = functools.reduce(lambda a, b: a+b, [v for k, v in calculated.items()])
+
+        self.assertGreater(sum, 0)
+
 if __name__ == "__main__":
     unittest.main()

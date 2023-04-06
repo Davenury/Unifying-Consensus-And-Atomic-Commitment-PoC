@@ -14,11 +14,21 @@ LIKELINESS_SKEW = 0.2
 
 
 class PeersetsGenerator:
-    def __init__(self):
+    def __init__(self,
+                 number_of_peers=NUMBER_OF_PEERS,
+                 number_of_peersets=NUMBER_OF_PEERSETS,
+                 minimal_number_of_peers_in_peersets=MINIMAL_NUMBER_OF_PEERS_IN_PEERSETS,
+                 maximal_number_of_peers_in_peersets=MAXIMAL_NUMBER_OF_PEERS_IN_PEERSETS,
+                 skew=LIKELINESS_SKEW
+                 ):
+        self.number_of_peers = number_of_peers
+        self.number_of_peersets = number_of_peersets
+        self.minimal = minimal_number_of_peers_in_peersets
+        self.maximal = maximal_number_of_peers_in_peersets
+        self.skew = 1 - skew
         self.peers = self._create_peers()
         self.map = self.generate_random_map()
         self.peersets = self.generate_peersets()
-
 
     def get_peersets(self):
         return self.peersets
@@ -27,7 +37,7 @@ class PeersetsGenerator:
         return self.join_peersets_to_strings()
 
     def generate_peersets(self) -> List[List[str]]:
-        return [self._generate_single_peerset() for _ in range(NUMBER_OF_PEERSETS)]
+        return [self._generate_single_peerset() for _ in range(self.number_of_peersets)]
 
     def generate_random_map(self) -> Dict[str, Tuple[int, int]]:
         return {peer: self._get_random_coordinates() for peer in self.peers}
@@ -37,7 +47,7 @@ class PeersetsGenerator:
         return ";".join(elements)
 
     def _create_peers(self) -> List[str]:
-        return [f"peer{i}" for i in range(NUMBER_OF_PEERS)]
+        return [f"peer{i}" for i in range(self.number_of_peers)]
 
     def _generate_single_peerset(self) -> Dict[str, float]:
         coords = self._get_random_coordinates()
@@ -49,19 +59,21 @@ class PeersetsGenerator:
         chosen_peers = []
 
         for i in range(number_of_peers_in_peerset):
-            random_value = abs(np.random.normal(loc=0, scale=(1 - LIKELINESS_SKEW)))
-            index = min(int(min(random_value, 1) * (NUMBER_OF_PEERS - i)), NUMBER_OF_PEERS - 1 - i)
+            random_value = abs(np.random.normal(loc=0, scale=self.skew))
+            index = min(int(min(random_value, 1) * (self.number_of_peers - i)), self.number_of_peers - 1 - i)
             chosen_peers.append(distances[index][0])
             del distances[index]
 
         return chosen_peers
 
     def _get_number_of_peers_in_peerset(self) -> int:
-        return random.randint(MINIMAL_NUMBER_OF_PEERS_IN_PEERSETS, MAXIMAL_NUMBER_OF_PEERS_IN_PEERSETS)
+        return random.randint(self.minimal, self.maximal)
 
     @staticmethod
     def _get_distance(peer_coords: Tuple[int, int], peerset_point_coords: Tuple[int, int]) -> float:
-        return math.sqrt(math.pow(peer_coords[0] - peerset_point_coords[0], 2) + math.pow(peer_coords[1] - peerset_point_coords[1], 2))
+        return math.sqrt(
+            math.pow(peer_coords[0] - peerset_point_coords[0], 2) + math.pow(peer_coords[1] - peerset_point_coords[1],
+                                                                             2))
 
     @staticmethod
     def _sort_distances(distances: Dict[str, float]) -> Tuple[str, float]:
