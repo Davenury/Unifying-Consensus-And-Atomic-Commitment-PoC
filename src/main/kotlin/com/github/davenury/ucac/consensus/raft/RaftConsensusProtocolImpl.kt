@@ -293,7 +293,7 @@ class RaftConsensusProtocolImpl(
             when {
                 !commitIndexEntryExists -> {
                     logger.info("I miss some entries to commit (I am behind)")
-                    return@withLock ConsensusHeartbeatResponse(false, currentTerm)
+                    return@withLock ConsensusHeartbeatResponse(false, currentTerm, missingValues = true)
                 }
 
                 !prevLogEntryExists -> {
@@ -622,7 +622,7 @@ class RaftConsensusProtocolImpl(
             logger.info("Leader sends a message to $peerAddress $allChanges")
 
         val limitedCommittedChanges = newCommittedChanges.take(maxChangesPerMessage)
-        val lastLimitedCommittedChange = newCommittedChanges.lastOrNull()
+        val lastLimitedCommittedChange = limitedCommittedChanges.lastOrNull()
         val lastId = lastLimitedCommittedChange?.entry?.getId()
 
         val (currentEntryId, leaderCommitId, changesToSend) =

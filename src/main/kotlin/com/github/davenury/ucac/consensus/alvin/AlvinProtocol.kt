@@ -230,20 +230,14 @@ class AlvinProtocol(
                 return
             }
 
-            if (transactionBlocker.isAcquired()) {
-                logger.info(
-                    "Transaction is blocked, timeout transaction"
-                )
+//          FIXME: show up in 1000 Alvin changes
+
+            val isAcquiredTransactionBlocker = transactionBlocker.tryAcquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
+
+            if (!isAcquiredTransactionBlocker) {
+                logger.info("Transaction is blocked on protocol ${transactionBlocker.getProtocolName()}, timeout transaction")
                 result.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
                 return
-            }
-
-            try {
-                transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
-            } catch (ex: AlreadyLockedException) {
-                logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
-                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                throw ex
             }
 
             if (!history.isEntryCompatible(entry)) {
