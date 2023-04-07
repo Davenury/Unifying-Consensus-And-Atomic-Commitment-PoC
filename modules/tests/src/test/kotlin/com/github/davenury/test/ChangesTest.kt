@@ -53,7 +53,7 @@ class ChangesTest {
     @Test
     fun `should call lock, when list of available peersets is empty`(): Unit = runBlocking {
         // given - changes
-        val sender = DummySender(shouldNotify = false)
+        val sender = DummySender(peersets = peers, shouldNotify = false)
         val lockMock = mockk<Lock>()
         val conditionMock = mockk<Condition>()
         val subject = Changes(
@@ -117,7 +117,7 @@ class ChangesTest {
 
     @Test
     fun `should be able to unlock peersets`(): Unit = runBlocking {
-        val sender = DummySender(shouldNotify = false)
+        val sender = DummySender(shouldNotify = false, peers)
         val subject = Changes(
             peers,
             sender,
@@ -158,7 +158,7 @@ class ChangesTest {
         val changesToExecute = 10
         val phaser = Phaser(changesToExecute)
         phaser.register()
-        val sender = DummySender(shouldNotify = true, phaser = phaser)
+        val sender = DummySender(shouldNotify = true, phaser = phaser, peersets = peers)
         val subject = Changes(
             peers, sender, RandomPeersWithDelayOnConflictStrategy(peers.keys.toList()), DefaultChangeStrategy(
                 ownAddress
@@ -198,7 +198,7 @@ class ChangesTest {
         }
 
         val changes = Changes(
-            peers, DummySender(shouldNotify = false), strategy, DefaultChangeStrategy(
+            peers, DummySender(shouldNotify = false, peers), strategy, DefaultChangeStrategy(
                 ownAddress
             ),
             null

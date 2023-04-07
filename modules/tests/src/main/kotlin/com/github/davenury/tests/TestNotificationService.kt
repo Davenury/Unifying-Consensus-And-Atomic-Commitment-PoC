@@ -75,7 +75,7 @@ class TestNotificationService {
         }
 
         GlobalScope.launch {
-            delay(2000)
+            delay(3000)
             testExecutor.startTest()
             delay(2000)
             closeService()
