@@ -49,7 +49,7 @@ class PeersetsGenerator:
     def _create_peers(self) -> List[str]:
         return [f"peer{i}" for i in range(self.number_of_peers)]
 
-    def _generate_single_peerset(self) -> Dict[str, float]:
+    def _generate_single_peerset(self) -> List[str]:
         coords = self._get_random_coordinates()
         distances = {peer: self._get_distance(peer_coords, coords) for peer, peer_coords in self.map.items()}
         distances = self._sort_distances(distances)
@@ -60,9 +60,11 @@ class PeersetsGenerator:
 
         for i in range(number_of_peers_in_peerset):
             random_value = abs(np.random.normal(loc=0, scale=self.skew))
-            index = min(int(min(random_value, 1) * (self.number_of_peers - i)), self.number_of_peers - 1 - i)
-            chosen_peers.append(distances[index][0])
-            del distances[index]
+            current_list_size = self.number_of_peers - 1 -i
+            calculated_index = int(random_value * (self.number_of_peers - i))
+            correct_index = min(calculated_index, current_list_size)
+            chosen_peers.append(distances[correct_index][0])
+            del distances[correct_index]
 
         return chosen_peers
 
