@@ -426,6 +426,11 @@ class RaftConsensusProtocolImpl(
             peerAddress = peerResolver.resolve(peer)
             peerMessage = getMessageForPeer(peerAddress)
         }
+        signalPublisher.signal(
+            signal = Signal.ConsensusSendHeartbeat,
+            subject = this@RaftConsensusProtocolImpl,
+            peers = mapOf(peersetId to otherConsensusPeers()),
+        )
         val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
 
         // We should schedule heartbeat even if something failed during handling response
@@ -529,6 +534,16 @@ class RaftConsensusProtocolImpl(
                 voteContainer.getAcceptedChanges { isMoreThanHalf(it) } + additionalAcceptedIds
             acceptedItems = state.getLogEntries(acceptedIds)
 
+            acceptedItems.forEach {
+                signalPublisher.signal(
+                    signal = Signal.ConsensusAfterProposingChange,
+                    subject = this@RaftConsensusProtocolImpl,
+                    peers = mapOf(peersetId to otherConsensusPeers()),
+                    change = Change.fromHistoryEntry(it.entry),
+                    historyEntry = it.entry,
+                )
+            }
+
             state.acceptItems(acceptedIds)
 
             acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
@@ -542,16 +557,6 @@ class RaftConsensusProtocolImpl(
 
         acceptedItems.forEach {
             changeIdToCompletableFuture.putIfAbsent(it.changeId, CompletableFuture())
-        }
-
-        acceptedItems.forEach {
-            signalPublisher.signal(
-                signal = Signal.ConsensusAfterProposingChange,
-                subject = this@RaftConsensusProtocolImpl,
-                peers = mapOf(peersetId to otherConsensusPeers()),
-                change = Change.fromHistoryEntry(it.entry),
-                historyEntry = it.entry,
-            )
         }
 
         acceptedItems

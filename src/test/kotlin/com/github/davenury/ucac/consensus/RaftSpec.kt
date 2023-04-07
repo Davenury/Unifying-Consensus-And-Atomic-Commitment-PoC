@@ -43,6 +43,7 @@ import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.measureTimeMillis
 
+// TODO: Add test in all consensuses that we run x changes and after finishing them, all peers has got consistent state
 
 @ExtendWith(TestLogExtension::class)
 class RaftSpec : IntegrationTestBase() {
@@ -476,14 +477,11 @@ class RaftSpec : IntegrationTestBase() {
         listOf(election1Phaser, election2Phaser, changePhaser).forEach { it.register() }
         var firstLeader = true
         val proposedPeers = ConcurrentHashMap<String, Boolean>()
-        var changePeers: (() -> Unit?)? = null
-
         val mutex = Mutex()
 
         val leaderAction = SignalListener {
             if (firstLeader) {
-                logger.info("Arrived ${it.subject.getPeerName()}")
-                changePeers?.invoke()
+                logger.info("Arrived leader action ${it.subject.getPeerName()}")
                 failurePhaser.arrive()
                 throw RuntimeException("Failed after proposing change")
             }
@@ -505,7 +503,6 @@ class RaftSpec : IntegrationTestBase() {
             }
 
         val peerApplyChange = SignalListener {
-            if(firstLeader) throw RuntimeException("Ignore first leader appyling change")
             logger.info("Arrived peer apply change")
             changePhaser.arrive()
         }
@@ -516,10 +513,17 @@ class RaftSpec : IntegrationTestBase() {
                         it.change == change && firstLeader && !proposedPeers.contains(it.subject.getPeerName()) -> {
                             proposedPeers[it.subject.getPeerName()] = true
                         }
-
                         proposedPeers.contains(it.subject.getPeerName()) && firstLeader -> throw Exception("Ignore heartbeat from old leader")
                         proposedPeers.size > 2 && firstLeader -> throw Exception("Ignore heartbeat from old leader")
                     }
+                }
+            }
+        }
+
+        val leaderSendingHeartbeat = SignalListener {
+            runBlocking {
+                mutex.withLock {
+                    if (firstLeader && proposedPeers.size > 2) throw RuntimeException("Stop handling heartbeats from old leader")
                 }
             }
         }
@@ -528,7 +532,8 @@ class RaftSpec : IntegrationTestBase() {
             Signal.ConsensusAfterProposingChange to leaderAction,
             Signal.ConsensusLeaderElected to peerLeaderElected,
             Signal.ConsensusFollowerChangeAccepted to peerApplyChange,
-            Signal.ConsensusFollowerHeartbeatReceived to ignoreHeartbeatAfterProposingChange
+            Signal.ConsensusFollowerHeartbeatReceived to ignoreHeartbeatAfterProposingChange,
+            Signal.ConsensusFollowerHeartbeatReceived to leaderSendingHeartbeat,
         )
 
         apps = TestApplicationSet(
@@ -541,14 +546,6 @@ class RaftSpec : IntegrationTestBase() {
         election1Phaser.arriveAndAwaitAdvanceWithTimeout()
 
         val firstLeaderAddress = getLeaderAddress(apps.getRunningApps()[0])
-
-        changePeers = {
-            val peers = apps.getRunningPeers("peerset0").mapValues { entry ->
-                val peer = entry.value
-                peer.copy(address = peer.address.replace(knownPeerIp, unknownPeerIp))
-            }
-            apps.getApp(firstLeaderAddress.peerId).setPeerAddresses(peers)
-        }
 
 
 //      Start processing
