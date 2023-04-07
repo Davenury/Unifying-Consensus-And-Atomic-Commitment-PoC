@@ -505,6 +505,7 @@ class RaftSpec : IntegrationTestBase() {
             }
 
         val peerApplyChange = SignalListener {
+            if(firstLeader) throw RuntimeException("Ignore first leader appyling change")
             logger.info("Arrived peer apply change")
             changePhaser.arrive()
         }
@@ -560,9 +561,10 @@ class RaftSpec : IntegrationTestBase() {
         apps.getApp(firstLeaderAddress.peerId).stop(0, 0)
 
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
-        firstLeader = false
-        changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
+        firstLeader = false
+
+        changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
         apps.getRunningPeers("peerset0")
             .values
