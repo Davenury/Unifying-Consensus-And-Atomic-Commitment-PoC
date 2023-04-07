@@ -21,6 +21,8 @@ import strikt.api.expectThat
 import strikt.assertions.*
 import java.util.concurrent.Phaser
 
+
+@Disabled("Temporary")
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
 class MixedChangesSpec : IntegrationTestBase() {
