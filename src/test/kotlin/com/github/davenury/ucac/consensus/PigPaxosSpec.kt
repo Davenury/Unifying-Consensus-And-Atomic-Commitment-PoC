@@ -472,7 +472,7 @@ class PigPaxosSpec : IntegrationTestBase() {
         val allPeers = 5
 
         val electionPhaser = Phaser(1)
-        val changePhaser = Phaser(allPeers - 3)
+        val changePhaser = Phaser(allPeers - 4)
         listOf(electionPhaser, changePhaser).forEach { it.register() }
 
         val peerLeaderElected = SignalListener { electionPhaser.arrive() }

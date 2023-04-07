@@ -296,6 +296,7 @@ class PigPaxosProtocolImpl(
                 }
 
                 if (result == null) {
+                    logger.info("Sending request to leader failed, try to become a leader myself")
                     changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
                     becomeLeader()
                 }
