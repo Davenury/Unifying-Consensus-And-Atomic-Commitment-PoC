@@ -98,15 +98,8 @@ class PigPaxosProtocolImpl(
 
             failureDetector.cancelCounting()
             failureDetector = getHeartbeatTimer()
-            votedFor = VotedFor(message.peerId, true)
-            currentRound = message.paxosRound
-            cleanOldRoundState()
+            updateVotedFor(message.paxosRound, message.peerId)
 
-            with(CoroutineScope(leaderRequestExecutorService)) {
-                launch(MDCContext()) {
-                    tryPropagatingChangesToLeader()
-                }
-            }
             return PaxosPromise(
                 true,
                 message.paxosRound,
@@ -265,6 +258,7 @@ class PigPaxosProtocolImpl(
             votedFor = VotedFor(proposer, true)
             currentRound = paxosRound
             cleanOldRoundState()
+            sendOldChanges()
         }
     }
 
@@ -606,14 +600,10 @@ class PigPaxosProtocolImpl(
     private fun cleanOldRoundState() {
         val oldEntries = entryIdPaxosRound.values.filter { it.round < currentRound }
         oldEntries.forEach {
-            val changeId = Change.fromHistoryEntry(it.entry)!!.id
+            val change = Change.fromHistoryEntry(it.entry)!!
+            changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+            changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, changeIdToCompletableFuture[change.id]!!))
             entryIdPaxosRound.remove(it.entry.getId())
-            changeIdToCompletableFuture[changeId]?.complete(
-                ChangeResult(
-                    ChangeResult.Status.TIMEOUT,
-                    "leader doesn't finish it"
-                )
-            )
         }
         if (transactionBlocker.isAcquired()) transactionBlocker.release(
             TransactionAcquisition(
@@ -621,6 +611,14 @@ class PigPaxosProtocolImpl(
                 transactionBlocker.getChangeId()!!
             )
         )
+    }
+
+    private fun sendOldChanges() {
+        with(CoroutineScope(leaderRequestExecutorService)) {
+            launch(MDCContext()) {
+                tryPropagatingChangesToLeader()
+            }
+        }
     }
 
 
@@ -639,6 +637,7 @@ class PigPaxosProtocolImpl(
         // TODO mutex?
         val votedFor = this.votedFor
         if (votedFor == null || !votedFor.elected) return
+        logger.info("Try to propagate")
         while (true) {
             val changeToBePropagated = changesToBePropagatedToLeader.poll() ?: break
             if (amIALeader()) {

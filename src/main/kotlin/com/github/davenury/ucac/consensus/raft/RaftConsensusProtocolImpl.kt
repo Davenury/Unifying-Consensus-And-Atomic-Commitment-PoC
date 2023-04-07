@@ -189,8 +189,8 @@ class RaftConsensusProtocolImpl(
             if (amILeader()) stopBeingLeader(iteration)
 
             val lastEntryId =
-                state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId()
-                    ?: state.lastApplied
+                state.proposedEntries.lastOrNull()?.entry?.getId()
+                    ?: history.getCurrentEntryId()
 
             val candidateIsOutdated: Boolean = state.isOlderEntryThanLastEntry(lastLogId)
 

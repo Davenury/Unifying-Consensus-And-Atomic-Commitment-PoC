@@ -499,7 +499,6 @@ class RaftSpec : IntegrationTestBase() {
 
                     else -> {
                         logger.info("Arrived at election 2 ${it.subject.getPeerName()}")
-                        firstLeader = false
                         election2Phaser.arrive()
                     }
                 }
@@ -561,6 +560,7 @@ class RaftSpec : IntegrationTestBase() {
         apps.getApp(firstLeaderAddress.peerId).stop(0, 0)
 
         election2Phaser.arriveAndAwaitAdvanceWithTimeout()
+        firstLeader = false
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 
