@@ -320,7 +320,7 @@ class PigPaxosProtocolImpl(
 
         val newRound = responses.maxOfOrNull { it.currentRound } ?: currentRound
 
-        val newerLeader = responses.find { it.currentRound >= round && !it.promised }
+        val newerLeader = responses.find { it.currentRound > round && !it.promised }
         val votes = responses.filter { it.promised }.also { println("Votes: $it") }.count { it.promised }
 
         mutex.withLock {
