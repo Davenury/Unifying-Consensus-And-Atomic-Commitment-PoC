@@ -130,7 +130,7 @@ class PigPaxosSpec : IntegrationTestBase() {
         var change = createChange(null)
 
         val peerLeaderElected = SignalListener {
-            logger.info("Arrived ${it.subject.getPeerName()}")
+            logger.info("Arrived peer elected ${it.subject.getPeerName()}")
             leaderElectedPhaser.arrive()
         }
 
@@ -163,7 +163,7 @@ class PigPaxosSpec : IntegrationTestBase() {
         (0 until endRange).forEach {
             val newTime = measureTimeMillis {
                 expectCatching {
-                    executeChange("${apps.getPeer(peer(0)).address}/v2/change/async", change)
+                    executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync", change)
                 }.isSuccess()
             }
             logger.info("Change $it is processed $newTime ms")
@@ -585,7 +585,7 @@ class PigPaxosSpec : IntegrationTestBase() {
 
         logger.info("First election finished")
 
-        val firstLeaderAddress = peers.mapNotNull { getLeaderAddress(it) }.first()
+        val firstLeaderAddress = peers.firstNotNullOf { getLeaderAddress(it) }
 
         logger.info("First leader: $firstLeaderAddress")
 
