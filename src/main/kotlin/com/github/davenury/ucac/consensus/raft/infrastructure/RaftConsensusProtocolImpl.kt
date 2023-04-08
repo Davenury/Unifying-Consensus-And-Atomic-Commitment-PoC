@@ -528,7 +528,7 @@ class RaftConsensusProtocolImpl(
             }
 
             !response.message.success -> {
-                logger.info("Peer doesn't accept heartbeat, because I have outdated history")
+                logger.info("Peer ${peerAddress.peerId} doesn't accept heartbeat, because I have outdated history")
 
                 if (isRegular) {
                     launchHeartBeatToPeer(peer, delay = heartbeatDelay)
