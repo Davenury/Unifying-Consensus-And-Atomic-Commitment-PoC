@@ -646,23 +646,22 @@ class RaftConsensusProtocolImpl(
         val lastLimitedCommittedChange = limitedCommittedChanges.lastOrNull()
         val lastId = lastLimitedCommittedChange?.entry?.getId()
 
-        val (currentEntryId, leaderCommitId, changesToSend) =
+        val (leaderCommitId, changesToSend) =
             if (limitedCommittedChanges.size < allChanges.size && lastId != null) {
                 logger.info("Leader sends a message to $peerAddress - number of changes: ${limitedCommittedChanges.size}, first: ${limitedCommittedChanges.firstOrNull()}, last: ${limitedCommittedChanges.lastOrNull()}")
-                Triple(lastId, lastId, limitedCommittedChanges)
+                Pair(lastId, limitedCommittedChanges)
             }
             else {
                 logger.info("Leader sends a message to $peerAddress - number of changes: ${allChanges.size}, first: ${allChanges.firstOrNull()}, last: ${allChanges.lastOrNull()}")
-                Triple(history.getCurrentEntryId(), state.commitIndex, allChanges)
+                Pair(state.commitIndex, allChanges)
             }
-
 
         return ConsensusHeartbeat(
             peerId,
             currentTerm,
             changesToSend.map { it.toDto() },
             lastAppliedChangeId,
-            currentEntryId,
+            history.getCurrentEntryId(),
             leaderCommitId
         )
     }
