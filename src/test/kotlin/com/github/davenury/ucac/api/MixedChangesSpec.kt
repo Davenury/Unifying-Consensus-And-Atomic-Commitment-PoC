@@ -43,8 +43,9 @@ class MixedChangesSpec : IntegrationTestBase() {
         val beforeSendingApplyPhaser = Phaser(1)
         val electionPhaser = Phaser(4)
         val applyConsensusPhaser = Phaser(2)
+        val receivedAgreePhaser = Phaser(5)
 
-        listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser, applyConsensusPhaser)
+        listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser, applyConsensusPhaser, receivedAgreePhaser)
             .forEach { it.register() }
         val leaderElected = SignalListener {
             logger.info("Arrived ${it.subject.getPeerName()}")
@@ -58,7 +59,10 @@ class MixedChangesSpec : IntegrationTestBase() {
             },
             Signal.ConsensusLeaderElected to leaderElected,
             Signal.BeforeSendingApply to SignalListener {
-                beforeSendingApplyPhaser.arrive()
+                runBlocking {
+                    receivedAgreePhaser.arriveAndAwaitAdvanceWithTimeout()
+                    beforeSendingApplyPhaser.arrive()
+                }
             },
             Signal.ConsensusFollowerChangeAccepted to SignalListener {
                 if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
@@ -114,8 +118,9 @@ class MixedChangesSpec : IntegrationTestBase() {
             val beforeSendingApplyPhaser = Phaser(1)
             val electionPhaser = Phaser(4)
             val applyConsensusPhaser = Phaser(3)
+            val receivedAgreePhaser = Phaser(5)
 
-            listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser)
+            listOf(applyEndPhaser, electionPhaser, beforeSendingApplyPhaser, receivedAgreePhaser)
                 .forEach { it.register() }
             val leaderElected = SignalListener {
                 logger.info("Arrived ${it.subject.getPeerName()}")
@@ -129,9 +134,15 @@ class MixedChangesSpec : IntegrationTestBase() {
                 },
                 Signal.ConsensusLeaderElected to leaderElected,
                 Signal.BeforeSendingApply to SignalListener {
-                    beforeSendingApplyPhaser.arrive()
+                    runBlocking {
+                        receivedAgreePhaser.arriveAndAwaitAdvanceWithTimeout()
+                        beforeSendingApplyPhaser.arrive()
+                    }
+
                 },
+                Signal.OnHandlingAgreeEnd to SignalListener { receivedAgreePhaser.arrive() },
                 Signal.ConsensusFollowerChangeAccepted to SignalListener {
+                    logger.info("Arrived consensus change: ${it.subject.getPeerName()}")
                     if (it.change?.id == secondChange.id) applyConsensusPhaser.arrive()
                 }
             )
@@ -190,7 +201,7 @@ class MixedChangesSpec : IntegrationTestBase() {
             electionPhaser,
             beforeSendingApplyPhaser,
             applySecondChangePhaser,
-            applyThirdChangePhaser
+            applyThirdChangePhaser,
         )
             .forEach { it.register() }
         val leaderElected = SignalListener {
