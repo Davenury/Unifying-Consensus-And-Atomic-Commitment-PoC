@@ -314,12 +314,16 @@ class PigPaxosProtocolImpl(
             }
         }
 
-    private suspend fun becomeLeader(reason: String): Unit = span("PigPaxos.becomeLeader") {
+    private suspend fun becomeLeader(reason: String, round: Int = currentRound+1): Unit = span("PigPaxos.becomeLeader") {
 
-        val round: Int
         mutex.withLock {
-            currentRound += 1
-            round = currentRound
+            if(round <= currentRound) {
+                logger.info("Don't try to become a leader, because someone tried in meantime, propagate chagnes")
+                sendOldChanges()
+                return@span
+            }
+
+            currentRound = round
             votedFor = VotedFor(globalPeerId)
         }
         logger.info("Try to become a leader in round: $round, because $reason")
