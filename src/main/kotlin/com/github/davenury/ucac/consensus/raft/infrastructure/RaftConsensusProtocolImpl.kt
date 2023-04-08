@@ -140,7 +140,7 @@ class RaftConsensusProtocolImpl(
 
         val positiveResponses = responses.filterNotNull().count { it.voteGranted }
 
-        if (!isMoreThanHalf(positiveResponses)) {
+        if (!isMoreThanHalf(positiveResponses) || responses.filterNotNull().any { !it.voteGranted }) {
             mutex.withLock {
                 restartTimer(RaftRole.Candidate)
             }
