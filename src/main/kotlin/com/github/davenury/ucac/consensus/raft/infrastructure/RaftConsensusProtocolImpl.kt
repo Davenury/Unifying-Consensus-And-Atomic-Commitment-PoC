@@ -229,7 +229,7 @@ class RaftConsensusProtocolImpl(
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse =
         span("Raft.handleHeartbeat") {
             return mutex.withLock {
-                logger.info("Handling heartbeat: $heartbeat")
+                logger.info("Handling heartbeat: first change ${heartbeat.logEntries.firstOrNull()}, last change: ${heartbeat.logEntries.lastOrNull()}, overall: ${heartbeat.logEntries.size}")
                 heartbeat.logEntries.forEach {
                     val entry = HistoryEntry.deserialize(it.serializedEntry)
                     signalPublisher.signal(
@@ -253,13 +253,16 @@ class RaftConsensusProtocolImpl(
                     return@withLock ConsensusHeartbeatResponse(false, currentTerm)
                 }
 
-                if (currentTerm < term || votedFor == null || votedFor?.elected == false)
+                if (currentTerm < term || votedFor == null || votedFor?.elected == false) {
+                    logger.info("New leader")
                     newLeaderElected(heartbeat.leaderId, term)
+                }
 
                 if (history.getCurrentEntryId() != heartbeat.currentHistoryEntryId && !isUpdatedCommitIndex) {
-                    logger.info("Received heartbeat from leader that has outdated history ${state.commitIndex} $leaderCommitId")
+                    logger.info("Received heartbeat from leader that has outdated history my commit - ${state.commitIndex} leader commit - $leaderCommitId")
                     return@withLock ConsensusHeartbeatResponse(false, currentTerm)
                 }
+
 
 //      Restart timer because we received heartbeat from proper leader
                 if (currentTerm < term) {
@@ -273,18 +276,23 @@ class RaftConsensusProtocolImpl(
 
                 val notAppliedProposedChanges =
                     proposedChanges.filter { state.isNotAppliedNorProposed(it.entry.getId()) }
+                logger.info("Not applied proposed: ${notAppliedProposedChanges.size}, first: ${notAppliedProposedChanges.firstOrNull()}, last: ${notAppliedProposedChanges.lastOrNull()}")
 
                 val prevLogEntryExists = prevEntryId == null || state.checkIfItemExist(prevEntryId)
+                logger.info("Prev log entry exists: $prevLogEntryExists, prev log entry: $prevEntryId")
 
                 val commitIndexEntryExists = notAppliedProposedChanges
                     .find { it.entry.getId() == leaderCommitId }
                     ?.let { true }
                     ?: state.checkIfItemExist(leaderCommitId)
+                logger.info("Commit index entry exists: first part - ${notAppliedProposedChanges.find { it.entry.getId() == leaderCommitId }}, second part - ${state.checkIfItemExist(leaderCommitId)}")
 
 
                 val areProposedChangesIncompatible =
                     notAppliedProposedChanges.isNotEmpty() && notAppliedProposedChanges.any {
-                        !history.isEntryCompatible(it.entry)
+                        !history.isEntryCompatible(it.entry).also { compabilityResult ->
+                            logger.debug("Entry with id: ${it.entry.getId()}, compabilityResult: $compabilityResult")
+                        }
                     }
 
                 val acceptedChangesFromProposed = notAppliedProposedChanges
@@ -294,7 +302,7 @@ class RaftConsensusProtocolImpl(
 
                 when {
                     !commitIndexEntryExists -> {
-                        logger.info("I miss some entries to commit (I am behind)")
+                        logger.info("I miss some entries to commit (I am behind), lastCommitedEntryId: ${state.commitIndex}")
                         return@withLock ConsensusHeartbeatResponse(
                             false,
                             currentTerm,
@@ -509,12 +517,14 @@ class RaftConsensusProtocolImpl(
             }
 
             response.message.missingValues -> {
-                logger.info("Peer ${peerAddress.peerId} is not up to date, decrementing index")
+                logger.info("Peer ${peerAddress.peerId} is not up to date, decrementing index (they told me their commit entry is ${response.message.lastCommittedEntryId})")
                 val oldValues = peerToNextIndex[peerAddress.peerId]
+                logger.info("Old values for ${peerAddress.peerId} is ${oldValues}")
 //                Done: Add decrement method for PeerIndices
                 peerToNextIndex[peerAddress.peerId] = oldValues
-                    ?.let { PeerIndices(response.message.lastCommittedEntryId!!,response.message.lastCommittedEntryId!!) }
+                    ?.let { PeerIndices(response.message.lastCommittedEntryId!!, response.message.lastCommittedEntryId) }
                     ?: PeerIndices()
+                logger.info("I set the ${peerAddress.peerId} to ${peerToNextIndex[peerAddress.peerId]}")
             }
 
             !response.message.success -> {
@@ -638,11 +648,11 @@ class RaftConsensusProtocolImpl(
 
         val (currentEntryId, leaderCommitId, changesToSend) =
             if (limitedCommittedChanges.size < allChanges.size && lastId != null) {
-                logger.info("Leader sends a message to $peerAddress $limitedCommittedChanges")
+                logger.info("Leader sends a message to $peerAddress - number of changes: ${limitedCommittedChanges.size}, first: ${limitedCommittedChanges.firstOrNull()}, last: ${limitedCommittedChanges.lastOrNull()}")
                 Triple(lastId, lastId, limitedCommittedChanges)
             }
             else {
-                logger.info("Leader sends a message to $peerAddress $allChanges")
+                logger.info("Leader sends a message to $peerAddress - number of changes: ${allChanges.size}, first: ${allChanges.firstOrNull()}, last: ${allChanges.lastOrNull()}")
                 Triple(history.getCurrentEntryId(), state.commitIndex, allChanges)
             }
 
