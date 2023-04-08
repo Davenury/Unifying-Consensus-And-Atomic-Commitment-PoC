@@ -68,7 +68,7 @@ class PigPaxosProtocolImpl(
 
     override suspend fun begin() {
         failureDetector.startCounting {
-            becomeLeader()
+            if(votedFor?.elected != true) becomeLeader("No leader was elected")
         }
     }
 
@@ -146,7 +146,7 @@ class PigPaxosProtocolImpl(
                         changeIdToCompletableFuture[changeId]!!
                     )
                 )
-                becomeLeader()
+                becomeLeader("Leader didn't finish entry ${entry.getId()}")
             }
 
             return@withLock PaxosAccepted(true, currentRound, votedFor?.id)
@@ -308,13 +308,13 @@ class PigPaxosProtocolImpl(
                     if (result == null) {
                         logger.info("Sending request to leader failed, try to become a leader myself")
                         changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
-                        becomeLeader()
+                        becomeLeader("Leader doesn't respond to my request")
                     }
                 }
             }
         }
 
-    private suspend fun becomeLeader(): Unit = span("PigPaxos.becomeLeader") {
+    private suspend fun becomeLeader(reason: String): Unit = span("PigPaxos.becomeLeader") {
 
         val round: Int
         mutex.withLock {
@@ -322,7 +322,7 @@ class PigPaxosProtocolImpl(
             round = currentRound
             votedFor = VotedFor(globalPeerId)
         }
-        logger.info("Try to become a leader in round: $round")
+        logger.info("Try to become a leader in round: $round, because $reason")
         signalPublisher.signal(
             Signal.PigPaxosTryToBecomeLeader,
             this@PigPaxosProtocolImpl,
@@ -347,14 +347,6 @@ class PigPaxosProtocolImpl(
                     logger.info("Other peer ${votedFor?.id} become a leader meanwhile myself tried")
                 }
 
-//                currentRound > round -> {
-//                    logger.info("Outdated round try it again")
-//                    currentRound = maxOf(currentRound, newRound)
-//                    failureDetector.startCounting {
-//                        becomeLeader()
-//                    }
-//                }
-
                 newerLeader?.currentLeaderId != null && newerLeader.currentRound > round -> {
                     logger.info("Peer ${newerLeader.currentLeaderId} can be a leader in round: ${newerLeader.currentRound}")
                     votedFor = VotedFor(newerLeader.currentLeaderId, true)
@@ -365,7 +357,7 @@ class PigPaxosProtocolImpl(
                     logger.info("This is not newest round, retry becoming leader in some time")
                     currentRound = maxOf(newerLeader.currentRound, newRound)
                     failureDetector.startCounting {
-                        becomeLeader()
+                        becomeLeader("Lea")
                     }
                     return
                 }
@@ -374,7 +366,7 @@ class PigPaxosProtocolImpl(
                     logger.info("Peer ${peerTryingToBecomeLeaderInSameRound.currentLeaderId} tries to become a leader in the same round, retry after some time")
                     currentRound = maxOf(currentRound, newRound)
                     failureDetector.startCounting {
-                        becomeLeader()
+                        becomeLeader("Two peers tried to become a leader in the same time")
                     }
                     return
                 }
@@ -405,9 +397,9 @@ class PigPaxosProtocolImpl(
                 }
 
                 else -> {
-                    logger.info("I don't gather qurom votes, retry after some time")
+                    logger.info("I don't gather quorum votes, retry after some time")
                     failureDetector.startCounting {
-                        becomeLeader()
+                        becomeLeader("Leader wasn't elected, retry after some time")
                     }
                     return
                 }
