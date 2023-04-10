@@ -153,6 +153,7 @@ class OnePeersetChanges(
                 change
             )
         } catch (e: Exception) {
+            logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
             populateConsensusLeader()
             return introduceChange(change)
         }
@@ -165,6 +166,7 @@ class OnePeersetChanges(
             when (e) {
                 is ClientRequestException, is ServerResponseException -> throw e
                 else -> {
+                    logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
                     populateConsensusLeader()
                     return getChange()
                 }
@@ -181,9 +183,11 @@ class OnePeersetChanges(
         val peerId = try {
             sender.getConsensusLeaderId(address)
         } catch (e: Exception) {
+            logger.info("$address is dead, I'm trying to get consensus leader from another one")
             return getConsensusLeader(peerAddresses.filterNot { it == address })
         }
         return peersAddresses.find { it.peerId == peerId } ?: runBlocking {
+            logger.info("Consensus leader is not elected yet, I'm trying to get one in 500 ms")
             delay(500)
             getConsensusLeader(peerAddresses)
         }
@@ -194,5 +198,9 @@ class OnePeersetChanges(
 
     fun overrideParentId(newParentId: String) {
         parentId.set(newParentId)
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger("OnePeersetChanges")
     }
 }
