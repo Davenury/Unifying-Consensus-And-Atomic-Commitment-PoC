@@ -674,7 +674,6 @@ class ConsensusSpec : IntegrationTestBase() {
                     that(acceptedChanges2.first().acceptNum).isEqualTo(null)
                 }
             }
-
     }
 
     @Test
