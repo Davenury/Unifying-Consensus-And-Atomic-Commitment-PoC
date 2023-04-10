@@ -6,6 +6,7 @@ import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
 import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
 import io.ktor.client.features.*
 import io.ktor.client.request.*
+import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,7 +21,8 @@ class Changes(
     private val sender: Sender,
     private val getPeersStrategy: GetPeersStrategy,
     private val createChangeStrategy: CreateChangeStrategy,
-    private val acProtocol: ACProtocol?
+    private val acProtocol: ACProtocol?,
+    private val ownAddress: String,
 ) {
     private val changes = peers.mapValues { OnePeersetChanges(it.value, sender) }
 
@@ -31,6 +33,7 @@ class Changes(
 
     init {
         populateConsensusLeaders()
+        subscribeToStructuralChanges()
     }
 
     private fun populateConsensusLeaders() {
@@ -42,6 +45,22 @@ class Changes(
         }.let {
             runBlocking {
                 it.map { deferred -> deferred.second }.awaitAll()
+            }
+        }
+    }
+
+    private fun subscribeToStructuralChanges() {
+        GlobalScope.launch {
+            peers.entries.forEach { (_, addresses) ->
+                addresses.forEach { address ->
+                    httpClient.post("http://${address.address}/v2/subscribe-to-structural-changes") {
+                        contentType(ContentType.Application.Json)
+                        body = SubscriberAddress(
+                            address = "$ownAddress/api/v1/new-consensus-leader",
+                            type = "http",
+                        )
+                    }
+                }
             }
         }
     }
@@ -132,6 +151,10 @@ class Changes(
         }
     }
 
+    fun newConsensusLeader(newConsensusLeaderId: CurrentLeaderFullInfoDto) {
+        changes[newConsensusLeaderId.peersetId]!!.newConsensusLeader(newConsensusLeaderId.peerId)
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger("Changes")
         private const val changeTimeout: Long = 8000
@@ -198,6 +221,10 @@ class OnePeersetChanges(
 
     fun overrideParentId(newParentId: String) {
         parentId.set(newParentId)
+    }
+
+    fun newConsensusLeader(peerId: PeerId) {
+        this.consensusLeader.set(peersAddresses.find { it.peerId == peerId }!!)
     }
 
     companion object {
