@@ -35,6 +35,7 @@ class HttpSender(
             when (e) {
                 is ClientRequestException -> Metrics.reportUnsuccessfulChange(e.response.status.value)
                 is ServerResponseException -> Metrics.reportUnsuccessfulChange(e.response.status.value)
+                else -> throw e
             }
             ChangeState.REJECTED
         }
