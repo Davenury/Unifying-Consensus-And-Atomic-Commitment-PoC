@@ -5,6 +5,7 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
 import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
 import io.ktor.client.request.*
+import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -46,6 +47,7 @@ class Changes(
 
     init {
         populateConsensusLeaders()
+        subscribeToStructuralChanges()
     }
 
     private fun populateConsensusLeaders() {
@@ -57,6 +59,22 @@ class Changes(
         }.let {
             runBlocking {
                 it.map { deferred -> deferred.second }.awaitAll()
+            }
+        }
+    }
+
+    private fun subscribeToStructuralChanges() {
+        GlobalScope.launch {
+            peers.entries.forEach { (_, addresses) ->
+                addresses.forEach { address ->
+                    httpClient.post("http://${address.address}/v2/subscribe-to-structural-changes") {
+                        contentType(ContentType.Application.Json)
+                        body = SubscriberAddress(
+                            address = "$ownAddress/api/v1/new-consensus-leader",
+                            type = "http",
+                        )
+                    }
+                }
             }
         }
     }
