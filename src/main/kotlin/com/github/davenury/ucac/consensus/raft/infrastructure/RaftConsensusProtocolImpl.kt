@@ -155,12 +155,7 @@ class RaftConsensusProtocolImpl(
         }
 
         logger.info(
-            "I have been selected as a leader (in term $currentTerm), peerIndices - ${
-                PeerIndices(
-                    state.lastApplied,
-                    state.lastApplied
-                )
-            }"
+            "I have been selected as a leader (in term $currentTerm)"
         )
 
         peerToNextIndex.keys.forEach {
@@ -236,7 +231,7 @@ class RaftConsensusProtocolImpl(
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse =
         span("Raft.handleHeartbeat") {
             return mutex.withLock {
-                logger.info("Handling heartbeat: first change ${heartbeat.logEntries.firstOrNull()}, last change: ${heartbeat.logEntries.lastOrNull()}, overall: ${heartbeat.logEntries.size}")
+                logger.debug("Handling heartbeat: first change ${heartbeat.logEntries.firstOrNull()}, last change: ${heartbeat.logEntries.lastOrNull()}, overall: ${heartbeat.logEntries.size}")
                 heartbeat.logEntries.forEach {
                     val entry = HistoryEntry.deserialize(it.serializedEntry)
                     signalPublisher.signal(
@@ -261,14 +256,13 @@ class RaftConsensusProtocolImpl(
                 }
 
                 if (currentTerm < term || votedFor == null || votedFor?.elected == false) {
-                    logger.info("New leader")
                     newLeaderElected(heartbeat.leaderId, term)
                 }
 
                 val leaderCurrentEntryIsOutdated = history.containsEntry(heartbeat.currentHistoryEntryId) && history.getCurrentEntryId() != heartbeat.currentHistoryEntryId
 
                 if (leaderCurrentEntryIsOutdated) {
-                    logger.info("Received heartbeat from leader that has outdated history my commit - ${state.commitIndex} leader commit - $leaderCommitId")
+                    logger.warn("Received heartbeat from leader that has outdated history my commit - ${state.commitIndex} leader commit - $leaderCommitId")
                     return@withLock ConsensusHeartbeatResponse(false, currentTerm)
                 }
 
