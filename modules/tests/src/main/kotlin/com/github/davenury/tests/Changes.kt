@@ -148,7 +148,6 @@ class Changes(
                 if (!handledChanges.contains(change.id)) {
                     logger.error("Change $change timed out from performance tests, freeing peersets")
                     getPeersStrategy.freePeersets(change.peersets.map { it.peersetId }, change.id)
-                    handledChanges[change.id] = change.peersets.size
                 }
             }
         }
