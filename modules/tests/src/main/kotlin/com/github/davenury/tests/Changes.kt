@@ -74,6 +74,9 @@ class Changes(
                     val parentId = change.toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
                     logger.info("Setting new parent id for peerset $peersetId: $parentId, change was for ${(change as AddUserChange).userName}")
+                } else if (notification.result.status == ChangeResult.Status.CONFLICT && notification.result.desiredParentId != null) {
+                    logger.info("Change conflicted, yet we have desired parent id for peerset: ${notification.result.desiredParentId}")
+                    changes[peersetId]!!.overrideParentId(notification.result.desiredParentId!!)
                 }
             }
             getPeersStrategy.handleNotification(notification)

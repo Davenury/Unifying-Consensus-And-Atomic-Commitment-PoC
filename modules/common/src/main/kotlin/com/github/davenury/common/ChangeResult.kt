@@ -2,7 +2,8 @@ package com.github.davenury.common
 
 data class ChangeResult(
     val status: Status,
-    val detailedMessage: String? = null
+    val detailedMessage: String? = null,
+    val desiredParentId: String? = null,
 ) {
     enum class Status {
         /**

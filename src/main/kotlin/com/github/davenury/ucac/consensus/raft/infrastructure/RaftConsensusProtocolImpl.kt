@@ -732,10 +732,10 @@ class RaftConsensusProtocolImpl(
                         "Proposed change is incompatible. \n CurrentChange: ${
                             history.getCurrentEntryId()
                         } \n Change.parentId: ${
-                            updatedChange.toHistoryEntry(peersetId).getParentId()
+                            entry.getParentId()
                         }"
                     )
-                    result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                    result.complete(ChangeResult(ChangeResult.Status.CONFLICT, detailedMessage = "Change incompatible", desiredParentId = history.getCurrentEntryId()))
                     transactionBlocker.release(acquisition)
                     this.setTag("result", "conflict")
                     this.finish()
