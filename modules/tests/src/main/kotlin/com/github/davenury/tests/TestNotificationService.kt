@@ -75,9 +75,11 @@ class TestNotificationService {
             }
 
             post("/api/v1/new-consensus-leader") {
+                logger.info("Received new consensus leader notification")
                 try {
                     val newConsensusLeaderId = call.receive<CurrentLeaderFullInfoDto>()
                     changes.newConsensusLeader(newConsensusLeaderId)
+                    call.respond(HttpStatusCode.OK)
                 } catch (e: Exception) {
                     logger.error("Error while handling new consensus leader message", e)
                     call.respond(HttpStatusCode.ServiceUnavailable)

@@ -163,7 +163,7 @@ class RaftConsensusProtocolImpl(
 
         logger.info("I have been selected as a leader (in term $currentTerm)")
         Subscribers.notifyAboutConsensusLeaderChange(peerId, peersetId)
-        
+
         peerToNextIndex.keys.forEach {
             peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
         }
