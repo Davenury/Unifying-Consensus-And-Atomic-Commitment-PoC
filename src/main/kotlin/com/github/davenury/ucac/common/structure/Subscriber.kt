@@ -5,5 +5,4 @@ import com.github.davenury.common.PeersetId
 
 interface Subscriber {
     suspend fun notifyConsensusLeaderChange(newLeaderPeerId: PeerId, newLeaderPeersetId: PeersetId)
-
 }

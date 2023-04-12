@@ -9,6 +9,7 @@ import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.zopa.ktor.opentracing.span
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
@@ -39,6 +40,7 @@ class TwoPC(
                 peersets = updatedChange.peersets,
                 twoPCStatus = TwoPCStatus.ACCEPTED,
                 change = change,
+                leaderPeerset = peersetId,
             )
 
             val otherPeersets = updatedChange.peersets
@@ -119,6 +121,7 @@ class TwoPC(
             otherPeerset,
         )
 
+        logger.info("Asking about change: $change - result - $resultChange")
         if (resultChange != null) {
             handleDecision(resultChange)
         } else changeTimer.startCounting {
@@ -197,6 +200,37 @@ class TwoPC(
         }
     }
 
+    // I have been selected as a new leader, let me check if there are any 2PC changes
+    fun newConsensusLeaderElected(peerId: PeerId, peersetId: PeersetId) {
+        logger.info("I have been selected as a new consensus leader")
+        val currentChange = Change.fromHistoryEntry(history.getCurrentEntry())
+        logger.info("Current change in history is - $currentChange")
+        if (currentChange !is TwoPCChange || currentChange.twoPCStatus == TwoPCStatus.ABORTED) {
+            // everything good - current change is not 2PC change
+            logger.info("There's no unfinished TwoPC changes, I can receive new changes")
+            return
+        }
+        // try to find out what happened to the transaction
+        if (currentChange.leaderPeerset == peersetId) {
+            logger.info("Change $currentChange is my change, so I need to go with decision phase")
+            // it was my change, so it's better to finish it
+            runBlocking {
+                // TODO - it does not have to be false - it was a fault so it's safer to abort the transaction
+                decisionPhase(
+                    currentChange,
+                    false,
+                    currentChange.peersets.filterNot { it.peersetId == peersetId }
+                        .map { peerResolver.getPeersFromPeerset(it.peersetId)[0] })
+            }
+        } else {
+            logger.info("Change $currentChange is not my change, I'll ask about it")
+            // it was not my change, so I should ask about it
+            runBlocking {
+                askForDecisionChange(currentChange)
+            }
+        }
+    }
+
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
 
@@ -235,6 +269,7 @@ class TwoPC(
                 peersets = change.peersets,
                 twoPCStatus = TwoPCStatus.ABORTED,
                 change = change,
+                leaderPeerset = peersetId,
             )
         }
 //      Asynchronous commit change to consensuses
