@@ -209,7 +209,7 @@ class OnePeersetChanges(
             sender.getConsensusLeaderId(address)
         } catch (e: Exception) {
             logger.info("$address is dead, I'm trying to get consensus leader from another one")
-            return getConsensusLeader(peerAddresses.filterNot { it == address })
+            return getConsensusLeader(peerAddresses.drop(1))
         }
         return peersAddresses.find { it.peerId == peerId } ?: runBlocking {
             logger.info("Consensus leader is not elected yet, I'm trying to get one in 500 ms")
