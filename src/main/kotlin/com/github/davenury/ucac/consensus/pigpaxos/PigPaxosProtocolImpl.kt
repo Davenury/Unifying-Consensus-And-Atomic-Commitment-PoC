@@ -568,14 +568,13 @@ class PigPaxosProtocolImpl(
         val peers = otherConsensusPeers().size
 
         while (responses.size < peers) {
-            logger.info("Gathered responses: ${responses.size} vs $peers")
             val response = channel.receive()
-
-            logger.info("Received response: $response")
 
             responses.add(response)
 
             val (accepted, rejected) = responses.filterNotNull().partition { it.result }
+
+            logger.info("Received response: $response, accepted: ${accepted.size}, rejected: ${rejected.size}, total: ${responses.size}")
 
             when {
                 isMoreThanHalf(accepted.size) || isMoreThanHalf(rejected.size) -> {
@@ -593,7 +592,6 @@ class PigPaxosProtocolImpl(
                     logger.info("I am not a valid leader anymore, current leader: ${response.currentLeaderId}, round: ${response.currentRound}")
                     return responses
                 }
-
             }
         }
 
