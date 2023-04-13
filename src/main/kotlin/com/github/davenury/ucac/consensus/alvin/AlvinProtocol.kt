@@ -637,13 +637,12 @@ class AlvinProtocol(
 
         val commitVotes = entryIdToVotesCommit.getOrDefault(entryId, listOf()).distinct().size
         val abortVotes = entryIdToVotesAbort.getOrDefault(entryId, listOf()).distinct().size
-
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
 
         val commitDecision = if (myselfVotesForCommit) isMoreThanHalf(commitVotes) else isMoreThanHalf(commitVotes - 1)
         val abortDecision = if (myselfVotesForCommit) isMoreThanHalf(abortVotes - 1) else isMoreThanHalf(abortVotes)
 
         if ((commitDecision || abortDecision) && changeIdToCompletableFuture[change.id]?.isDone != true) {
-            changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             entryIdToAlvinEntry.remove(entryId)
             entryIdToFailureDetector[entryId]?.cancelCounting()
             entryIdToFailureDetector.remove(entryId)
@@ -660,7 +659,7 @@ class AlvinProtocol(
                         state = "accepted"
                     )
                 }
-                history.addEntry(entry.entry)
+                if(!history.containsEntry(entry.entry.getId()))history.addEntry(entry.entry)
                 Pair(ChangeResult.Status.SUCCESS, Signal.AlvinCommitChange)
             } else {
                 Pair(ChangeResult.Status.CONFLICT, Signal.AlvinAbortChange)
@@ -697,6 +696,9 @@ class AlvinProtocol(
                 mutex.withLock {
                     logger.info("Add missing history entry: ${historyEntry.getId()}")
                     history.addEntry(historyEntry)
+                    val change = Change.fromHistoryEntry(historyEntry)!!
+                    changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
+                    signalPublisher.signal(Signal.AlvinCommitChange, this, mapOf(peersetId to otherConsensusPeers()), change = change)
                     true
                 }
 
