@@ -13,6 +13,7 @@ import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.consensus.VotedFor
 import com.github.davenury.ucac.consensus.raft.ChangeToBePropagatedToLeader
+import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
 import com.zopa.ktor.opentracing.span
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -291,27 +292,41 @@ class PigPaxosProtocolImpl(
             with(CoroutineScope(leaderRequestExecutorService)) {
                 launch(MDCContext()) {
                     if(amIALeader()) return@launch proposeChangeToLedger(cf, change)
-                    val result: ChangeResult? = try {
-                        val response = protocolClient.sendRequestApplyChange(
-                            peerResolver.resolve(votedFor?.id!!), change
-                        )
-                        logger.info("Response from leader: $response")
-                        response
-                    } catch (e: Exception) {
-                        logger.info("Request to leader (${votedFor?.id}) failed", e)
-                        null
-                    }
 
-                    if (listOf(ChangeResult.Status.ABORTED,ChangeResult.Status.REJECTED, ChangeResult.Status.CONFLICT).contains(result?.status)) {
-                        entryIdPaxosRound.remove(change.toHistoryEntry(peersetId).getId())
-                        cf.complete(result)
+                    var result: ChangeResult? = null
+//              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
+                    var retries = 0
+                    while (result == null && retries < 3) {
+                        val address: PeerAddress
+                        if (amIALeader()) {
+                            return@launch proposeChangeToLedger(cf, change)
+                        } else {
+                            address = peerResolver.resolve(votedFor!!.id)
+                        }
+
+                        result = try {
+                            protocolClient.sendRequestApplyChange(address, change)
+                        } catch (e: Exception) {
+                            logger.error("Request to leader ($address, ${votedFor?.id}) failed", e.message)
+                            null
+                        }
+                        retries++
+                        if(result == null) delay(heartbeatDelay.toMillis())
                     }
 
                     if (result == null) {
                         logger.info("Sending request to leader failed, try to become a leader myself")
                         changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
-                        becomeLeader("Leader doesn't respond to my request")
+                        return@launch becomeLeader("Leader doesn't respond to my request")
                     }
+
+                    if (result.status != ChangeResult.Status.SUCCESS) {
+                        entryIdPaxosRound.remove(change.toHistoryEntry(peersetId).getId())
+                        cf.complete(result)
+                    }
+
+
+
                 }
             }
         }
