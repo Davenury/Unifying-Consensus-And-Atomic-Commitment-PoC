@@ -4,6 +4,8 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.*
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.ucac.common.structure.CodeSubscriber
+import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.utils.IntegrationTestBase
 import com.github.davenury.ucac.utils.TestApplicationSet
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
@@ -127,7 +129,10 @@ class TwoPCSpec : IntegrationTestBase() {
         repeat(endRange) {
             time += measureTimeMillis {
                 expectCatching {
-                    executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change)
+                    executeChange(
+                        "http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true",
+                        change
+                    )
                 }.isSuccess()
             }
             phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -183,7 +188,10 @@ class TwoPCSpec : IntegrationTestBase() {
 
         changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0&use_2pc=true", changeSecond)
+        executeChange(
+            "http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0&use_2pc=true",
+            changeSecond
+        )
 
         changeSecondAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -243,7 +251,10 @@ class TwoPCSpec : IntegrationTestBase() {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         val change: Change = change(0, 1)
-        val result = executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0&use_2pc=true", change)
+        val result = executeChange(
+            "http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0&use_2pc=true",
+            change
+        )
 
         expectThat(result.status).isEqualTo(HttpStatusCode.Accepted)
 
@@ -299,7 +310,10 @@ class TwoPCSpec : IntegrationTestBase() {
 
         // when - executing transaction
         try {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change)
+            executeChange(
+                "http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true",
+                change
+            )
             fail("Exception not thrown")
         } catch (e: Exception) {
             expectThat(e).isA<ServerResponseException>()
@@ -415,7 +429,10 @@ class TwoPCSpec : IntegrationTestBase() {
 
             electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change)
+            executeChange(
+                "http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true",
+                change
+            )
 
             firstPeersetChangeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -482,7 +499,10 @@ class TwoPCSpec : IntegrationTestBase() {
 
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change)
+            executeChange(
+                "http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true",
+                change
+            )
         }
 
         applyCommittedPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -583,7 +603,10 @@ class TwoPCSpec : IntegrationTestBase() {
             )
 
             expectCatching {
-                executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", lastChange)
+                executeChange(
+                    "http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true",
+                    lastChange
+                )
             }.isSuccess()
 
             finalChangePhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -624,8 +647,14 @@ class TwoPCSpec : IntegrationTestBase() {
         expectCatching {
             val change1 = change(0, 1)
             val change2 = twoPeersetChange(change1)
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change1)
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change2)
+            executeChange(
+                "http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true",
+                change1
+            )
+            executeChange(
+                "http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true",
+                change2
+            )
         }.isSuccess()
 
         askAllForChanges("peerset0").forEach { changes ->
@@ -689,6 +718,100 @@ class TwoPCSpec : IntegrationTestBase() {
         changes.forEach { ch ->
             expectThat(ch.size).isEqualTo(4)
         }
+    }
+
+    @Test
+    fun `should be able to execute transaction to its end, when the leader fails`(): Unit = runBlocking {
+        val consensusLeaderElectedPhaser = Phaser(5)
+        val twoPcChangePhaser = Phaser(2)
+        val newConsensusLeaderPhaser = Phaser(2)
+        val changeAppliedPhaser = Phaser(2)
+
+        val consensusLeaders: MutableMap<PeersetId, PeerId> = mutableMapOf()
+
+        fun subscribers() = Subscribers().apply {
+            this.registerSubscriber(CodeSubscriber { peerId, peersetId ->
+                logger.info("New consensus leader elected: $peerId")
+                if (consensusLeaders[peersetId] != null) {
+                    newConsensusLeaderPhaser.arrive()
+                }
+                consensusLeaders[peersetId] = peerId
+            })
+        }
+
+        val leaderElectedListener = SignalListener {
+            consensusLeaderElectedPhaser.arrive()
+        }
+
+        val twoPCLeaderListener = SignalListener {
+            twoPcChangePhaser.arrive()
+            throw RuntimeException()
+        }
+
+        val changeAppliedListener = SignalListener {
+            changeAppliedPhaser.arrive()
+        }
+
+        apps = TestApplicationSet(
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2"),
+                "peerset1" to listOf("peer3", "peer4", "peer5")
+            ),
+            subscribers = (0..2).map { "peer$it" }.associateWith { mapOf(PeersetId("peerset0") to subscribers()) } +
+                    (3..5).map { "peer$it" }.associateWith { mapOf(PeersetId("peerset0") to subscribers()) },
+            signalListeners = (0..5).map { "peer$it" }.associateWith {
+                mapOf(
+                    Signal.ConsensusLeaderElected to leaderElectedListener,
+                    Signal.TwoPCOnChangeAccepted to twoPCLeaderListener,
+                    Signal.TwoPCOnChangeApplied to changeAppliedListener,
+                )
+            }
+        )
+
+        // pick first consensus leader
+        consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        expectThat(consensusLeaders[PeersetId("peerset0")]).isNotNull()
+        expectThat(consensusLeaders[PeersetId("peerset1")]).isNotNull()
+
+        val firstConsensusLeader = consensusLeaders[PeersetId("peerset0")]!!
+
+        // execute change that will stop at TwoPCChange(Accepted)
+        expectCatching {
+            val change1 = change(0, 1)
+            executeChange("http://${apps.getPeer(firstConsensusLeader).address}/v2/change/sync?use_2pc=true", change1)
+        }.isFailure()
+
+        twoPcChangePhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        logger.info("Killing - $firstConsensusLeader")
+        // force peers to pick another consensus leader
+        apps.stopApp(firstConsensusLeader)
+
+        // make sure current change in peersets are TwoPCChanges - potential rc?
+        expectThat(askForChanges(
+            apps.getPeer(
+                listOf("peer0", "peer1", "peer2")
+                    .map { PeerId(it) }
+                    .filterNot { it == firstConsensusLeader }
+                    .first()
+            ),
+            "peerset0"
+        ).last()).isA<TwoPCChange>()
+        expectThat(askForChanges(apps.getPeer(PeerId("peer3")), "peerset1").last()).isA<TwoPCChange>()
+
+        newConsensusLeaderPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        listOf(Pair("peer0", "peerset0"), Pair("peer1", "peerset0"), Pair("peer2", "peerset0"), Pair("peer3", "peerset1"), Pair("peer4", "peerset1"), Pair("peer5", "peerset1"))
+            .map { Pair(PeerId(it.first), it.second) }
+            .filterNot { it.first == firstConsensusLeader }
+            .forEach {
+                val change = askForChanges(apps.getPeer(it.first), it.second).last()
+                expectThat(change).isA<TwoPCChange>()
+                expectThat((change as TwoPCChange).twoPCStatus).isEqualTo(TwoPCStatus.ABORTED)
+            }
     }
 
     private suspend fun executeChange(uri: String, change: Change): HttpResponse =

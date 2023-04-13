@@ -76,7 +76,7 @@ class PeersetProtocols(
             changeNotifier = changeNotifier
         )
 
-        subscribers.registerSubscriber(CodeSubscriber { peerId, peersetId ->
+        subscribers?.registerSubscriber(CodeSubscriber { peerId, peersetId ->
             twoPC.newConsensusLeaderElected(peerId, peersetId)
         })
     }

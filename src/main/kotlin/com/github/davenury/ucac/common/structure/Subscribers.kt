@@ -9,6 +9,7 @@ import java.util.concurrent.Executors
 
 class Subscribers {
     private val subscribers = mutableListOf<Subscriber>()
+    private val ctx = Executors.newCachedThreadPool().asCoroutineDispatcher()
 
     fun registerSubscriber(subscriber: Subscriber) {
         subscribers.add(subscriber)

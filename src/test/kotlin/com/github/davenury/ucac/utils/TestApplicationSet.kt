@@ -6,6 +6,7 @@ import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.createApplication
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -18,6 +19,7 @@ class TestApplicationSet(
     signalListeners: Map<String, Map<Signal, SignalListener>> = emptyMap(),
     configOverrides: Map<String, Map<String, Any>> = emptyMap(),
     val appsToExclude: List<String> = emptyList(),
+    subscribers: Map<String, Map<PeersetId, Subscribers>> = emptyMap(),
 ) : AutoCloseable {
     private val apps: Map<PeerId, ApplicationUcac>
     private val peerAddresses: Map<PeerId, PeerAddress>
@@ -48,6 +50,7 @@ class TestApplicationSet(
                 mapOf("peerId" to peerId) +
                         testConfigOverrides +
                         (configOverrides[peerId.toString()] ?: emptyMap()),
+                subscribers[peerId.toString()] ?: emptyMap(),
             )
         }
 
@@ -81,6 +84,11 @@ class TestApplicationSet(
     }
 
     fun getPeersets(): Map<PeersetId, List<PeerId>> = peersets
+
+    fun stopApp(peerId: PeerId) {
+        logger.info("Stopping app: $peerId")
+        apps[peerId]!!.stop()
+    }
 
     fun getPeer(peerId: String): PeerAddress = getPeer(PeerId(peerId))
     fun getPeer(peerId: PeerId): PeerAddress = peerAddresses[peerId]!!
