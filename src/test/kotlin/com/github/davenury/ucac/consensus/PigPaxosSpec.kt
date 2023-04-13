@@ -691,7 +691,6 @@ class PigPaxosSpec : IntegrationTestBase() {
         logger.info("Network merged")
 
         change2Phaser.arriveAndAwaitAdvanceWithTimeout()
-//        abortChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
         logger.info("After change 2")
 

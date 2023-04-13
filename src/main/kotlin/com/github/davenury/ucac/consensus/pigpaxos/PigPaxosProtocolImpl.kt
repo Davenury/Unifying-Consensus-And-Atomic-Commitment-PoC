@@ -301,7 +301,8 @@ class PigPaxosProtocolImpl(
                         null
                     }
 
-                    if (result?.status == ChangeResult.Status.ABORTED) {
+                    if (listOf(ChangeResult.Status.ABORTED,ChangeResult.Status.REJECTED, ChangeResult.Status.CONFLICT).contains(result?.status)) {
+                        entryIdPaxosRound.remove(change.toHistoryEntry(peersetId).getId())
                         cf.complete(result)
                     }
 
@@ -583,6 +584,11 @@ class PigPaxosProtocolImpl(
                 response == null -> {}
 
                 isNotValidLeader(response, round) && round >= 0 -> {
+                    mutex.withLock {
+                        votedFor = VotedFor(response.currentLeaderId!!,true)
+                        currentRound = response.currentRound
+                    }
+
                     logger.info("I am not a valid leader anymore, current leader: ${response.currentLeaderId}, round: ${response.currentRound}")
                     return responses
                 }
