@@ -32,7 +32,7 @@ class PeersetProtocols(
     changeNotifier: ChangeNotifier
 ) : AutoCloseable {
     private val persistence = PersistenceFactory().createForConfig(config)
-    val history = MeteredHistory(PersistentHistory(persistence))
+    val history = PersistentHistory(persistence)
     private val transactionBlocker = PersistentTransactionBlocker(persistence)
 
     private val ctx: ExecutorCoroutineDispatcher =
