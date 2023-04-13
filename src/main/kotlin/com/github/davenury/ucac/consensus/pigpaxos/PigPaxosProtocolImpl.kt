@@ -286,10 +286,11 @@ class PigPaxosProtocolImpl(
         }
     }
 
-    private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change) =
+    private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit =
         span("PigPaxos.sendRequestToLeader") {
             with(CoroutineScope(leaderRequestExecutorService)) {
                 launch(MDCContext()) {
+                    if(amIALeader()) return@launch proposeChangeToLedger(cf, change)
                     val result: ChangeResult? = try {
                         val response = protocolClient.sendRequestApplyChange(
                             peerResolver.resolve(votedFor?.id!!), change
