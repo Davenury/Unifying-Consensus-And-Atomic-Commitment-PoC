@@ -577,10 +577,6 @@ class PigPaxosProtocolImpl(
             logger.info("Received response: $response, accepted: ${accepted.size}, rejected: ${rejected.size}, total: ${responses.size}")
 
             when {
-                isMoreThanHalf(accepted.size) || isMoreThanHalf(rejected.size) -> {
-                    return responses
-                }
-
                 response == null -> {}
 
                 isNotValidLeader(response, round) && round >= 0 -> {
@@ -590,6 +586,10 @@ class PigPaxosProtocolImpl(
                     }
 
                     logger.info("I am not a valid leader anymore, current leader: ${response.currentLeaderId}, round: ${response.currentRound}")
+                    return responses
+                }
+
+                isMoreThanHalf(accepted.size) || isMoreThanHalf(rejected.size) -> {
                     return responses
                 }
             }
