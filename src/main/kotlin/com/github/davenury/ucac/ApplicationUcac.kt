@@ -24,9 +24,13 @@ import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.micrometer.core.instrument.Meter
+import io.micrometer.core.instrument.Tag
+import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics
 import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics
+import io.micrometer.core.instrument.config.MeterFilter
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.opentracing.util.GlobalTracer
 import kotlinx.coroutines.runBlocking
@@ -98,6 +102,14 @@ class ApplicationUcac constructor(
         withMdc {
             logger.info("Starting application with config: $config")
             engine = createServer()
+        }
+        config.experimentId?.let {experimentId ->
+            meterRegistry.config().meterFilter(object: MeterFilter {
+                override fun map(id: Meter.Id): Meter.Id {
+                    val tags = Tags.of(id.tags.toMutableList().also { it.add(Tag.of("experiment", experimentId)) })
+                    return Meter.Id(id.name, tags, id.baseUnit, id.description, id.type)
+                }
+            })
         }
         this.engine = engine!!
     }

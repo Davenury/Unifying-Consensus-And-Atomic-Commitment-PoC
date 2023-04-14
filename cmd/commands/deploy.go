@@ -85,7 +85,7 @@ func DoDeploy(config DeployConfig) {
 				PeersetsConfig: config.NumberOfPeersInPeersets,
 			}
 
-			createPV(config.DeployNamespace, peerConfig)
+			createPV(config.DeployNamespace, peerConfig, config.CreateResources)
 			createPVC(config.DeployNamespace, peerConfig, config.CreateResources)
 			createRedisConfigmap(config.DeployNamespace, peerConfig)
 
@@ -429,13 +429,20 @@ func deploySinglePeerService(namespace string, peerConfig utils.PeerConfig, curr
 	clientset.CoreV1().Services(namespace).Create(context.Background(), service, metav1.CreateOptions{})
 }
 
-func createPV(namespace string, peerConfig utils.PeerConfig) {
+func createPV(namespace string, peerConfig utils.PeerConfig, createResources bool) {
 	clientset, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
 	}
 
 	hostPathType := apiv1.HostPathUnset
+
+	var storageClass string
+	if createResources {
+		storageClass = "local-path"
+	} else {
+		storageClass = ""
+	}
 
 	pv := &apiv1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
@@ -448,7 +455,7 @@ func createPV(namespace string, peerConfig utils.PeerConfig) {
 			},
 		},
 		Spec: apiv1.PersistentVolumeSpec{
-			StorageClassName: "",
+			StorageClassName: storageClass,
 			Capacity: apiv1.ResourceList{
 				"storage": resource.MustParse("50Mi"),
 			},
