@@ -58,6 +58,8 @@ func CreateDeployCommand() *cobra.Command {
 }
 
 func DoDeploy(config DeployConfig) {
+	experimentUUID := uuid.New()
+	fmt.Printf("Starting experiment: %s\n", experimentUUID.String())
 	peers, peersets := utils.GenerateServicesForPeersStaticPort(config.NumberOfPeersInPeersets, servicePort)
 	ratisGroups := make([]string, len(config.NumberOfPeersInPeersets))
 	for i := 0; i < len(config.NumberOfPeersInPeersets); i++ {
@@ -89,7 +91,7 @@ func DoDeploy(config DeployConfig) {
 
 			deploySinglePeerService(config.DeployNamespace, peerConfig, ratisPort+i)
 
-			deploySinglePeerConfigMap(config, peerConfig, peers, peersets)
+			deploySinglePeerConfigMap(config, peerConfig, peers, peersets, experimentUUID)
 
 			deploySinglePeerDeployment(config, peerConfig)
 
@@ -347,7 +349,7 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 	}
 }
 
-func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig, peers string, peersets string) {
+func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig, peers string, peersets string, experimentUUID uuid.UUID) {
 	clientset, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
@@ -382,6 +384,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 			"NAMESPACE":                    config.DeployNamespace,
 			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
+			"EXPERIMENT_UUID":              experimentUUID.String(),
 		},
 	}
 
