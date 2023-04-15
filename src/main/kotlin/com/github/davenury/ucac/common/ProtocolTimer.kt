@@ -1,5 +1,6 @@
 package com.github.davenury.ucac.common
 
+import com.zopa.ktor.opentracing.tracingContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
@@ -28,8 +29,8 @@ class ProtocolTimerImpl(
 
     override suspend fun startCounting(iteration: Int, action: suspend () -> Unit) {
         cancelCounting()
-        with(CoroutineScope(ctx)) {
-            task = launch(MDCContext()) {
+        with(CoroutineScope(ctx) + tracingContext()) {
+            task = launch(MDCContext() + tracingContext()) {
                 val exponent = 1.5.pow(iteration)
 
                 val backoff = (

@@ -58,6 +58,8 @@ func CreateDeployCommand() *cobra.Command {
 }
 
 func DoDeploy(config DeployConfig) {
+	experimentUUID := uuid.New()
+	fmt.Printf("Starting experiment: %s\n", experimentUUID.String())
 	peers, peersets := utils.GenerateServicesForPeersStaticPort(config.NumberOfPeersInPeersets, servicePort)
 	ratisGroups := make([]string, len(config.NumberOfPeersInPeersets))
 	for i := 0; i < len(config.NumberOfPeersInPeersets); i++ {
@@ -83,13 +85,13 @@ func DoDeploy(config DeployConfig) {
 				PeersetsConfig: config.NumberOfPeersInPeersets,
 			}
 
-			createPV(config.DeployNamespace, peerConfig)
+			createPV(config.DeployNamespace, peerConfig, config.CreateResources)
 			createPVC(config.DeployNamespace, peerConfig, config.CreateResources)
 			createRedisConfigmap(config.DeployNamespace, peerConfig)
 
 			deploySinglePeerService(config.DeployNamespace, peerConfig, ratisPort+i)
 
-			deploySinglePeerConfigMap(config, peerConfig, peers, peersets)
+			deploySinglePeerConfigMap(config, peerConfig, peers, peersets, experimentUUID)
 
 			deploySinglePeerDeployment(config, peerConfig)
 
@@ -347,7 +349,7 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 	}
 }
 
-func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig, peers string, peersets string) {
+func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig, peers string, peersets string, experimentUUID uuid.UUID) {
 	clientset, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
@@ -382,6 +384,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"LOKI_BASE_URL":                fmt.Sprintf("http://loki.%s:3100", config.MonitoringNamespace),
 			"NAMESPACE":                    config.DeployNamespace,
 			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
+			"EXPERIMENT_UUID":              experimentUUID.String(),
 		},
 	}
 
@@ -426,13 +429,20 @@ func deploySinglePeerService(namespace string, peerConfig utils.PeerConfig, curr
 	clientset.CoreV1().Services(namespace).Create(context.Background(), service, metav1.CreateOptions{})
 }
 
-func createPV(namespace string, peerConfig utils.PeerConfig) {
+func createPV(namespace string, peerConfig utils.PeerConfig, createResources bool) {
 	clientset, err := utils.GetClientset()
 	if err != nil {
 		panic(err)
 	}
 
 	hostPathType := apiv1.HostPathUnset
+
+	var storageClass string
+	if createResources {
+		storageClass = "local-path"
+	} else {
+		storageClass = ""
+	}
 
 	pv := &apiv1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
@@ -445,7 +455,7 @@ func createPV(namespace string, peerConfig utils.PeerConfig) {
 			},
 		},
 		Spec: apiv1.PersistentVolumeSpec{
-			StorageClassName: "",
+			StorageClassName: storageClass,
 			Capacity: apiv1.ResourceList{
 				"storage": resource.MustParse("50Mi"),
 			},

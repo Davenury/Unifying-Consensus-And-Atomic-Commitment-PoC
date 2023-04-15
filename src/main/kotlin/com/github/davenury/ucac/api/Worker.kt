@@ -6,9 +6,11 @@ import com.github.davenury.common.Metrics
 import com.github.davenury.common.ProtocolName
 import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.PeersetProtocols
+import com.zopa.ktor.opentracing.span
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
+import okhttp3.internal.notifyAll
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import java.util.concurrent.CompletableFuture
@@ -50,10 +52,11 @@ class Worker(
         }
     }
 
-    private suspend fun processQueueElement() {
+    private suspend fun processQueueElement() = span("Worker.processQueueElement") {
         val job = queue.receive()
         logger.info("Received a job: $job")
         Metrics.startTimer(job.change.id)
+        this.setTag("changeId", job.change.id)
         val result =
             when (job.protocolName) {
                 ProtocolName.CONSENSUS -> peersetProtocols.consensusProtocol.proposeChangeAsync(job.change)
@@ -65,6 +68,8 @@ class Worker(
             job.completableFuture.complete(it)
             Metrics.stopTimer(job.change.id, job.protocolName.name.lowercase(), it)
             Metrics.bumpChangeProcessed(it, job.protocolName.name.lowercase())
+            this.setTag("result", it.status.name.lowercase())
+            this.finish()
             changeNotifier.notify(job.change, it)
         }.await()
     }

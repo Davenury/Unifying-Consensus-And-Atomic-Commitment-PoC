@@ -18,7 +18,8 @@ data class Config(
     val twoPC: TwoPCConfig = TwoPCConfig(),
     val rest: RestConfig = RestConfig(),
     val persistence: PersistenceConfig = PersistenceConfig(),
-    val metricTest: Boolean
+    val metricTest: Boolean,
+    val experimentId: String?,
 ) {
     fun peerId() = PeerId(peerId)
 
