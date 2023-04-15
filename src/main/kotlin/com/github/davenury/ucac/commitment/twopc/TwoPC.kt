@@ -92,7 +92,7 @@ class TwoPC(
                 state = result.name.lowercase()
             )
         }
-
+        
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(result))
         signal(Signal.TwoPCOnChangeApplied, change)
@@ -125,6 +125,8 @@ class TwoPC(
     private suspend fun askForDecisionChange(change: Change): Unit = span("TwoPc.askForDecisionChange") {
         val otherPeerset = change.peersets.map { it.peersetId }
             .first { it != peersetId }
+
+        signal(Signal.TwoPCOnAskForDecision, change)
         val resultChange = protocolClient.askForChangeStatus(
             otherPeerset.let { peerResolver.getPeersFromPeerset(it)[0] },
             change,
@@ -177,6 +179,7 @@ class TwoPC(
                 )
             }
             cf.await()
+            signal(Signal.TwoPCOnHandleDecisionEnd, change)
         } catch (e: Exception) {
             changeConflict(mainChangeId, "Change conflicted in decision phase, ${e.message}")
             throw e

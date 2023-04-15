@@ -24,6 +24,7 @@ import strikt.api.expectCatching
 import strikt.api.expectThat
 import strikt.api.expectThrows
 import strikt.assertions.*
+import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.measureTimeMillis
@@ -812,6 +813,107 @@ class TwoPCSpec : IntegrationTestBase() {
                 expectThat(change).isA<TwoPCChange>()
                 expectThat((change as TwoPCChange).twoPCStatus).isEqualTo(TwoPCStatus.ABORTED)
             }
+    }
+
+    @Test
+    @Disabled("Sometimes consensus adds entry to history but doesn't send signal - bother Radek about it")
+    fun `should be able to execute transaction to its end, even if the cohort fails`(): Unit = runBlocking {
+        val consensusLeaderElectedPhaser = Phaser(5)
+        val askForDecisionPhaser = Phaser(2)
+        val finalPhaser = Phaser(3)
+        val finalConsensusPhaser = Phaser(5)
+
+        val leaderElectedListener = SignalListener {
+            consensusLeaderElectedPhaser.arrive()
+        }
+
+        val consensusLeaders: MutableMap<PeersetId, PeerId> = mutableMapOf()
+
+        val changeWasAccepted = AtomicBoolean(false)
+        val askedForDecision = AtomicBoolean(false)
+        val changeHandleDecisionListener = SignalListener {
+            changeWasAccepted.set(true)
+            if (!changeWasAccepted.get()) {
+                throw RuntimeException()
+            }
+        }
+
+        val counters = mutableListOf<PeerId>()
+
+        fun subscribers() = Subscribers().apply {
+            this.registerSubscriber(CodeSubscriber { peerId, peersetId ->
+                logger.info("New consensus leader elected: $peerId")
+                consensusLeaders[peersetId] = peerId
+            })
+        }
+        val finalConsensusAction = SignalListener {
+            if (it.peerResolver.currentPeer() in counters) {
+                logger.info("Peer: ${it.peerResolver.currentPeer()} arrived")
+                finalConsensusPhaser.arrive()
+            } else {
+                counters.add(it.peerResolver.currentPeer())
+            }
+        }
+
+        apps = TestApplicationSet(
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2"),
+                "peerset1" to listOf("peer3", "peer4", "peer5")
+            ),
+            signalListeners = (0..2).map { "peer$it" }.associateWith {
+                mapOf(
+                    Signal.ConsensusLeaderElected to leaderElectedListener,
+                    Signal.TwoPCOnChangeApplied to SignalListener {
+                        logger.info("Yo, you can ask")
+                        askForDecisionPhaser.arrive()
+                        finalPhaser.arrive()
+                    },
+                    Signal.ConsensusFollowerChangeAccepted to finalConsensusAction
+                )
+            } + (3..5).map { "peer$it" }.associateWith {
+                mapOf(
+                    Signal.ConsensusLeaderElected to leaderElectedListener,
+                    Signal.TwoPCOnHandleDecision to changeHandleDecisionListener,
+                    Signal.TwoPCOnAskForDecision to SignalListener {
+                        askedForDecision.set(true)
+                        runBlocking {
+                            logger.info("Waiting for ask for decision phaser")
+                            askForDecisionPhaser.arriveAndAwaitAdvanceWithTimeout()
+                        }
+                    },
+                    Signal.TwoPCOnHandleDecisionEnd to SignalListener {
+                        finalPhaser.arrive()
+                    },
+                    Signal.ConsensusFollowerChangeAccepted to finalConsensusAction
+                )
+            },
+            subscribers = (0..2).map { "peer$it" }.associateWith { mapOf(PeersetId("peerset0") to subscribers()) } +
+                    (3..5).map { "peer$it" }.associateWith { mapOf(PeersetId("peerset1") to subscribers()) },
+            configOverrides = (3..5).map { "peer$it" }.associateWith { mapOf("twoPC.changeDelay" to Duration.ZERO) }
+        )
+
+        consensusLeaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        expectThat(consensusLeaders[PeersetId("peerset0")]).isNotNull()
+        expectThat(consensusLeaders[PeersetId("peerset1")]).isNotNull()
+
+        val firstConsensusLeader = consensusLeaders[PeersetId("peerset0")]!!
+
+        expectCatching {
+            val change1 = change(0, 1)
+            executeChange("http://${apps.getPeer(firstConsensusLeader).address}/v2/change/sync?use_2pc=true", change1)
+        }.isSuccess()
+
+        finalPhaser.arriveAndAwaitAdvanceWithTimeout()
+        finalConsensusPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        expectThat(askedForDecision.get()).isTrue()
+
+        askAllForChanges("peerset0", "peerset1").forEach {
+            logger.info("changes: $it")
+            expectThat(it.size).isEqualTo(2)
+            expectThat(it[1]).isA<AddUserChange>()
+        }
     }
 
     private suspend fun executeChange(uri: String, change: Change): HttpResponse =

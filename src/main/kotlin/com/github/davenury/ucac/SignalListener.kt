@@ -31,6 +31,8 @@ enum class Signal {
     TwoPCOnChangeAccepted,
     TwoPCBeforeProposePhase,
     TwoPCOnHandleDecision,
+    TwoPCOnAskForDecision,
+    TwoPCOnHandleDecisionEnd,
 }
 
 
