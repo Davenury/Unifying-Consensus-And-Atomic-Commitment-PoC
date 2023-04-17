@@ -11,6 +11,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
+import java.io.IOError
+import java.io.IOException
 import java.lang.IllegalStateException
 import java.util.*
 import java.util.concurrent.Executors
@@ -177,7 +179,7 @@ class OnePeersetChanges(
                 consensusLeader.get()!!,
                 change
             )
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
             populateConsensusLeader()
             return introduceChange(change)
@@ -187,15 +189,10 @@ class OnePeersetChanges(
     suspend fun getChange(): Change {
         return try {
             httpClient.get("http://${consensusLeader.get()!!.address}/v2/last-change")
-        } catch (e: Exception) {
-            when (e) {
-                is ClientRequestException, is ServerResponseException -> throw e
-                else -> {
-                    logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
-                    populateConsensusLeader()
-                    return getChange()
-                }
-            }
+        } catch (e: IOException) {
+            logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
+            populateConsensusLeader()
+            return getChange()
         }
     }
 
@@ -207,7 +204,7 @@ class OnePeersetChanges(
         val address = peersAddresses.firstOrNull() ?: throw IllegalStateException("I have no more peers to ask!")
         val peerId = try {
             sender.getConsensusLeaderId(address)
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             logger.info("$address is dead, I'm trying to get consensus leader from another one")
             return getConsensusLeader(peerAddresses.drop(1))
         }
