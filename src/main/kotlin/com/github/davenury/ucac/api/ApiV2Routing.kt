@@ -143,7 +143,8 @@ fun Application.apiV2Routing(
 
         post("/v2/subscribe-to-structural-changes") {
             val address = call.receive<SubscriberAddress>()
-            Subscribers.registerSubscriber(Subscriber.of(address.address, address.type))
+            val peersetId = call.peersetId()
+            service.registerSubscriber(peersetId, address)
             call.respond(HttpStatusCode.OK)
         }
     }
