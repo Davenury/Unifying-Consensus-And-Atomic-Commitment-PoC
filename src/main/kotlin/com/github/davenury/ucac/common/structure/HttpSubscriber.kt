@@ -10,13 +10,13 @@ import io.ktor.http.*
 import org.slf4j.LoggerFactory
 
 class HttpSubscriber(
-    val address: String
+    private val url: String
 ): Subscriber {
 
     override suspend fun notifyConsensusLeaderChange(newLeaderPeerId: PeerId, newLeaderPeersetId: PeersetId) {
-        logger.info("Sending new consensus leader message to $address")
+        logger.info("Sending new consensus leader message to $url")
         try {
-            val response = httpClient.post<HttpStatement>(address) {
+            val response = httpClient.post<HttpStatement>(url) {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
                 body = CurrentLeaderFullInfoDto(newLeaderPeerId, newLeaderPeersetId)

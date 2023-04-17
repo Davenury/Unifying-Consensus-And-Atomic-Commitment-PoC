@@ -134,7 +134,7 @@ fun Application.apiV2Routing(
             call.respond(service.getLastChange(peersetId) ?: HttpStatusCode.NotFound)
         }
 
-        post("/v2/subscribe-to-structural-changes") {
+        post("/v2/subscribe-to-peer-configuration-changes") {
             val address = call.receive<SubscriberAddress>()
             val peersetId = call.peersetId()
             service.registerSubscriber(peersetId, address)
