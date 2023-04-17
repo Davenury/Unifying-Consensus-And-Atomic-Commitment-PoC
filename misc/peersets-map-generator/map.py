@@ -36,14 +36,14 @@ class PeersetsGenerator:
     def get_peersets_in_string(self):
         return self.join_peersets_to_strings()
 
-    def generate_peersets(self) -> List[List[str]]:
-        return [self._generate_single_peerset() for _ in range(self.number_of_peersets)]
+    def generate_peersets(self) -> Dict[str, List[str]]:
+        return {f"peerset{i}": self._generate_single_peerset() for i in range(self.number_of_peersets)}
 
     def generate_random_map(self) -> Dict[str, Tuple[int, int]]:
         return {peer: self._get_random_coordinates() for peer in self.peers}
 
     def join_peersets_to_strings(self):
-        elements = [f"peerset{i}={','.join(peers)}" for i, peers in enumerate(self.peersets)]
+        elements = [f"{peerset_id}={','.join(peers)}" for peerset_id, peers in self.peersets.items()]
         return ";".join(elements)
 
     def _create_peers(self) -> List[str]:
