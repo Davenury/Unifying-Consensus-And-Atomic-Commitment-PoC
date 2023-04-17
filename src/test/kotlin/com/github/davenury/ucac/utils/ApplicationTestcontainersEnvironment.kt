@@ -48,7 +48,6 @@ class ApplicationTestcontainersEnvironment(
                 .withNetworkAliases(networkAlias)
                 .withNetwork(network)
                 .withExposedPorts(containerPort)
-                .withEnv("config_host", networkAlias)
                 .withEnv("config_port", containerPort.toString())
                 .withEnv("config_peerId", peerId.toString())
                 .withEnv("config_peers", peersConfig)

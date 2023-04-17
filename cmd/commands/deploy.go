@@ -372,7 +372,6 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 		Data: map[string]string{
 			"CONFIG_FILE":                  "application-kubernetes.conf",
 			"JAVA_OPTS":                    "-Xmx200m",
-			"config_host":                  utils.ServiceAddress(peerConfig),
 			"config_port":                  "8081",
 			"config_peerId":                peerConfig.PeerId,
 			"config_peers":                 peers,

@@ -5,7 +5,6 @@ import com.github.davenury.ucac.common.PeerResolver
 import java.time.Duration
 
 data class Config(
-    val host: String,
     val port: Int,
     val peerId: String,
     // peer1=X;peer2=Y

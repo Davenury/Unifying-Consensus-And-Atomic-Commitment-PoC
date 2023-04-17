@@ -17,7 +17,6 @@ services:
       - "10024"
     environment:
       CONFIG_FILE: "application-compose.conf"
-      config_host: "peer0"
       config_peerId: "0"
       config_peersetId: "0"
   peer2:
@@ -29,7 +28,6 @@ services:
       - "10124"
     environment:
       CONFIG_FILE: "application-compose.conf"
-      config_host: "peer1"
       config_peerId: "1"
       config_peersetId: "0"
   peer3:
@@ -41,7 +39,6 @@ services:
       - "11124"
     environment:
       CONFIG_FILE: "application-compose.conf"
-      config_host: "peer2"
       config_peerId: "2"
       config_peersetId: "0"
   peer4:
@@ -53,7 +50,6 @@ services:
       - "10034"
     environment:
       CONFIG_FILE: "application-compose.conf"
-      config_host: "peer3"
       config_peerId: "0"
       config_peersetId: "1"
   peer5:
@@ -65,7 +61,6 @@ services:
       - "10134"
     environment:
       CONFIG_FILE: "application-compose.conf"
-      config_host: "peer4"
       config_peerId: "1"
       config_peersetId: "1"
   peer6:
@@ -77,6 +72,5 @@ services:
       - "11134"
     environment:
       CONFIG_FILE: "application-compose.conf"
-      config_host: "peer5"
       config_peerId: "2"
       config_peersetId: "1"
