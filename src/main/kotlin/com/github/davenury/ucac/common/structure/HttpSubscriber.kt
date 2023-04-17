@@ -12,8 +12,6 @@ import org.slf4j.LoggerFactory
 class HttpSubscriber(
     val address: String
 ): Subscriber {
-    override val type: String
-        get() = "http"
 
     override suspend fun notifyConsensusLeaderChange(newLeaderPeerId: PeerId, newLeaderPeersetId: PeersetId) {
         logger.info("Sending new consensus leader message to $address")

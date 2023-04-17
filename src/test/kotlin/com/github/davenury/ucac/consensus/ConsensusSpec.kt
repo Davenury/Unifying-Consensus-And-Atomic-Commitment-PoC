@@ -10,6 +10,8 @@ import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.structure.Subscribers
+import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.IntegrationTestBase
@@ -994,7 +996,8 @@ class ConsensusSpec : IntegrationTestBase() {
             protocolClient = mockk(),
             transactionBlocker = mockk(),
             isMetricTest = false,
-            maxChangesPerMessage = 200
+            maxChangesPerMessage = 200,
+            subscribers = Subscribers(),
         )
         expect {
             that(consensus.isMoreThanHalf(0)).isTrue()

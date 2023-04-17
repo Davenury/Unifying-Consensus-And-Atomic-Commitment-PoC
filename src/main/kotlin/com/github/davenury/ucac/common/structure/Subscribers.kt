@@ -6,7 +6,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
-object Subscribers {
+class Subscribers {
     private val subscribers = mutableListOf<Subscriber>()
 
     fun registerSubscriber(subscriber: Subscriber) {
@@ -15,8 +15,10 @@ object Subscribers {
 
     fun notifyAboutConsensusLeaderChange(newPeerId: PeerId, newPeersetId: PeersetId) {
         GlobalScope.launch {
-            runBlocking {
-                subscribers.forEach { it.notifyConsensusLeaderChange(newPeerId, newPeersetId) }
+            subscribers.forEach { 
+                launch {
+                    it.notifyConsensusLeaderChange(newPeerId, newPeersetId)
+                }
             }
         }
     }

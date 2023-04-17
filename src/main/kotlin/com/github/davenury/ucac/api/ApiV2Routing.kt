@@ -13,7 +13,9 @@ import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
-fun Application.apiV2Routing(service: ApiV2Service) {
+fun Application.apiV2Routing(
+    service: ApiV2Service,
+) {
     val logger = LoggerFactory.getLogger("V2Routing")
 
     suspend fun respondChangeResult(result: ChangeResult?, call: ApplicationCall) {
@@ -134,7 +136,8 @@ fun Application.apiV2Routing(service: ApiV2Service) {
 
         post("/v2/subscribe-to-structural-changes") {
             val address = call.receive<SubscriberAddress>()
-            Subscribers.registerSubscriber(Subscriber.of(address.address, address.type))
+            val peersetId = call.peersetId()
+            service.registerSubscriber(peersetId, address)
             call.respond(HttpStatusCode.OK)
         }
     }
