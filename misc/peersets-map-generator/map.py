@@ -84,7 +84,7 @@ class PeersetsGenerator:
 
     @staticmethod
     def _get_random_coordinates():
-        return random.randint(0, 50), random.randint(0, 50)
+        return random.random(), random.random()
 
 
 if __name__ == "__main__":
