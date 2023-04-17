@@ -15,7 +15,7 @@ class Subscribers {
 
     fun notifyAboutConsensusLeaderChange(newPeerId: PeerId, newPeersetId: PeersetId) {
         GlobalScope.launch {
-            subscribers.forEach { 
+            subscribers.forEach {
                 launch {
                     it.notifyConsensusLeaderChange(newPeerId, newPeersetId)
                 }
