@@ -74,8 +74,8 @@ class PeersetsGenerator:
     @staticmethod
     def _get_distance(peer_coords: Tuple[int, int], peerset_point_coords: Tuple[int, int]) -> float:
         return math.sqrt(
-            math.pow(peer_coords[0] - peerset_point_coords[0], 2) + math.pow(peer_coords[1] - peerset_point_coords[1],
-                                                                             2))
+            math.pow(peer_coords[0] - peerset_point_coords[0], 2) +
+            math.pow(peer_coords[1] - peerset_point_coords[1], 2))
 
     @staticmethod
     def _sort_distances(distances: Dict[str, float]) -> Tuple[str, float]:
