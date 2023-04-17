@@ -55,7 +55,7 @@ class Changes(
         GlobalScope.launch {
             peers.entries.forEach { (_, addresses) ->
                 addresses.forEach { address ->
-                    httpClient.post("http://${address.address}/v2/subscribe-to-structural-changes") {
+                    httpClient.post("http://${address.address}/v2/subscribe-to-peer-configuration-changes") {
                         contentType(ContentType.Application.Json)
                         body = SubscriberAddress(
                             address = "$ownAddress/api/v1/new-consensus-leader",
