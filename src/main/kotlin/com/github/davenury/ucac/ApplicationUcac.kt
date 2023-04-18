@@ -271,6 +271,13 @@ class ApplicationUcac(
                 )
             }
 
+            exception<ImNotLeaderException> { cause ->
+                call.respond(
+                    status = HttpStatusCode.TemporaryRedirect,
+                    CurrentLeaderFullInfoDto(cause.peerId, cause.peersetId)
+                )
+            }
+
             exception<Throwable> { cause ->
                 log.error("Throwable has been thrown in Application: ", cause)
                 call.respond(

@@ -4,6 +4,7 @@ data class ChangeResult(
     val status: Status,
     val detailedMessage: String? = null,
     val currentEntryId: String? = null,
+    val currentConsensusLeader: PeerId? = null,
 ) {
     enum class Status {
         /**
@@ -31,6 +32,11 @@ data class ChangeResult(
         /**
          * Change was applied with ABORT result
          */
-        ABORTED;
+        ABORTED,
+
+        /**
+         * Change was not applied because I'm not the consensus leader
+         */
+        REDIRECT;
     }
 }

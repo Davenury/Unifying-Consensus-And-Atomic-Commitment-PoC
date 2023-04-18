@@ -10,9 +10,11 @@ import com.zopa.ktor.opentracing.span
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
+import okhttp3.internal.notifyAll
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 
 class TwoPC(
     private val peersetId: PeersetId,
@@ -29,6 +31,7 @@ class TwoPC(
     private val peerId = peerResolver.currentPeer()
 
     private var changeTimer: ProtocolTimer = ProtocolTimerImpl(twoPCConfig.changeDelay, Duration.ZERO, ctx)
+    val currentConsensusLeaders = ConcurrentHashMap<PeersetId, PeerAddress>()
 
     override suspend fun performProtocol(change: Change): Unit = span("TwoPC.performProtocol") {
         val updatedChange =
@@ -47,7 +50,7 @@ class TwoPC(
                 .map { it.peersetId }
                 .filter { it != peersetId }
             val otherPeers: Map<PeersetId, PeerAddress> =
-                otherPeersets.associateWith { peerResolver.getPeersFromPeerset(it)[0] }
+                otherPeersets.associateWith { currentConsensusLeaders[it] ?: peerResolver.getPeersFromPeerset(it)[0] }
 
             signal(Signal.TwoPCBeforeProposePhase, change)
             val decision = proposePhase(acceptChange, mainChangeId, otherPeers)
@@ -63,7 +66,8 @@ class TwoPC(
             }
 
             signal(Signal.TwoPCOnChangeAccepted, change)
-            decisionPhase(acceptChange, decision, otherPeers)
+            val decisionPhaseOtherPeers = otherPeersets.associateWith { currentConsensusLeaders[it] ?: peerResolver.getPeersFromPeerset(it)[0] }
+            decisionPhase(acceptChange, decision, decisionPhaseOtherPeers)
 
             val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.ABORTED
 
@@ -92,7 +96,7 @@ class TwoPC(
                 state = result.name.lowercase()
             )
         }
-        
+
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(result))
         signal(Signal.TwoPCOnChangeApplied, change)
@@ -111,10 +115,15 @@ class TwoPC(
             peersetId,
             history.getCurrentEntryId(),
         )
-        val result = consensusProtocol.proposeChangeAsync(changeWithProperParentId).await()
+        val result = consensusProtocol.proposeChangeAsync(changeWithProperParentId, true).await()
 
-        if (result.status != ChangeResult.Status.SUCCESS) {
-            throw TwoPCHandleException("TwoPCChange didn't apply change")
+        when (result.status) {
+            ChangeResult.Status.SUCCESS -> {}
+            ChangeResult.Status.REDIRECT -> {
+                throw ImNotLeaderException(result.currentConsensusLeader!!, peersetId)
+            }
+
+            else -> throw TwoPCHandleException("TwoPCChange didn't apply change")
         }
 
         changeTimer.startCounting {
@@ -270,11 +279,41 @@ class TwoPC(
             logger.info("Change accepted locally ${acceptChange.change}")
         }
 
-        val decision = protocolClient.sendAccept(otherPeers, acceptChange).all { it }
+        val decision = getProposePhaseResponses(otherPeers, acceptChange, mapOf())
 
         logger.info("Decision $decision from other peerset for ${acceptChange.change}")
 
         return decision
+    }
+
+    suspend fun getProposePhaseResponses(
+        peers: Map<PeersetId, PeerAddress>,
+        change: Change,
+        recentResponses: Map<PeerAddress, TwoPCRequestResponse>
+    ): Boolean {
+        val responses = protocolClient.sendAccept(peers, change)
+
+        val addressesToAskAgain = responses.filter { (_, response) -> response.redirect }
+            .map { (_, response) ->
+                val address = peerResolver.resolve(response.newConsensusLeaderId!!)
+                logger.debug(
+                    "Updating {} peerset to new consensus leader: {}",
+                    response.newConsensusLeaderPeersetId,
+                    response.newConsensusLeaderId
+                )
+                currentConsensusLeaders[response.newConsensusLeaderPeersetId!!] = address
+                response.peersetId to address
+            }.toMap()
+
+        if (addressesToAskAgain.isEmpty()) {
+            return (recentResponses + responses).values.map { it.success }.all { it }
+        }
+
+        return getProposePhaseResponses(
+            addressesToAskAgain,
+            change,
+            (recentResponses + responses.filterNot { it.value.redirect })
+        )
     }
 
     private suspend fun decisionPhase(
@@ -296,7 +335,6 @@ class TwoPC(
             )
         }
         logger.info("Change to commit: $commitChange")
-//      Asynchronous commit change to consensuses
 
         protocolClient.sendDecision(otherPeers, commitChange)
         val changeResult = checkChangeAndProposeToConsensus(
@@ -334,10 +372,11 @@ class TwoPC(
 
     private suspend fun checkChangeAndProposeToConsensus(
         change: Change,
-        originalChangeId: String
+        originalChangeId: String,
+        redirectIfNotConsensusLeader: Boolean = false
     ): CompletableFuture<ChangeResult> = change
         .also { checkChangeCompatibility(it, originalChangeId) }
-        .let { consensusProtocol.proposeChangeAsync(change) }
+        .let { consensusProtocol.proposeChangeAsync(change, redirectIfNotConsensusLeader) }
 
 
     private fun changeConflict(changeId: String, exceptionText: String) =

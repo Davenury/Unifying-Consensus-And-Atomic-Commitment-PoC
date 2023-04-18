@@ -30,7 +30,7 @@ class HistoryRatisNode(
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
-    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
+    override suspend fun proposeChangeAsync(change: Change, redirectIfNotLeader: Boolean): CompletableFuture<ChangeResult> {
         val cf = CompletableFuture<ChangeResult>()
         val changeId = change.id
         changeIdToCompletableFuture[changeId] = cf
