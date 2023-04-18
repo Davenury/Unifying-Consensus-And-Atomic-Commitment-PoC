@@ -365,7 +365,7 @@ class TwoPC(
                     change.toHistoryEntry(peersetId).getParentId()
                 } is ${history.getCurrentEntryId()}"
             )
-            changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.REJECTED))
+            changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.REJECTED, currentEntryId = history.getCurrentEntryId()))
             throw HistoryCannotBeBuildException()
         }
     }
