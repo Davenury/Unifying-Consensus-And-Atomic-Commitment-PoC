@@ -195,6 +195,7 @@ class TwoPC(
         }
 
         changeNotifier.notify(change, ChangeResult(ChangeResult.Status.SUCCESS))
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         changeIdToCompletableFuture[change.id]!!
             .complete(ChangeResult(ChangeResult.Status.SUCCESS))
     }
