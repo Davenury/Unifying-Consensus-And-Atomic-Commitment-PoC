@@ -7,6 +7,7 @@ import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.zopa.ktor.opentracing.span
+import io.micrometer.core.instrument.Tag
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
@@ -34,6 +35,7 @@ class TwoPC(
     val currentConsensusLeaders = ConcurrentHashMap<PeersetId, PeerAddress>()
 
     override suspend fun performProtocol(change: Change): Unit = span("TwoPC.performProtocol") {
+        this.setTag("changeId", change.id)
         val updatedChange =
             updateParentIdFor2PCCompatibility(change, history, peersetId)
 

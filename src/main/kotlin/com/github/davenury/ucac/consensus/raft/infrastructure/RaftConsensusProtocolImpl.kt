@@ -703,6 +703,7 @@ class RaftConsensusProtocolImpl(
     //  TODO: sync change will have to use Condition/wait/notifyAll
     private suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change): Unit =
         span("Raft.proposeChangeToLedger") {
+            this.setTag("changeId", change.id)
             var entry = change.toHistoryEntry(peersetId)
             changeIdToCompletableFuture[change.id] = result
 
@@ -833,6 +834,7 @@ class RaftConsensusProtocolImpl(
         change: Change,
         redirectIfNotLeader: Boolean,
     ): CompletableFuture<ChangeResult> = span("Raft.proposeChangeAsync") {
+        this.setTag("changeId", change.id)
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         val result = changeIdToCompletableFuture[change.id]!!
         when {
