@@ -265,7 +265,7 @@ class ApplicationUcac constructor(
             "raft" -> raftProtocolRouting(peersetProtocols.consensusProtocol as RaftConsensusProtocol, logger)
             "alvin" -> alvinProtocolRouting(peersetProtocols.consensusProtocol as AlvinProtocol)
             "pigpaxos" -> pigPaxosProtocolRouting(peersetProtocols.consensusProtocol as PigPaxosProtocol)
-            else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
+            else -> throw RuntimeException("Unknown consensus type ${config.consensus.name}")
         }
         twoPCRouting(peersetProtocols.twoPC)
 
