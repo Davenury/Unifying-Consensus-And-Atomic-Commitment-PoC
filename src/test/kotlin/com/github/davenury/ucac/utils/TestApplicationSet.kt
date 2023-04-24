@@ -80,6 +80,8 @@ class TestApplicationSet(
         }
     }
 
+    fun getPeersets(): Map<PeersetId, List<PeerId>> = peersets
+
     fun getPeer(peerId: String): PeerAddress = getPeer(PeerId(peerId))
     fun getPeer(peerId: PeerId): PeerAddress = peerAddresses[peerId]!!
 

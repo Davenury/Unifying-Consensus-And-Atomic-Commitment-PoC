@@ -10,10 +10,7 @@ import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
-fun Application.apiV2Routing(
-    service: ApiV2Service,
-    peersetId: PeersetId,
-) {
+fun Application.apiV2Routing(service: ApiV2Service) {
     val logger = LoggerFactory.getLogger("V2Routing")
 
     suspend fun respondChangeResult(result: ChangeResult?, call: ApplicationCall) {
@@ -64,7 +61,7 @@ fun Application.apiV2Routing(
         }
     }
 
-    suspend fun createProcessorJob(call: ApplicationCall): ProcessorJob {
+    suspend fun createProcessorJob(peersetId: PeersetId, call: ApplicationCall): ProcessorJob {
         val enforceGpac: Boolean = call.request.queryParameters["enforce_gpac"]?.toBoolean() ?: false
         val useTwoPC: Boolean = call.request.queryParameters["use_2pc"]?.toBoolean() ?: false
         val change = call.receive<Change>()
@@ -92,38 +89,44 @@ fun Application.apiV2Routing(
 
     routing {
         post("/v2/change/async") {
-            val processorJob = createProcessorJob(call)
-            service.addChange(processorJob)
+            val peersetId = call.peersetId()
+            val processorJob = createProcessorJob(peersetId, call)
+            service.addChange(peersetId, processorJob)
 
             call.respond(HttpStatusCode.Accepted)
         }
 
         post("/v2/change/sync") {
-            val processorJob = createProcessorJob(call)
+            val peersetId = call.peersetId()
+            val processorJob = createProcessorJob(peersetId, call)
             val timeout = call.request.queryParameters["timeout"]?.let { Duration.parse(it) }
 
-            val result: ChangeResult? = service.addChangeSync(processorJob, timeout)
+            val result: ChangeResult? = service.addChangeSync(peersetId, processorJob, timeout)
             respondChangeResult(result, call)
         }
 
         get("/v2/change/{id}") {
+            val peersetId = call.peersetId()
             val id = call.parameters["id"]!!
-            val change = service.getChangeById(id)
+            val change = service.getChangeById(peersetId, id)
             return@get call.respond(change ?: HttpStatusCode.NotFound)
         }
 
         get("/v2/change_status/{id}") {
+            val peersetId = call.peersetId()
             val id = call.parameters["id"]!!
-            val result: ChangeResult? = service.getChangeStatus(id).getNow(null)
+            val result: ChangeResult? = service.getChangeStatus(peersetId, id).getNow(null)
             respondChangeResult(result, call)
         }
 
         get("/v2/change") {
-            call.respond(service.getChanges())
+            val peersetId = call.peersetId()
+            call.respond(service.getChanges(peersetId))
         }
 
         get("/v2/last-change") {
-            call.respond(service.getLastChange() ?: HttpStatusCode.NotFound)
+            val peersetId = call.peersetId()
+            call.respond(service.getLastChange(peersetId) ?: HttpStatusCode.NotFound)
         }
     }
 }

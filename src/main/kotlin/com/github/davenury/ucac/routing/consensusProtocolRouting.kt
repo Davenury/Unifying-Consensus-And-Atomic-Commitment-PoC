@@ -2,9 +2,8 @@ package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
 import com.github.davenury.common.CurrentLeaderDto
-import com.github.davenury.common.PeerId
-import com.github.davenury.ucac.common.ChangeNotifier
-import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.common.peersetId
+import com.github.davenury.ucac.common.MultiplePeersetProtocols
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusElectMe
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusHeartbeat
 import com.github.davenury.ucac.consensus.raft.domain.ConsensusProposeChange
@@ -15,37 +14,39 @@ import io.ktor.response.*
 import io.ktor.routing.*
 import kotlinx.coroutines.future.await
 
-fun Application.consensusProtocolRouting(protocol: RaftConsensusProtocol) {
+fun Application.consensusProtocolRouting(multiplePeersetProtocols: MultiplePeersetProtocols) {
+    fun ApplicationCall.consensus(): RaftConsensusProtocol {
+        return multiplePeersetProtocols.forPeerset(this.peersetId()).consensusProtocol
+    }
     routing {
-        // głosujemy na leadera
         post("/consensus/request_vote") {
             val message: ConsensusElectMe = call.receive()
-            val response = protocol.handleRequestVote(message.peerId, message.term, message.lastEntryId)
+            val response = call.consensus().handleRequestVote(message.peerId, message.term, message.lastEntryId)
             call.respond(response)
         }
 
         post("/consensus/heartbeat") {
             val message: ConsensusHeartbeat = call.receive()
-            val heartbeatResult = protocol.handleHeartbeat(message)
+            val heartbeatResult = call.consensus().handleHeartbeat(message)
             call.respond(heartbeatResult)
         }
 
         post("/consensus/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
-            val result = protocol.handleProposeChange(message).await()
+            val result = call.consensus().handleProposeChange(message).await()
             call.respond(result)
         }
 
         get("/consensus/current-leader") {
-            call.respond(CurrentLeaderDto(protocol.getLeaderId()))
+            call.respond(CurrentLeaderDto(call.consensus().getLeaderId()))
         }
 
         get("/consensus/proposed_changes") {
-            call.respond(Changes(protocol.getProposedChanges()))
+            call.respond(Changes(call.consensus().getProposedChanges()))
         }
 
         get("/consensus/accepted_changes") {
-            call.respond(Changes(protocol.getAcceptedChanges()))
+            call.respond(Changes(call.consensus().getAcceptedChanges()))
         }
     }
 }

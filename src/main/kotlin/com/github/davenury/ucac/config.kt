@@ -19,19 +19,13 @@ data class Config(
     val persistence: PersistenceConfig = PersistenceConfig(),
     val metricTest: Boolean,
     val experimentId: String?,
+    val workerPoolSize: Int = 1,
 ) {
     fun peerId() = PeerId(peerId)
 
-    // TODO remove:
-    fun peersetId() = parsePeersets(peersets).filterValues { peers -> peers.contains(PeerId(peerId)) }.let {
-        if (it.isEmpty()) {
-            throw AssertionError("Peer in no peersets, not supported yet")
-        }
-        if (it.size != 1) {
-            throw AssertionError("Peer in multiple peersets, not supported yet")
-        }
-        return@let it.keys.iterator().next()
-    }
+    fun peersetIds(): Set<PeersetId> = parsePeersets(peersets)
+        .filterValues { peers -> peers.contains(PeerId(peerId)) }
+        .keys
 
     fun newPeerResolver() = PeerResolver(peerId(), parsePeers(peers), parsePeersets(peersets))
 }

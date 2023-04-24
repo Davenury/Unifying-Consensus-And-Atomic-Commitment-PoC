@@ -1,11 +1,11 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.common.*
-import com.github.davenury.common.history.historyRouting
+import com.github.davenury.ucac.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
+import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.routing.consensusProtocolRouting
 import com.github.davenury.ucac.routing.gpacProtocolRouting
 import com.github.davenury.ucac.routing.metaRouting
@@ -14,7 +14,6 @@ import com.zopa.ktor.opentracing.OpenTracingServer
 import com.zopa.ktor.opentracing.ThreadContextElementScopeManager
 import io.jaegertracing.Configuration
 import io.jaegertracing.internal.samplers.ConstSampler
-import io.ktor.application.*
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -73,7 +72,7 @@ fun createApplication(
     return ApplicationUcac(signalListeners, config)
 }
 
-class ApplicationUcac constructor(
+class ApplicationUcac(
     private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
     private val config: Config,
 ) {
@@ -81,7 +80,7 @@ class ApplicationUcac constructor(
     private val peerResolver = config.newPeerResolver()
     private val engine: NettyApplicationEngine
     private lateinit var service: ApiV2Service
-    private lateinit var peersetProtocols: PeersetProtocols
+    private lateinit var multiplePeersetProtocols: MultiplePeersetProtocols
 
     init {
         MDC.getCopyOfContextMap()?.let { mdc.putAll(it) }
@@ -115,9 +114,9 @@ class ApplicationUcac constructor(
     }
 
     private fun createServer() = embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
-        val peersetId = config.peersetId()
+        val peersetIds = config.peersetIds()
 
-        logger.info("My peerset: $peersetId")
+        logger.info("My peersets: $peersetIds")
         val changeNotifier = ChangeNotifier(peerResolver)
         val tracer = Configuration(peerResolver.peerName())
             .withSampler(Configuration.SamplerConfiguration.fromEnv()
@@ -135,15 +134,14 @@ class ApplicationUcac constructor(
 
         val signalPublisher = SignalPublisher(signalListeners, peerResolver)
 
-        peersetProtocols = PeersetProtocols(
-            peersetId,
+        multiplePeersetProtocols = MultiplePeersetProtocols(
             config,
             peerResolver,
             signalPublisher,
             changeNotifier,
         )
 
-        service = ApiV2Service(config, peersetProtocols, changeNotifier)
+        service = ApiV2Service(config, multiplePeersetProtocols, changeNotifier)
 
         install(OpenTracingServer) {
             addTag("threadName") { Thread.currentThread().name }
@@ -155,6 +153,14 @@ class ApplicationUcac constructor(
             level = Level.DEBUG
             mdc.forEach { mdcEntry ->
                 mdc(mdcEntry.key) { mdcEntry.value }
+            }
+            mdc("peerset") {
+                val peerset = it.request.queryParameters["peerset"]
+                if (peerset != null && peersetIds.contains(PeersetId(peerset))) {
+                    peerset
+                } else {
+                    "invalid:$peerset"
+                }
             }
         }
 
@@ -244,6 +250,22 @@ class ApplicationUcac constructor(
                 )
             }
 
+            exception<MissingPeersetParameterException> { cause ->
+                logger.error("Missing peerset parameter", cause)
+                call.respond(
+                    status = HttpStatusCode.BadRequest,
+                    ErrorMessage("Missing peerset parameter")
+                )
+            }
+
+            exception<UnknownPeersetException> { cause ->
+                logger.error("Unknown peerset: {}", cause.peersetId, cause)
+                call.respond(
+                    status = HttpStatusCode.BadRequest,
+                    ErrorMessage("Unknown peerset: ${cause.peersetId}")
+                )
+            }
+
             exception<Throwable> { cause ->
                 log.error("Throwable has been thrown in Application: ", cause)
                 call.respond(
@@ -254,23 +276,23 @@ class ApplicationUcac constructor(
         }
 
         metaRouting()
-        historyRouting(peersetProtocols.history)
-        apiV2Routing(service, peersetId)
-        gpacProtocolRouting(peersetProtocols.gpacFactory)
-        consensusProtocolRouting(peersetProtocols.consensusProtocol)
-        twoPCRouting(peersetProtocols.twoPC)
+        historyRouting(multiplePeersetProtocols)
+        apiV2Routing(service)
+        gpacProtocolRouting(multiplePeersetProtocols)
+        consensusProtocolRouting(multiplePeersetProtocols)
+        twoPCRouting(multiplePeersetProtocols)
 
         runBlocking {
-            if (config.raft.isEnabled) peersetProtocols.consensusProtocol.begin()
+            if (config.raft.isEnabled) {
+                multiplePeersetProtocols.protocols.values.forEach { protocols ->
+                    protocols.consensusProtocol.begin()
+                }
+            }
         }
     }
 
-    fun setPeerAddresses(peerAddresses: Map<PeerId, PeerAddress>) {
-        peerAddresses.forEach { (peerId, address) -> setPeerAddress(peerId, address) }
-    }
-
-    fun setPeerAddress(peerId: PeerId, address: PeerAddress) {
-        withMdc {
+    fun setPeerAddresses(peerAddresses: Map<PeerId, PeerAddress>) = withMdc {
+        peerAddresses.forEach { (peerId, address) ->
             val oldAddress = peerResolver.resolve(peerId)
             peerResolver.setPeerAddress(peerId, address)
             val newAddress = peerResolver.resolve(peerId)
@@ -286,8 +308,8 @@ class ApplicationUcac constructor(
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
         withMdc {
-            if (this::peersetProtocols.isInitialized) {
-                peersetProtocols.close()
+            if (this::multiplePeersetProtocols.isInitialized) {
+                multiplePeersetProtocols.close()
             }
             engine.stop(gracePeriodMillis, timeoutMillis)
         }
@@ -309,9 +331,7 @@ class ApplicationUcac constructor(
 
     fun getPeerId(): PeerId = config.peerId()
 
-    fun getConsensusProtocol(): RaftConsensusProtocol {
-        return peersetProtocols.consensusProtocol
-    }
+    fun getPeersetProtocols(peersetId: PeersetId) = multiplePeersetProtocols.forPeerset(peersetId)
 
     companion object {
         val logger: Logger = LoggerFactory.getLogger("ucac")

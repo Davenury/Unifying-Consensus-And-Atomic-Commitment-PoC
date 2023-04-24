@@ -63,12 +63,6 @@ abstract class RatisNode(
 
         client = buildClient(peer)
 
-        this.start()
-    }
-
-
-    @Throws(IOException::class)
-    fun start() {
         server.start()
     }
 
@@ -76,7 +70,6 @@ abstract class RatisNode(
     override fun close() {
         server.close()
     }
-
 
     private fun buildClient(peer: RaftPeer): RaftClient {
         val raftProperties = RaftProperties()

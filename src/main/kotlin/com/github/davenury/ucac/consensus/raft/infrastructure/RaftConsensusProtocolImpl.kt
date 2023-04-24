@@ -14,6 +14,7 @@ import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.raft.domain.*
+import com.github.davenury.ucac.utils.MdcProvider
 import com.zopa.ktor.opentracing.launchTraced
 import com.zopa.ktor.opentracing.span
 import com.zopa.ktor.opentracing.tracingContext
@@ -71,7 +72,7 @@ class RaftConsensusProtocolImpl(
         config.raft.maxChangesPerMessage
     )
 
-
+    private val mdcProvider = MdcProvider(mapOf("peerset" to peersetId.toString()))
     private val peerId = peerResolver.currentPeer()
 
     private var currentTerm: Int = 0
@@ -97,12 +98,12 @@ class RaftConsensusProtocolImpl(
     //    TODO: Useless, it should use a worker queue.
     private val queuedChanges: MutableList<Change> = mutableListOf()
 
-    private fun otherConsensusPeers(): List<PeerAddress> {
+    fun otherConsensusPeers(): List<PeerAddress> {
         return peerResolver.getPeersFromPeerset(peersetId).filter { it.peerId != peerId }
     }
 
-    override suspend fun begin() {
-        logger.info("Starting raft, other peers: ${otherConsensusPeers()}")
+    override suspend fun begin() = mdcProvider.withMdc {
+        logger.info("Starting raft, other peers: ${otherConsensusPeers().map { it.peerId }}")
         timer.startCounting { sendLeaderRequest() }
     }
 
@@ -444,18 +445,17 @@ class RaftConsensusProtocolImpl(
         // We should schedule heartbeat even if something failed during handling response
         when {
             role != RaftRole.Leader ->
-                logger.info("I am not longer leader so not schedule heartbeat again")
+                logger.debug("I am not longer leader so not schedule heartbeat again")
 
             !otherConsensusPeers().any { it.peerId == peer } ->
-                logger.info("Peer $peer is not one of other consensus peer ${otherConsensusPeers()}")
+                logger.debug("Peer $peer is not one of other consensus peer ${otherConsensusPeers()}")
 
             executorService == null ->
-                logger.info("Executor service is null")
+                logger.debug("Executor service is null")
 
             !isRegular ->
-                logger.info("Heartbeat message is not regular")
+                logger.debug("Heartbeat message is not regular")
         }
-
 
         if (isRegular && shouldISendHeartbeatToPeer(peer)) {
             launchHeartBeatToPeer(peer, true)
@@ -884,8 +884,8 @@ class RaftConsensusProtocolImpl(
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
 
-    override fun stop() {
-        logger.info("Stop whole consensus")
+    override fun stop() = mdcProvider.withMdc {
+        logger.info("Stopping whole consensus")
         stopExecutorService()
         leaderRequestExecutorService.cancel()
         leaderRequestExecutorService.close()
@@ -897,7 +897,6 @@ class RaftConsensusProtocolImpl(
         executorService = null
     }
 
-    //    DONE: unit tests for this function
     fun isMoreThanHalf(value: Int): Boolean = (value + 1) * 2 > otherConsensusPeers().size + 1
 
     private fun amILeader(): Boolean = role == RaftRole.Leader

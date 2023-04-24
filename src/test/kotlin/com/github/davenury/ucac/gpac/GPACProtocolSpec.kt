@@ -38,9 +38,9 @@ class GPACProtocolSpec {
         peerResolver = PeerResolver(
             PeerId("peer0"),
             mapOf(
-                PeerId("peer0") to PeerAddress(PeerId("peer1"), "peer1"),
-                PeerId("peer1") to PeerAddress(PeerId("peer2"), "peer2"),
-                PeerId("peer2") to PeerAddress(PeerId("peer3"), "peer3"),
+                PeerId("peer0") to PeerAddress.of("peer1", "peer1"),
+                PeerId("peer1") to PeerAddress.of("peer2", "peer2"),
+                PeerId("peer2") to PeerAddress.of("peer3", "peer3"),
             ),
             mapOf(
                 PeersetId("peerset0") to listOf(PeerId("peer0"), PeerId("peer1"), PeerId("peer2")),

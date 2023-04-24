@@ -13,12 +13,12 @@ class ConfigSpec {
 
         expectThat(peerAddresses).isEqualTo(
             mapOf(
-                PeerId("p1") to PeerAddress(PeerId("p1"), "peer1.com:8080"),
-                PeerId("p2") to PeerAddress(PeerId("p2"), "peer2:8080"),
-                PeerId("p3") to PeerAddress(PeerId("p3"), "peer3:8080"),
-                PeerId("p4") to PeerAddress(PeerId("p4"), "peer4:8080"),
-                PeerId("p5") to PeerAddress(PeerId("p5"), "peer5:8080"),
-                PeerId("p6") to PeerAddress(PeerId("p6"), "peer6:8080"),
+                PeerId("p1") to PeerAddress.of("p1", "peer1.com:8080"),
+                PeerId("p2") to PeerAddress.of("p2", "peer2:8080"),
+                PeerId("p3") to PeerAddress.of("p3", "peer3:8080"),
+                PeerId("p4") to PeerAddress.of("p4", "peer4:8080"),
+                PeerId("p5") to PeerAddress.of("p5", "peer5:8080"),
+                PeerId("p6") to PeerAddress.of("p6", "peer6:8080"),
             )
         )
     }

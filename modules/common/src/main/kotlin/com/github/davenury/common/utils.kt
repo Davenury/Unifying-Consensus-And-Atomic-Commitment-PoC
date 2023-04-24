@@ -3,6 +3,7 @@ package com.github.davenury.common
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import io.ktor.application.*
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Timer
 import io.micrometer.prometheus.PrometheusConfig
@@ -27,7 +28,7 @@ object Metrics {
 
     private val changeIdToTimer: MutableMap<String, Instant> = mutableMapOf()
 
-    private var lastHearbeat: Instant = Instant.now()
+    private var lastHeartbeat: Instant = Instant.now()
 
     fun bumpChangeProcessed(changeResult: ChangeResult, protocol: String) {
         Counter
@@ -53,7 +54,7 @@ object Metrics {
     }
     
     fun refreshLastHeartbeat() {
-        lastHearbeat = Instant.now()
+        lastHeartbeat = Instant.now()
     }
 
     fun registerTimerHeartbeat(){
@@ -61,8 +62,8 @@ object Metrics {
         Timer
             .builder("heartbeat_processing_time")
             .register(meterRegistry)
-            .record(Duration.between(lastHearbeat, now))
-        lastHearbeat = now
+            .record(Duration.between(lastHeartbeat, now))
+        lastHeartbeat = now
     }
 
     fun bumpChangeMetric(changeId: String, peerId: PeerId, peersetId: PeersetId, protocolName: ProtocolName, state: String) {
@@ -78,3 +79,5 @@ object Metrics {
 
     private val logger = LoggerFactory.getLogger("Metrics")
 }
+
+fun ApplicationCall.peersetId() = PeersetId(this.request.queryParameters["peerset"] ?: throw MissingPeersetParameterException())

@@ -24,26 +24,26 @@ class ChangesTest {
     companion object {
         private val peers: Map<PeersetId, List<PeerAddress>> = mapOf(
             PeersetId("peerset0") to listOf(
-                PeerAddress(PeerId("peer0"), "localhost0:8080"),
-                PeerAddress(PeerId("peer1"), "localhost0:8081"),
-                PeerAddress(PeerId("peer2"), "localhost0:8082"),
+                PeerAddress.of("peer0", "localhost0:8080"),
+                PeerAddress.of("peer1", "localhost0:8081"),
+                PeerAddress.of("peer2", "localhost0:8082"),
             ),
             PeersetId("peerset1") to listOf(
-                PeerAddress(PeerId("peer3"), "localhost1:8080"),
+                PeerAddress.of("peer3", "localhost1:8080"),
             ),
             PeersetId("peerset2") to listOf(
-                PeerAddress(PeerId("peer4"), "localhost2:8080"),
+                PeerAddress.of("peer4", "localhost2:8080"),
             ),
             PeersetId("peerset3") to listOf(
-                PeerAddress(PeerId("peer5"), "localhost3:8080"),
-                PeerAddress(PeerId("peer6"), "localhost3:8081"),
-                PeerAddress(PeerId("peer7"), "localhost3:8082"),
+                PeerAddress.of("peer5", "localhost3:8080"),
+                PeerAddress.of("peer6", "localhost3:8081"),
+                PeerAddress.of("peer7", "localhost3:8082"),
             ),
             PeersetId("peerset4") to listOf(
-                PeerAddress(PeerId("peer8"), "localhost4:8080"),
+                PeerAddress.of("peer8", "localhost4:8080"),
             ),
             PeersetId("peerset5") to listOf(
-                PeerAddress(PeerId("peer9"), "localhost5:8080"),
+                PeerAddress.of("peer9", "localhost5:8080"),
             ),
         )
 

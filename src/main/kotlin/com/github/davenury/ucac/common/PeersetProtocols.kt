@@ -24,7 +24,7 @@ class PeersetProtocols(
     config: Config,
     val peerResolver: PeerResolver,
     signalPublisher: SignalPublisher,
-    changeNotifier: ChangeNotifier
+    changeNotifier: ChangeNotifier,
 ) : AutoCloseable {
     private val persistence = PersistenceFactory().createForConfig(config)
     val history = MeteredHistory(PersistentHistory(persistence))
@@ -55,7 +55,7 @@ class PeersetProtocols(
             ctx,
             peerResolver,
             signalPublisher,
-            RaftProtocolClientImpl(),
+            RaftProtocolClientImpl(peersetId),
             transactionBlocker,
         )
 
