@@ -334,7 +334,7 @@ class RaftConsensusProtocolImpl(
 
                 isUpdatedCommitIndex && transactionBlocker.isAcquiredByProtocol(ProtocolName.CONSENSUS) -> {
                     logger.info("Received heartbeat when is blocked so only accepted changes, blocked on ${transactionBlocker.getChangeId()}")
-                    updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
+                    updateLedger(leaderCommitId, acceptedChangesFromProposed)
                     return@withLock ConsensusHeartbeatResponse(true, currentTerm, true)
                 }
 
@@ -345,7 +345,7 @@ class RaftConsensusProtocolImpl(
 
                 isUpdatedCommitIndex && areProposedChangesIncompatible -> {
                     logger.info("Received heartbeat but changes are incompatible, updated accepted changes")
-                    updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
+                    updateLedger(leaderCommitId, acceptedChangesFromProposed)
                     return@withLock ConsensusHeartbeatResponse(true, currentTerm, incompatibleWithHistory = true)
                 }
 
@@ -355,14 +355,14 @@ class RaftConsensusProtocolImpl(
                 }
 
                 notAppliedProposedChanges.isNotEmpty() -> {
-                    logger.info("Introduce new changes")
+                    logger.info("Introduce new changes: $notAppliedProposedChanges")
                     val changeId = notAppliedProposedChanges.first().changeId
                     transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
                 }
             }
 
             logger.debug("Updating ledger with {}", notAppliedProposedChanges)
-            updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
+            updateLedger(leaderCommitId, notAppliedProposedChanges)
 
             tryPropagatingChangesToLeader()
 
@@ -371,7 +371,6 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun updateLedger(
-        heartbeat: ConsensusHeartbeat,
         leaderCommitId: String,
         proposedChanges: List<LedgerItem> = listOf()
     ): Unit = span("Raft.updateLedger") {
@@ -948,11 +947,7 @@ class RaftConsensusProtocolImpl(
 data class PeerIndices(
     val acceptedEntryId: String = InitialHistoryEntry.getId(),
     val acknowledgedEntryId: String = InitialHistoryEntry.getId()
-) {
-    suspend fun decrement(ledger: Ledger): PeerIndices = ledger
-        .getPreviousEntryId(acceptedEntryId)
-        .let { PeerIndices(it, it) }
-}
+)
 
 data class VotedFor(val id: PeerId, val elected: Boolean = false)
 

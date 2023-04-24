@@ -13,7 +13,6 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
@@ -49,7 +48,6 @@ class SinglePeersetApiSpec {
         ),
     )
 
-    @Disabled("Chaos class")
     @Test
     fun `sync api`(): Unit = runBlocking {
         val change = AddUserChange(
@@ -62,13 +60,13 @@ class SinglePeersetApiSpec {
         logger.info("Sending change $change")
 
         val peer0Address = environment.getAddress("peer0")
-        val response = http.post<HttpResponse>("http://${peer0Address}/v2/change/sync") {
+        val response = http.post<HttpResponse>("http://${peer0Address}/v2/change/sync?peerset=peerset0") {
             contentType(ContentType.Application.Json)
             body = change
         }
         expectThat(response.status.value).isEqualTo(201)
 
-        val changes = http.get<Changes>("http://${peer0Address}/v2/change") {
+        val changes = http.get<Changes>("http://${peer0Address}/v2/change?peerset=peerset0") {
             contentType(ContentType.Application.Json)
             body = change
         }

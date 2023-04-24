@@ -19,5 +19,3 @@ abstract class GPACProtocolAbstract(peerResolver: PeerResolver, logger: Logger) 
     abstract fun getTransaction(): Transaction
     abstract fun getBallotNumber(): Int
 }
-
-data class ElectMeResult(val responses: Map<PeersetId, List<ElectedYou>>, val success: Boolean)

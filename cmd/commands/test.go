@@ -9,7 +9,7 @@ import (
 	"github.com/davenury/ucac/cmd/commands/utils"
 	"github.com/goccy/kpoward"
 	"github.com/spf13/cobra"
-	"io/ioutil"
+	"io"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"time"
@@ -76,7 +76,7 @@ func test() {
 			panic(err)
 		}
 
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			panic(err)
 		}
@@ -95,7 +95,7 @@ func test() {
 				panic(err)
 			}
 
-			body, err = ioutil.ReadAll(resp.Body)
+			body, err = io.ReadAll(resp.Body)
 			if err != nil {
 				panic(err)
 			}
