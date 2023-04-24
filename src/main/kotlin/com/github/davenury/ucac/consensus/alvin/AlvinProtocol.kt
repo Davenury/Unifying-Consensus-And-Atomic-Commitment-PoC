@@ -163,11 +163,12 @@ class AlvinProtocol(
             logger.info("Handle commit: ${message.result} from peer: ${message.peerId}, for entry: ${messageEntry.entry.getId()}")
 
             val change = Change.fromHistoryEntry(messageEntry.entry)!!
-            if (changeIdToCompletableFuture[change.id]?.isDone == true)
+            val entryId = messageEntry.entry.getId()
+            if (changeIdToCompletableFuture[change.id]?.isDone == true || history.containsEntry(entryId))
                 return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
 
             checkTransactionBlocker(messageEntry)
-            val entryId = messageEntry.entry.getId()
+
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             entryIdToVotesCommit.putIfAbsent(entryId, listOf())
             entryIdToVotesAbort.putIfAbsent(entryId, listOf())
