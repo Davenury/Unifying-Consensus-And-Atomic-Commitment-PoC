@@ -6,11 +6,8 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.utils.IntegrationTestBase
-import com.github.davenury.ucac.utils.TestApplicationSet
+import com.github.davenury.ucac.utils.*
 import com.github.davenury.ucac.utils.TestApplicationSet.Companion.NON_RUNNING_PEER
-import com.github.davenury.ucac.utils.TestLogExtension
-import com.github.davenury.ucac.utils.arriveAndAwaitAdvanceWithTimeout
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -74,16 +71,15 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
+        executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", change)
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+        askAllForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isGreaterThanOrEqualTo(1)
             expectThat(changes[0]).isEqualTo(change)
         }
     }
-
 
     @Test
     fun `1000 change processed sequentially`(): Unit = runBlocking {
@@ -128,7 +124,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         repeat((0 until endRange).count()) {
             time += measureTimeMillis {
                 expectCatching {
-                    executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
+                    executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", change)
                 }.isSuccess()
             }
             phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -138,7 +134,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
         expectThat(time / endRange).isLessThanOrEqualTo(500L)
 
-        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach { changes ->
+        askAllForChanges("peerset0").forEach { changes ->
             // then: there are two changes
             expectThat(changes.size).isEqualTo(endRange)
         }
@@ -178,20 +174,20 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
         val change: Change = change(0, 1)
 
-        val result = executeChange("http://${apps.getPeer("peer0").address}/v2/change/async", change)
+        val result = executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0", change)
 
         expectThat(result.status).isEqualTo(HttpStatusCode.Accepted)
 
         maxRetriesPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // then - transaction should not be executed
-        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach { changes ->
+        askAllForChanges("peerset0").forEach { changes ->
             expectThat(changes.size).isEqualTo(0)
         }
 
         try {
             testHttpClient.get<HttpResponse>(
-                "http://${apps.getPeer("peer0").address}/v2/change_status/${change.id}"
+                "http://${apps.getPeer("peer0").address}/v2/change_status/${change.id}?peerset=peerset0"
             ) {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
@@ -219,7 +215,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
         // when - executing transaction
         try {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", change)
             fail("Exception not thrown")
         } catch (e: Exception) {
             expectThat(e).isA<ServerResponseException>()
@@ -230,7 +226,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         delay(10000)
 
         // then - transaction should not be executed
-        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach { changes ->
+        askAllForChanges("peerset0").forEach { changes ->
             expectThat(changes.size).isEqualTo(0)
         }
     }
@@ -271,13 +267,13 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
+        executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", change)
 
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
         // then - transaction should be executed in every peerset
-        askAllForChanges(apps.getPeerAddresses().values.filter { it.address != NON_RUNNING_PEER })
+        askAllRunningPeersForChanges("peerset0", "peerset1")
             .forEach { changes ->
                 expectThat(changes.size).isGreaterThanOrEqualTo(1)
                 expectThat(changes[0]).isEqualTo(change)
@@ -308,7 +304,12 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     "peerset1" to listOf("peer3", "peer4", "peer5", "peer6", "peer7"),
                 ),
                 signalListeners = (3..7).map { "peer$it" }
-                    .associateWith { mapOf(Signal.OnHandlingAgreeEnd to failAction, Signal.OnHandlingAgreeBegin to ftAgreeAction) } + (0..2).map { "peer$it" }
+                    .associateWith {
+                        mapOf(
+                            Signal.OnHandlingAgreeEnd to failAction,
+                            Signal.OnHandlingAgreeBegin to ftAgreeAction
+                        )
+                    } + (0..2).map { "peer$it" }
                     .associateWith { mapOf(Signal.OnHandlingAgreeBegin to ftAgreeAction) },
                 configOverrides = (0..2).map { "peer$it" }.associateWith {
                     mapOf(
@@ -320,11 +321,11 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             )
             val change = change(0, 1)
 
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0", change)
 
             phaser.arriveAndAwaitAdvanceWithTimeout()
 
-            askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+            askAllForChanges("peerset0", "peerset1").forEach { changes ->
                 expectThat(changes.size).isEqualTo(0)
             }
         }
@@ -375,7 +376,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", change)
         }.subject.let { e ->
             // TODO rewrite — we cannot model leader failure as part of API
             expect {
@@ -387,7 +388,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
         applyCommittedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+        askAllForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isGreaterThanOrEqualTo(1)
             expectThat(changes[0]).isEqualTo(change)
         }
@@ -472,13 +473,13 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
             // when - executing transaction something should go wrong after ft-agree
             expectThrows<ServerResponseException> {
-                executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
+                executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", change)
             }
 
             changePhaser.arriveAndAwaitAdvanceWithTimeout()
 
             // waiting for consensus to propagate change is waste of time and fails CI
-            askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+            askAllForChanges("peerset0", "peerset1").forEach { changes ->
                 expectThat(changes.size).isGreaterThanOrEqualTo(1)
                 expectThat(changes[0]).isEqualTo(change)
             }
@@ -548,7 +549,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             // given - change in first peerset
             expectCatching {
                 executeChange(
-                    "http://${apps.getPeer("peer0").address}/v2/change/sync", AddUserChange(
+                    "http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", AddUserChange(
                         "firstUserName",
                         peersets = listOf(
                             ChangePeersetInfo(PeersetId("peerset0"), InitialHistoryEntry.getId()),
@@ -562,7 +563,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             // and - change in second peerset
             expectCatching {
                 executeChange(
-                    "http://${apps.getPeer("peer3").address}/v2/change/sync",
+                    "http://${apps.getPeer("peer3").address}/v2/change/sync?peerset=peerset1",
                     AddGroupChange(
                         "firstGroup",
                         peersets = listOf(
@@ -574,8 +575,8 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
             secondChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            val lastChange0 = askForChanges(apps.getPeer("peer0")).last()
-            val lastChange1 = askForChanges(apps.getPeer("peer3")).last()
+            val lastChange0 = askForChanges(apps.getPeer("peer0"), "peerset0").last()
+            val lastChange1 = askForChanges(apps.getPeer("peer3"), "peerset1").last()
 
             // when - executing change between two peersets
             val addRelationChange = AddRelationChange(
@@ -589,14 +590,14 @@ class MultiplePeersetSpec : IntegrationTestBase() {
 
             expectCatching {
                 executeChange(
-                    "http://${apps.getPeer("peer0").address}/v2/change/sync",
+                    "http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0",
                     addRelationChange
                 )
             }.isSuccess()
 
             finalChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            askAllForChanges(apps.getPeerAddresses().values).let {
+            askAllForChanges("peerset0", "peerset1").let {
                 it.forEach {
                     (it.last() as AddRelationChange).let {
                         expectThat(it.from).isEqualTo(addRelationChange.from)
@@ -635,12 +636,12 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         val change: Change = change(0, 1)
 
         expectCatching {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", change)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+        askAllForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isEqualTo(1)
         }
     }
@@ -665,12 +666,12 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         val change: Change = change(0, 1)
 
         expectCatching {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", change)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+        askAllForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isEqualTo(1)
         }
     }
@@ -700,12 +701,12 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         val change: Change = change(0, 1)
 
         expectCatching {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0", change)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+        askAllForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isEqualTo(0)
         }
     }
@@ -739,12 +740,12 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         val change: Change = change(0, 1)
 
         expectCatching {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0", change)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+        askAllForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isEqualTo(0)
         }
     }
@@ -782,12 +783,12 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         val change: Change = change(0, 1)
 
         expectCatching {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0", change)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
 
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+        askAllForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isEqualTo(0)
         }
     }
@@ -804,12 +805,76 @@ class MultiplePeersetSpec : IntegrationTestBase() {
         expectCatching {
             val change1 = change(0, 1)
             val change2 = twoPeersetChange(change1)
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change1)
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", change2)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", change1)
+            executeChange("http://${apps.getPeer("peer1").address}/v2/change/sync?peerset=peerset1", change2)
         }.isSuccess()
 
-        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach { changes ->
+        askAllForChanges("peerset0").forEach { changes ->
             expectThat(changes.size).isEqualTo(2)
+        }
+    }
+
+    @Test
+    fun `gpac on multiple peersets`(): Unit = runBlocking {
+        apps = TestApplicationSet(
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+                "peerset1" to listOf("peer1", "peer2", "peer4"),
+                "peerset2" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+                "peerset3" to listOf("peer2", "peer3"),
+            ),
+        )
+
+        val change01 = change(0, 1)
+        val change23 = change(2, 3)
+
+        val change12 = change(
+            1 to change01.toHistoryEntry(PeersetId("peerset1")).getId(),
+            2 to change23.toHistoryEntry(PeersetId("peerset2")).getId(),
+        )
+        val change03 = change(
+            0 to change01.toHistoryEntry(PeersetId("peerset0")).getId(),
+            3 to change23.toHistoryEntry(PeersetId("peerset3")).getId(),
+        )
+
+        val peer0Address = apps.getPeer("peer0").address
+        val peer3Address = apps.getPeer("peer3").address
+        val peer4Address = apps.getPeer("peer4").address
+
+        logger.info("Sending change between 0 and 1")
+        expectCatching {
+            executeChange("http://$peer0Address/v2/change/sync?peerset=peerset0", change01)
+        }.isSuccess()
+
+        logger.info("Sending change between 2 and 3")
+        expectCatching {
+            executeChange("http://$peer0Address/v2/change/sync?peerset=peerset2", change23)
+        }.isSuccess()
+
+        logger.info("Sending change between 1 and 2")
+        expectCatching {
+            executeChange("http://$peer4Address/v2/change/sync?peerset=peerset1", change12)
+        }.isSuccess()
+
+        logger.info("Sending change between 0 and 3")
+        expectCatching {
+            executeChange("http://$peer3Address/v2/change/sync?peerset=peerset3", change03)
+        }.isSuccess()
+
+        eventually(5) {
+            runBlocking {
+                val changes = mapOf(
+                    "peerset0" to askForChanges(apps.getPeer("peer0"), "peerset0"),
+                    "peerset2" to askForChanges(apps.getPeer("peer0"), "peerset2"),
+                    "peerset1" to askForChanges(apps.getPeer("peer4"), "peerset1"),
+                    "peerset3" to askForChanges(apps.getPeer("peer3"), "peerset3"),
+                )
+                changes.forEach { (peerset, ch) ->
+                    logger.info("Verifying peerset $peerset")
+                    logger.info("Changes: $ch")
+                    expectThat(ch.size).isEqualTo(2)
+                }
+            }
         }
     }
 
@@ -820,19 +885,39 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             body = change
         }
 
-    private suspend fun askForChanges(peerAddress: PeerAddress) =
-        testHttpClient.get<Changes>("http://${peerAddress.address}/changes") {
+    private suspend fun askForChanges(peerAddress: PeerAddress, peersetId: String) =
+        testHttpClient.get<Changes>("http://${peerAddress.address}/changes?peerset=$peersetId") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
 
-    private suspend fun askAllForChanges(peerAddresses: Collection<PeerAddress>) =
-        peerAddresses.map { askForChanges(it) }
+    private suspend fun askAllForChanges(vararg peersetIds: String) =
+        peersetIds.flatMap { peersetId ->
+            apps.getPeerAddresses(peersetId).values.map {
+                askForChanges(it, peersetId)
+            }
+        }
+
+    private suspend fun askAllRunningPeersForChanges(vararg peersetIds: String) =
+        peersetIds.flatMap { peersetId ->
+            apps.getPeerAddresses(peersetId).values
+                .filter { it.address != NON_RUNNING_PEER }
+                .map {
+                    askForChanges(it, peersetId)
+                }
+        }
 
     private fun change(vararg peersetIds: Int) = AddUserChange(
         "userName",
         peersets = peersetIds.map {
             ChangePeersetInfo(PeersetId("peerset$it"), InitialHistoryEntry.getId())
+        },
+    )
+
+    private fun change(vararg peersetParentIds: Pair<Int, String>) = AddUserChange(
+        "userName",
+        peersets = peersetParentIds.map {
+            ChangePeersetInfo(PeersetId("peerset${it.first}"), it.second)
         },
     )
 

@@ -65,11 +65,11 @@ class TwoPCSpec : IntegrationTestBase() {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?use_2pc=true", change)
+        executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0&use_2pc=true", change)
 
         changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+        askAllForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isEqualTo(2)
             expectThat(changes[0]).isA<TwoPCChange>()
                 .with(TwoPCChange::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
@@ -114,7 +114,6 @@ class TwoPCSpec : IntegrationTestBase() {
                 )
             }
         )
-        val peerAddresses = apps.getPeerAddresses("peerset0")
 
         leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
         logger.info("Leader elected")
@@ -129,7 +128,7 @@ class TwoPCSpec : IntegrationTestBase() {
         repeat(endRange) {
             time += measureTimeMillis {
                 expectCatching {
-                    executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?use_2pc=true", change)
+                    executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change)
                 }.isSuccess()
             }
             phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -139,7 +138,7 @@ class TwoPCSpec : IntegrationTestBase() {
 
         expectThat(time / endRange).isLessThanOrEqualTo(500L)
 
-        askAllForChanges(peerAddresses.values).forEach { changes ->
+        askAllForChanges("peerset0").forEach { changes ->
             // then: there are two changes
             expectThat(changes.size).isEqualTo(endRange * 2)
             expectThat(changes.all { it is TwoPCChange && it.twoPCStatus == TwoPCStatus.ACCEPTED || it is AddUserChange }).isTrue()
@@ -181,15 +180,15 @@ class TwoPCSpec : IntegrationTestBase() {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?use_2pc=true", change)
+        executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0&use_2pc=true", change)
 
         changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?use_2pc=true", changeSecond)
+        executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0&use_2pc=true", changeSecond)
 
         changeSecondAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+        askAllForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isEqualTo(4)
             expectThat(changes[0]).isA<TwoPCChange>()
                 .with(TwoPCChange::twoPCStatus) { isEqualTo(TwoPCStatus.ACCEPTED) }
@@ -245,7 +244,7 @@ class TwoPCSpec : IntegrationTestBase() {
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         val change: Change = change(0, 1)
-        val result = executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?use_2pc=true", change)
+        val result = executeChange("http://${apps.getPeer("peer0").address}/v2/change/async?peerset=peerset0&use_2pc=true", change)
 
         expectThat(result.status).isEqualTo(HttpStatusCode.Accepted)
 
@@ -254,7 +253,7 @@ class TwoPCSpec : IntegrationTestBase() {
 
 
         // then - transaction should not be executed
-        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach { changes ->
+        askAllForChanges("peerset0").forEach { changes ->
             expectThat(changes.size).isEqualTo(2)
             expectThat(changes[0]).isA<TwoPCChange>()
                 .with(TwoPCChange::twoPCStatus) {
@@ -274,7 +273,7 @@ class TwoPCSpec : IntegrationTestBase() {
 
         try {
             testHttpClient.get<HttpResponse>(
-                "http://${apps.getPeer("peer0").address}/v2/change_status/${change.id}"
+                "http://${apps.getPeer("peer0").address}/v2/change_status/${change.id}?peerset=peerset0"
             ) {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
@@ -301,7 +300,7 @@ class TwoPCSpec : IntegrationTestBase() {
 
         // when - executing transaction
         try {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?use_2pc=true", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change)
             fail("Exception not thrown")
         } catch (e: Exception) {
             expectThat(e).isA<ServerResponseException>()
@@ -312,7 +311,7 @@ class TwoPCSpec : IntegrationTestBase() {
         delay(10000)
 
         // then - transaction should not be executed
-        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach { changes ->
+        askAllForChanges("peerset0").forEach { changes ->
             expectThat(changes.size).isEqualTo(0)
         }
     }
@@ -346,18 +345,17 @@ class TwoPCSpec : IntegrationTestBase() {
             appsToExclude = listOf("peer2", "peer6", "peer7"),
             signalListeners = (0..7).map { "peer$it" }.associateWith { signalListenersForCohort },
         )
-        val peers = apps.getPeerAddresses()
         val change: Change = change(0, 1)
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // when - executing transaction
-        executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?use_2pc=true", change)
+        executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change)
 
         changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // then - transaction should be executed in every peerset
-        askAllForChanges(peers.values.filter { it.address != NON_RUNNING_PEER }).forEach { changes ->
+        askAllRunningPeersForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isEqualTo(2)
             expectThat(changes[0]).isA<TwoPCChange>()
                 .with(Change::peersets) { isEqualTo(change.peersets) }
@@ -414,12 +412,11 @@ class TwoPCSpec : IntegrationTestBase() {
                     )
                 }.toMap(),
             )
-            val peers = apps.getPeerAddresses()
             val change: Change = change(0, 1)
 
             electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?use_2pc=true", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change)
 
             firstPeersetChangeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
@@ -427,7 +424,7 @@ class TwoPCSpec : IntegrationTestBase() {
 
             secondPeersetChangeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-            askAllForChanges(peers.values).forEach { changes ->
+            askAllForChanges("peerset0", "peerset1").forEach { changes ->
                 expectThat(changes.size).isEqualTo(2)
                 expectThat(changes[0]).isA<TwoPCChange>()
                     .with(TwoPCChange::peersets) {
@@ -486,12 +483,12 @@ class TwoPCSpec : IntegrationTestBase() {
 
         // when - executing transaction something should go wrong after ft-agree
         expectThrows<ServerResponseException> {
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?use_2pc=true", change)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change)
         }
 
         applyCommittedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        askAllForChanges(apps.getPeerAddresses().values).forEach { changes ->
+        askAllForChanges("peerset0", "peerset1").forEach { changes ->
             expectThat(changes.size).isGreaterThanOrEqualTo(1)
             expectThat(changes[0]).isEqualTo(change)
         }
@@ -554,7 +551,7 @@ class TwoPCSpec : IntegrationTestBase() {
                 peersets = listOf(ChangePeersetInfo(PeersetId("peerset0"), InitialHistoryEntry.getId())),
             )
             expectCatching {
-                executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync", firstChange)
+                executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0", firstChange)
             }.isSuccess()
 
             firstChangePhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -566,7 +563,7 @@ class TwoPCSpec : IntegrationTestBase() {
             )
             expectCatching {
                 executeChange(
-                    "http://${apps.getPeer("peer3").address}/v2/change/sync",
+                    "http://${apps.getPeer("peer3").address}/v2/change/sync?peerset=peerset1",
                     secondChange
                 )
             }.isSuccess()
@@ -587,13 +584,13 @@ class TwoPCSpec : IntegrationTestBase() {
             )
 
             expectCatching {
-                executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?use_2pc=true", lastChange)
+                executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", lastChange)
             }.isSuccess()
 
             finalChangePhaser.arriveAndAwaitAdvanceWithTimeout()
 
 //          First peerset
-            askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach {
+            askAllForChanges("peerset0").forEach {
                 expectThat(it.size).isEqualTo(3)
                 expectThat(it[0]).isEqualTo(firstChange)
                 expectThat(it[1]).isA<TwoPCChange>()
@@ -604,7 +601,7 @@ class TwoPCSpec : IntegrationTestBase() {
                     .with(AddRelationChange::to) { isEqualTo("firstGroup") }
             }
 
-            askAllForChanges(apps.getPeerAddresses("peerset1").values).forEach {
+            askAllForChanges("peerset1").forEach {
                 expectThat(it.size).isEqualTo(3)
                 expectThat(it[0]).isEqualTo(secondChange)
                 expectThat(it[1]).isA<TwoPCChange>()
@@ -628,12 +625,70 @@ class TwoPCSpec : IntegrationTestBase() {
         expectCatching {
             val change1 = change(0, 1)
             val change2 = twoPeersetChange(change1)
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?use_2pc=true", change1)
-            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?use_2pc=true", change2)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change1)
+            executeChange("http://${apps.getPeer("peer0").address}/v2/change/sync?peerset=peerset0&use_2pc=true", change2)
         }.isSuccess()
 
-        askAllForChanges(apps.getPeerAddresses("peerset0").values).forEach { changes ->
+        askAllForChanges("peerset0").forEach { changes ->
             expectThat(changes.size).isEqualTo(4)
+        }
+    }
+
+    @Test
+    fun `2pc on multiple peersets`(): Unit = runBlocking {
+        apps = TestApplicationSet(
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+                "peerset1" to listOf("peer1", "peer2", "peer4"),
+                "peerset2" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+                "peerset3" to listOf("peer2", "peer3"),
+            ),
+        )
+
+        val change01 = change(0, 1)
+        val change23 = change(2, 3)
+
+        val change12 = change(
+            1 to change01.toHistoryEntry(PeersetId("peerset1")).getId(),
+            2 to change23.toHistoryEntry(PeersetId("peerset2")).getId(),
+        )
+        val change03 = change(
+            0 to change01.toHistoryEntry(PeersetId("peerset0")).getId(),
+            3 to change23.toHistoryEntry(PeersetId("peerset3")).getId(),
+        )
+
+        val peer0Address = apps.getPeer("peer0").address
+        val peer3Address = apps.getPeer("peer3").address
+        val peer4Address = apps.getPeer("peer4").address
+
+        logger.info("Sending change between 0 and 1")
+        expectCatching {
+            executeChange("http://$peer0Address/v2/change/sync?peerset=peerset0&use_2pc=true", change01)
+        }.isSuccess()
+
+        logger.info("Sending change between 2 and 3")
+        expectCatching {
+            executeChange("http://$peer0Address/v2/change/sync?peerset=peerset2&use_2pc=true", change23)
+        }.isSuccess()
+
+        logger.info("Sending change between 1 and 2")
+        expectCatching {
+            executeChange("http://$peer4Address/v2/change/sync?peerset=peerset1&use_2pc=true", change12)
+        }.isSuccess()
+
+        logger.info("Sending change between 0 and 3")
+        expectCatching {
+            executeChange("http://$peer3Address/v2/change/sync?peerset=peerset3&use_2pc=true", change03)
+        }.isSuccess()
+
+        val changes = listOf(
+            askForChanges(apps.getPeer("peer0"), "peerset0"),
+            askForChanges(apps.getPeer("peer0"), "peerset2"),
+            askForChanges(apps.getPeer("peer4"), "peerset1"),
+            askForChanges(apps.getPeer("peer3"), "peerset3"),
+        )
+        changes.forEach { ch ->
+            expectThat(ch.size).isEqualTo(4)
         }
     }
 
@@ -644,14 +699,23 @@ class TwoPCSpec : IntegrationTestBase() {
             body = change
         }
 
-    private suspend fun askForChanges(peer: PeerAddress) =
-        testHttpClient.get<Changes>("http://${peer.address}/changes") {
+    private suspend fun askForChanges(peer: PeerAddress, peersetId: String) =
+        testHttpClient.get<Changes>("http://${peer.address}/changes?peerset=$peersetId") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
 
-    private suspend fun askAllForChanges(peerAddresses: Collection<PeerAddress>) =
-        peerAddresses.map { askForChanges(it) }
+    private suspend fun askAllForChanges(vararg peersetIds: String) =
+        peersetIds.flatMap { peersetId ->
+            apps.getPeerAddresses(peersetId).values.map { askForChanges(it, peersetId) }
+        }
+
+    private suspend fun askAllRunningPeersForChanges(vararg peersetIds: String) =
+        peersetIds.flatMap { peersetId ->
+            apps.getPeerAddresses(peersetId).values
+                .filter { it.address != NON_RUNNING_PEER }
+                .map { askForChanges(it, peersetId) }
+        }
 
     private fun change(vararg peersetNums: Int) = AddUserChange(
         "userName",

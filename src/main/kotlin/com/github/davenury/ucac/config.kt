@@ -5,7 +5,6 @@ import com.github.davenury.ucac.common.PeerResolver
 import java.time.Duration
 
 data class Config(
-    val host: String,
     val port: Int,
     val peerId: String,
     // peer1=X;peer2=Y
@@ -18,20 +17,15 @@ data class Config(
     val twoPC: TwoPCConfig = TwoPCConfig(),
     val rest: RestConfig = RestConfig(),
     val persistence: PersistenceConfig = PersistenceConfig(),
-    val metricTest: Boolean
+    val metricTest: Boolean,
+    val experimentId: String?,
+    val workerPoolSize: Int = 1,
 ) {
     fun peerId() = PeerId(peerId)
 
-    // TODO remove:
-    fun peersetId() = parsePeersets(peersets).filterValues { peers -> peers.contains(PeerId(peerId)) }.let {
-        if (it.isEmpty()) {
-            throw AssertionError("Peer in no peersets, not supported yet")
-        }
-        if (it.size != 1) {
-            throw AssertionError("Peer in multiple peersets, not supported yet")
-        }
-        return@let it.keys.iterator().next()
-    }
+    fun peersetIds(): Set<PeersetId> = parsePeersets(peersets)
+        .filterValues { peers -> peers.contains(PeerId(peerId)) }
+        .keys
 
     fun newPeerResolver() = PeerResolver(peerId(), parsePeers(peers), parsePeersets(peersets))
 }

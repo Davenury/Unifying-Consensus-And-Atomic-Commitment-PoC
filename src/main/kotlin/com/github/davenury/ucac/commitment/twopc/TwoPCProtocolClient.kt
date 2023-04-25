@@ -2,6 +2,7 @@ package com.github.davenury.ucac.commitment.twopc
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.httpClient
 import com.zopa.ktor.opentracing.asyncTraced
 import io.ktor.client.request.*
@@ -13,23 +14,23 @@ import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
 interface TwoPCProtocolClient {
-    suspend fun sendAccept(peers: List<PeerAddress>, change: Change): List<Boolean>
-    suspend fun sendDecision(peers: List<PeerAddress>, decisionChange: Change): List<Boolean>
+    suspend fun sendAccept(peers: Map<PeersetId, PeerAddress>, change: Change): List<Boolean>
+    suspend fun sendDecision(peers: Map<PeersetId, PeerAddress>, decisionChange: Change): List<Boolean>
 
-    suspend fun askForChangeStatus(peer: PeerAddress, change: Change): Change?
+    suspend fun askForChangeStatus(peer: PeerAddress, change: Change, otherPeerset: PeersetId): Change?
 }
 
 class TwoPCProtocolClientImpl : TwoPCProtocolClient {
 
-    override suspend fun sendAccept(peers: List<PeerAddress>, change: Change): List<Boolean> =
+    override suspend fun sendAccept(peers: Map<PeersetId, PeerAddress>, change: Change): List<Boolean> =
         sendMessages(peers, change, "2pc/accept")
 
 
-    override suspend fun sendDecision(peers: List<PeerAddress>, decisionChange: Change): List<Boolean> =
+    override suspend fun sendDecision(peers: Map<PeersetId, PeerAddress>, decisionChange: Change): List<Boolean> =
         sendMessages(peers, decisionChange, "2pc/decision")
 
-    override suspend fun askForChangeStatus(peer: PeerAddress, change: Change): Change? {
-        val url = "http://${peer.address}/2pc/ask/${change.id}"
+    override suspend fun askForChangeStatus(peer: PeerAddress, change: Change, peersetId: PeersetId): Change? {
+        val url = "http://${peer.address}/2pc/ask/${change.id}?peerset=${peersetId}"
         logger.info("Sending to: $url")
         return try {
             httpClient.get<Change?>(url) {
@@ -42,18 +43,12 @@ class TwoPCProtocolClientImpl : TwoPCProtocolClient {
         }
     }
 
-    private suspend fun <T> sendMessages(peers: List<PeerAddress>, body: T, path: String): List<Boolean> =
-        sendRequests(peers.map { Pair(it, body) }, path)
-
-    private suspend inline fun <T> sendRequests(
-        peersWithBody: List<Pair<PeerAddress, T>>,
-        urlPath: String
-    ): List<Boolean> =
-        peersWithBody.map {
+    private suspend fun <T> sendMessages(peers: Map<PeersetId, PeerAddress>, body: T, urlPath: String): List<Boolean> =
+        peers.map { (peersetId, peerAddress) ->
             CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
-                send2PCMessage<T, Unit>("http://${it.first.address}/$urlPath", it.second)
+                send2PCMessage<T, Unit>("http://${peerAddress.address}/$urlPath?peerset=${peersetId}", body)
             }.let { coroutine ->
-                Pair(it.first, coroutine)
+                Pair(peerAddress, coroutine)
             }
         }.map {
             val result = try {

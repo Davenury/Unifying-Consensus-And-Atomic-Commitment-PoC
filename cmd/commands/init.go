@@ -137,6 +137,10 @@ func DoInit(namespace string, createNamespace bool) {
 				"type": "filesystem",
 			},
 			"auth_enabled": false,
+			"server": map[string]interface{}{
+				"grpc_server_max_recv_msg_size": 6500000,
+				"grpc_server_max_send_msg_size": 6500000,
+			},
 		},
 		"singleBinary": map[string]interface{}{
 			"replicas": 1,

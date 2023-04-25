@@ -3,6 +3,7 @@ package com.github.davenury.ucac.consensus.raft
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.consensus.ConsensusProtocolClient
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.httpClient
@@ -41,8 +42,7 @@ interface RaftProtocolClient {
     ): ChangeResult
 }
 
-class RaftProtocolClientImpl : RaftProtocolClient, ConsensusProtocolClient() {
-
+class RaftProtocolClientImpl(private val peersetId: PeersetId) : RaftProtocolClient, ConsensusProtocolClient() {
     override suspend fun sendConsensusElectMe(
         otherPeers: List<PeerAddress>,
         message: ConsensusElectMe
@@ -76,7 +76,7 @@ class RaftProtocolClientImpl : RaftProtocolClient, ConsensusProtocolClient() {
     }
 
     override suspend fun sendRequestApplyChange(address: String, change: Change) =
-        httpClient.post<ChangeResult>("http://${address}/raft/request_apply_change") {
+        httpClient.post<ChangeResult>("http://${address}/raft/request_apply_change?peerset=${peersetId}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = change

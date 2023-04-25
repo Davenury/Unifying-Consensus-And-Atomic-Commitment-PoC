@@ -1,9 +1,9 @@
 package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
-import com.github.davenury.common.PeerId
-import com.github.davenury.ucac.common.ChangeNotifier
-import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.common.CurrentLeaderDto
+import com.github.davenury.common.peersetId
+import com.github.davenury.ucac.common.MultiplePeersetProtocols
 import com.github.davenury.ucac.consensus.ConsensusProposeChange
 import com.github.davenury.ucac.consensus.raft.ConsensusElectMe
 import com.github.davenury.ucac.consensus.raft.ConsensusHeartbeat
@@ -15,40 +15,40 @@ import io.ktor.routing.*
 import kotlinx.coroutines.future.await
 import org.slf4j.Logger
 
-data class CurrentLeaderDto(val currentLeaderPeerId: PeerId?)
-
-fun Application.raftProtocolRouting(protocol: RaftConsensusProtocol, logger: Logger) {
+fun Application.raftProtocolRouting(multiplePeersetProtocols: MultiplePeersetProtocols) {
+    fun ApplicationCall.consensus(): RaftConsensusProtocol {
+        return multiplePeersetProtocols.forPeerset(this.peersetId()).consensusProtocol
+    }
     routing {
-        // głosujemy na leadera
         post("/raft/request_vote") {
             val message: ConsensusElectMe = call.receive()
-            val response = protocol.handleRequestVote(message.peerId, message.term, message.lastEntryId)
+            val response = call.consensus().handleRequestVote(message.peerId, message.term, message.lastEntryId)
             call.respond(response)
         }
 
         post("/raft/heartbeat") {
             val message: ConsensusHeartbeat = call.receive()
-            val heartbeatResult = protocol.handleHeartbeat(message)
+            val heartbeatResult = call.consensus().handleHeartbeat(message)
             call.respond(heartbeatResult)
         }
 
         post("/raft/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
             logger.info("Received request apply change: $message")
-            val result = protocol.handleProposeChange(message).await()
+            val result = call.consensus().handleProposeChange(message).await()
             call.respond(result)
         }
 
         get("/raft/current-leader") {
-            call.respond(CurrentLeaderDto(protocol.getLeaderId()))
+            call.respond(CurrentLeaderDto(call.consensus().getLeaderId()))
         }
 
         get("/raft/proposed_changes") {
-            call.respond(Changes(protocol.getProposedChanges()))
+            call.respond(Changes(call.consensus().getProposedChanges()))
         }
 
         get("/raft/accepted_changes") {
-            call.respond(Changes(protocol.getAcceptedChanges()))
+            call.respond(Changes(call.consensus().getAcceptedChanges()))
         }
     }
 }

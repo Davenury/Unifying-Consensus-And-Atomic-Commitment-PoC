@@ -4,16 +4,16 @@
             <level>INFO</level>
         </filter>
         <encoder>
-            <pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} %-5level [%-11logger{36}] %msg \(%thread\)%n</pattern>
+            <pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} %-5level [%-11logger{36}] \(%mdc{peerset:-?}\) %msg \(%thread\)%n</pattern>
         </encoder>
     </appender>
     <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
         <http>
-            <url>${LOKI_BASE_URL}/loki/api/v1/push</url>
+            <url>${LOKI_BASE_URL:-http://example.com}/loki/api/v1/push</url>
         </http>
         <format>
             <label>
-                <pattern>app=peer,host=${HOSTNAME},level=%level,namespace=${NAMESPACE}</pattern>
+                <pattern>app=peer,host=${HOSTNAME},level=%level,namespace=${NAMESPACE},experiment=${EXPERIMENT_UUID}</pattern>
             </label>
             <message>
                 <pattern>l=%level namespace=${NAMESPACE} h=${HOSTNAME} c=%logger{20} t=%thread | %msg %ex</pattern>

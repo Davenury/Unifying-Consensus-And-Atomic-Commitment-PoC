@@ -23,6 +23,8 @@ class ChangeDoesntExist(changeId: String) : Exception("Change with id: $changeId
 class TwoPCConflictException(msg: String) : Exception("During 2PC occurs error: $msg")
 class TwoPCHandleException(msg: String) : Exception("In 2PC occurs error: $msg")
 class GPACInstanceNotFoundException(changeId: String) : Exception("GPAC instance for change $changeId wasn't found!")
+class MissingPeersetParameterException : Exception("Missing peerset parameter")
+class UnknownPeersetException(val peersetId: PeersetId) : Exception("Unknown peerset: $peersetId")
 class AlvinLeaderBecameOutdatedException(changeId: String) : Exception("I as a leader become outdated for entry $changeId")
 class AlvinOutdatedPrepareException(prevEpoch: Int, currEpoch: Int) : Exception("Receive prepare from previous epoch $prevEpoch, current: $currEpoch")
 class AlvinHistoryBlocked(changeId: String, protocol: ProtocolName) : Exception("TransactionBlocker is blocked on change: $changeId with protocol $protocol")

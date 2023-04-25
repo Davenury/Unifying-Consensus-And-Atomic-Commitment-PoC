@@ -71,7 +71,7 @@ func test() {
 			panic(err)
 		}
 
-		resp, err := http.Post(fmt.Sprintf("http://localhost:%d/v2/change", int(localPort)), "application/json", bytes.NewBuffer(requestData))
+		resp, err := http.Post(fmt.Sprintf("http://localhost:%d/v2/change?peerset=peerset0", int(localPort)), "application/json", bytes.NewBuffer(requestData))
 		if err != nil {
 			panic(err)
 		}
@@ -90,7 +90,7 @@ func test() {
 
 			time.Sleep(1 * time.Second)
 
-			resp, err = http.Get(fmt.Sprintf("http://localhost:%d/v2/change", int(localPort)))
+			resp, err = http.Get(fmt.Sprintf("http://localhost:%d/v2/change?peerset=peerset0", int(localPort)))
 			if err != nil {
 				panic(err)
 			}
