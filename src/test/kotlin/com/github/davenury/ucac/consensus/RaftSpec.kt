@@ -1298,12 +1298,12 @@ class RaftSpec : IntegrationTestBase() {
         genericAskForChange("accepted_changes", peerAddress)
 
     private fun askForLeaderAddress(app: ApplicationUcac): String? {
-        val leaderId = app.getPeersetProtocols(PeersetId("peerset0")).consensusProtocol.getLeaderId()
+        val leaderId = (app.getPeersetProtocols(PeersetId("peerset0")).consensusProtocol as RaftConsensusProtocol).getLeaderId()
         return leaderId?.let { apps.getPeer(it).address }
     }
 
     private fun getLeaderAddress(app: ApplicationUcac): PeerAddress {
-        val leaderId = app.getPeersetProtocols(PeersetId("peerset0")).consensusProtocol.getLeaderId()!!
+        val leaderId = (app.getPeersetProtocols(PeersetId("peerset0")).consensusProtocol as RaftConsensusProtocol).getLeaderId()!!
         return apps.getPeer(leaderId)
     }
 

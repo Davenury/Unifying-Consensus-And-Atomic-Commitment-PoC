@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.consensus
 
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.raftHttpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
@@ -11,7 +12,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
-open class ConsensusProtocolClient{
+open class ConsensusProtocolClient(open val peersetId: PeersetId){
 
     suspend inline fun <T, reified K> sendRequest(
         peerWithBody: Pair<PeerAddress, T>,
@@ -47,7 +48,7 @@ open class ConsensusProtocolClient{
         message: Message,
     ): Response? {
         logger.debug("Sending request to: ${peer.peerId} ${peer.address}, message: $message")
-        return raftHttpClient.post<Response>("http://${peer.address}/${suffix}") {
+        return raftHttpClient.post<Response>("http://${peer.address}/${suffix}?peerset=${peersetId}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = message!!

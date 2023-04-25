@@ -78,7 +78,7 @@ class AlvinSpec : IntegrationTestBase() {
         // when: peer1 executed change
         val change1 = createChange(null)
         expectCatching {
-            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync", change1)
+            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?peerset=peerset0", change1)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -96,7 +96,7 @@ class AlvinSpec : IntegrationTestBase() {
         // when: peer2 executes change
         val change2 = createChange(1, userName = "userName2", parentId = change1.toHistoryEntry(peerset(0)).getId())
         expectCatching {
-            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync", change2)
+            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?peerset=peerset0", change2)
         }.isSuccess()
 
         phaser.arriveAndAwaitAdvanceWithTimeout()
@@ -148,7 +148,7 @@ class AlvinSpec : IntegrationTestBase() {
         (0 until endRange).forEach {
             val newTime = measureTimeMillis {
                 expectCatching {
-                    executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync", change)
+                    executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?peerset=peerset0", change)
                 }.isSuccess()
             }
             logger.info("Change $it is processed $newTime ms")
@@ -205,7 +205,7 @@ class AlvinSpec : IntegrationTestBase() {
 
 //      Start processing
         expectCatching {
-            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?timeout=PT4S", change)
+            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?peerset=peerset0&timeout=PT4S", change)
         }.isFailure()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -267,7 +267,7 @@ class AlvinSpec : IntegrationTestBase() {
 
 //      Start processing
         expectCatching {
-            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?timeout=PT4S", change)
+            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?peerset=peerset0&timeout=PT4S", change)
         }.isFailure()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -327,7 +327,7 @@ class AlvinSpec : IntegrationTestBase() {
 
 //      Start processing
         expectCatching {
-            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?timeout=PT4S", change)
+            executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?peerset=peerset0&timeout=PT4S", change)
         }.isFailure()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -382,7 +382,7 @@ class AlvinSpec : IntegrationTestBase() {
 
 //      Start processing
         expectCatching {
-            executeChange("${runningPeers.first().address}/v2/change/async", change)
+            executeChange("${runningPeers.first().address}/v2/change/async?peerset=peerset0", change)
         }.isSuccess()
 
         changeProposedPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -472,11 +472,11 @@ class AlvinSpec : IntegrationTestBase() {
 
 //      Run change in both halfs
         expectCatching {
-            executeChange("${firstHalf.first().address}/v2/change/async", change1)
+            executeChange("${firstHalf.first().address}/v2/change/async?peerset=peerset0", change1)
         }.isSuccess()
 
         expectCatching {
-            executeChange("${secondHalf.first().address}/v2/change/async", change2)
+            executeChange("${secondHalf.first().address}/v2/change/async?peerset=peerset0", change2)
         }.isSuccess()
 
         change2CommitPhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -562,7 +562,7 @@ class AlvinSpec : IntegrationTestBase() {
             PersistentHistory(InMemoryPersistence()),
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
-            protocolClient = AlvinProtocolClientImpl(),
+            protocolClient = AlvinProtocolClientImpl(peerset(0)),
             transactionBlocker =  PersistentTransactionBlocker(InMemoryPersistence()),
             isMetricTest = false
         )
@@ -638,7 +638,7 @@ class AlvinSpec : IntegrationTestBase() {
         )
 
         val firstLeaderAction = SignalListener { signalData ->
-            val url = "http://${signalData.peerResolver.resolve(peerId(1)).address}/apply"
+            val url = "http://${signalData.peerResolver.resolve(peerId(1)).address}/apply?peerset=peerset0"
             runBlocking {
                 testHttpClient.post<HttpResponse>(url) {
                     contentType(ContentType.Application.Json)
@@ -717,7 +717,7 @@ class AlvinSpec : IntegrationTestBase() {
         // change that will cause leader to fall according to action
         try {
             executeChange(
-                "${apps.getPeer(peer(0)).address}/v2/change/sync?enforce_gpac=true",
+                "${apps.getPeer(peer(0)).address}/v2/change/sync?peerset=peerset0&enforce_gpac=true",
                 change1
             )
             fail("Change passed")
@@ -729,7 +729,7 @@ class AlvinSpec : IntegrationTestBase() {
         phaserGPACPeer.arriveAndAwaitAdvanceWithTimeout()
         isSecondGPAC.set(true)
 
-        val change = testHttpClient.get<Change>("http://${apps.getPeer(peer(1)).address}/change") {
+        val change = testHttpClient.get<Change>("http://${apps.getPeer(peer(1)).address}/change?peerset=peerset0") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -740,7 +740,7 @@ class AlvinSpec : IntegrationTestBase() {
         }
 
         executeChange(
-            "${apps.getPeer(peer(1)).address}/v2/change/sync",
+            "${apps.getPeer(peer(1)).address}/v2/change/sync?peerset=peerset0",
             change2
         )
 
@@ -748,7 +748,7 @@ class AlvinSpec : IntegrationTestBase() {
 
         apps.getPeerAddresses(peerset(0)).forEach { (_, peerAddress) ->
             // and should not execute this change couple of times
-            val changes = testHttpClient.get<Changes>("http://${peerAddress.address}/changes") {
+            val changes = testHttpClient.get<Changes>("http://${peerAddress.address}/changes?peerset=peerset0") {
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
             }
@@ -765,15 +765,53 @@ class AlvinSpec : IntegrationTestBase() {
         }
     }
 
+
+    @Test
+    fun `consensus on multiple peersets`(): Unit = runBlocking {
+        apps = TestApplicationSet(
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+                "peerset1" to listOf("peer1", "peer2", "peer4"),
+                "peerset2" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+                "peerset3" to listOf("peer2", "peer3"),
+            ),
+        )
+
+        val peersetCount = apps.getPeersets().size
+        repeat(peersetCount) { i ->
+            logger.info("Sending changes to peerset$i")
+
+            val change1 = createChange(null, peersetId = "peerset$i")
+            val parentId = change1.toHistoryEntry(PeersetId("peerset$i")).getId()
+            val change2 = createChange(null, peersetId = "peerset$i", parentId = parentId)
+
+            val peerAddress = apps.getPeerAddresses("peerset$i").values.iterator().next().address
+
+            expectCatching {
+                executeChange("$peerAddress/v2/change/sync?peerset=peerset$i", change1)
+                executeChange("$peerAddress/v2/change/sync?peerset=peerset$i", change2)
+            }.isSuccess()
+        }
+
+        repeat(peersetCount) { i ->
+            val peerAddress = apps.getPeerAddresses("peerset$i").values.iterator().next()
+
+            val changes = askForChanges(peerAddress)
+            expectThat(changes.size).isEqualTo(2)
+        }
+    }
+
     private fun createChange(
         acceptNum: Int?,
         userName: String = "userName",
         parentId: String = InitialHistoryEntry.getId(),
+        peersetId: String = "peerset0",
     ) = AddUserChange(
         userName,
         acceptNum,
-        peersets = listOf(ChangePeersetInfo(peerset(0), parentId)),
+        peersets = listOf(ChangePeersetInfo(PeersetId(peersetId), parentId)),
     )
+
 
     private suspend fun executeChange(uri: String, change: Change) =
         testHttpClient.post<String>("http://${uri}") {
@@ -783,14 +821,14 @@ class AlvinSpec : IntegrationTestBase() {
         }
 
     private suspend fun genericAskForChange(suffix: String, peerAddress: PeerAddress) =
-        testHttpClient.get<Changes>("http://${peerAddress.address}/alvin/$suffix") {
+        testHttpClient.get<Changes>("http://${peerAddress.address}/alvin/$suffix?peerset=peerset0") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
 
 
     private suspend fun askForChanges(peerAddress: PeerAddress) =
-        testHttpClient.get<Changes>("http://${peerAddress.address}/v2/change") {
+        testHttpClient.get<Changes>("http://${peerAddress.address}/v2/change?peerset=peerset0") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }

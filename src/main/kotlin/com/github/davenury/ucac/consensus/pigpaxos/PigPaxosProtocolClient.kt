@@ -3,6 +3,7 @@ package com.github.davenury.ucac.consensus.pigpaxos
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.consensus.ConsensusProtocolClient
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.httpClient
@@ -34,7 +35,7 @@ interface PigPaxosProtocolClient {
     ): ChangeResult
 }
 
-class PigPaxosProtocolClientImpl() : PigPaxosProtocolClient, ConsensusProtocolClient() {
+class PigPaxosProtocolClientImpl(override val peersetId: PeersetId) : PigPaxosProtocolClient, ConsensusProtocolClient(peersetId) {
 
     override suspend fun sendProposes(
         peers: List<PeerAddress>,
@@ -60,7 +61,7 @@ class PigPaxosProtocolClientImpl() : PigPaxosProtocolClient, ConsensusProtocolCl
     }
 
     override suspend fun sendRequestApplyChange(peer: PeerAddress, change: Change): ChangeResult =
-        httpClient.post("http://${peer.address}/pigpaxos/request_apply_change") {
+        httpClient.post("http://${peer.address}/pigpaxos/request_apply_change?peerset=${peersetId}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = change

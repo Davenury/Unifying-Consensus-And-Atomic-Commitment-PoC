@@ -1,6 +1,7 @@
 package com.github.davenury.ucac.consensus.alvin
 
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.consensus.ConsensusProtocolClient
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.raftHttpClient
@@ -50,7 +51,7 @@ interface AlvinProtocolClient {
     ): ConsensusResponse<AlvinFastRecoveryResponse?>
 }
 
-public class AlvinProtocolClientImpl : AlvinProtocolClient, ConsensusProtocolClient() {
+public class AlvinProtocolClientImpl(override val peersetId: PeersetId) : AlvinProtocolClient, ConsensusProtocolClient(peersetId) {
 
     override suspend fun sendProposal(
         peer: PeerAddress,

@@ -42,7 +42,7 @@ interface RaftProtocolClient {
     ): ChangeResult
 }
 
-class RaftProtocolClientImpl(private val peersetId: PeersetId) : RaftProtocolClient, ConsensusProtocolClient() {
+class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolClient, ConsensusProtocolClient(peersetId) {
     override suspend fun sendConsensusElectMe(
         otherPeers: List<PeerAddress>,
         message: ConsensusElectMe

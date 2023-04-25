@@ -17,7 +17,7 @@ import org.slf4j.Logger
 
 fun Application.raftProtocolRouting(multiplePeersetProtocols: MultiplePeersetProtocols) {
     fun ApplicationCall.consensus(): RaftConsensusProtocol {
-        return multiplePeersetProtocols.forPeerset(this.peersetId()).consensusProtocol
+        return multiplePeersetProtocols.forPeerset(this.peersetId()).consensusProtocol as RaftConsensusProtocol
     }
     routing {
         post("/raft/request_vote") {
@@ -34,7 +34,6 @@ fun Application.raftProtocolRouting(multiplePeersetProtocols: MultiplePeersetPro
 
         post("/raft/request_apply_change") {
             val message: ConsensusProposeChange = call.receive()
-            logger.info("Received request apply change: $message")
             val result = call.consensus().handleProposeChange(message).await()
             call.respond(result)
         }

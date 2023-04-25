@@ -13,7 +13,6 @@ import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
-import com.github.davenury.ucac.consensus.raft.domain.*
 import com.github.davenury.ucac.utils.MdcProvider
 import com.zopa.ktor.opentracing.launchTraced
 import com.github.davenury.ucac.consensus.VotedFor
@@ -469,7 +468,7 @@ class RaftConsensusProtocolImpl(
 
         when {
             response.message == null -> {
-                logger.info("Peer $peer did not respond to heartbeat ${peerAddress.peerId}")
+                logger.info("Peer $peer did not respond to heartbeat")
             }
 
             response.message.transactionBlocked && response.message.success -> {
