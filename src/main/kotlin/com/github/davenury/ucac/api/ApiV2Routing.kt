@@ -1,6 +1,9 @@
 package com.github.davenury.ucac.api
 
 import com.github.davenury.common.*
+import com.github.davenury.ucac.common.structure.HttpSubscriber
+import com.github.davenury.ucac.common.structure.Subscriber
+import com.github.davenury.ucac.common.structure.Subscribers
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
@@ -10,7 +13,9 @@ import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
-fun Application.apiV2Routing(service: ApiV2Service) {
+fun Application.apiV2Routing(
+    service: ApiV2Service,
+) {
     val logger = LoggerFactory.getLogger("V2Routing")
 
     suspend fun respondChangeResult(result: ChangeResult?, call: ApplicationCall) {
@@ -127,6 +132,13 @@ fun Application.apiV2Routing(service: ApiV2Service) {
         get("/v2/last-change") {
             val peersetId = call.peersetId()
             call.respond(service.getLastChange(peersetId) ?: HttpStatusCode.NotFound)
+        }
+
+        post("/v2/subscribe-to-peer-configuration-changes") {
+            val address = call.receive<SubscriberAddress>()
+            val peersetId = call.peersetId()
+            service.registerSubscriber(peersetId, address)
+            call.respond(HttpStatusCode.OK)
         }
     }
 }

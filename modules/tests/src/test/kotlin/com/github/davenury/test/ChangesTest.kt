@@ -61,7 +61,8 @@ class ChangesTest {
             sender,
             RandomPeersWithDelayOnConflictStrategy(peers.keys.toList(), lockMock, conditionMock),
             DefaultChangeStrategy(ownAddress),
-            null
+            null,
+            ""
         )
         sender.setChanges(subject)
         val phaser = Phaser(peers.keys.size)
@@ -123,7 +124,8 @@ class ChangesTest {
             sender,
             RandomPeersWithDelayOnConflictStrategy(peers.keys.toList()),
             DefaultChangeStrategy(ownAddress),
-            null
+            null,
+            ""
         )
         sender.setChanges(subject)
 
@@ -163,7 +165,8 @@ class ChangesTest {
             peers, sender, RandomPeersWithDelayOnConflictStrategy(peers.keys.toList()), DefaultChangeStrategy(
                 ownAddress
             ),
-            null
+            null,
+            ""
         )
         sender.setChanges(subject)
 
@@ -201,7 +204,8 @@ class ChangesTest {
             peers, DummySender(shouldNotify = false, peers), strategy, DefaultChangeStrategy(
                 ownAddress
             ),
-            null
+            null,
+            ""
         )
 
         val singleChange = AddUserChange(

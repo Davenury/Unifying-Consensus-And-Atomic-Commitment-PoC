@@ -1,13 +1,11 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.common.Changes
-import com.github.davenury.common.PeersetId
+import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.MultiplePeersetProtocols
+import com.github.davenury.ucac.common.structure.HttpSubscriber
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -42,6 +40,10 @@ class ApiV2Service(
 
     fun getChanges(peersetId: PeersetId): Changes {
         return Changes.fromHistory(history(peersetId))
+    }
+
+    fun registerSubscriber(peersetId: PeersetId, address: SubscriberAddress) {
+        multiplePeersetProtocols.registerSubscriber(peersetId, HttpSubscriber(address.address))
     }
 
     fun getLastChange(peersetId: PeersetId): Change? =

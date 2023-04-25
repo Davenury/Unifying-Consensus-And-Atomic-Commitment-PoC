@@ -9,6 +9,7 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
+import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
@@ -25,6 +26,7 @@ class PeersetProtocols(
     val peerResolver: PeerResolver,
     signalPublisher: SignalPublisher,
     changeNotifier: ChangeNotifier,
+    subscribers: Subscribers?,
 ) : AutoCloseable {
     private val persistence = PersistenceFactory().createForConfig(config)
     val history = MeteredHistory(PersistentHistory(persistence))
@@ -57,6 +59,7 @@ class PeersetProtocols(
             signalPublisher,
             RaftProtocolClientImpl(peersetId),
             transactionBlocker,
+            subscribers,
         )
 
         twoPC = TwoPC(

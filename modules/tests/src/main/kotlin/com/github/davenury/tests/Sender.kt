@@ -31,10 +31,11 @@ class HttpSender(
             logger.info("Received: ${response.execute().status.value}")
             ChangeState.ACCEPTED
         } catch (e: Exception) {
-            logger.error("Couldn't execute change with address: $address")
+            logger.error("Couldn't execute change with address: $address", e)
             when (e) {
                 is ClientRequestException -> Metrics.reportUnsuccessfulChange(e.response.status.value)
                 is ServerResponseException -> Metrics.reportUnsuccessfulChange(e.response.status.value)
+                else -> throw e
             }
             ChangeState.REJECTED
         }

@@ -5,6 +5,8 @@ import com.github.davenury.common.UnknownPeersetException
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.common.structure.Subscriber
+import com.github.davenury.ucac.common.structure.Subscribers
 
 /**
  * @author Kamil Jarosz
@@ -13,7 +15,8 @@ class MultiplePeersetProtocols(
     config: Config,
     peerResolver: PeerResolver,
     signalPublisher: SignalPublisher,
-    changeNotifier: ChangeNotifier
+    changeNotifier: ChangeNotifier,
+    private val subscribers: Map<PeersetId, Subscribers>
 ) {
     val protocols: Map<PeersetId, PeersetProtocols>
 
@@ -25,6 +28,7 @@ class MultiplePeersetProtocols(
                 peerResolver,
                 signalPublisher,
                 changeNotifier,
+                subscribers[peersetId]
             )
         }.associateBy { it.peersetId }
     }
@@ -35,6 +39,10 @@ class MultiplePeersetProtocols(
 
     fun getHistories(): Map<PeersetId, History> {
         return protocols.mapValues { it.value.history }
+    }
+
+    fun registerSubscriber(peersetId: PeersetId, subscriber: Subscriber) {
+        subscribers[peersetId]?.registerSubscriber(subscriber)
     }
 
     fun close() {

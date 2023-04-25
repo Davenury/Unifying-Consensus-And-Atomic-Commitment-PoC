@@ -13,6 +13,7 @@ import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.raft.domain.*
 import com.github.davenury.ucac.utils.MdcProvider
 import com.zopa.ktor.opentracing.launchTraced
@@ -46,7 +47,8 @@ class RaftConsensusProtocolImpl(
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
     private val transactionBlocker: TransactionBlocker,
     private val isMetricTest: Boolean,
-    private val maxChangesPerMessage: Int
+    private val maxChangesPerMessage: Int,
+    private val subscribers: Subscribers?,
 ) : RaftConsensusProtocol, SignalSubject {
 
     constructor(
@@ -58,6 +60,7 @@ class RaftConsensusProtocolImpl(
         signalPublisher: SignalPublisher = SignalPublisher(emptyMap(), peerResolver),
         protocolClient: RaftProtocolClient,
         transactionBlocker: TransactionBlocker,
+        subscribers: Subscribers?,
     ) : this(
         peersetId,
         history,
@@ -69,7 +72,8 @@ class RaftConsensusProtocolImpl(
         heartbeatDelay = config.raft.leaderTimeout,
         transactionBlocker = transactionBlocker,
         config.metricTest,
-        config.raft.maxChangesPerMessage
+        config.raft.maxChangesPerMessage,
+        subscribers
     )
 
     private val mdcProvider = MdcProvider(mapOf("peerset" to peersetId.toString()))
@@ -160,9 +164,8 @@ class RaftConsensusProtocolImpl(
             executorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
         }
 
-        logger.info(
-            "I have been selected as a leader (in term $currentTerm)"
-        )
+        logger.info("I have been selected as a leader (in term $currentTerm)")
+        subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
 
         peerToNextIndex.keys.forEach {
             peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
@@ -194,7 +197,7 @@ class RaftConsensusProtocolImpl(
             if (amILeader()) stopBeingLeader(iteration)
 
             val lastEntryId =
-                state.proposedEntries.find { it.changeId == transactionBlocker.getChangeId() }?.entry?.getId()
+                state.proposedEntries.lastOrNull()?.entry?.getId()
                     ?: state.lastApplied
 
             val candidateIsOutdated: Boolean = state.isOlderEntryThanLastEntry(lastLogId)
@@ -732,10 +735,10 @@ class RaftConsensusProtocolImpl(
                         "Proposed change is incompatible. \n CurrentChange: ${
                             history.getCurrentEntryId()
                         } \n Change.parentId: ${
-                            updatedChange.toHistoryEntry(peersetId).getParentId()
+                            entry.getParentId()
                         }"
                     )
-                    result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                    result.complete(ChangeResult(ChangeResult.Status.CONFLICT, detailedMessage = "Change incompatible", currentEntryId = history.getCurrentEntryId()))
                     transactionBlocker.release(acquisition)
                     this.setTag("result", "conflict")
                     this.finish()
