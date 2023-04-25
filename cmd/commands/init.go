@@ -172,6 +172,9 @@ func DoInit(namespace string, createNamespace bool) {
 				"remoteWriteUrl": fmt.Sprintf("http://victoria-victoria-metrics-single-server.%s:8428/api/v1/write", namespace),
 			},
 			"reportingEnabled": false,
+			"global_overrides": map[string]interface{}{
+				"max_traces_per_user": 0,
+			},
 		},
 	}
 
