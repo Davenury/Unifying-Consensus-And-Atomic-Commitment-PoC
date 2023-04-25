@@ -26,7 +26,7 @@ class PeersetProtocols(
     val peerResolver: PeerResolver,
     signalPublisher: SignalPublisher,
     changeNotifier: ChangeNotifier,
-    subscribers: Subscribers,
+    subscribers: Subscribers?,
 ) : AutoCloseable {
     private val persistence = PersistenceFactory().createForConfig(config)
     val history = MeteredHistory(PersistentHistory(persistence))

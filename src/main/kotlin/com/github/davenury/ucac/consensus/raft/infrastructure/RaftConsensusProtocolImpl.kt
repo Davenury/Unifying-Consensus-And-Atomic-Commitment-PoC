@@ -48,7 +48,7 @@ class RaftConsensusProtocolImpl(
     private val transactionBlocker: TransactionBlocker,
     private val isMetricTest: Boolean,
     private val maxChangesPerMessage: Int,
-    private val subscribers: Subscribers,
+    private val subscribers: Subscribers?,
 ) : RaftConsensusProtocol, SignalSubject {
 
     constructor(
@@ -60,7 +60,7 @@ class RaftConsensusProtocolImpl(
         signalPublisher: SignalPublisher = SignalPublisher(emptyMap(), peerResolver),
         protocolClient: RaftProtocolClient,
         transactionBlocker: TransactionBlocker,
-        subscribers: Subscribers,
+        subscribers: Subscribers?,
     ) : this(
         peersetId,
         history,
@@ -165,7 +165,7 @@ class RaftConsensusProtocolImpl(
         }
 
         logger.info("I have been selected as a leader (in term $currentTerm)")
-        subscribers.notifyAboutConsensusLeaderChange(peerId, peersetId)
+        subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
 
         peerToNextIndex.keys.forEach {
             peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))

@@ -28,7 +28,7 @@ class MultiplePeersetProtocols(
                 peerResolver,
                 signalPublisher,
                 changeNotifier,
-                subscribers[peersetId]!!
+                subscribers[peersetId]
             )
         }.associateBy { it.peersetId }
     }
