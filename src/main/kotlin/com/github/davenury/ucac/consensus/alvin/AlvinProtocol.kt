@@ -282,7 +282,7 @@ class AlvinProtocol(
             protocolClient.sendProposal(peerAddress, AlvinPropose(peerId, entry.toDto()))
         }
         val responses: List<AlvinAckPropose> =
-            waitForQuorom(historyEntry, jobs, proposeChannel, AlvinStatus.PENDING)
+            waitForQuorum(historyEntry, jobs, proposeChannel, AlvinStatus.PENDING)
 
         val newPos = responses.maxOf { it.newPos }
         val newDeps = responses.flatMap { it.newDeps }.map { HistoryEntry.deserialize(it) }
@@ -316,7 +316,7 @@ class AlvinProtocol(
             change = Change.fromHistoryEntry(historyEntry)
         )
 
-        val newResponses = waitForQuorom(historyEntry, jobs, acceptChannel, AlvinStatus.PENDING)
+        val newResponses = waitForQuorum(historyEntry, jobs, acceptChannel, AlvinStatus.PENDING)
 
         val newDeps = newResponses.flatMap { it.newDeps }.map { HistoryEntry.deserialize(it) }
 
@@ -361,7 +361,7 @@ class AlvinProtocol(
             )
         }
 
-        val responses = waitForQuorom(entry.entry, jobs, promiseChannel, AlvinStatus.UNKNOWN, includeMyself = false)
+        val responses = waitForQuorum(entry.entry, jobs, promiseChannel, AlvinStatus.UNKNOWN, includeMyself = false)
 
         val newDeps = responses
             .filter { it.entry != null }
@@ -473,15 +473,15 @@ class AlvinProtocol(
             }
         }
 
-    private suspend fun <A> waitForQuorom(
+    private suspend fun <A> waitForQuorum(
         historyEntry: HistoryEntry,
         jobs: List<Job>,
         channel: Channel<RequestResult<A>>,
         status: AlvinStatus,
         includeMyself: Boolean = true
-    ): List<A> = waitForQuorom<A>(historyEntry.getId(), jobs, channel, status, includeMyself)
+    ): List<A> = waitForQuorum<A>(historyEntry.getId(), jobs, channel, status, includeMyself)
 
-    private suspend fun <A> waitForQuorom(
+    private suspend fun <A> waitForQuorum(
         entryId: String,
         jobs: List<Job>,
         channel: Channel<RequestResult<A>>,

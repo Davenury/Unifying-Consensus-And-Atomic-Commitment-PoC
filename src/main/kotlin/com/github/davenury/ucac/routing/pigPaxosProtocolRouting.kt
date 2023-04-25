@@ -20,7 +20,6 @@ fun Application.pigPaxosProtocolRouting(multiplePeersetProtocols: MultiplePeerse
         return multiplePeersetProtocols.forPeerset(this.peersetId()).consensusProtocol as PigPaxosProtocol
     }
     routing {
-        // głosujemy na leadera
         post("/pigpaxos/propose") {
             val message: PaxosPropose = call.receive()
             val response = call.consensus().handlePropose(message)

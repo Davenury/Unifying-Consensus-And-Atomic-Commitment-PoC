@@ -53,9 +53,9 @@ class GPACProtocolSpec {
 
     @Test
     fun `should return elected you, when ballot number is lower than proposed`(): Unit = runBlocking {
-        every { runBlocking { transactionBlockerMock.getAcquisition() } } returns null
-        every { runBlocking { transactionBlockerMock.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, change.id)) } } just Runs
-        every { runBlocking { transactionBlockerMock.tryRelease(TransactionAcquisition(ProtocolName.GPAC, change.id)) } }returns true
+        coEvery {  transactionBlockerMock.getAcquisition() }  returns null
+        coEvery { transactionBlockerMock.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, change.id)) }  just Runs
+        coEvery { transactionBlockerMock.tryRelease(TransactionAcquisition(ProtocolName.GPAC, change.id)) } returns true
         every { transactionBlockerMock.release(TransactionAcquisition(ProtocolName.GPAC, change.id)) }  just Runs
 
         val message = ElectMe(100000, change)
@@ -70,9 +70,9 @@ class GPACProtocolSpec {
 
     @Test
     fun `should throw NotElectingYou when ballot number is higher than proposed`(): Unit = runBlocking {
-        every { runBlocking { transactionBlockerMock.getAcquisition() } } returns null
-        every { runBlocking { transactionBlockerMock.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, change.id)) } } just Runs
-        every { runBlocking { transactionBlockerMock.tryRelease(TransactionAcquisition(ProtocolName.GPAC, change.id)) }} returns true
+        coEvery { transactionBlockerMock.getAcquisition() }  returns null
+        coEvery { transactionBlockerMock.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, change.id)) }  just Runs
+        coEvery { transactionBlockerMock.tryRelease(TransactionAcquisition(ProtocolName.GPAC, change.id)) } returns true
         every { transactionBlockerMock.release(TransactionAcquisition(ProtocolName.GPAC, change.id)) }  just Runs
 
         // -1 is not possible value according to protocol, but extending protocol class
@@ -86,9 +86,9 @@ class GPACProtocolSpec {
 
     @Test
     fun `should return elected you with commit init val, when history can be built`(): Unit = runBlocking {
-        every { runBlocking { transactionBlockerMock.getAcquisition() } } returns null
-        every { runBlocking { transactionBlockerMock.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, change.id)) } } just Runs
-        every { runBlocking { transactionBlockerMock.tryRelease(TransactionAcquisition(ProtocolName.GPAC, change.id)) }} returns true
+        coEvery { transactionBlockerMock.getAcquisition() } returns null
+        coEvery { transactionBlockerMock.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, change.id)) }  just Runs
+        coEvery { transactionBlockerMock.tryRelease(TransactionAcquisition(ProtocolName.GPAC, change.id)) } returns true
         every { transactionBlockerMock.release(TransactionAcquisition(ProtocolName.GPAC, change.id)) }  just Runs
 
         val message = ElectMe(3, change)
@@ -101,9 +101,9 @@ class GPACProtocolSpec {
 
     @Test
     fun `should change ballot number and return agreed, when asked to ft-agree on change`(): Unit = runBlocking {
-        every { runBlocking { transactionBlockerMock.getAcquisition() } } returns null
-        every { runBlocking { transactionBlockerMock.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, change.id)) } } just Runs
-        every { runBlocking { transactionBlockerMock.tryRelease(TransactionAcquisition(ProtocolName.GPAC, change.id)) }} returns true
+        coEvery { transactionBlockerMock.getAcquisition() }  returns null
+        coEvery { transactionBlockerMock.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, change.id)) } just Runs
+        coEvery { transactionBlockerMock.tryRelease(TransactionAcquisition(ProtocolName.GPAC, change.id)) } returns true
         every { transactionBlockerMock.release(TransactionAcquisition(ProtocolName.GPAC, change.id)) }  just Runs
         coEvery { timerMock.startCounting(action = any()) } just Runs
         every { timerMock.cancelCounting() } just Runs
@@ -128,7 +128,7 @@ class GPACProtocolSpec {
 
     @Test
     fun `should apply change`(): Unit = runBlocking {
-        every { runBlocking { transactionBlockerMock.getAcquisition() } } returns null
+        coEvery { transactionBlockerMock.getAcquisition() }  returns null
         every { transactionBlockerMock.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, change.id)) } just Runs
         every {  transactionBlockerMock.tryRelease(TransactionAcquisition(ProtocolName.GPAC, change.id)) } returns true
         every {
@@ -152,7 +152,7 @@ class GPACProtocolSpec {
     @Test
     fun `should not apply change when acceptVal is abort`(): Unit = runBlocking {
 
-        every { runBlocking { transactionBlockerMock.getAcquisition() } } returns null
+        coEvery { transactionBlockerMock.getAcquisition() }  returns null
         every {  transactionBlockerMock.acquireReentrant(TransactionAcquisition(ProtocolName.GPAC, change.id)) } just Runs
         every {  transactionBlockerMock.tryRelease(TransactionAcquisition(ProtocolName.GPAC, change.id)) } returns true
         every {

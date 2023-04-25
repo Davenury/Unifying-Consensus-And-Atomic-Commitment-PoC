@@ -300,7 +300,7 @@ class ApplicationUcac(
             "raft" -> raftProtocolRouting(multiplePeersetProtocols)
             "alvin" -> alvinProtocolRouting(multiplePeersetProtocols)
             "pigpaxos" -> pigPaxosProtocolRouting(multiplePeersetProtocols)
-            else -> throw RuntimeException("Unknown consensus type ${config.consensus.name}")
+            else -> throw IllegalStateException("Unknown consensus type ${config.consensus.name}")
         }
         twoPCRouting(multiplePeersetProtocols)
 

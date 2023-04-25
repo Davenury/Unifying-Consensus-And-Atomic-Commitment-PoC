@@ -10,13 +10,6 @@ import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.consensus.ConsensusProtocol
-import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
-import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
-import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocol
-import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocolClientImpl
-import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocolImpl
-import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
-import com.github.davenury.ucac.consensus.raft.RaftProtocolClientImpl
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import java.util.concurrent.Executors
@@ -32,7 +25,7 @@ class PeersetProtocols(
     changeNotifier: ChangeNotifier,
 ) : AutoCloseable {
     private val persistence = PersistenceFactory().createForConfig(config)
-    val history = PersistentHistory(persistence)
+    val history = MeteredHistory(PersistentHistory(persistence))
     private val transactionBlocker = PersistentTransactionBlocker(persistence)
 
     private val ctx: ExecutorCoroutineDispatcher =
@@ -53,47 +46,16 @@ class PeersetProtocols(
             peerResolver,
         )
 
-        consensusProtocol =  when (config.consensus.name) {
-
-            "raft" -> RaftConsensusProtocolImpl(
-                peersetId,
-                history,
+        consensusProtocol =
+            ConsensusProtocol.createConsensusProtocol(
                 config,
-                ctx,
-                peerResolver,
-                signalPublisher,
-                RaftProtocolClientImpl(peersetId),
-                transactionBlocker = transactionBlocker,
-            )
-
-            "alvin" -> AlvinProtocol(
                 peersetId,
                 history,
                 ctx,
+                transactionBlocker,
                 peerResolver,
-                signalPublisher,
-                AlvinProtocolClientImpl(peersetId),
-                heartbeatTimeout = config.consensus.heartbeatTimeout,
-                heartbeatDelay = config.consensus.leaderTimeout,
-                transactionBlocker = transactionBlocker,
-                config.metricTest,
+                signalPublisher
             )
-
-            "pigpaxos" -> PigPaxosProtocolImpl(
-                peersetId,
-                history,
-                ctx,
-                peerResolver,
-                signalPublisher,
-                PigPaxosProtocolClientImpl(peersetId),
-                heartbeatTimeout = config.consensus.heartbeatTimeout,
-                heartbeatDelay = config.consensus.leaderTimeout,
-                transactionBlocker = transactionBlocker,
-                config.metricTest,
-            )
-
-            else -> throw RuntimeException("Unknow consensus type ${config.consensus.name}")
-        }
 
         twoPC = TwoPC(
             peersetId,

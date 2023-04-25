@@ -29,7 +29,6 @@ fun Application.alvinProtocolRouting(multiplePeersetProtocols: MultiplePeersetPr
             call.respond(response)
         }
 
-        // kiedy nie jesteś leaderem to prosisz leadera o zmianę
         post("/alvin/stable") {
             val message: AlvinStable = call.receive()
             val result = call.consensus().handleStable(message)
@@ -55,7 +54,6 @@ fun Application.alvinProtocolRouting(multiplePeersetProtocols: MultiplePeersetPr
         }
 
 
-//      Endpoints for tests
         get("/alvin/proposed_changes") {
             call.respond(Changes(call.consensus().getProposedChanges()))
         }

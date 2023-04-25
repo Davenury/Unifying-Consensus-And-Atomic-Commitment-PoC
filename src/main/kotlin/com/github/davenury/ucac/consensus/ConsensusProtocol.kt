@@ -3,8 +3,18 @@ package com.github.davenury.ucac.consensus
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.PeerAddress
+import com.github.davenury.common.PeersetId
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.common.txblocker.PersistentTransactionBlocker
+import com.github.davenury.ucac.Config
+import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
+import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocolClientImpl
+import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocolImpl
+import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.consensus.raft.RaftProtocolClientImpl
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import java.util.concurrent.CompletableFuture
 
@@ -26,4 +36,57 @@ interface ConsensusProtocol {
 
     suspend fun getProposedChanges(): List<Change>
     suspend fun getAcceptedChanges(): List<Change>
+
+    companion object {
+        fun createConsensusProtocol(
+            config: Config,
+            peersetId: PeersetId,
+            history: History,
+            ctx: ExecutorCoroutineDispatcher,
+            transactionBlocker: PersistentTransactionBlocker,
+            peerResolver: PeerResolver,
+            signalPublisher: SignalPublisher
+        ): ConsensusProtocol = when (config.consensus.name) {
+
+            "raft" -> RaftConsensusProtocolImpl(
+                peersetId,
+                history,
+                config,
+                ctx,
+                peerResolver,
+                signalPublisher,
+                RaftProtocolClientImpl(peersetId),
+                transactionBlocker = transactionBlocker,
+            )
+
+            "alvin" -> AlvinProtocol(
+                peersetId,
+                history,
+                ctx,
+                peerResolver,
+                signalPublisher,
+                AlvinProtocolClientImpl(peersetId),
+                heartbeatTimeout = config.consensus.heartbeatTimeout,
+                heartbeatDelay = config.consensus.leaderTimeout,
+                transactionBlocker = transactionBlocker,
+                config.metricTest,
+            )
+
+            "pigpaxos" -> PigPaxosProtocolImpl(
+                peersetId,
+                history,
+                ctx,
+                peerResolver,
+                signalPublisher,
+                PigPaxosProtocolClientImpl(peersetId),
+                heartbeatTimeout = config.consensus.heartbeatTimeout,
+                heartbeatDelay = config.consensus.leaderTimeout,
+                transactionBlocker = transactionBlocker,
+                config.metricTest,
+            )
+
+            else -> throw IllegalStateException("Unknow consensus type ${config.consensus.name}")
+        }
+    }
+
 }

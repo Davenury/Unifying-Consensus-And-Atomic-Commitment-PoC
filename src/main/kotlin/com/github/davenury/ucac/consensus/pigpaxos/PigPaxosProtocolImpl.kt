@@ -360,7 +360,7 @@ class PigPaxosProtocolImpl(
             responses.find { !it.promised && it.currentRound == round && it.currentLeaderId != globalPeerId }
 
         val newerLeader = responses.find { !it.promised && it.currentLeaderId != null && it.currentRound > round }
-        val votes = responses.filter { it.promised }.also { println("Votes: $it") }.count { it.promised }
+        val votes = responses.filter { it.promised }.count { it.promised }
 
         mutex.withLock {
             when {
