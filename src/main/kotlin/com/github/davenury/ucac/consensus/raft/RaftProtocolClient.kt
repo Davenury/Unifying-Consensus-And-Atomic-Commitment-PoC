@@ -25,11 +25,6 @@ interface RaftProtocolClient {
         message: ConsensusElectMe
     ): List<ConsensusResponse<ConsensusElectedYou?>>
 
-
-    suspend fun sendConsensusHeartbeat(
-        peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>,
-    ): List<ConsensusResponse<ConsensusHeartbeatResponse?>>
-
     suspend fun sendConsensusHeartbeat(
         peer: PeerAddress,
         message: ConsensusHeartbeat,
@@ -52,11 +47,6 @@ class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolCl
             .map { Pair(it, message) }
             .let { sendRequests(it, "raft/request_vote") }
     }
-
-    override suspend fun sendConsensusHeartbeat(
-        peersWithMessage: List<Pair<PeerAddress, ConsensusHeartbeat>>
-    ): List<ConsensusResponse<ConsensusHeartbeatResponse?>> =
-        sendRequests(peersWithMessage, "raft/heartbeat")
 
     override suspend fun sendConsensusHeartbeat(
         peer: PeerAddress, message: ConsensusHeartbeat,
