@@ -31,7 +31,6 @@ import java.time.Duration
 import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 
-@Disabled("Temporary")
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
 class SinglePeersetSpec : IntegrationTestBase() {
@@ -147,7 +146,6 @@ class SinglePeersetSpec : IntegrationTestBase() {
             }
         }
 
-    @Disabled("Temporary")
     @Test
     fun `should be able to execute transaction even if leader fails after first ft-agree`() {
         runBlocking {

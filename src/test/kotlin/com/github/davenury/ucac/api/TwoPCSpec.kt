@@ -26,7 +26,6 @@ import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.measureTimeMillis
 
-@Disabled("Temporary")
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
 class TwoPCSpec : IntegrationTestBase() {
@@ -662,6 +661,9 @@ class TwoPCSpec : IntegrationTestBase() {
         val peer4Address = apps.getPeer("peer4").address
 
         logger.info("Sending change between 0 and 1")
+
+
+
         expectCatching {
             executeChange("http://$peer0Address/v2/change/sync?peerset=peerset0&use_2pc=true", change01)
         }.isSuccess()
