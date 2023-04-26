@@ -82,18 +82,7 @@ class PigPaxosProtocolImpl(
                 else listOf()
             val proposedEntries = entryIdPaxosRound.map { it.value.entry }
 
-            if (currentRound == message.paxosRound && votedFor?.id == message.peerId) {
-                votedFor = VotedFor(message.peerId, true)
-                return PaxosPromise(
-                    true,
-                    message.paxosRound,
-                    message.peerId,
-                    committedEntries.serialize(),
-                    proposedEntries.serialize()
-                )
-            }
-
-            if (currentRound >= message.paxosRound) {
+            if (currentRound > message.paxosRound || (currentRound==message.paxosRound && votedFor?.id != message.peerId)) {
                 return@withLock PaxosPromise(false, currentRound, votedFor?.id, listOf(), listOf())
             }
 

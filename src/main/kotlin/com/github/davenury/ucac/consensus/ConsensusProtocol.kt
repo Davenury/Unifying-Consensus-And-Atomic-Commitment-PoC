@@ -18,6 +18,9 @@ import com.github.davenury.ucac.consensus.raft.RaftProtocolClientImpl
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import java.util.concurrent.CompletableFuture
 
+//Add tests for PigPaxos and Alvin where for some time there are no quorum and then one peer starts responding to verify that it is possible to synchronize state
+
+
 interface ConsensusProtocol {
     suspend fun begin()
     fun stop()
