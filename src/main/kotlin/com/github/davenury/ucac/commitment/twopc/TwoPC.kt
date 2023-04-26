@@ -6,6 +6,7 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
+import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.zopa.ktor.opentracing.span
 import io.micrometer.core.instrument.Tag
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -117,15 +118,16 @@ class TwoPC(
             peersetId,
             history.getCurrentEntryId(),
         )
-        val result = consensusProtocol.proposeChangeAsync(changeWithProperParentId, true).await()
+        val result = if (consensusProtocol.amILeader()) {
+            consensusProtocol.proposeChangeAsync(changeWithProperParentId).await()
+        } else {
+            consensusProtocol.getLeaderId()?.let {
+                throw ImNotLeaderException(it, peersetId)
+            } ?: throw TwoPCHandleException("TwoPCChange didn't apply change")
+        }
 
-        when (result.status) {
-            ChangeResult.Status.SUCCESS -> {}
-            ChangeResult.Status.REDIRECT -> {
-                throw ImNotLeaderException(result.currentConsensusLeader!!, peersetId)
-            }
-
-            else -> throw TwoPCHandleException("TwoPCChange didn't apply change")
+        if (result.status != ChangeResult.Status.SUCCESS) {
+            throw TwoPCHandleException("TwoPCChange didn't apply change")
         }
 
         changeTimer.startCounting {
@@ -376,10 +378,9 @@ class TwoPC(
     private suspend fun checkChangeAndProposeToConsensus(
         change: Change,
         originalChangeId: String,
-        redirectIfNotConsensusLeader: Boolean = false
     ): CompletableFuture<ChangeResult> = change
         .also { checkChangeCompatibility(it, originalChangeId) }
-        .let { consensusProtocol.proposeChangeAsync(change, redirectIfNotConsensusLeader) }
+        .let { consensusProtocol.proposeChangeAsync(change) }
 
 
     private fun changeConflict(changeId: String, exceptionText: String) =

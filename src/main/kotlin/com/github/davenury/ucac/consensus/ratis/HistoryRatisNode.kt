@@ -2,6 +2,7 @@ package com.github.davenury.ucac.consensus.ratis
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
+import com.github.davenury.common.PeerId
 import com.github.davenury.common.PeersetId
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.common.PeerResolver
@@ -16,7 +17,7 @@ import java.util.concurrent.CompletableFuture
 class HistoryRatisNode(
     peerId: Int,
     private val peersetId: PeersetId,
-    peerResolver: PeerResolver,
+    private val peerResolver: PeerResolver,
     private val history: History,
 ) :
     RatisNode(
@@ -30,7 +31,11 @@ class HistoryRatisNode(
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
 
-    override suspend fun proposeChangeAsync(change: Change, redirectIfNotLeader: Boolean): CompletableFuture<ChangeResult> {
+    override fun amILeader(): Boolean = true
+
+    override fun getLeaderId(): PeerId? = peerResolver.currentPeer()
+
+    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
         val cf = CompletableFuture<ChangeResult>()
         val changeId = change.id
         changeIdToCompletableFuture[changeId] = cf

@@ -32,11 +32,6 @@ data class ChangeResult(
         /**
          * Change was applied with ABORT result
          */
-        ABORTED,
-
-        /**
-         * Change was not applied because I'm not the consensus leader
-         */
-        REDIRECT;
+        ABORTED;
     }
 }

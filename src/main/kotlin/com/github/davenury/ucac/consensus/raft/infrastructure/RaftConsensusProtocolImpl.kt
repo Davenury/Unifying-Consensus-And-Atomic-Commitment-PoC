@@ -838,7 +838,6 @@ class RaftConsensusProtocolImpl(
     //   TODO: only one change can be proposed at the same time
     override suspend fun proposeChangeAsync(
         change: Change,
-        redirectIfNotLeader: Boolean,
     ): CompletableFuture<ChangeResult> = span("Raft.proposeChangeAsync") {
         this.setTag("changeId", change.id)
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
@@ -847,16 +846,6 @@ class RaftConsensusProtocolImpl(
             amILeader() -> {
                 logger.info("Proposing change: $change")
                 proposeChangeToLedger(result, change)
-            }
-
-            redirectIfNotLeader && votedFor?.elected == true -> {
-                logger.info("I'm no leader but there's a leader, so I'm sending redirect")
-                result.complete(ChangeResult(ChangeResult.Status.REDIRECT, currentConsensusLeader = votedFor!!.id))
-            }
-
-            redirectIfNotLeader && votedFor?.elected != true -> {
-                logger.info("I'm no leader but the leader has not been chosen yet, so I'm going to reject the change")
-                result.complete(ChangeResult(ChangeResult.Status.REJECTED))
             }
 
             votedFor?.elected == true -> {
@@ -928,7 +917,7 @@ class RaftConsensusProtocolImpl(
 
     fun isMoreThanHalf(value: Int): Boolean = (value + 1) * 2 > otherConsensusPeers().size + 1
 
-    private fun amILeader(): Boolean = role == RaftRole.Leader
+    override fun amILeader(): Boolean = role == RaftRole.Leader
 
     private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout.dividedBy(2), ctx)
 
