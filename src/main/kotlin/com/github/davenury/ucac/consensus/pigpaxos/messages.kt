@@ -16,7 +16,7 @@ data class PaxosPromise(
 
 data class PaxosAccept(val entry: String, val paxosRound: Int, val proposer: PeerId)
 
-data class PaxosAccepted(val accepted: Boolean, override val currentRound: Int, override val currentLeaderId: PeerId?) :
+data class PaxosAccepted(val accepted: Boolean, override val currentRound: Int, override val currentLeaderId: PeerId?, val isTransactionBlocked: Boolean = false,) :
     PaxosResponse(accepted, currentRound, currentLeaderId)
 
 data class PaxosCommit(val paxosResult: PaxosResult, val entry: String, val paxosRound: Int, val proposer: PeerId)

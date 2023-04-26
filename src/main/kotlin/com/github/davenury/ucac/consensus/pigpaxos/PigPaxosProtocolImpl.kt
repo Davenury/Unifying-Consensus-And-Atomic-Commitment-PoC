@@ -13,7 +13,6 @@ import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.consensus.VotedFor
 import com.github.davenury.ucac.consensus.raft.ChangeToBePropagatedToLeader
-import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
 import com.zopa.ktor.opentracing.span
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -68,7 +67,7 @@ class PigPaxosProtocolImpl(
 
     override suspend fun begin() {
         failureDetector.startCounting {
-            if(votedFor?.elected != true) becomeLeader("No leader was elected")
+            if (votedFor?.elected != true) becomeLeader("No leader was elected")
         }
     }
 
@@ -81,7 +80,7 @@ class PigPaxosProtocolImpl(
                 else listOf()
             val proposedEntries = entryIdPaxosRound.map { it.value.entry }
 
-            if (currentRound > message.paxosRound || (currentRound==message.paxosRound && votedFor?.id != message.peerId)) {
+            if (currentRound > message.paxosRound || (currentRound == message.paxosRound && votedFor?.id != message.peerId)) {
                 return@withLock PaxosPromise(false, currentRound, votedFor?.id, listOf(), listOf())
             }
 
@@ -112,7 +111,15 @@ class PigPaxosProtocolImpl(
                 return@withLock PaxosAccepted(false, currentRound, votedFor?.id)
             }
 
-            if(!history.isEntryCompatible(entry)){
+            val transactionAcquisition = TransactionAcquisition(ProtocolName.CONSENSUS, changeId)
+            val isTransactionBlockerAcquired = transactionBlocker.tryAcquireReentrant(transactionAcquisition)
+
+            if (!isTransactionBlockerAcquired) {
+                return@withLock PaxosAccepted(false, currentRound, votedFor?.id, isTransactionBlocked = true)
+            }
+
+
+            if (!history.isEntryCompatible(entry)) {
                 logger.info("Reject PaxosAccept, because entry is not compatible, currentEntryId: ${history.getCurrentEntryId()}, entryParentId: ${entry.getParentId()}")
                 return@withLock PaxosAccepted(false, currentRound, votedFor?.id)
             }
@@ -128,7 +135,8 @@ class PigPaxosProtocolImpl(
 
             if (!history.containsEntry(entry.getId())) {
                 entryIdPaxosRound[entry.getId()] = PaxosRound(message.paxosRound, entry, message.proposer)
-                transactionBlocker.tryAcquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
+            } else {
+                transactionBlocker.tryRelease(transactionAcquisition)
             }
 
             failureDetector.cancelCounting()
@@ -285,7 +293,7 @@ class PigPaxosProtocolImpl(
         span("PigPaxos.sendRequestToLeader") {
             with(CoroutineScope(leaderRequestExecutorService)) {
                 launch(MDCContext()) {
-                    if(amIALeader()) return@launch proposeChangeToLedger(cf, change)
+                    if (amIALeader()) return@launch proposeChangeToLedger(cf, change)
 
                     var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
@@ -305,7 +313,7 @@ class PigPaxosProtocolImpl(
                             null
                         }
                         retries++
-                        if(result == null) delay(heartbeatDelay.toMillis())
+                        if (result == null) delay(heartbeatDelay.toMillis())
                     }
 
                     if (result == null) {
@@ -320,109 +328,109 @@ class PigPaxosProtocolImpl(
                     }
 
 
-
                 }
             }
         }
 
-    private suspend fun becomeLeader(reason: String, round: Int = currentRound+1): Unit = span("PigPaxos.becomeLeader") {
+    private suspend fun becomeLeader(reason: String, round: Int = currentRound + 1): Unit =
+        span("PigPaxos.becomeLeader") {
 
-        mutex.withLock {
-            if(round <= currentRound) {
-                logger.info("Don't try to become a leader, because someone tried in meantime, propagate chagnes")
-                sendOldChanges()
-                return@span
+            mutex.withLock {
+                if (round <= currentRound) {
+                    logger.info("Don't try to become a leader, because someone tried in meantime, propagate chagnes")
+                    sendOldChanges()
+                    return@span
+                }
+
+                currentRound = round
+                votedFor = VotedFor(globalPeerId)
             }
+            logger.info("Try to become a leader in round: $round, because $reason")
+            signalPublisher.signal(
+                Signal.PigPaxosTryToBecomeLeader,
+                this@PigPaxosProtocolImpl,
+                mapOf(peersetId to otherConsensusPeers())
+            )
 
-            currentRound = round
-            votedFor = VotedFor(globalPeerId)
-        }
-        logger.info("Try to become a leader in round: $round, because $reason")
-        signalPublisher.signal(
-            Signal.PigPaxosTryToBecomeLeader,
-            this@PigPaxosProtocolImpl,
-            mapOf(peersetId to otherConsensusPeers())
-        )
+            val responses: List<PaxosPromise> = protocolClient
+                .sendProposes(otherConsensusPeers(), PaxosPropose(globalPeerId, round, history.getCurrentEntryId()))
+                .mapNotNull { it.message }
 
-        val responses: List<PaxosPromise> = protocolClient
-            .sendProposes(otherConsensusPeers(), PaxosPropose(globalPeerId, round, history.getCurrentEntryId()))
-            .mapNotNull { it.message }
+            val newRound = responses.maxOfOrNull { it.currentRound } ?: currentRound
 
-        val newRound = responses.maxOfOrNull { it.currentRound } ?: currentRound
+            val peerTryingToBecomeLeaderInSameRound =
+                responses.find { !it.promised && it.currentRound == round && it.currentLeaderId != globalPeerId }
 
-        val peerTryingToBecomeLeaderInSameRound =
-            responses.find { !it.promised && it.currentRound == round && it.currentLeaderId != globalPeerId }
+            val newerLeader = responses.find { !it.promised && it.currentLeaderId != null && it.currentRound > round }
+            val votes = responses.filter { it.promised }.count { it.promised }
 
-        val newerLeader = responses.find { !it.promised && it.currentLeaderId != null && it.currentRound > round }
-        val votes = responses.filter { it.promised }.count { it.promised }
-
-        mutex.withLock {
-            when {
-                currentRound > round && votedFor?.elected == true -> {
-                    logger.info("Other peer ${votedFor?.id} become a leader meanwhile myself tried")
-                }
-
-                newerLeader?.currentLeaderId != null && newerLeader.currentRound > round -> {
-                    logger.info("Peer ${newerLeader.currentLeaderId} can be a leader in round: ${newerLeader.currentRound}")
-                    votedFor = VotedFor(newerLeader.currentLeaderId, true)
-                    currentRound = maxOf(newerLeader.currentRound, newRound)
-                }
-
-                newerLeader != null && newerLeader.currentLeaderId == null -> {
-                    logger.info("This is not newest round, retry becoming leader in some time")
-                    currentRound = maxOf(newerLeader.currentRound, newRound)
-                    failureDetector.startCounting {
-                        becomeLeader("Lea")
+            mutex.withLock {
+                when {
+                    currentRound > round && votedFor?.elected == true -> {
+                        logger.info("Other peer ${votedFor?.id} become a leader meanwhile myself tried")
                     }
-                    return
-                }
 
-                peerTryingToBecomeLeaderInSameRound != null -> {
-                    logger.info("Peer ${peerTryingToBecomeLeaderInSameRound.currentLeaderId} tries to become a leader in the same round, retry after some time")
-                    currentRound = maxOf(currentRound, newRound)
-                    failureDetector.startCounting {
-                        becomeLeader("Two peers tried to become a leader in the same time")
+                    newerLeader?.currentLeaderId != null && newerLeader.currentRound > round -> {
+                        logger.info("Peer ${newerLeader.currentLeaderId} can be a leader in round: ${newerLeader.currentRound}")
+                        votedFor = VotedFor(newerLeader.currentLeaderId, true)
+                        currentRound = maxOf(newerLeader.currentRound, newRound)
                     }
-                    return
-                }
 
-                isMoreThanHalf(votes) -> {
-                    logger.info("I have been selected as a leader in round $round")
-                    votedFor = VotedFor(globalPeerId, true)
-                    signalPublisher.signal(
-                        Signal.PigPaxosLeaderElected,
-                        this@PigPaxosProtocolImpl,
-                        mapOf(peersetId to otherConsensusPeers())
-                    )
-                    val committedEntries = responses.flatMap { it.committedEntries.deserialize() }.distinct()
-                    val proposedEntries = responses.flatMap { it.notFinishedEntries.deserialize() }.distinct()
+                    newerLeader != null && newerLeader.currentLeaderId == null -> {
+                        logger.info("This is not newest round, retry becoming leader in some time")
+                        currentRound = maxOf(newerLeader.currentRound, newRound)
+                        failureDetector.startCounting {
+                            becomeLeader("Lea")
+                        }
+                        return
+                    }
 
-                    (committedEntries + proposedEntries).forEach {
-                        val change = Change.fromHistoryEntry(it)!!
-                        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-                        changesToBePropagatedToLeader.add(
-                            ChangeToBePropagatedToLeader(
-                                change,
-                                changeIdToCompletableFuture[change.id]!!
-                            )
+                    peerTryingToBecomeLeaderInSameRound != null -> {
+                        logger.info("Peer ${peerTryingToBecomeLeaderInSameRound.currentLeaderId} tries to become a leader in the same round, retry after some time")
+                        currentRound = maxOf(currentRound, newRound)
+                        failureDetector.startCounting {
+                            becomeLeader("Two peers tried to become a leader in the same time")
+                        }
+                        return
+                    }
+
+                    isMoreThanHalf(votes) -> {
+                        logger.info("I have been selected as a leader in round $round")
+                        votedFor = VotedFor(globalPeerId, true)
+                        signalPublisher.signal(
+                            Signal.PigPaxosLeaderElected,
+                            this@PigPaxosProtocolImpl,
+                            mapOf(peersetId to otherConsensusPeers())
                         )
+                        val committedEntries = responses.flatMap { it.committedEntries.deserialize() }.distinct()
+                        val proposedEntries = responses.flatMap { it.notFinishedEntries.deserialize() }.distinct()
+
+                        (committedEntries + proposedEntries).forEach {
+                            val change = Change.fromHistoryEntry(it)!!
+                            changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+                            changesToBePropagatedToLeader.add(
+                                ChangeToBePropagatedToLeader(
+                                    change,
+                                    changeIdToCompletableFuture[change.id]!!
+                                )
+                            )
+                        }
+
+
                     }
 
-
-                }
-
-                else -> {
-                    logger.info("I don't gather quorum votes, retry after some time")
-                    failureDetector.startCounting {
-                        becomeLeader("Leader wasn't elected, retry after some time")
+                    else -> {
+                        logger.info("I don't gather quorum votes, retry after some time")
+                        failureDetector.startCounting {
+                            becomeLeader("Leader wasn't elected, retry after some time")
+                        }
+                        return
                     }
-                    return
                 }
+
+                tryPropagatingChangesToLeader()
             }
-
-            tryPropagatingChangesToLeader()
         }
-    }
 
     private suspend fun acceptPhase(entry: HistoryEntry) {
         var result: PaxosResult? = null
@@ -537,7 +545,7 @@ class PigPaxosProtocolImpl(
     }
 
     private suspend fun sendAccepts(entry: HistoryEntry): PaxosResult? {
-        val jobs = scheduleMessages(acceptedChannel) {
+        val jobs = scheduleAccepts {
             protocolClient.sendAccept(it, PaxosAccept(entry.serialize(), currentRound, votedFor?.id!!))
         }
 
@@ -557,16 +565,14 @@ class PigPaxosProtocolImpl(
         }
     }
 
-    private suspend fun <A> scheduleMessages(
-        channel: Channel<A?>,
-        sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<A?>
-    ) =
+    private suspend fun scheduleAccepts(sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<PaxosAccepted?>) =
         (0 until otherConsensusPeers().size).map {
             with(CoroutineScope(executorService)) {
                 launch(MDCContext()) {
                     val peerAddress: PeerAddress = otherConsensusPeers()[it]
-                    val response: ConsensusResponse<A?> = sendMessage(peerAddress)
-                    channel.send(response.message)
+                    val response: ConsensusResponse<PaxosAccepted?> = sendMessage(peerAddress)
+                    if (response.message?.isTransactionBlocked == true) acceptedChannel.send(null)
+                    else acceptedChannel.send(response.message)
                 }
             }
         }
@@ -590,7 +596,7 @@ class PigPaxosProtocolImpl(
 
                 isNotValidLeader(response, round) && round >= 0 -> {
                     mutex.withLock {
-                        votedFor = VotedFor(response.currentLeaderId!!,true)
+                        votedFor = VotedFor(response.currentLeaderId!!, true)
                         currentRound = response.currentRound
                     }
 
@@ -612,7 +618,12 @@ class PigPaxosProtocolImpl(
         oldEntries.forEach {
             val change = Change.fromHistoryEntry(it.entry)!!
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-            changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, changeIdToCompletableFuture[change.id]!!))
+            changesToBePropagatedToLeader.add(
+                ChangeToBePropagatedToLeader(
+                    change,
+                    changeIdToCompletableFuture[change.id]!!
+                )
+            )
             entryIdPaxosRound.remove(it.entry.getId())
         }
         if (transactionBlocker.isAcquired()) transactionBlocker.release(
