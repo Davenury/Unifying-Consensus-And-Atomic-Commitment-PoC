@@ -5,6 +5,8 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
+import com.github.davenury.ucac.commitment.gpac.Accept
+import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocol
 import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.IntegrationTestBase
@@ -19,6 +21,7 @@ import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.fail
 import org.slf4j.LoggerFactory
 import strikt.api.expect
 import strikt.api.expectCatching
@@ -52,7 +55,6 @@ class PigPaxosSpec : IntegrationTestBase() {
         listOf(leaderElectionPhaser, changePhaser).forEach { it.register() }
 
         val peerLeaderElected = SignalListener {
-            expectThat(changePhaser.phase).isEqualTo(0)
             logger.info("Arrived leader election ${it.subject.getPeerName()}")
             leaderElectionPhaser.arrive()
         }
@@ -303,7 +305,6 @@ class PigPaxosSpec : IntegrationTestBase() {
         val election2Phaser = Phaser(1)
         peers -= 1
         val changePhaser = Phaser(4)
-        var shouldElection2Starts = false
         listOf(election1Phaser, election2Phaser, changePhaser).forEach { it.register() }
         var firstLeader = true
         val proposedPeers = ConcurrentHashMap<String, Boolean>()
@@ -320,7 +321,7 @@ class PigPaxosSpec : IntegrationTestBase() {
 
         val peerLeaderElected =
             SignalListener {
-                when (election1Phaser.phase) {
+                when (failurePhaser.phase) {
                     0 -> {
                         logger.info("Arrived at election 1 ${it.subject.getPeerName()}")
                         election1Phaser.arrive()
@@ -697,7 +698,7 @@ class PigPaxosSpec : IntegrationTestBase() {
 
     @Test
     fun `should synchronize on history if it was added outside of paxos`(): Unit = runBlocking {
-        val phaserGPACPeer = Phaser(3)
+        val phaserGPACPeer = Phaser(1)
         val phaserPigPaxosPeers = Phaser(5)
         val leaderElectedPhaser = Phaser(1)
 
@@ -725,25 +726,64 @@ class PigPaxosSpec : IntegrationTestBase() {
         val peerGPACAction = SignalListener {
             phaserGPACPeer.arrive()
         }
-        val pigPaxosPeersAction = SignalListener {
-            logger.info("Arrived: ${it.change}")
-            if (it.change == change2) phaserPigPaxosPeers.arrive()
-        }
+
         val leaderElectedAction = SignalListener { leaderElectedPhaser.arrive() }
+
+        val firstLeaderAction = SignalListener { signalData ->
+            val url = "http://${signalData.peerResolver.resolve(peerId(1)).address}/apply?peerset=peerset0"
+            runBlocking {
+                testHttpClient.post<HttpResponse>(url) {
+                    contentType(ContentType.Application.Json)
+                    accept(ContentType.Application.Json)
+                    body = Apply(
+                        signalData.transaction!!.ballotNumber,
+                        true,
+                        Accept.COMMIT,
+                        signalData.change!!
+                    )
+                }.also {
+                    logger.info("Got response ${it.status.value}")
+                }
+            }
+            throw RuntimeException("Stop leader after apply")
+        }
+
+        val consensusPeersAction = SignalListener {
+            logger.info("Arrived: ${it.change}")
+            if(it.change == change2) phaserPigPaxosPeers.arrive()
+        }
+
+        val firstPeerSignals = mapOf(
+            Signal.BeforeSendingApply to firstLeaderAction,
+            Signal.PigPaxosLeaderElected to leaderElectedAction,
+            Signal.PigPaxosChangeCommitted to consensusPeersAction,
+            Signal.OnHandlingElectBegin to SignalListener {
+                if (isSecondGPAC.get()) {
+                    throw Exception("Ignore restarting GPAC")
+                }
+            }
+        )
 
         val peerSignals =
             mapOf(
-                Signal.OnHandlingApplyCommitted to peerGPACAction,
                 Signal.PigPaxosLeaderElected to leaderElectedAction,
-                Signal.PigPaxosChangeCommitted to pigPaxosPeersAction,
+                Signal.PigPaxosChangeCommitted to consensusPeersAction,
+                Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") }
             )
 
-        val peerConsenusSignals =
+        val peerPaxosSignals =
             mapOf(
                 Signal.PigPaxosLeaderElected to leaderElectedAction,
-                Signal.PigPaxosChangeCommitted to pigPaxosPeersAction,
+                Signal.PigPaxosChangeCommitted to consensusPeersAction,
                 Signal.OnHandlingElectBegin to SignalListener { if (isSecondGPAC.get()) throw Exception("Ignore restarting GPAC") },
                 Signal.OnHandlingAgreeBegin to SignalListener { throw Exception("Ignore GPAC") }
+            )
+
+        val peer1Signals =
+            mapOf(
+                Signal.PigPaxosLeaderElected to leaderElectedAction,
+                Signal.PigPaxosChangeCommitted to consensusPeersAction,
+                Signal.OnHandlingApplyCommitted to peerGPACAction,
             )
 
         apps = TestApplicationSet(
@@ -751,18 +791,33 @@ class PigPaxosSpec : IntegrationTestBase() {
                 "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
             ),
             signalListeners = mapOf(
-                peer(0) to peerSignals,
-                peer(1) to peerSignals,
+                peer(0) to firstPeerSignals,
+                peer(1) to peer1Signals,
                 peer(2) to peerSignals,
-                peer(3) to peerConsenusSignals,
-                peer(4) to peerConsenusSignals,
+                peer(3) to peerPaxosSignals,
+                peer(4) to peerPaxosSignals,
+            ), configOverrides = mapOf(
+                peer(0) to mapOf("gpac.maxLeaderElectionTries" to 2),
+                peer(1) to mapOf("gpac.maxLeaderElectionTries" to 2),
+                peer(2) to mapOf("gpac.maxLeaderElectionTries" to 2),
+                peer(3) to mapOf("gpac.maxLeaderElectionTries" to 2),
+                peer(4) to mapOf("gpac.maxLeaderElectionTries" to 2),
             )
         )
 
         leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         // change committed on 3/5 peers
-        executeChange("${apps.getPeer(peer(0)).address}/v2/change/sync?peerset=peerset0&enforce_gpac=true", change1)
+        try {
+            executeChange(
+                "${apps.getPeer(peer(0)).address}/v2/change/sync?peerset=peerset0&enforce_gpac=true",
+                change1
+            )
+            fail("Change passed")
+        } catch (e: Exception) {
+            logger.info("Leader 1 fails", e)
+        }
+
 
         // leader timeout is 5 seconds for integration tests - in the meantime other peer should wake up and execute transaction
         phaserGPACPeer.arriveAndAwaitAdvanceWithTimeout()

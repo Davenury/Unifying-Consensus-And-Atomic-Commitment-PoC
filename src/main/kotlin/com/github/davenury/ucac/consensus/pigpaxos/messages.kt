@@ -11,7 +11,8 @@ data class PaxosPromise(
     override val currentRound: Int,
     override val currentLeaderId: PeerId?,
     val committedEntries: List<String>,
-    val notFinishedEntries: List<String>
+    val notFinishedEntries: List<String>,
+    val currentEntryId: String,
 ) : PaxosResponse(promised, currentRound, currentLeaderId)
 
 data class PaxosAccept(val entry: String, val paxosRound: Int, val proposer: PeerId)

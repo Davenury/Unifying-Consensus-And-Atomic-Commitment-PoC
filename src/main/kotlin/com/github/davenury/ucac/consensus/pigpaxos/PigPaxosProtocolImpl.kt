@@ -49,12 +49,12 @@ class PigPaxosProtocolImpl(
     private var failureDetector = ProtocolTimerImpl(Duration.ofSeconds(0), heartbeatTimeout, ctx)
     private var votedFor: VotedFor? = null
     private var currentRound = -1
-    private val promiseChannel: Channel<PaxosPromise?> = Channel()
     private val acceptedChannel: Channel<PaxosAccepted?> = Channel()
     private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
         ConcurrentLinkedDeque()
 
     private val leaderRequestExecutorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    private var lastPropagatedEntryId: String = history.getCurrentEntryId()
 
 //  Distinguished proposer, the last one which proposed value, asks him about results
 //  Add synchronization phase from Zab after election of the proposer/leader
@@ -81,7 +81,14 @@ class PigPaxosProtocolImpl(
             val proposedEntries = entryIdPaxosRound.map { it.value.entry }
 
             if (currentRound > message.paxosRound || (currentRound == message.paxosRound && votedFor?.id != message.peerId)) {
-                return@withLock PaxosPromise(false, currentRound, votedFor?.id, listOf(), listOf())
+                return@withLock PaxosPromise(
+                    false,
+                    currentRound,
+                    votedFor?.id,
+                    listOf(),
+                    listOf(),
+                    history.getCurrentEntryId()
+                )
             }
 
             failureDetector.cancelCounting()
@@ -93,7 +100,8 @@ class PigPaxosProtocolImpl(
                 message.paxosRound,
                 message.peerId,
                 committedEntries.serialize(),
-                proposedEntries.serialize()
+                proposedEntries.serialize(),
+                history.getCurrentEntryId()
             )
         }
     }
@@ -198,29 +206,22 @@ class PigPaxosProtocolImpl(
             val result = changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
                 ?: changeIdToCompletableFuture[change.id]!!
 
-            when {
-                amIALeader() -> {
-                    logger.info("Proposing change: $change")
-                    proposeChangeToLedger(result, change)
-                }
-
-                votedFor?.id != null -> {
-                    logger.info("Forwarding change to the leader(${votedFor}): $change")
-                    sendRequestToLeader(result, change)
-                }
-
-                else -> {
-                    logger.info("Queueing a change to be propagated when leader is elected")
-                    changesToBePropagatedToLeader.push(ChangeToBePropagatedToLeader(change, result))
-                }
+            if (amIALeader() && lastPropagatedEntryId == history.getCurrentEntryId()) {
+                proposeChangeToLedger(result, change)
+            } else {
+                logger.info("We are not a leader or some change maybe needed to propagate")
+                changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, result))
+                becomeLeader("Try to process change")
             }
+
+
             return result
         }
 
     override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) =
         span("PigPaxos.proposeChangeToLedger") {
             val entry = change.toHistoryEntry(peersetId)
-            if (entryIdPaxosRound.contains(entry.getId()) || history.containsEntry(entry.getId())) {
+            if (entryIdPaxosRound.contains(entry.getId())) {
                 logger.info("Already proposed that change: $change")
                 return
             }
@@ -402,19 +403,30 @@ class PigPaxosProtocolImpl(
                             this@PigPaxosProtocolImpl,
                             mapOf(peersetId to otherConsensusPeers())
                         )
-                        val committedEntries = responses.flatMap { it.committedEntries.deserialize() }.distinct()
-                        val proposedEntries = responses.flatMap { it.notFinishedEntries.deserialize() }.distinct()
 
-                        (committedEntries + proposedEntries).forEach {
-                            val change = Change.fromHistoryEntry(it)!!
-                            changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-                            changesToBePropagatedToLeader.add(
-                                ChangeToBePropagatedToLeader(
-                                    change,
-                                    changeIdToCompletableFuture[change.id]!!
+                        val committedEntries = responses.flatMap { it.committedEntries.deserialize() }
+
+                        val newCommittedEntries =
+                            responses.flatMap { history.getAllEntriesUntilHistoryEntryId(it.currentEntryId) }
+
+                        val proposedEntries = responses.flatMap { it.notFinishedEntries.deserialize() }
+
+                        val oldChangesToBePropagated =
+                            changesToBePropagatedToLeader.toList().map { it.change.toHistoryEntry(peersetId) }
+
+                        changesToBePropagatedToLeader = ConcurrentLinkedDeque()
+
+                        (committedEntries + newCommittedEntries + proposedEntries + oldChangesToBePropagated).distinct()
+                            .forEach {
+                                val change = Change.fromHistoryEntry(it)!!
+                                changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+                                changesToBePropagatedToLeader.add(
+                                    ChangeToBePropagatedToLeader(
+                                        change,
+                                        changeIdToCompletableFuture[change.id]!!
+                                    )
                                 )
-                            )
-                        }
+                            }
 
 
                     }
@@ -427,10 +439,11 @@ class PigPaxosProtocolImpl(
                         return
                     }
                 }
-
-                tryPropagatingChangesToLeader()
             }
+
+            tryPropagatingChangesToLeader()
         }
+
 
     private suspend fun acceptPhase(entry: HistoryEntry) {
         var result: PaxosResult? = null
@@ -489,7 +502,7 @@ class PigPaxosProtocolImpl(
 
             result == PaxosResult.COMMIT && history.isEntryCompatible(entry) -> {
                 logger.info("Commit entry $entry")
-                history.addEntry(entry)
+                if (!history.containsEntry(entry.getId())) history.addEntry(entry)
                 changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
                 signalPublisher.signal(
                     Signal.PigPaxosChangeCommitted,
