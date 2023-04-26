@@ -59,7 +59,6 @@ class PigPaxosProtocolImpl(
 
 //  Distinguished proposer, the last one which proposed value, asks him about results
 //  Add synchronization phase from Zab after election of the proposer/leader
-//
 
     companion object {
         private val logger = LoggerFactory.getLogger("pig-paxos")
@@ -108,7 +107,13 @@ class PigPaxosProtocolImpl(
 
             logger.info("Handle PaxosAccept: ${message.paxosRound} ${message.proposer} ${entry.getId()}")
 
-            if (isMessageFromNotLeader(message.paxosRound, message.proposer) || !history.isEntryCompatible(entry)) {
+            if (isMessageFromNotLeader(message.paxosRound, message.proposer)) {
+                logger.info("Reject PaxosAccept, because message is not from leader, current leader ${votedFor?.id}")
+                return@withLock PaxosAccepted(false, currentRound, votedFor?.id)
+            }
+
+            if(!history.isEntryCompatible(entry)){
+                logger.info("Reject PaxosAccept, because entry is not compatible, currentEntryId: ${history.getCurrentEntryId()}, entryParentId: ${entry.getParentId()}")
                 return@withLock PaxosAccepted(false, currentRound, votedFor?.id)
             }
 
