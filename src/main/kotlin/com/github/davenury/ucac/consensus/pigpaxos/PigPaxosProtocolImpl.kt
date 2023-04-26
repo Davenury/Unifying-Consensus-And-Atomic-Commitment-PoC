@@ -116,20 +116,36 @@ class PigPaxosProtocolImpl(
 
             if (isMessageFromNotLeader(message.paxosRound, message.proposer)) {
                 logger.info("Reject PaxosAccept, because message is not from leader, current leader ${votedFor?.id}")
-                return@withLock PaxosAccepted(false, currentRound, votedFor?.id)
+                return@withLock PaxosAccepted(
+                    false,
+                    currentRound,
+                    votedFor?.id,
+                    currentEntryId = history.getCurrentEntryId()
+                )
             }
 
             val transactionAcquisition = TransactionAcquisition(ProtocolName.CONSENSUS, changeId)
             val isTransactionBlockerAcquired = transactionBlocker.tryAcquireReentrant(transactionAcquisition)
 
             if (!isTransactionBlockerAcquired) {
-                return@withLock PaxosAccepted(false, currentRound, votedFor?.id, isTransactionBlocked = true)
+                return@withLock PaxosAccepted(
+                    false,
+                    currentRound,
+                    votedFor?.id,
+                    isTransactionBlocked = true,
+                    currentEntryId = history.getCurrentEntryId()
+                )
             }
 
 
             if (!history.isEntryCompatible(entry)) {
                 logger.info("Reject PaxosAccept, because entry is not compatible, currentEntryId: ${history.getCurrentEntryId()}, entryParentId: ${entry.getParentId()}")
-                return@withLock PaxosAccepted(false, currentRound, votedFor?.id)
+                return@withLock PaxosAccepted(
+                    false,
+                    currentRound,
+                    votedFor?.id,
+                    currentEntryId = history.getCurrentEntryId()
+                )
             }
 
             updateVotedFor(message.paxosRound, message.proposer)
@@ -160,7 +176,12 @@ class PigPaxosProtocolImpl(
                 becomeLeader("Leader didn't finish entry ${entry.getId()}")
             }
 
-            return@withLock PaxosAccepted(true, currentRound, votedFor?.id)
+            return@withLock PaxosAccepted(
+                true,
+                currentRound,
+                votedFor?.id,
+                currentEntryId = history.getCurrentEntryId()
+            )
         }
     }
 
@@ -338,7 +359,7 @@ class PigPaxosProtocolImpl(
 
             mutex.withLock {
                 if (round <= currentRound) {
-                    logger.info("Don't try to become a leader, because someone tried in meantime, propagate chagnes")
+                    logger.info("Don't try to become a leader, because someone tried in meantime, propagate changes")
                     sendOldChanges()
                     return@span
                 }
@@ -559,7 +580,10 @@ class PigPaxosProtocolImpl(
 
     private suspend fun sendAccepts(entry: HistoryEntry): PaxosResult? {
         val jobs = scheduleAccepts {
-            protocolClient.sendAccept(it, PaxosAccept(entry.serialize(), currentRound, votedFor?.id!!))
+            protocolClient.sendAccept(
+                it,
+                PaxosAccept(entry.serialize(), currentRound, votedFor?.id!!, history.getCurrentEntryId())
+            )
         }
 
         val responses = gatherResponses(currentRound, acceptedChannel).filterNotNull()
@@ -584,8 +608,23 @@ class PigPaxosProtocolImpl(
                 launch(MDCContext()) {
                     val peerAddress: PeerAddress = otherConsensusPeers()[it]
                     val response: ConsensusResponse<PaxosAccepted?> = sendMessage(peerAddress)
-                    if (response.message?.isTransactionBlocked == true) acceptedChannel.send(null)
-                    else acceptedChannel.send(response.message)
+
+                    when {
+                        response.message == null -> acceptedChannel.send(response.message)
+                        response.message.isTransactionBlocked -> acceptedChannel.send(null)
+                        history.containsEntry(response.message.currentEntryId) && response.message.currentEntryId != history.getCurrentEntryId() -> {
+
+                            history.getAllEntriesUntilHistoryEntryId(response.message.currentEntryId).forEach {
+                                protocolClient.sendCommit(
+                                    peerAddress,
+                                    PaxosCommit(PaxosResult.COMMIT, it.serialize(), currentRound, globalPeerId)
+                                )
+                            }
+                            acceptedChannel.send(null)
+                        }
+
+                        else -> acceptedChannel.send(response.message)
+                    }
                 }
             }
         }
@@ -639,10 +678,11 @@ class PigPaxosProtocolImpl(
             )
             entryIdPaxosRound.remove(it.entry.getId())
         }
-        if (transactionBlocker.isAcquired()) transactionBlocker.release(
+        val changeId = transactionBlocker.getChangeId()
+        if (changeId != null) transactionBlocker.tryRelease(
             TransactionAcquisition(
                 ProtocolName.CONSENSUS,
-                transactionBlocker.getChangeId()!!
+                changeId
             )
         )
     }
@@ -671,7 +711,7 @@ class PigPaxosProtocolImpl(
         // TODO mutex?
         val votedFor = this.votedFor
         if (votedFor == null || !votedFor.elected) return
-        logger.info("Try to propagate")
+        if (changesToBePropagatedToLeader.size > 0) logger.info("Try to propagate changes")
         while (true) {
             val changeToBePropagated = changesToBePropagatedToLeader.poll() ?: break
             if (amIALeader()) {

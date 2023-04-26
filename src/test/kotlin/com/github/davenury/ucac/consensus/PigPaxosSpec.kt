@@ -499,7 +499,7 @@ class PigPaxosSpec : IntegrationTestBase() {
 
         electionPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        val firstLeaderAddress = getLeaderAddress(peers[0])
+        val firstLeaderAddress = peers.map { getLeaderAddress(it) }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
 
         val peersToStop = peerAddresses.filter { it != firstLeaderAddress }.take(3)
         peersToStop.forEach { apps.getApp(it.peerId).stop(0, 0) }
