@@ -49,7 +49,7 @@ class PigPaxosProtocolImpl(
     private var failureDetector = ProtocolTimerImpl(Duration.ofSeconds(0), heartbeatTimeout, ctx)
     private var votedFor: VotedFor? = null
     private var currentRound = -1
-    private val acceptedChannel: Channel<PaxosAccepted?> = Channel()
+    private val acceptedChannel: Channel<Pair<String, PaxosAccepted?>> = Channel()
     private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
         ConcurrentLinkedDeque()
 
@@ -523,14 +523,16 @@ class PigPaxosProtocolImpl(
 
             result == PaxosResult.COMMIT && history.isEntryCompatible(entry) -> {
                 logger.info("Commit entry $entry")
-                if (!history.containsEntry(entry.getId())) history.addEntry(entry)
-                changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
-                signalPublisher.signal(
-                    Signal.PigPaxosChangeCommitted,
-                    this,
-                    mapOf(peersetId to otherConsensusPeers()),
-                    change = change
-                )
+                if (!history.containsEntry(entry.getId())) {
+                    history.addEntry(entry)
+                    changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
+                    signalPublisher.signal(
+                        Signal.PigPaxosChangeCommitted,
+                        this,
+                        mapOf(peersetId to otherConsensusPeers()),
+                        change = change
+                    )
+                }
                 entryIdPaxosRound.remove(entry.getId())
                 transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
             }
@@ -579,14 +581,15 @@ class PigPaxosProtocolImpl(
     }
 
     private suspend fun sendAccepts(entry: HistoryEntry): PaxosResult? {
-        val jobs = scheduleAccepts {
+        val changeId = Change.fromHistoryEntry(entry)!!.id
+        val jobs = scheduleAccepts(changeId) {
             protocolClient.sendAccept(
                 it,
                 PaxosAccept(entry.serialize(), currentRound, votedFor?.id!!, history.getCurrentEntryId())
             )
         }
 
-        val responses = gatherResponses(currentRound, acceptedChannel).filterNotNull()
+        val responses = gatherAccepts(currentRound, changeId).filterNotNull()
         logger.info("Responses sendAccepts: $responses")
 
         val (accepted, rejected) = responses.partition { it.accepted }
@@ -602,7 +605,11 @@ class PigPaxosProtocolImpl(
         }
     }
 
-    private suspend fun scheduleAccepts(sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<PaxosAccepted?>) =
+    //  Send tou many nulls
+    private suspend fun scheduleAccepts(
+        changeId: String,
+        sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<PaxosAccepted?>
+    ) =
         (0 until otherConsensusPeers().size).map {
             with(CoroutineScope(executorService)) {
                 launch(MDCContext()) {
@@ -610,33 +617,40 @@ class PigPaxosProtocolImpl(
                     val response: ConsensusResponse<PaxosAccepted?> = sendMessage(peerAddress)
 
                     when {
-                        response.message == null -> acceptedChannel.send(response.message)
-                        response.message.isTransactionBlocked -> acceptedChannel.send(null)
-                        history.containsEntry(response.message.currentEntryId) && response.message.currentEntryId != history.getCurrentEntryId() -> {
+                        response.message == null -> acceptedChannel.send(Pair(changeId, null))
+                        response.message.isTransactionBlocked -> {
+                            logger.info("Peer has transaction blocked")
+                            acceptedChannel.send(Pair(changeId, null))
+                        }
 
+                        history.containsEntry(response.message.currentEntryId) && response.message.currentEntryId != history.getCurrentEntryId() -> {
+                            logger.info("Peer has outdated history")
                             history.getAllEntriesUntilHistoryEntryId(response.message.currentEntryId).forEach {
                                 protocolClient.sendCommit(
                                     peerAddress,
                                     PaxosCommit(PaxosResult.COMMIT, it.serialize(), currentRound, globalPeerId)
                                 )
                             }
-                            acceptedChannel.send(null)
+                            acceptedChannel.send(Pair(changeId, null))
                         }
 
-                        else -> acceptedChannel.send(response.message)
+                        else -> acceptedChannel.send(Pair(changeId, response.message))
                     }
                 }
             }
         }
 
-    private suspend fun <A : PaxosResponse> gatherResponses(round: Int, channel: Channel<A?>): List<A?> {
-        val responses: MutableList<A?> = mutableListOf()
+    private suspend fun gatherAccepts(round: Int, changeId: String): List<PaxosAccepted?> {
+        val responses: MutableList<PaxosAccepted?> = mutableListOf()
 
         val peers = otherConsensusPeers().size
 
         while (responses.size < peers) {
-            val response = channel.receive()
+            val tuple = acceptedChannel.receive()
 
+            if (changeId != tuple.first) continue
+
+            val response = tuple.second
             responses.add(response)
 
             val (accepted, rejected) = responses.filterNotNull().partition { it.result }
