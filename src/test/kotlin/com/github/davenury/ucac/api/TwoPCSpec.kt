@@ -638,12 +638,19 @@ class TwoPCSpec : IntegrationTestBase() {
 
     @Test
     fun `atomic commitment between one-peer peersets`(): Unit = runBlocking {
+        val consensusLeaderPhaser = Phaser(3)
+        val signalListener = SignalListener {
+            consensusLeaderPhaser.arrive()
+        }
         apps = TestApplicationSet(
             mapOf(
                 "peerset0" to listOf("peer0"),
                 "peerset1" to listOf("peer1"),
             ),
+            signalListeners = (0..1).map { "peer$it" }.associateWith { mapOf(Signal.ConsensusLeaderIHaveBeenElected to signalListener) }
         )
+
+        consensusLeaderPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         expectCatching {
             val change1 = change(0, 1)
@@ -665,14 +672,33 @@ class TwoPCSpec : IntegrationTestBase() {
 
     @Test
     fun `2pc on multiple peersets`(): Unit = runBlocking {
-        apps = TestApplicationSet(
-            mapOf(
-                "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
-                "peerset1" to listOf("peer1", "peer2", "peer4"),
-                "peerset2" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
-                "peerset3" to listOf("peer2", "peer3"),
-            ),
+
+        val leaderElectedPhaser = Phaser(5)
+        fun subscribers() = Subscribers().apply {
+            this.registerSubscriber(CodeSubscriber { peerId, peersetId ->
+                leaderElectedPhaser.arrive()
+            })
+        }
+
+        val peers = mapOf(
+            "peerset0" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            "peerset1" to listOf("peer1", "peer2", "peer4"),
+            "peerset2" to listOf("peer0", "peer1", "peer2", "peer3", "peer4"),
+            "peerset3" to listOf("peer2", "peer3"),
         )
+        val reversedPeers: MutableMap<String, MutableMap<PeersetId, Subscribers>> = mutableMapOf()
+        peers.forEach { (peersetId, peers) ->
+            peers.forEach { peer ->
+                reversedPeers[peer] = reversedPeers.getOrDefault(peer, mutableMapOf()).apply { this[PeersetId(peersetId)] = subscribers() }
+            }
+        }
+
+        apps = TestApplicationSet(
+            peers,
+            subscribers = reversedPeers,
+        )
+
+        leaderElectedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
         val change01 = change(0, 1)
         val change23 = change(2, 3)
@@ -759,7 +785,7 @@ class TwoPCSpec : IntegrationTestBase() {
                 "peerset1" to listOf("peer3", "peer4", "peer5")
             ),
             subscribers = (0..2).map { "peer$it" }.associateWith { mapOf(PeersetId("peerset0") to subscribers()) } +
-                    (3..5).map { "peer$it" }.associateWith { mapOf(PeersetId("peerset0") to subscribers()) },
+                    (3..5).map { "peer$it" }.associateWith { mapOf(PeersetId("peerset1") to subscribers()) },
             signalListeners = (0..5).map { "peer$it" }.associateWith {
                 mapOf(
                     Signal.ConsensusLeaderElected to leaderElectedListener,
@@ -780,7 +806,7 @@ class TwoPCSpec : IntegrationTestBase() {
         // execute change that will stop at TwoPCChange(Accepted)
         expectCatching {
             val change1 = change(0, 1)
-            executeChange("http://${apps.getPeer(firstConsensusLeader).address}/v2/change/sync?use_2pc=true", change1)
+            executeChange("http://${apps.getPeer(firstConsensusLeader).address}/v2/change/sync?use_2pc=true&peerset=peerset0", change1)
         }.isFailure()
 
         twoPcChangePhaser.arriveAndAwaitAdvanceWithTimeout()
@@ -805,11 +831,11 @@ class TwoPCSpec : IntegrationTestBase() {
 
         changeAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
 
-        listOf(Pair("peer0", "peerset0"), Pair("peer1", "peerset0"), Pair("peer2", "peerset0"), Pair("peer3", "peerset1"), Pair("peer4", "peerset1"), Pair("peer5", "peerset1"))
-            .map { Pair(PeerId(it.first), it.second) }
+        listOf(PeersetId("peerset0").let { Pair(consensusLeaders[it]!!, it) }, PeersetId("peerset1").let { Pair(consensusLeaders[it]!!, it) })
+            .map { Pair(it.first, it.second) }
             .filterNot { it.first == firstConsensusLeader }
             .forEach {
-                val change = askForChanges(apps.getPeer(it.first), it.second).last()
+                val change = askForChanges(apps.getPeer(it.first), it.second.peersetId).last()
                 expectThat(change).isA<TwoPCChange>()
                 expectThat((change as TwoPCChange).twoPCStatus).isEqualTo(TwoPCStatus.ABORTED)
             }
@@ -864,7 +890,6 @@ class TwoPCSpec : IntegrationTestBase() {
                 mapOf(
                     Signal.ConsensusLeaderElected to leaderElectedListener,
                     Signal.TwoPCOnChangeApplied to SignalListener {
-                        logger.info("Yo, you can ask")
                         askForDecisionPhaser.arrive()
                         finalPhaser.arrive()
                     },
@@ -901,7 +926,7 @@ class TwoPCSpec : IntegrationTestBase() {
 
         expectCatching {
             val change1 = change(0, 1)
-            executeChange("http://${apps.getPeer(firstConsensusLeader).address}/v2/change/sync?use_2pc=true", change1)
+            executeChange("http://${apps.getPeer(firstConsensusLeader).address}/v2/change/sync?use_2pc=true&peerset=peerset0", change1)
         }.isSuccess()
 
         finalPhaser.arriveAndAwaitAdvanceWithTimeout()

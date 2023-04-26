@@ -383,7 +383,9 @@ class TwoPC(
 
 
     private fun changeConflict(changeId: String, exceptionText: String) =
-        changeIdToCompletableFuture[changeId]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+        changeIdToCompletableFuture
+            .also { it.putIfAbsent(changeId, CompletableFuture()) }
+            .get(changeId)!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
             .also { throw TwoPCConflictException(exceptionText) }
 
     companion object {

@@ -163,6 +163,12 @@ class RaftConsensusProtocolImpl(
 
         logger.info("I have been selected as a leader (in term $currentTerm)")
         subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
+        signalPublisher.signal(
+            Signal.ConsensusLeaderIHaveBeenElected,
+            this@RaftConsensusProtocolImpl,
+            mapOf(peersetId to otherConsensusPeers()),
+            null
+        )
 
         peerToNextIndex.keys.forEach {
             peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
@@ -355,7 +361,7 @@ class RaftConsensusProtocolImpl(
                 }
             }
 
-            logger.info("Updating ledger with $notAppliedProposedChanges")
+            logger.debug("Updating ledger with {}", notAppliedProposedChanges)
             updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
 
             tryPropagatingChangesToLeader()

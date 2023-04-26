@@ -53,9 +53,9 @@ class Changes(
 
     private fun subscribeToStructuralChanges() {
         GlobalScope.launch {
-            peers.entries.forEach { (_, addresses) ->
+            peers.entries.forEach { (peersetId, addresses) ->
                 addresses.forEach { address ->
-                    httpClient.post("http://${address.address}/v2/subscribe-to-peer-configuration-changes") {
+                    httpClient.post("http://${address.address}/v2/subscribe-to-peer-configuration-changes?peerset=${peersetId.peersetId}") {
                         contentType(ContentType.Application.Json)
                         body = SubscriberAddress(
                             address = "$ownAddress/api/v1/new-consensus-leader",

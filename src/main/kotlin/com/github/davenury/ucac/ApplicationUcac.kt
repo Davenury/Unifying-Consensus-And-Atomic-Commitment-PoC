@@ -1,13 +1,12 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.common.*
-import com.github.davenury.ucac.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.common.ChangeNotifier
-import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.MultiplePeersetProtocols
 import com.github.davenury.ucac.common.structure.Subscribers
-import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
+import com.github.davenury.ucac.history.historyRouting
 import com.github.davenury.ucac.routing.consensusProtocolRouting
 import com.github.davenury.ucac.routing.gpacProtocolRouting
 import com.github.davenury.ucac.routing.metaRouting
@@ -122,19 +121,27 @@ class ApplicationUcac(
 
         logger.info("My peersets: $peersetIds")
         val changeNotifier = ChangeNotifier(peerResolver)
-        val tracer = Configuration("${peerResolver.peerName()}-${config.experimentId}")
-            .withSampler(Configuration.SamplerConfiguration.fromEnv()
-                .withType(ConstSampler.TYPE)
-                .withParam(1))
-            .withReporter(Configuration.ReporterConfiguration.fromEnv()
-                .withLogSpans(false)
-                .withSender(
-                    Configuration.SenderConfiguration()
-                        .withAgentHost("tempo")
-                        .withAgentPort(6831))).tracerBuilder
-            .withScopeManager(ThreadContextElementScopeManager())
-            .build()
-        GlobalTracer.registerIfAbsent(tracer)
+
+        if (config.configureTraces) {
+            val tracer = Configuration("${peerResolver.peerName()}-${config.experimentId}")
+                .withSampler(
+                    Configuration.SamplerConfiguration.fromEnv()
+                        .withType(ConstSampler.TYPE)
+                        .withParam(1)
+                )
+                .withReporter(
+                    Configuration.ReporterConfiguration.fromEnv()
+                        .withLogSpans(false)
+                        .withSender(
+                            Configuration.SenderConfiguration()
+                                .withAgentHost("tempo")
+                                .withAgentPort(6831)
+                        )
+                ).tracerBuilder
+                .withScopeManager(ThreadContextElementScopeManager())
+                .build()
+            GlobalTracer.registerIfAbsent(tracer)
+        }
 
         val signalPublisher = SignalPublisher(signalListeners, peerResolver)
 
