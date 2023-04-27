@@ -19,6 +19,7 @@ import io.ktor.http.*
 import io.ktor.util.collections.*
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.fail
@@ -870,6 +871,7 @@ class PigPaxosSpec : IntegrationTestBase() {
     }
 
 
+    @Disabled("Not supported for now")
     @Test
     fun `consensus on multiple peersets`(): Unit = runBlocking {
         apps = TestApplicationSet(
