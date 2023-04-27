@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
-	"log"
 	"os"
 	"os/exec"
 	"time"
@@ -24,7 +23,7 @@ const (
 func getCurrentPath() string {
 	path, err := os.Getwd()
 	if err != nil {
-		log.Println(err)
+		panic(err)
 	}
 	return path
 }
