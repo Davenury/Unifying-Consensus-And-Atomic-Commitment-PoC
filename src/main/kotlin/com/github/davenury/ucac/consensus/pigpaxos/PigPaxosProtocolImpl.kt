@@ -137,16 +137,6 @@ class PigPaxosProtocolImpl(
                 )
             }
 
-            if(history.containsEntry(entry.getId())){
-                transactionBlocker.tryRelease(transactionAcquisition)
-                return@withLock PaxosAccepted(
-                    true,
-                    currentRound,
-                    votedFor?.id,
-                    currentEntryId = history.getCurrentEntryId()
-                )
-            }
-
 
             if (!history.isEntryCompatible(entry)) {
                 logger.info("Reject PaxosAccept, because entry is not compatible, currentEntryId: ${history.getCurrentEntryId()}, entryParentId: ${entry.getParentId()}")
@@ -506,6 +496,7 @@ class PigPaxosProtocolImpl(
 
         signalPublisher.signal(Signal.PigPaxosAfterAcceptChange, this, mapOf(peersetId to otherConsensusPeers()))
         commitChange(result, change)
+        if(result == PaxosResult.COMMIT) lastPropagatedEntryId = entry.getId()
 
         (0 until otherConsensusPeers().size).map {
             with(CoroutineScope(executorService)) {
