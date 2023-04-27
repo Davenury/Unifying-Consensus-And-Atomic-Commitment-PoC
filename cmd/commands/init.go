@@ -174,6 +174,7 @@ func DoInit(namespace string, createNamespace bool) {
 			"reportingEnabled": false,
 			"global_overrides": map[string]interface{}{
 				"max_traces_per_user": 0,
+				"metrics_generator_processor_span_metrics_dimensions": []string{"experiment"},
 			},
 		},
 	}
