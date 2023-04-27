@@ -526,6 +526,8 @@ class PigPaxosProtocolImpl(
                 logger.info("Commit entry $entry")
                 if (!history.containsEntry(entry.getId())) {
                     history.addEntry(entry)
+                    entryIdPaxosRound.remove(entry.getId())
+                    transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
                     changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
                     signalPublisher.signal(
                         Signal.PigPaxosChangeCommitted,
@@ -533,9 +535,10 @@ class PigPaxosProtocolImpl(
                         mapOf(peersetId to otherConsensusPeers()),
                         change = change
                     )
+                }else {
+                    entryIdPaxosRound.remove(entry.getId())
+                    transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
                 }
-                entryIdPaxosRound.remove(entry.getId())
-                transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
             }
 
             result == PaxosResult.COMMIT -> {
