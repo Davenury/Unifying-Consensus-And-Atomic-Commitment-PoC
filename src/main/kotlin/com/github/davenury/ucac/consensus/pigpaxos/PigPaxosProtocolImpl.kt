@@ -137,6 +137,16 @@ class PigPaxosProtocolImpl(
                 )
             }
 
+            if(history.containsEntry(entry.getId())){
+                transactionBlocker.tryRelease(transactionAcquisition)
+                return@withLock PaxosAccepted(
+                    true,
+                    currentRound,
+                    votedFor?.id,
+                    currentEntryId = history.getCurrentEntryId()
+                )
+            }
+
 
             if (!history.isEntryCompatible(entry)) {
                 logger.info("Reject PaxosAccept, because entry is not compatible, currentEntryId: ${history.getCurrentEntryId()}, entryParentId: ${entry.getParentId()}")
