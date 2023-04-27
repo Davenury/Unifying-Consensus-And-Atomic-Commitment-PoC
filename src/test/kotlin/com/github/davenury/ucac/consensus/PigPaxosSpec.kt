@@ -508,9 +508,6 @@ class PigPaxosSpec : IntegrationTestBase() {
             if(it.value > leaderAddressMap[firstLeaderAddress]!!) firstLeaderAddress = it.key
         }
 
-        logger.info("FirstLeaderAddress $firstLeaderAddress leaderAddressMap: $leaderAddressMap")
-
-
         val peersToStop = peerAddresses.filter { it != firstLeaderAddress }.take(3)
         peersToStop.forEach { apps.getApp(it.peerId).stop(0, 0) }
         val runningPeers = peerAddresses.filter { address -> address !in peersToStop }
@@ -518,7 +515,7 @@ class PigPaxosSpec : IntegrationTestBase() {
 
 //      Start processing
         expectCatching {
-            executeChange("${runningPeers.first().address}/v2/change/async?peerset=peerset0", change)
+            executeChange("${firstLeaderAddress!!.address}/v2/change/async?peerset=peerset0", change)
         }.isSuccess()
 
         changePhaser.arriveAndAwaitAdvanceWithTimeout()
