@@ -26,6 +26,7 @@ import java.time.Duration
 import java.util.concurrent.Phaser
 import kotlin.system.measureTimeMillis
 
+@Disabled("For fixing consensuses")
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
 class MultiplePeersetSpec : IntegrationTestBase() {

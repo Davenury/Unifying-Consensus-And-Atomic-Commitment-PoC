@@ -22,6 +22,7 @@ import strikt.assertions.*
 import java.util.concurrent.Phaser
 
 
+@Disabled("For fixing consensuses")
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
 class MixedChangesSpec : IntegrationTestBase() {

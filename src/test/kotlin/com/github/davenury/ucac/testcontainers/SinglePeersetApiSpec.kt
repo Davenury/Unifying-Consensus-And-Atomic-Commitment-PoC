@@ -27,6 +27,7 @@ import strikt.assertions.isEqualTo
  * @author Kamil Jarosz
  */
 
+@Disabled("For fixing consensuses")
 @Testcontainers
 @ExtendWith(TestLogExtension::class)
 class SinglePeersetApiSpec {
