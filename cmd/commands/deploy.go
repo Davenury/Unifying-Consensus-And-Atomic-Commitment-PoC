@@ -30,6 +30,29 @@ type DeployConfig struct {
 	MonitoringNamespace     string
 }
 
+func (cfg *DeployConfig) version() string {
+	if cfg.NumberOfPeersV2 != 0 {
+		return "v2"
+	}
+	return "v1"
+}
+
+func (cfg *DeployConfig) GetPeersAndPeersets() (string, string) {
+	if cfg.version() == "v2" {
+		peers, _ := utils.GenerateServicesForPeersStaticPort([]int{cfg.NumberOfPeersV2}, servicePort)
+		peersets := cfg.PeersetsConfigurationV2
+		return peers, peersets
+	}
+	return utils.GenerateServicesForPeersStaticPort(cfg.NumberOfPeersInPeersets, servicePort)
+}
+
+func (cfg *DeployConfig) GetDeployFunction() func(config DeployConfig, peers string, peersets string, experimentUUID uuid.UUID) {
+	if cfg.version() == "v2" {
+		return DoDeployV2
+	}
+	return DoDeployV1
+}
+
 const ratisPort = 10024
 const servicePort = 8080
 
@@ -67,24 +90,13 @@ func DoDeploy(config DeployConfig) {
 	experimentUUID := uuid.New()
 	fmt.Printf("Starting experiment: %s\n", experimentUUID.String())
 
-	var peers string
-	var peersets string
-	if config.NumberOfPeersV2 != 0 {
-		peers, _ = utils.GenerateServicesForPeersStaticPort([]int{config.NumberOfPeersV2}, servicePort)
-		peersets = config.PeersetsConfigurationV2
-	} else {
-		peers, peersets = utils.GenerateServicesForPeersStaticPort(config.NumberOfPeersInPeersets, servicePort)
-	}
+	peers, peersets := config.GetPeersAndPeersets()
 
 	if config.DeployCreateNamespace {
 		utils.CreateNamespace(config.DeployNamespace)
 	}
 
-	if config.NumberOfPeersV2 != 0 {
-		DoDeployV2(config, peers, peersets, experimentUUID)
-	} else {
-		DoDeployV1(config, peers, peersets, experimentUUID)
-	}
+	config.GetDeployFunction()(config, peers, peersets, experimentUUID)
 }
 
 func DoDeployV1(config DeployConfig, peers string, peersets string, experimentUUID uuid.UUID) {
