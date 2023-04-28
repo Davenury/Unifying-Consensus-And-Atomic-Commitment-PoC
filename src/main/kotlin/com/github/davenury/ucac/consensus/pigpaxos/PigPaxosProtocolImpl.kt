@@ -224,6 +224,9 @@ class PigPaxosProtocolImpl(
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> =
         span("PigPaxos.proposeChangeAsync") {
+
+            if(changeIdToCompletableFuture.contains(change.id)) return changeIdToCompletableFuture[change.id]!!
+
             val result = changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
                 ?: changeIdToCompletableFuture[change.id]!!
 
@@ -234,7 +237,6 @@ class PigPaxosProtocolImpl(
                 changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, result))
                 becomeLeader("Try to process change")
             }
-
 
             return result
         }
@@ -495,8 +497,10 @@ class PigPaxosProtocolImpl(
         logger.info("Accepts result is: $result")
 
         signalPublisher.signal(Signal.PigPaxosAfterAcceptChange, this, mapOf(peersetId to otherConsensusPeers()))
-        commitChange(result, change)
-        if(result == PaxosResult.COMMIT) lastPropagatedEntryId = entry.getId()
+        mutex.withLock {
+            commitChange(result, change)
+            if (result == PaxosResult.COMMIT) lastPropagatedEntryId = entry.getId()
+        }
 
         (0 until otherConsensusPeers().size).map {
             with(CoroutineScope(executorService)) {
