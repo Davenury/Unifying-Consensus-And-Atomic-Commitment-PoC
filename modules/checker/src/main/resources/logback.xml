@@ -7,23 +7,8 @@
             <pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} %-5level [%-11logger{36}] %msg \(%thread\)%n</pattern>
         </encoder>
     </appender>
-    <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
-        <http>
-            <url>${LOKI_BASE_URL}/loki/api/v1/push</url>
-        </http>
-        <format>
-            <label>
-                <pattern>app=checker,host=${HOSTNAME},level=%level,namespace=${NAMESPACE}</pattern>
-            </label>
-            <message>
-                <pattern>l=%level namespace=${NAMESPACE} h=${HOSTNAME} c=%logger{20} t=%thread | %msg %ex</pattern>
-            </message>
-            <sortByTime>true</sortByTime>
-        </format>
-    </appender>
     <root level="DEBUG">
         <appender-ref ref="STDOUT"/>
-        <appender-ref ref="LOKI" />
     </root>
     <logger name="org.eclipse.jetty" level="INFO"/>
     <logger name="io.netty" level="INFO"/>

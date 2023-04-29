@@ -417,6 +417,11 @@ func deploySinglePeerService(namespace string, peerConfig utils.PeerConfig, curr
 					TargetPort: intstr.FromInt(servicePort),
 				},
 				{
+					Name:       "service-backdoor",
+					Port:       8081,
+					TargetPort: intstr.FromInt(8081),
+				},
+				{
 					Name:       "ratis",
 					Port:       int32(currentRatisPort),
 					TargetPort: intstr.FromInt(currentRatisPort),
