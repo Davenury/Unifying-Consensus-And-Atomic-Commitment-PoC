@@ -94,7 +94,7 @@ func CreateWholeCommand() *cobra.Command {
 func perform(config Config) {
 	if config.deployMonitoring {
 		fmt.Println("Deploying monitoring...")
-		DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
+		DoInit(config.monitoringNamespace, config.createMonitoringNamespace, false)
 	}
 	fmt.Println("Deploying application...")
 	DoDeploy(DeployConfig{
