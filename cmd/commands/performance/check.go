@@ -93,10 +93,6 @@ func DoCheck(config CheckConfig) {
 							Name:  "NUMBER_OF_THREADS",
 							Value: fmt.Sprintf("%d", config.numberOfThreads),
 						},
-						{
-							Name:  "LOKI_BASE_URL",
-							Value: "http://loki.ddebowski:3100",
-						},
 					},
 					Resources: v1.ResourceRequirements{
 						Limits: v1.ResourceList{
