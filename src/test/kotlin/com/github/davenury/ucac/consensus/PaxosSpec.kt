@@ -7,7 +7,7 @@ import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
-import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocol
+import com.github.davenury.ucac.consensus.paxos.PaxosProtocol
 import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.IntegrationTestBase
 import com.github.davenury.ucac.utils.TestApplicationSet
@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.measureTimeMillis
 
 @ExtendWith(TestLogExtension::class)
-class PigPaxosSpec : IntegrationTestBase() {
+class PaxosSpec : IntegrationTestBase() {
 
     private val knownPeerIp = "localhost"
     private val unknownPeerIp = "198.18.0.0"
@@ -43,7 +43,7 @@ class PigPaxosSpec : IntegrationTestBase() {
 
     @BeforeEach
     fun setUp() {
-        System.setProperty("configFile", "pigpaxos_application.conf")
+        System.setProperty("configFile", "paxos_application.conf")
     }
 
 
@@ -924,7 +924,7 @@ class PigPaxosSpec : IntegrationTestBase() {
         }
 
     private suspend fun genericAskForChange(suffix: String, peerAddress: PeerAddress) =
-        testHttpClient.get<Changes>("http://${peerAddress.address}/pigpaxos/$suffix?peerset=peerset0") {
+        testHttpClient.get<Changes>("http://${peerAddress.address}/paxos/$suffix?peerset=peerset0") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
         }
@@ -946,12 +946,12 @@ class PigPaxosSpec : IntegrationTestBase() {
         genericAskForChange("accepted_changes", peerAddress)
 
     private fun askForLeaderAddress(app: ApplicationUcac): String? {
-        val leaderId = (app.getPeersetProtocols(PeersetId("peerset0")).consensusProtocol as PigPaxosProtocol).getLeaderId()
+        val leaderId = (app.getPeersetProtocols(PeersetId("peerset0")).consensusProtocol as PaxosProtocol).getLeaderId()
         return leaderId?.let { apps.getPeer(it).address }
     }
 
     private fun getLeaderAddress(app: ApplicationUcac): PeerAddress? {
-        val leaderId = (app.getPeersetProtocols(PeersetId("peerset0")).consensusProtocol as PigPaxosProtocol).getLeaderId()
+        val leaderId = (app.getPeersetProtocols(PeersetId("peerset0")).consensusProtocol as PaxosProtocol).getLeaderId()
         return leaderId?.let { apps.getPeer(it) }
     }
 
@@ -960,6 +960,6 @@ class PigPaxosSpec : IntegrationTestBase() {
     private fun peerset(peersetId: Int): PeersetId = PeersetId("peerset$peersetId")
 
     companion object {
-        private val logger = LoggerFactory.getLogger(PigPaxosSpec::class.java)
+        private val logger = LoggerFactory.getLogger(PaxosSpec::class.java)
     }
 }

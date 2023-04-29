@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.consensus.pigpaxos
+package com.github.davenury.ucac.consensus.paxos
 
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
@@ -44,7 +44,7 @@ class PigPaxosProtocolClientImpl(override val peersetId: PeersetId) : PigPaxosPr
         logger.debug("Sending proposes requestes to ${peers.map { it.peerId }}")
         return peers
             .map { Pair(it, message) }
-            .let { sendRequests(it, "pigpaxos/propose") }
+            .let { sendRequests(it, "paxos/propose") }
     }
 
     override suspend fun sendAccept(
@@ -52,16 +52,16 @@ class PigPaxosProtocolClientImpl(override val peersetId: PeersetId) : PigPaxosPr
         message: PaxosAccept
     ): ConsensusResponse<PaxosAccepted?> {
         logger.debug("Sending accept request to ${peer.peerId}")
-        return sendRequest(Pair(peer, message), "pigpaxos/accept")
+        return sendRequest(Pair(peer, message), "paxos/accept")
     }
 
     override suspend fun sendCommit(peer: PeerAddress, message: PaxosCommit): ConsensusResponse<String?> {
         logger.debug("Sending commit request to ${peer.peerId}")
-        return sendRequest(Pair(peer, message), "pigpaxos/commit")
+        return sendRequest(Pair(peer, message), "paxos/commit")
     }
 
     override suspend fun sendRequestApplyChange(peer: PeerAddress, change: Change): ChangeResult =
-        httpClient.post("http://${peer.address}/pigpaxos/request_apply_change?peerset=${peersetId}") {
+        httpClient.post("http://${peer.address}/paxos/request_apply_change?peerset=${peersetId}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = change

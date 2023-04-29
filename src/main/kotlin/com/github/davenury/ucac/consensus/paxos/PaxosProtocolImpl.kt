@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.consensus.pigpaxos
+package com.github.davenury.ucac.consensus.paxos
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
 
-class PigPaxosProtocolImpl(
+class PaxosProtocolImpl(
     private val peersetId: PeersetId,
     private val history: History,
     private val ctx: ExecutorCoroutineDispatcher,
@@ -37,7 +37,7 @@ class PigPaxosProtocolImpl(
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
     private val transactionBlocker: TransactionBlocker,
     private val isMetricTest: Boolean
-) : PigPaxosProtocol, SignalSubject {
+) : PaxosProtocol, SignalSubject {
     //  General consesnus
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
     private val globalPeerId = peerResolver.currentPeer()
@@ -152,7 +152,7 @@ class PigPaxosProtocolImpl(
 
             signalPublisher.signal(
                 Signal.PigPaxosReceivedAccept,
-                this@PigPaxosProtocolImpl,
+                this@PaxosProtocolImpl,
                 mapOf(peersetId to otherConsensusPeers()),
                 change = change
             )
@@ -191,7 +191,7 @@ class PigPaxosProtocolImpl(
             val change = Change.fromHistoryEntry(entry)!!
             signalPublisher.signal(
                 Signal.PigPaxosReceivedCommit,
-                this@PigPaxosProtocolImpl,
+                this@PaxosProtocolImpl,
                 mapOf(peersetId to otherConsensusPeers()),
                 change = change
             )
@@ -372,7 +372,7 @@ class PigPaxosProtocolImpl(
             logger.info("Try to become a leader in round: $round, because $reason")
             signalPublisher.signal(
                 Signal.PigPaxosTryToBecomeLeader,
-                this@PigPaxosProtocolImpl,
+                this@PaxosProtocolImpl,
                 mapOf(peersetId to otherConsensusPeers())
             )
 
@@ -423,7 +423,7 @@ class PigPaxosProtocolImpl(
                         votedFor = VotedFor(globalPeerId, true)
                         signalPublisher.signal(
                             Signal.PigPaxosLeaderElected,
-                            this@PigPaxosProtocolImpl,
+                            this@PaxosProtocolImpl,
                             mapOf(peersetId to otherConsensusPeers())
                         )
 

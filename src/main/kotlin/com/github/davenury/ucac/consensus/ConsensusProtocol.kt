@@ -11,8 +11,8 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
-import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocolClientImpl
-import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocolImpl
+import com.github.davenury.ucac.consensus.paxos.PigPaxosProtocolClientImpl
+import com.github.davenury.ucac.consensus.paxos.PaxosProtocolImpl
 import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.consensus.raft.RaftProtocolClientImpl
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -75,7 +75,7 @@ interface ConsensusProtocol {
                 config.metricTest,
             )
 
-            "pigpaxos" -> PigPaxosProtocolImpl(
+            "paxos" -> PaxosProtocolImpl(
                 peersetId,
                 history,
                 ctx,

@@ -5,15 +5,7 @@ import com.github.davenury.ucac.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.common.ChangeNotifier
-import com.github.davenury.ucac.common.PeersetProtocols
-import com.github.davenury.ucac.common.PeerResolver
-import com.github.davenury.ucac.consensus.ConsensusProtocol
-import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
-import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClient
-import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
 import com.github.davenury.ucac.common.*
-import com.github.davenury.ucac.consensus.pigpaxos.PigPaxosProtocol
-import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocol
 import com.github.davenury.ucac.routing.gpacProtocolRouting
 import com.github.davenury.ucac.routing.metaRouting
 import com.zopa.ktor.opentracing.OpenTracingServer
@@ -22,7 +14,6 @@ import io.jaegertracing.Configuration
 import io.jaegertracing.internal.samplers.ConstSampler
 import io.ktor.application.*
 import com.github.davenury.ucac.routing.*
-import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
@@ -299,7 +290,7 @@ class ApplicationUcac(
         when (config.consensus.name){
             "raft" -> raftProtocolRouting(multiplePeersetProtocols)
             "alvin" -> alvinProtocolRouting(multiplePeersetProtocols)
-            "pigpaxos" -> pigPaxosProtocolRouting(multiplePeersetProtocols)
+            "paxos" -> pigPaxosProtocolRouting(multiplePeersetProtocols)
             else -> throw IllegalStateException("Unknown consensus type ${config.consensus.name}")
         }
         twoPCRouting(multiplePeersetProtocols)

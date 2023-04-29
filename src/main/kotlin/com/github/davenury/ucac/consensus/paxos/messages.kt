@@ -1,4 +1,4 @@
-package com.github.davenury.ucac.consensus.pigpaxos
+package com.github.davenury.ucac.consensus.paxos
 
 import com.github.davenury.common.PeerId
 import com.github.davenury.common.history.HistoryEntry
