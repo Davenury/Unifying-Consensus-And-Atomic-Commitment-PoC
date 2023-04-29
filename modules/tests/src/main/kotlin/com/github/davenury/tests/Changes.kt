@@ -26,7 +26,7 @@ class Changes(
     private val acProtocol: ACProtocol?,
     private val ownAddress: String,
 ) {
-    private val changes = peers.mapValues { OnePeersetChanges(it.value, sender) }
+    private val changes = peers.mapValues { OnePeersetChanges(it.value, sender, it.key) }
 
     private val handledChanges: MutableMap<String, Int> = mutableMapOf()
     private val mutex = Mutex()
@@ -169,6 +169,7 @@ class Changes(
 class OnePeersetChanges(
     private val peersAddresses: List<PeerAddress>,
     private val sender: Sender,
+    private val peersetId: PeersetId,
 ) {
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
     private var consensusLeader = AtomicReference<PeerAddress?>(null)
@@ -177,7 +178,8 @@ class OnePeersetChanges(
         return try {
             sender.executeChange(
                 consensusLeader.get()!!,
-                change
+                change,
+                peersetId
             )
         } catch (e: IOException) {
             logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
@@ -188,7 +190,7 @@ class OnePeersetChanges(
 
     suspend fun getChange(): Change {
         return try {
-            httpClient.get("http://${consensusLeader.get()!!.address}/v2/last-change")
+            httpClient.get("http://${consensusLeader.get()!!.address}/v2/last-change?peerset=${peersetId.peersetId}")
         } catch (e: IOException) {
             logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
             populateConsensusLeader()
@@ -203,7 +205,7 @@ class OnePeersetChanges(
     private suspend fun getConsensusLeader(peerAddresses: List<PeerAddress> = peersAddresses): PeerAddress {
         val address = peersAddresses.firstOrNull() ?: throw IllegalStateException("I have no more peers to ask!")
         val peerId = try {
-            sender.getConsensusLeaderId(address)
+            sender.getConsensusLeaderId(address, peersetId)
         } catch (e: IOException) {
             logger.info("$address is dead, I'm trying to get consensus leader from another one")
             return getConsensusLeader(peerAddresses.drop(1))

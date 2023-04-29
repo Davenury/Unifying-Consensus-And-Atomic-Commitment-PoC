@@ -19,7 +19,7 @@ class DummySender(
     val appearedChanges = mutableListOf<Pair<PeerAddress, Change>>()
     val mutex = Mutex()
 
-    override suspend fun executeChange(address: PeerAddress, change: Change): ChangeState {
+    override suspend fun executeChange(address: PeerAddress, change: Change, peersetId: PeersetId): ChangeState {
         mutex.withLock {
             appearedChanges.add(Pair(address, change))
         }
@@ -40,7 +40,7 @@ class DummySender(
         )
     }
 
-    override suspend fun getConsensusLeaderId(address: PeerAddress): PeerId? {
+    override suspend fun getConsensusLeaderId(address: PeerAddress, peersetId: PeersetId): PeerId? {
         return peersets.values.find { address in it }?.first()?.peerId
     }
 
