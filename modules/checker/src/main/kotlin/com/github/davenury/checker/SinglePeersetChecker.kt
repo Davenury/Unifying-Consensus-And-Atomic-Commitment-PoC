@@ -37,31 +37,20 @@ class SinglePeersetChecker(
     }
 
     private fun areChangesEqual(lists: List<Changes>): ChangesEqualityResult {
-        val firstList = lists[0]
-        val otherLists = lists.drop(1)
-
-        if (otherLists.isEmpty()) {
+        val distinctLists = lists.distinct()
+        if (distinctLists.size == 1) {
             return ChangesEqualityResult(true)
         }
 
-        // check sizes
-        if (otherLists.all { it.size == firstList.size }.not()) {
-            logger.error("Changes in peerset: ${peersetId.peersetId} does not have the same size")
-            return ChangesEqualityResult(false, ChangesArentTheSameReason.DIFFERENT_SIZES)
+        // check for different sizes
+        distinctLists.map { it.size }.reduce { first, second ->
+            if (first == second) first else return ChangesEqualityResult(
+                false,
+                ChangesArentTheSameReason.DIFFERENT_SIZES
+            )
         }
 
-        // check changes
-        otherLists.forEachIndexed { index, changes ->
-            for (i in (0 until firstList.size)) {
-                if (firstList[i] != changes[i]) {
-                    logger.error("Peerset ${peersetId.peersetId} has incompatible changes, change from the first peer: ${firstList[i]}, change from the other peer: ${changes[i]}")
-                    return ChangesEqualityResult(false, ChangesArentTheSameReason.DIFFERENT_CHANGES)
-                }
-            }
-        }
-
-        logger.info("Changes in peerset: ${peersetId.peersetId} looks well")
-        return ChangesEqualityResult(true)
+        return ChangesEqualityResult(false, ChangesArentTheSameReason.DIFFERENT_CHANGES)
     }
 
     private fun getMultiplePeersetChanges(changes: Changes): Map<String, MultiplePeersetChange> =
