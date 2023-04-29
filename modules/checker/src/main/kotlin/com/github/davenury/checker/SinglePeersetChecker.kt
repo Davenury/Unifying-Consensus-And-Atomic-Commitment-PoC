@@ -17,19 +17,20 @@ class SinglePeersetChecker(
         val compatibilityResult = areChangesEqual(changes.values.toList())
 
         if (!compatibilityResult.ok) {
-            return CheckResult(false, reason = compatibilityResult.reason)
+            return CheckResult(peersetId, false, reason = compatibilityResult.reason)
         }
 
         val multiplePeersetChanges = getMultiplePeersetChanges(changes.values.toList()[0])
 
-        return CheckResult(true, multiplePeersetChanges = multiplePeersetChanges)
+        return CheckResult(peersetId, true, multiplePeersetChanges = multiplePeersetChanges)
     }
 
     private fun getPeersetChanges(): Map<PeerId, Changes> {
+        logger.info("Getting changes from peerset: ${peersetId.peersetId}")
         return runBlocking {
             peers.associate {
                 it.peerId to async {
-                    changesGetter.getChanges(it)
+                    changesGetter.getChanges(it, peersetId)
                 }.await()
             }
         }
@@ -59,6 +60,7 @@ class SinglePeersetChecker(
             }
         }
 
+        logger.info("Changes in peerset: ${peersetId.peersetId} looks well")
         return ChangesEqualityResult(true)
     }
 
@@ -67,7 +69,12 @@ class SinglePeersetChecker(
             .filter { it.peersets.size > 1 }
             // TwoPC Changes does not need to be in all peersets
             .filterNot { it is TwoPCChange }
-            .map { change -> change.id to MultiplePeersetChange(change.peersets.map { it.peersetId }, listOf(peersetId)) }
+            .map { change ->
+                change.id to MultiplePeersetChange(
+                    change.peersets.map { it.peersetId },
+                    listOf(peersetId)
+                )
+            }
             .toMap()
 
 
@@ -82,6 +89,7 @@ data class ChangesEqualityResult(
 )
 
 data class CheckResult(
+    val peersetId: PeersetId,
     val doesPeersetHaveTheSameChanges: Boolean,
     val reason: ChangesArentTheSameReason? = null,
     val multiplePeersetChanges: Map<String, MultiplePeersetChange> = mapOf(),

@@ -32,11 +32,13 @@ class Launcher(
             }
         )
 
+        logger.info("Got results from all peersets")
         assertChangesBetweenPeersets(results.map { it.get() })
     }
 
     private fun assertChangesBetweenPeersets(results: List<CheckResult>) {
         if (results.any { !it.doesPeersetHaveTheSameChanges }) {
+            logger.error("Changes aren't the same in peersets: ${results.filter { it.doesPeersetHaveTheSameChanges }.map { it.peersetId.peersetId }}")
             throw ChangesArentTheSameException(ChangesArentTheSameReason.DIFFERENT_CHANGES)
         }
 
@@ -59,6 +61,8 @@ class Launcher(
                 throw ChangesArentTheSameException(ChangesArentTheSameReason.DIFFERENT_CHANGES_BETWEEN_PEERSETS)
             }
         }
+
+        logger.info("Everything's fine")
     }
 
     private data class PeersetInformation(
