@@ -207,6 +207,8 @@ class AlvinProtocol(
         }
     }
 
+    override fun getLeaderId(): PeerId? = peerResolver.currentPeer()
+
     override fun getState(): History = history
 
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =

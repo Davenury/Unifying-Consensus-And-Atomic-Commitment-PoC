@@ -41,7 +41,7 @@ fun Application.pigPaxosProtocolRouting(multiplePeersetProtocols: MultiplePeerse
             call.respond(result)
         }
 
-        get("/paxos/current-leader") {
+        get("/consensus/current-leader") {
             call.respond(CurrentLeaderDto(call.consensus().getLeaderId()))
         }
 

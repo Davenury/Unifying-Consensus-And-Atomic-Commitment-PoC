@@ -3,10 +3,10 @@ package com.github.davenury.ucac.consensus.paxos
 import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.PeerAddress
-import com.github.davenury.ucac.consensus.LeaderBasedConsensusProtocol
+import com.github.davenury.ucac.consensus.ConsensusProtocol
 import java.util.concurrent.CompletableFuture
 
-interface PaxosProtocol : LeaderBasedConsensusProtocol {
+interface PaxosProtocol : ConsensusProtocol {
     suspend fun handlePropose(message: PaxosPropose): PaxosPromise
     suspend fun handleAccept(message: PaxosAccept): PaxosAccepted
     suspend fun handleCommit(message: PaxosCommit)

@@ -1,9 +1,6 @@
 package com.github.davenury.ucac.consensus.ratis
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.common.PeerAddress
-import com.github.davenury.common.PeersetId
+import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
@@ -75,6 +72,10 @@ class HistoryRatisNode(
     }
 
     override suspend fun getAcceptedChanges(): List<Change> {
+        TODO("Not yet implemented")
+    }
+
+    override fun getLeaderId(): PeerId? {
         TODO("Not yet implemented")
     }
 }

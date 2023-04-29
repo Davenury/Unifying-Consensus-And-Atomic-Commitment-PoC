@@ -38,7 +38,7 @@ fun Application.raftProtocolRouting(multiplePeersetProtocols: MultiplePeersetPro
             call.respond(result)
         }
 
-        get("/raft/current-leader") {
+        get("/consensus/current-leader") {
             call.respond(CurrentLeaderDto(call.consensus().getLeaderId()))
         }
 

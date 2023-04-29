@@ -1,9 +1,6 @@
 package com.github.davenury.ucac.consensus
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.common.PeerAddress
-import com.github.davenury.common.PeersetId
+import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.common.txblocker.PersistentTransactionBlocker
 import com.github.davenury.ucac.Config
@@ -39,6 +36,8 @@ interface ConsensusProtocol {
 
     suspend fun getProposedChanges(): List<Change>
     suspend fun getAcceptedChanges(): List<Change>
+
+    fun getLeaderId(): PeerId?
 
     companion object {
         fun createConsensusProtocol(
@@ -93,3 +92,7 @@ interface ConsensusProtocol {
     }
 
 }
+
+typealias ConsensusProposeChange = Change
+
+data class VotedFor(val id: PeerId, val elected: Boolean = false)
