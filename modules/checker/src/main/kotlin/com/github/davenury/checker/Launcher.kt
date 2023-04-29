@@ -2,6 +2,7 @@ package com.github.davenury.checker
 
 import com.github.davenury.common.PeersetId
 import com.github.davenury.common.loadConfig
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -10,10 +11,13 @@ import kotlin.system.exitProcess
 
 fun main() {
     val config = loadConfig<Config>()
+    val logger = LoggerFactory.getLogger("Checker")
     try {
         Launcher(config).launch()
+        logger.info("Everything went to the plan")
         exitProcess(0)
     } catch (e: Exception) {
+        logger.error("Error while checking changes", e)
         exitProcess(1)
     }
 }
