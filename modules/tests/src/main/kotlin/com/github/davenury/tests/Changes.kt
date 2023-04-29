@@ -20,7 +20,7 @@ class Changes(
     private val createChangeStrategy: CreateChangeStrategy,
     private val acProtocol: ACProtocol?
 ) {
-    private val changes = peers.mapValues { OnePeersetChanges(it.value, sender) }
+    private val changes = peers.mapValues { OnePeersetChanges(it.value, sender, it.key) }
 
     private val handledChanges: MutableMap<String, Int> = mutableMapOf()
     private val mutex = Mutex()
@@ -65,7 +65,7 @@ class Changes(
         return if (acProtocol == ACProtocol.TWO_PC) {
             try {
                 val consensusLeader = consensusLeaders[peersetId]!!
-                httpClient.get("http://${consensusLeader.address}/v2/last-change")
+                httpClient.get("http://${consensusLeader.address}/v2/last-change?peerset=${peersetId.peersetId}")
             } catch (e: Exception) {
                 logger.error("Could not receive change from ${peers[peersetId]!!.first()}", e)
                 notification.change
@@ -143,6 +143,7 @@ class Changes(
 class OnePeersetChanges(
     private val peersAddresses: List<PeerAddress>,
     private val sender: Sender,
+    private val peersetId: PeersetId,
 ) {
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
     private var consensusLeader: PeerId? = null
@@ -151,12 +152,13 @@ class OnePeersetChanges(
         val address = peersAddresses.find { it.peerId == consensusLeader }!!
         return sender.executeChange(
             address,
-            change
+            change,
+            peersetId
         )
     }
 
     suspend fun getConsensusLeader(): PeerId =
-        sender.getConsensusLeaderId(peersAddresses.first())!!
+        sender.getConsensusLeaderId(peersAddresses.first(), peersetId)!!
             .also { this.consensusLeader = it }
 
 

@@ -1,9 +1,6 @@
 package com.github.davenury.tests
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.CurrentLeaderDto
-import com.github.davenury.common.PeerAddress
-import com.github.davenury.common.PeerId
+import com.github.davenury.common.*
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -12,18 +9,18 @@ import org.slf4j.LoggerFactory
 import kotlin.Exception
 
 interface Sender {
-    suspend fun executeChange(address: PeerAddress, change: Change): ChangeState
-    suspend fun getConsensusLeaderId(address: PeerAddress): PeerId?
+    suspend fun executeChange(address: PeerAddress, change: Change, peersetId: PeersetId): ChangeState
+    suspend fun getConsensusLeaderId(address: PeerAddress, peersetId: PeersetId): PeerId?
 }
 
 class HttpSender(
     private val acProtocolConfig: ACProtocolConfig
 ): Sender {
-    override suspend fun executeChange(address: PeerAddress, change: Change): ChangeState {
+    override suspend fun executeChange(address: PeerAddress, change: Change, peersetId: PeersetId): ChangeState {
         return try {
             logger.info("Sending $change to $address")
             Metrics.bumpSentChanges()
-            val response = httpClient.post<HttpStatement>("http://${address.address}/v2/change/async?${acProtocolConfig.protocol.getParam(acProtocolConfig.enforceUsage)}") {
+            val response = httpClient.post<HttpStatement>("http://${address.address}/v2/change/async?${acProtocolConfig.protocol.getParam(acProtocolConfig.enforceUsage)}&peerset=${peersetId.peersetId}") {
                 accept(ContentType.Application.Json)
                 contentType(ContentType.Application.Json)
                 body = change
@@ -40,9 +37,9 @@ class HttpSender(
         }
     }
 
-    override suspend fun getConsensusLeaderId(address: PeerAddress): PeerId? {
+    override suspend fun getConsensusLeaderId(address: PeerAddress, peersetId: PeersetId): PeerId? {
         return try {
-            httpClient.get<CurrentLeaderDto>("http://${address.address}/consensus/current-leader").currentLeaderPeerId
+            httpClient.get<CurrentLeaderDto>("http://${address.address}/consensus/current-leader?peerset=${peersetId.peersetId}").currentLeaderPeerId
         } catch (e: Exception) {
             logger.error("Error while asking for consensus leader", e)
             null
