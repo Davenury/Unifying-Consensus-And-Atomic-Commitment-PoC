@@ -122,7 +122,7 @@ class ApplicationUcac(
 
         logger.info("My peersets: $peersetIds")
         val changeNotifier = ChangeNotifier(peerResolver)
-        val tracer = Configuration(peerResolver.peerName())
+        val tracer = Configuration("${peerResolver.peerName()}-${config.experimentId}")
             .withSampler(Configuration.SamplerConfiguration.fromEnv()
                 .withType(ConstSampler.TYPE)
                 .withParam(1))
