@@ -310,14 +310,27 @@ class TwoPC(
                 response.peersetId to address
             }.toMap()
 
-        if (addressesToAskAgain.isEmpty()) {
+        val deadPeersSubstitute = responses.filter { (_, response) -> response.failureBecauseOfDeadPeer }
+            .map { (peerAddress, response) ->
+                val peers = peerResolver.getPeersFromPeerset(response.peersetId)
+                val addressIndex = peers.indexOf(peerAddress)
+                if (addressIndex == -1) {
+                    throw IllegalStateException("Peer $peerAddress not found in peerset ${response.peersetId}")
+                }
+                val newAddress = peers.getOrNull((addressIndex + 1) % peers.size)
+                    ?: throw java.lang.IllegalStateException("I do not have any alive peer to ask in peerset ${response.peersetId}")
+                currentConsensusLeaders[response.peersetId] = newAddress
+                response.peersetId to newAddress
+            }
+
+        if (addressesToAskAgain.isEmpty() && deadPeersSubstitute.isEmpty()) {
             return (recentResponses + responses).values.map { it.success }.all { it }
         }
 
         return getProposePhaseResponses(
-            addressesToAskAgain,
+            addressesToAskAgain + deadPeersSubstitute,
             change,
-            (recentResponses + responses.filterNot { it.value.redirect })
+            (recentResponses + responses.filter { it.value.success })
         )
     }
 
