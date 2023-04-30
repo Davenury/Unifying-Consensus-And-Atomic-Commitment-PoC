@@ -6,3 +6,6 @@ helm uninstall grafana -n=rszuma &
 helm uninstall victoria loki -n=rszuma &
 helm uninstall loki -n=rszuma &
 helm uninstall tempo -n=rszuma &
+ kill $(ps -aux | grep "alvin" | awk {'print $2'})
+ kill $(ps -aux | grep "raft" | awk {'print $2'})
+ kill $(ps -aux | grep "paxos" | awk {'print $2'})

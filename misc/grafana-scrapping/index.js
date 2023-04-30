@@ -9,8 +9,8 @@ const getBaseDownloadPath = () => {
 
 const baseDownloadPath = process.env.BASE_DOWNLOAD_PATH ?? getBaseDownloadPath()
 const namespace = process.env.NAMESPACE ?? "ddebowski"
-const from = process.env.START_TIMESTAMP ?? "1682796165236"
-const to = process.env.END_TIMESTAMP ?? "1682797165236"
+const from = process.env.START_TIMESTAMP ?? "1682887830000"
+const to = process.env.END_TIMESTAMP ?? "1682887965000"
 const protocol = process.env.PROTOCOL ?? "alvin"
 const experiment = process.env.EXPERIMENT ?? "3x1"
 
@@ -44,6 +44,7 @@ const downloadFile = async (page, {
     await page.goto(`http://localhost:3000/d/HSUzSq2Vk/poc?orgId=1&refresh=10s&&viewPanel=${panelId}&inspect=${panelId}&var-namespace=${namespace}&from=${from}&to=${to}`, {waitUntil: "load"});
 
     await page.waitForSelector("div[role='dialog']")
+    await new Promise(resolve => setTimeout(resolve, 1_000));
     const dataOptionsButton = await page.waitForSelector('button[aria-controls="Data options"]')
     await dataOptionsButton.click()
 
@@ -70,7 +71,7 @@ function delay(time) {
 }
 
 (async () => {
-    const browser = await puppeteer.launch({headless: false});
+    const browser = await puppeteer.launch({headless: true});
     const page = await browser.newPage();
     await page.setViewport({ width: 1366, height: 768});
 

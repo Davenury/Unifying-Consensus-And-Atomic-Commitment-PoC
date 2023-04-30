@@ -2,10 +2,11 @@ directory=$(dirname $0)
 echo $directory
 
 protocols=("alvin" "paxos" "raft")
+#protocols=("alvin" )
 scripts=("consensus" "stress-consensus-test")
 
 peerset_size_start=3
-peerset_size_end=5
+peerset_size_end=3
 
 echo "Script directory: $directory"
 cd "$directory/misc/grafana-scrapping" && npm i
@@ -18,16 +19,14 @@ do
     do
       echo "Run experiment for protocol: $protocol for peerset_size: $peerset_size"
       cd $directory/cmd && CONSENSUS=$protocol "./scripts/$script.sh" $peerset_size 0 &
+      START_TIMESTAMP=$(date +%s%3N)
       scriptPID=$!
       sleep 1m
       grafana_pod=$(kubectl get pods -n=rszuma | grep "grafana" | awk {'print $1'})
       echo "grafana pods: $grafana_pod"
       kubectl port-forward $grafana_pod 3000:3000 -n=rszuma &
       portForwardPID=$!
-      sleep 3m
-      START_TIMESTAMP=$(date +%s%3N)
-      echo "Grafana start: $START_TIMESTAMP"
-      sleep 3m
+      sleep 5m
       END_TIMESTAMP=$(date +%s%3N)
       echo "Grafana end: $END_TIMESTAMP"
       BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$script" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
