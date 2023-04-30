@@ -5,3 +5,4 @@ echo $directory
 helm uninstall grafana -n=rszuma &
 helm uninstall victoria loki -n=rszuma &
 helm uninstall loki -n=rszuma &
+helm uninstall tempo -n=rszuma &

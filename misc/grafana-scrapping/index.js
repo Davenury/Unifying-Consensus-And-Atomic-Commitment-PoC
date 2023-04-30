@@ -26,8 +26,8 @@ const experiments = [
 
 console.log(experiments)
 
-const panels = [14, 18, 27, 4, 12]
-// const panels = [14, 18, 27, 4, 12, 21]
+const panels = [14, 18, 27, 4, 12, 31]
+// const panels = [14, 18, 27, 4, 12, 31, 21]
 const downloadFile = async (page, {
     namespace,
     panelId,
