@@ -59,6 +59,7 @@ class AlvinProtocol(
     override fun getPeerName() = peerId.toString()
 
     override suspend fun begin() {
+        Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
         logger.info("Start alvin protocol")
     }
 

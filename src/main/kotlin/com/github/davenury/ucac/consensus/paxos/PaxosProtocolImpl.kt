@@ -420,6 +420,7 @@ class PaxosProtocolImpl(
 
                     isMoreThanHalf(votes) -> {
                         logger.info("I have been selected as a leader in round $round")
+                        Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
                         votedFor = VotedFor(globalPeerId, true)
                         signalPublisher.signal(
                             Signal.PigPaxosLeaderElected,

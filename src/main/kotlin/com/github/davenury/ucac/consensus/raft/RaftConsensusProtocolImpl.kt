@@ -13,6 +13,7 @@ import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.github.davenury.ucac.consensus.VotedFor
 import com.github.davenury.ucac.utils.MdcProvider
 import com.zopa.ktor.opentracing.launchTraced
@@ -160,6 +161,8 @@ class RaftConsensusProtocolImpl(
         logger.info(
             "I have been selected as a leader (in term $currentTerm)"
         )
+
+        Metrics.bumpLeaderElection(peerId, peersetId)
 
         peerToNextIndex.keys.forEach {
             peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))

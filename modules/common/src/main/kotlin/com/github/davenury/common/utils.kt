@@ -39,6 +39,16 @@ object Metrics {
             .increment()
     }
 
+    fun bumpLeaderElection(peerId: PeerId, peersetId: PeersetId) {
+        Counter
+            .builder("leader_elected")
+            .tag("peerId", peerId.peerId.lowercase())
+            .tag("peersetId", peersetId.peersetId.lowercase())
+            .tag("protocol", "consensus")
+            .register(meterRegistry)
+            .increment()
+    }
+
     fun startTimer(changeId: String) {
         changeIdToTimer[changeId] = Instant.now()
     }
