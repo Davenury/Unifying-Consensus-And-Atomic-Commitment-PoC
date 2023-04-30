@@ -33,7 +33,8 @@ data class Config(
     // TODO - after implementing multiple consensus this might come in handy
     val consensusProtocol: String? = null,
     val fixedPeersetsInChange: String? = null,
-    val loadGeneratorConfig: LoadGeneratorConfig
+    val loadGeneratorConfig: LoadGeneratorConfig,
+    val enforceConsensusLeader: Boolean = true,
 ) {
     fun peerAddresses(): Map<PeersetId, List<PeerAddress>> {
         val parsedPeers = parsePeers(peers)

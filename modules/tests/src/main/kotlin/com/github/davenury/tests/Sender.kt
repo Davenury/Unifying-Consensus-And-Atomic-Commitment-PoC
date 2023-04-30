@@ -6,6 +6,8 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import org.slf4j.LoggerFactory
+import java.io.IOException
+import kotlin.Exception
 
 interface Sender {
     suspend fun executeChange(address: PeerAddress, change: Change, peersetId: PeersetId): ChangeState
@@ -40,6 +42,9 @@ class HttpSender(
     override suspend fun getConsensusLeaderId(address: PeerAddress, peersetId: PeersetId): PeerId? {
         return try {
             httpClient.get<PeersetInformation>("http://${address.address}/peerset-information?peerset=${peersetId.peersetId}").currentConsensusLeader
+        } catch (e: IOException) {
+            logger.error("Address: ${address.address} is dead, propagating exception")
+            throw e
         } catch (e: Exception) {
             logger.error("Error while asking for consensus leader", e)
             null
