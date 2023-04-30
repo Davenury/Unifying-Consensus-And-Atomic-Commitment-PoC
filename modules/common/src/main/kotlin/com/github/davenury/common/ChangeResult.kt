@@ -4,6 +4,7 @@ data class ChangeResult(
     val status: Status,
     val detailedMessage: String? = null,
     val currentEntryId: String? = null,
+    val currentConsensusLeader: PeerId? = null,
 ) {
     enum class Status {
         /**

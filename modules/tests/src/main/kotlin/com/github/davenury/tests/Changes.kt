@@ -4,19 +4,19 @@ import com.github.davenury.common.*
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.tests.strategies.changes.CreateChangeStrategy
 import com.github.davenury.tests.strategies.peersets.GetPeersStrategy
-import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
-import java.io.IOError
 import java.io.IOException
-import java.lang.IllegalStateException
 import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.collections.component1
+import kotlin.collections.component2
+import kotlin.collections.set
 
 class Changes(
     private val peers: Map<PeersetId, List<PeerAddress>>,
@@ -26,7 +26,7 @@ class Changes(
     private val acProtocol: ACProtocol?,
     private val ownAddress: String,
 ) {
-    private val changes = peers.mapValues { OnePeersetChanges(it.value, sender) }
+    private val changes = peers.mapValues { OnePeersetChanges(it.value, sender, it.key) }
 
     private val handledChanges: MutableMap<String, Int> = mutableMapOf()
     private val mutex = Mutex()
@@ -72,12 +72,12 @@ class Changes(
         if (shouldStartHandlingNotification(notification)) {
             (notification.change.peersets.map { it.peersetId }).forEach { peersetId ->
                 val change = getChange(notification, peersetId)
-                if (notification.result.status == ChangeResult.Status.SUCCESS) {
+                if (notification.result.status == ChangeResult.Status.SUCCESS || (notification.result.status == ChangeResult.Status.ABORTED && acProtocol == ACProtocol.TWO_PC)) {
                     val parentId = change.toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
-                    logger.info("Setting new parent id for peerset $peersetId: $parentId, change was for ${(change as AddUserChange).userName}")
+                    logger.info("Setting new parent id for peerset $peersetId: $parentId, change type: ${change::class.java.simpleName}${if (change is AddUserChange) "change was for ${change.userName}" else ""}")
                 } else if (notification.result.status == ChangeResult.Status.CONFLICT && notification.result.currentEntryId != null) {
-                    logger.info("Change conflicted, yet we have desired parent id for peerset: ${notification.result.currentEntryId}")
+                    logger.info("Change is ${notification.result.status.name.lowercase()}, yet we have current entry id for peerset: ${notification.result.currentEntryId}")
                     changes[peersetId]!!.overrideParentId(notification.result.currentEntryId!!)
                 }
             }
@@ -169,6 +169,7 @@ class Changes(
 class OnePeersetChanges(
     private val peersAddresses: List<PeerAddress>,
     private val sender: Sender,
+    private val peersetId: PeersetId,
 ) {
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
     private var consensusLeader = AtomicReference<PeerAddress?>(null)
@@ -177,7 +178,8 @@ class OnePeersetChanges(
         return try {
             sender.executeChange(
                 consensusLeader.get()!!,
-                change
+                change,
+                peersetId
             )
         } catch (e: IOException) {
             logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
@@ -188,7 +190,7 @@ class OnePeersetChanges(
 
     suspend fun getChange(): Change {
         return try {
-            httpClient.get("http://${consensusLeader.get()!!.address}/v2/last-change")
+            httpClient.get("http://${consensusLeader.get()!!.address}/v2/last-change?peerset=${peersetId.peersetId}")
         } catch (e: IOException) {
             logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
             populateConsensusLeader()
@@ -203,7 +205,7 @@ class OnePeersetChanges(
     private suspend fun getConsensusLeader(peerAddresses: List<PeerAddress> = peersAddresses): PeerAddress {
         val address = peersAddresses.firstOrNull() ?: throw IllegalStateException("I have no more peers to ask!")
         val peerId = try {
-            sender.getConsensusLeaderId(address)
+            sender.getConsensusLeaderId(address, peersetId)
         } catch (e: IOException) {
             logger.info("$address is dead, I'm trying to get consensus leader from another one")
             return getConsensusLeader(peerAddresses.drop(1))

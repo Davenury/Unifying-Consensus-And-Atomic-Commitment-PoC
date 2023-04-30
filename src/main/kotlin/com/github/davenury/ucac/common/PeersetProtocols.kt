@@ -9,6 +9,7 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.commitment.gpac.GPACFactory
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
+import com.github.davenury.ucac.common.structure.CodeSubscriber
 import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
 import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
@@ -74,6 +75,10 @@ class PeersetProtocols(
             config.metricTest,
             changeNotifier = changeNotifier
         )
+
+        subscribers?.registerSubscriber(CodeSubscriber { peerId, peersetId ->
+            twoPC.newConsensusLeaderElected(peerId, peersetId)
+        })
     }
 
     override fun close() {

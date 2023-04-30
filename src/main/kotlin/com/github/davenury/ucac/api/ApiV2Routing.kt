@@ -140,5 +140,12 @@ fun Application.apiV2Routing(
             service.registerSubscriber(peersetId, address)
             call.respond(HttpStatusCode.OK)
         }
+
+        post("/v2/subscribe-to-peer-configuration-changes") {
+            val address = call.receive<SubscriberAddress>()
+            val peersetId = call.peersetId()
+            service.registerSubscriber(peersetId, address)
+            call.respond(HttpStatusCode.OK)
+        }
     }
 }

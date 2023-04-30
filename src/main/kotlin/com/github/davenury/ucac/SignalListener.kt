@@ -20,6 +20,7 @@ enum class Signal {
     OnHandlingApplyEnd,
     OnHandlingApplyCommitted,
     ReachedMaxRetries,
+    ConsensusLeaderIHaveBeenElected,
     ConsensusLeaderElected,
     ConsensusLeaderDoesNotSendHeartbeat,
     ConsensusAfterProposingChange,
@@ -31,6 +32,8 @@ enum class Signal {
     TwoPCOnChangeAccepted,
     TwoPCBeforeProposePhase,
     TwoPCOnHandleDecision,
+    TwoPCOnAskForDecision,
+    TwoPCOnHandleDecisionEnd,
 }
 
 

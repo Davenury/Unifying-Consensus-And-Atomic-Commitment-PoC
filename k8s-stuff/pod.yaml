@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: ddebowski
+  name: peer0
+  labels:
+    project: ucac
+    peerId: "0"
+    peersetId: "0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      peerId: "0"
+      peersetId: "0"
+  template:
+    metadata:
+      labels:
+        peerId: "0"
+        peersetId: "0"
+    spec:
+      containers:
+        - name: redis
+          image: busybox
+          command:
+            - sh
+            - -c
+            - "sleep 3600"
+          env:
+            - name: MASTER
+              value: "true"
+          volumeMounts:
+            - name: storage
+              mountPath: /storage
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: server-volume-victoria-victoria-metrics-single-server-0

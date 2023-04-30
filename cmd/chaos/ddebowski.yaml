@@ -1,0 +1,47 @@
+apiVersion: lsc.davenury.github.com/v1
+kind: Scenario
+metadata:
+  name: gpac-chaos-ddebowski
+  namespace: ddebowski
+spec:
+  phases:
+    - duration: PT30S
+      actions:
+        - namespace: ddebowski
+          resourceType: deployment
+          action: scale
+          resourceName: peer1-dep
+          scaleDeploymentSpec:
+            value: 0
+        - namespace: ddebowski
+          resourceType: deployment
+          action: scale
+          resourceName: peer4-dep
+          scaleDeploymentSpec:
+            value: 0
+    - duration: PT30S
+      actions:
+        - namespace: ddebowski
+          resourceType: deployment
+          action: scale
+          resourceName: peer1-dep
+          scaleDeploymentSpec:
+            value: 0
+        - namespace: ddebowski
+          resourceType: deployment
+          action: scale
+          resourceName: peer2-dep
+          scaleDeploymentSpec:
+            value: 0
+        - namespace: ddebowski
+          resourceType: deployment
+          action: scale
+          resourceName: peer4-dep
+          scaleDeploymentSpec:
+            value: 0
+        - namespace: ddebowski
+          resourceType: deployment
+          action: scale
+          resourceName: peer5-dep
+          scaleDeploymentSpec:
+            value: 0

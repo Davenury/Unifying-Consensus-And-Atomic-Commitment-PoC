@@ -233,7 +233,8 @@ data class TwoPCChange(
     val twoPCStatus: TwoPCStatus,
     val change: Change,
     override val id: String = UUID.randomUUID().toString(),
-    override val peersets: List<ChangePeersetInfo>
+    override val peersets: List<ChangePeersetInfo>,
+    val leaderPeerset: PeersetId,
 ) : Change(id) {
     override fun equals(other: Any?): Boolean {
         if (other !is TwoPCChange || !super.doesEqual(other)) {
