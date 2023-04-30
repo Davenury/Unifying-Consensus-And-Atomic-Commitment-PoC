@@ -46,6 +46,10 @@ func DoInit(namespace string, createNamespace bool, persistence bool) {
 			"scrape": map[string]interface{}{
 				"enabled": true,
 				"config": map[string]interface{}{
+					"global": map[string]interface{}{
+						"scrape_interval": "5s",
+						"scrape_timeout":  "2s",
+					},
 					"scrape_configs": []map[string]interface{}{
 						{
 							"job_name": "victoriametrics",
