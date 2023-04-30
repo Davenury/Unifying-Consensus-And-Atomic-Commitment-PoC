@@ -81,7 +81,7 @@ class TwoPCProtocolClientImpl : TwoPCProtocolClient {
                     peersetId = it.second,
                 )
             } catch(e: IOException) {
-                logger.error("Error while evaluating response from ${it.first}", e)
+                logger.error("Error while evaluating response from ${it.first} - peer is dead", e)
                 it.first to TwoPCRequestResponse(
                     success = false,
                     peersetId = it.second,

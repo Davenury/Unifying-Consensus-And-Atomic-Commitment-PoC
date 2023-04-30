@@ -941,6 +941,52 @@ class TwoPCSpec : IntegrationTestBase() {
         }
     }
 
+    @Test
+    fun `should be able to execute transaction even if peer0 is dead`(): Unit = runBlocking {
+        val change2PCAppliedPhaser = Phaser(2)
+        val applied2PCChangesListener = SignalListener {
+            logger.info("Arrived 2PC: ${it.subject.getPeerName()}")
+            change2PCAppliedPhaser.arrive()
+        }
+
+        val electionPhaser = Phaser(3)
+        val leaderElected = SignalListener {
+            electionPhaser.arrive()
+        }
+
+        listOf(electionPhaser, change2PCAppliedPhaser).forEach { it.register() }
+
+        val signalListenersForCohort = mapOf(
+            Signal.TwoPCOnChangeApplied to applied2PCChangesListener,
+            Signal.TwoPCOnHandleDecisionEnd to applied2PCChangesListener,
+            Signal.ConsensusLeaderElected to leaderElected
+        )
+
+        apps = TestApplicationSet(
+            mapOf(
+                "peerset0" to listOf("peer0", "peer1", "peer2"),
+                "peerset1" to listOf("peer3", "peer4", "peer5"),
+            ),
+            appsToExclude = listOf("peer3"),
+            signalListeners = (0..5).map { "peer$it" }.associateWith { signalListenersForCohort },
+        )
+
+        electionPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        val change1 = change(0, 1)
+        executeChange(
+            "http://${apps.getPeer("peer0").address}/v2/change/async?use_2pc=true&peerset=peerset0",
+            change1
+        )
+
+        change2PCAppliedPhaser.arriveAndAwaitAdvanceWithTimeout()
+
+        askAllRunningPeersForChanges("peerset0", "peerset1").forEach {
+            expectThat(it.size).isEqualTo(2)
+            expectThat(it[1]).isA<AddUserChange>()
+        }
+    }
+
     private suspend fun executeChange(uri: String, change: Change): HttpResponse =
         testHttpClient.post(uri) {
             contentType(ContentType.Application.Json)

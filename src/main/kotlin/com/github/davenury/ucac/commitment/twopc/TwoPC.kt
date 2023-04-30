@@ -123,10 +123,14 @@ class TwoPC(
         } else {
             consensusProtocol.getLeaderId()?.let {
                 throw ImNotLeaderException(it, peersetId)
-            } ?: throw TwoPCHandleException("TwoPCChange didn't apply change")
+            } ?: kotlin.run {
+                logger.error("There's no consensus leader!")
+                throw TwoPCHandleException("TwoPCChange didn't apply change")
+            }
         }
 
         if (result.status != ChangeResult.Status.SUCCESS) {
+            logger.error("Two pc did not apply change, result is ${result.status.name.lowercase()}")
             throw TwoPCHandleException("TwoPCChange didn't apply change")
         }
 
@@ -320,6 +324,7 @@ class TwoPC(
                 val newAddress = peers.getOrNull((addressIndex + 1) % peers.size)
                     ?: throw java.lang.IllegalStateException("I do not have any alive peer to ask in peerset ${response.peersetId}")
                 currentConsensusLeaders[response.peersetId] = newAddress
+                logger.info("Peer from peerset ${response.peersetId} appears to be dead, I get next peer ${newAddress.peerId}")
                 response.peersetId to newAddress
             }
 
