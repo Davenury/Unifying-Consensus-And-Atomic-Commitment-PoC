@@ -8,19 +8,26 @@ const getBaseDownloadPath = () => {
 }
 
 const baseDownloadPath = process.env.BASE_DOWNLOAD_PATH ?? getBaseDownloadPath()
-
+const namespace = process.env.NAMESPACE ?? "ddebowski"
+const from = process.env.START_TIMESTAMP ?? "1682796165236"
+const to = process.env.END_TIMESTAMP ?? "1682797165236"
+const protocol = process.env.PROTOCOL ?? "alvin"
+const experiment = process.env.EXPERIMENT ?? "3x1"
 
 const experiments = [
     {
-        namespace: "ddebowski",
-        from: "1679148002592",
-        to: "1679148130702",
-        protocol: "gpac",
-        experiment: "3x2",
+        namespace: namespace,
+        from: from,
+        to: to,
+        protocol: protocol,
+        experiment: experiment,
     }
 ]
 
-const panels = [14, 18, 27, 4, 12, 21]
+console.log(experiments)
+
+const panels = [14, 18, 27, 4, 12]
+// const panels = [14, 18, 27, 4, 12, 21]
 const downloadFile = async (page, {
     namespace,
     panelId,
@@ -63,7 +70,7 @@ function delay(time) {
 }
 
 (async () => {
-    const browser = await puppeteer.launch({headless: false});
+    const browser = await puppeteer.launch({headless: true});
     const page = await browser.newPage();
     await page.setViewport({ width: 1366, height: 768});
 
