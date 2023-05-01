@@ -154,13 +154,3 @@ fun Application.apiV2Routing(
         }
     }
 }
-
-data class PeersetInformationDto(
-    val currentConsensusLeaderId: String?,
-    val peersInPeerset: List<String>
-)
-
-fun PeersetInformation.toDto() = PeersetInformationDto(
-    currentConsensusLeaderId = this.currentConsensusLeader?.peerId,
-    peersInPeerset = this.peersInPeerset.map { it.peerId }
-)
