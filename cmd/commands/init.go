@@ -153,7 +153,7 @@ func DoInit(namespace string, createNamespace bool, persistence bool) {
 			},
 		},
 	}
-	installChart(namespace, "vm", "victoria-metrics-single", "victoria", victoriaValues)
+	installChart(namespace, "vm", "victoria-metrics-single", "victoria", "0.8.59", victoriaValues)
 
 	grafanaValues := map[string]interface{}{
 		"adminPassword": "admin123",
@@ -230,7 +230,7 @@ func DoInit(namespace string, createNamespace bool, persistence bool) {
 	}
 
 	// install grafana
-	installChart(namespace, "grafana", "grafana", "grafana", grafanaValues)
+	installChart(namespace, "grafana", "grafana", "grafana", "6.52.2", grafanaValues)
 
 	lokiValues := map[string]interface{}{
 		"loki": map[string]interface{}{
@@ -267,7 +267,7 @@ func DoInit(namespace string, createNamespace bool, persistence bool) {
 		},
 	}
 
-	installChart(namespace, "grafana", "loki", "loki", lokiValues)
+	installChart(namespace, "grafana", "loki", "loki", "4.8.0", lokiValues)
 
 	tempoValues := map[string]interface{}{
 		"tempo": map[string]interface{}{
@@ -286,10 +286,10 @@ func DoInit(namespace string, createNamespace bool, persistence bool) {
 		},
 	}
 
-	installChart(namespace, "grafana", "tempo", "tempo", tempoValues)
+	installChart(namespace, "grafana", "tempo", "tempo", "1.0.2", tempoValues)
 }
 
-func installChart(namespace string, repoName string, chartName string, releaseName string, values map[string]interface{}) {
+func installChart(namespace string, repoName string, chartName string, releaseName string, version string, values map[string]interface{}) {
 	actionConfig := new(action.Configuration)
 	if err := actionConfig.Init(settings.RESTClientGetter(), namespace, "", log.Printf); err != nil {
 		log.Fatal(err)
@@ -297,6 +297,7 @@ func installChart(namespace string, repoName string, chartName string, releaseNa
 	client := action.NewInstall(actionConfig)
 
 	client.ReleaseName = releaseName
+	client.ChartPathOptions.Version = version
 	cp, err := client.ChartPathOptions.LocateChart(fmt.Sprintf("%s/%s", repoName, chartName), settings)
 	if err != nil {
 		log.Fatal(err)
