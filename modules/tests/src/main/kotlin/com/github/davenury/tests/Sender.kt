@@ -41,7 +41,9 @@ class HttpSender(
 
     override suspend fun getConsensusLeaderId(address: PeerAddress, peersetId: PeersetId): PeerId? {
         return try {
-            httpClient.get<PeersetInformation>("http://${address.address}/peerset-information?peerset=${peersetId.peersetId}").currentConsensusLeader
+            httpClient.get<PeersetInformationDto>("http://${address.address}/peerset-information?peerset=${peersetId.peersetId}")
+                .toDomain()
+                .currentConsensusLeader
         } catch (e: IOException) {
             logger.error("Address: ${address.address} is dead, propagating exception", e)
             throw e
