@@ -43,7 +43,7 @@ class HttpSender(
         return try {
             httpClient.get<PeersetInformation>("http://${address.address}/peerset-information?peerset=${peersetId.peersetId}").currentConsensusLeader
         } catch (e: IOException) {
-            logger.error("Address: ${address.address} is dead, propagating exception")
+            logger.error("Address: ${address.address} is dead, propagating exception", e)
             throw e
         } catch (e: Exception) {
             logger.error("Error while asking for consensus leader", e)
