@@ -147,5 +147,20 @@ fun Application.apiV2Routing(
             service.registerSubscriber(peersetId, address)
             call.respond(HttpStatusCode.OK)
         }
+
+        get("/peerset-information") {
+            val peersetId = call.peersetId()
+            call.respond(service.getPeersetInformation(peersetId).toDto())
+        }
     }
 }
+
+data class PeersetInformationDto(
+    val currentConsensusLeaderId: String?,
+    val peersInPeerset: List<String>
+)
+
+fun PeersetInformation.toDto() = PeersetInformationDto(
+    currentConsensusLeaderId = this.currentConsensusLeader?.peerId,
+    peersInPeerset = this.peersInPeerset.map { it.peerId }
+)
