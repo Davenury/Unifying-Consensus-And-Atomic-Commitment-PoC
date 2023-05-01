@@ -153,7 +153,7 @@ class ApplicationUcac(
             subscribers,
         )
 
-        service = ApiV2Service(config, multiplePeersetProtocols, changeNotifier)
+        service = ApiV2Service(config, multiplePeersetProtocols, changeNotifier, peerResolver)
 
         install(OpenTracingServer) {
             addTag("threadName") { Thread.currentThread().name }
