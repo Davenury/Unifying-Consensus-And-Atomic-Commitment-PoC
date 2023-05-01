@@ -301,8 +301,9 @@ class TwoPC(
         recentResponses: Map<PeerAddress, TwoPCRequestResponse>,
         iteration: Int = 0,
     ): Boolean {
+        println("here: $iteration, ${peers.keys.maxOf { peerResolver.getPeersFromPeerset(it).size }}")
         if (iteration > peers.keys.maxOf { peerResolver.getPeersFromPeerset(it).size }) {
-            throw java.lang.IllegalStateException("One of the peersets is dead entirely!")
+            return false
         }
         val responses = protocolClient.sendAccept(peers, change)
 
@@ -326,7 +327,7 @@ class TwoPC(
                     throw IllegalStateException("Peer $peerAddress not found in peerset ${response.peersetId}")
                 }
                 val newAddress = peers.getOrNull((addressIndex + 1) % peers.size)
-                    ?: throw java.lang.IllegalStateException("I do not have any alive peer to ask in peerset ${response.peersetId}")
+                    ?: return false
                 currentConsensusLeaders[response.peersetId] = newAddress
                 logger.info("Peer from peerset ${response.peersetId} appears to be dead, I get next peer ${newAddress.peerId}")
                 response.peersetId to newAddress
@@ -339,7 +340,7 @@ class TwoPC(
         return getProposePhaseResponses(
             addressesToAskAgain + deadPeersSubstitute,
             change,
-            (recentResponses + responses.filter { it.value.success }),
+            (recentResponses + responses.filterNot { it.value.failureBecauseOfDeadPeer || it.value.redirect }),
             iteration + 1,
         )
     }
