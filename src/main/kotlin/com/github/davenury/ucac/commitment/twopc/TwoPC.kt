@@ -298,8 +298,12 @@ class TwoPC(
     suspend fun getProposePhaseResponses(
         peers: Map<PeersetId, PeerAddress>,
         change: Change,
-        recentResponses: Map<PeerAddress, TwoPCRequestResponse>
+        recentResponses: Map<PeerAddress, TwoPCRequestResponse>,
+        iteration: Int = 0,
     ): Boolean {
+        if (iteration > peers.keys.maxOf { peerResolver.getPeersFromPeerset(it).size }) {
+            throw java.lang.IllegalStateException("One of the peersets is dead entirely!")
+        }
         val responses = protocolClient.sendAccept(peers, change)
 
         val addressesToAskAgain = responses.filter { (_, response) -> response.redirect }
@@ -335,7 +339,8 @@ class TwoPC(
         return getProposePhaseResponses(
             addressesToAskAgain + deadPeersSubstitute,
             change,
-            (recentResponses + responses.filter { it.value.success })
+            (recentResponses + responses.filter { it.value.success }),
+            iteration + 1,
         )
     }
 
