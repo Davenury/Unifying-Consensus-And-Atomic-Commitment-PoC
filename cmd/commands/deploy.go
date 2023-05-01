@@ -17,6 +17,8 @@ import (
 
 type DeployConfig struct {
 	NumberOfPeersInPeersets []int
+	NumberOfPeersV2         int
+	PeersetsConfigurationV2 string
 	DeployNamespace         string
 	DeployCreateNamespace   bool
 	WaitForReadiness        bool
@@ -26,6 +28,29 @@ type DeployConfig struct {
 	ProxyDelay              string
 	ProxyLimit              string
 	MonitoringNamespace     string
+}
+
+func (cfg *DeployConfig) version() string {
+	if cfg.NumberOfPeersV2 != 0 {
+		return "v2"
+	}
+	return "v1"
+}
+
+func (cfg *DeployConfig) GetPeersAndPeersets() (string, string) {
+	if cfg.version() == "v2" {
+		peers, _ := utils.GenerateServicesForPeersStaticPort([]int{cfg.NumberOfPeersV2}, servicePort)
+		peersets := cfg.PeersetsConfigurationV2
+		return peers, peersets
+	}
+	return utils.GenerateServicesForPeersStaticPort(cfg.NumberOfPeersInPeersets, servicePort)
+}
+
+func (cfg *DeployConfig) GetDeployFunction() func(config DeployConfig, peers string, peersets string, experimentUUID uuid.UUID) {
+	if cfg.version() == "v2" {
+		return DoDeployV2
+	}
+	return DoDeployV1
 }
 
 const ratisPort = 10024
@@ -42,7 +67,11 @@ func CreateDeployCommand() *cobra.Command {
 		},
 	}
 
-	deployCommand.Flags().IntSliceVar(&config.NumberOfPeersInPeersets, "peers", make([]int, 0), "Number of peers in peersets; example usage '--peers=1,2,3'")
+	deployCommand.Flags().IntSliceVar(&config.NumberOfPeersInPeersets, "peers", make([]int, 0), "Deprecated, does not support multiple peersets. Number of peers in peersets; example usage '--peers=1,2,3'")
+
+	deployCommand.Flags().IntVar(&config.NumberOfPeersV2, "peers-v2", 0, "Number of peers to deploy")
+	deployCommand.Flags().StringVar(&config.PeersetsConfigurationV2, "peersets-v2", "", "Peersets configuration, e.g. peerset1=peer0,peer1;peerset2=peer1,peer2")
+
 	deployCommand.Flags().BoolVarP(&config.DeployCreateNamespace, "create-namespace", "", false, "Include if should create namespace")
 	deployCommand.Flags().StringVarP(&config.DeployNamespace, "namespace", "n", "default", "Namespace to deploy cluster to")
 	deployCommand.Flags().BoolVarP(&config.WaitForReadiness, "wait-for-readiness", "", false, "Wait for deployment to be ready")
@@ -60,48 +89,62 @@ func CreateDeployCommand() *cobra.Command {
 func DoDeploy(config DeployConfig) {
 	experimentUUID := uuid.New()
 	fmt.Printf("Starting experiment: %s\n", experimentUUID.String())
-	peers, peersets := utils.GenerateServicesForPeersStaticPort(config.NumberOfPeersInPeersets, servicePort)
-	ratisGroups := make([]string, len(config.NumberOfPeersInPeersets))
-	for i := 0; i < len(config.NumberOfPeersInPeersets); i++ {
-		ratisGroups[i] = uuid.New().String()
-	}
+
+	peers, peersets := config.GetPeersAndPeersets()
 
 	if config.DeployCreateNamespace {
 		utils.CreateNamespace(config.DeployNamespace)
 	}
 
+	config.GetDeployFunction()(config, peers, peersets, experimentUUID)
+}
+
+func DoDeployV1(config DeployConfig, peers string, peersets string, experimentUUID uuid.UUID) {
 	totalPeers := 0
 	peerCount := 0
-	for idx, num := range config.NumberOfPeersInPeersets {
+	for _, num := range config.NumberOfPeersInPeersets {
 		totalPeers += num
 		for i := 0; i < num; i++ {
 			peerId := fmt.Sprintf("peer%d", peerCount)
 			peerCount += 1
 
 			peerConfig := utils.PeerConfig{
-				PeerId:         peerId,
-				PeersetId:      strconv.Itoa(idx),
-				PeersInPeerset: num,
-				PeersetsConfig: config.NumberOfPeersInPeersets,
+				PeerId: peerId,
 			}
 
-			createPV(config.DeployNamespace, peerConfig, config.CreateResources)
-			createPVC(config.DeployNamespace, peerConfig, config.CreateResources)
-			createRedisConfigmap(config.DeployNamespace, peerConfig)
+			deploySingle(config, peerConfig, peers, peersets, experimentUUID)
 
-			deploySinglePeerService(config.DeployNamespace, peerConfig, ratisPort+i)
-
-			deploySinglePeerConfigMap(config, peerConfig, peers, peersets, experimentUUID)
-
-			deploySinglePeerDeployment(config, peerConfig)
-
-			fmt.Printf("Deployed app of peer %s from peerset %s\n", peerConfig.PeerId, peerConfig.PeersetId)
+			fmt.Printf("Deployed app of peer %s\n", peerConfig.PeerId)
 		}
 	}
 
 	if config.WaitForReadiness {
 		waitForPodsReadiness(totalPeers, config.DeployNamespace)
 	}
+}
+
+func DoDeployV2(config DeployConfig, peers string, peersets string, experimentUUID uuid.UUID) {
+	for i := 0; i < config.NumberOfPeersV2; i++ {
+		deploySingle(config, utils.PeerConfig{
+			PeerId: fmt.Sprintf("peer%d", i),
+		}, peers, peersets, experimentUUID)
+	}
+
+	if config.WaitForReadiness {
+		waitForPodsReadiness(config.NumberOfPeersV2, config.DeployNamespace)
+	}
+}
+
+func deploySingle(config DeployConfig, peerConfig utils.PeerConfig, peers string, peersets string, experimentUUID uuid.UUID) {
+	createPV(config.DeployNamespace, peerConfig, config.CreateResources)
+	createPVC(config.DeployNamespace, peerConfig, config.CreateResources)
+	createRedisConfigmap(config.DeployNamespace, peerConfig)
+
+	deploySinglePeerService(config.DeployNamespace, peerConfig, ratisPort)
+
+	deploySinglePeerConfigMap(config, peerConfig, peers, peersets, experimentUUID)
+
+	deploySinglePeerDeployment(config, peerConfig)
 }
 
 func waitForPodsReadiness(expectedPeers int, namespace string) {
@@ -164,17 +207,15 @@ func deploySinglePeerDeployment(config DeployConfig, peerConfig utils.PeerConfig
 			Name:      utils.DeploymentName(peerConfig),
 			Namespace: config.DeployNamespace,
 			Labels: map[string]string{
-				"project":   "ucac",
-				"peerId":    peerConfig.PeerId,
-				"peersetId": peerConfig.PeersetId,
+				"project": "ucac",
+				"peerId":  peerConfig.PeerId,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &oneReplicaPointer,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"peerId":    peerConfig.PeerId,
-					"peersetId": peerConfig.PeersetId,
+					"peerId": peerConfig.PeerId,
 				},
 			},
 			Template: createPodTemplate(config, peerConfig),
@@ -197,10 +238,9 @@ func createPodTemplate(config DeployConfig, peerConfig utils.PeerConfig) apiv1.P
 		ObjectMeta: metav1.ObjectMeta{
 			Name: containerName,
 			Labels: map[string]string{
-				"peerId":    peerConfig.PeerId,
-				"peersetId": peerConfig.PeersetId,
-				"app.name":  fmt.Sprintf("%s-app", peerConfig.PeerId),
-				"project":   "ucac",
+				"peerId":   peerConfig.PeerId,
+				"app.name": fmt.Sprintf("%s-app", peerConfig.PeerId),
+				"project":  "ucac",
 			},
 			Annotations: map[string]string{
 				"prometheus.io/scrape": "true",
@@ -364,9 +404,8 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			Name:      utils.ConfigMapName(peerConfig),
 			Namespace: config.DeployNamespace,
 			Labels: map[string]string{
-				"project":   "ucac",
-				"peerId":    peerConfig.PeerId,
-				"peersetId": peerConfig.PeersetId,
+				"project": "ucac",
+				"peerId":  peerConfig.PeerId,
 			},
 		},
 		Data: map[string]string{
@@ -401,9 +440,8 @@ func deploySinglePeerService(namespace string, peerConfig utils.PeerConfig, curr
 			Name:      utils.ServiceName(peerConfig),
 			Namespace: namespace,
 			Labels: map[string]string{
-				"project":   "ucac",
-				"peerId":    peerConfig.PeerId,
-				"peersetId": peerConfig.PeersetId,
+				"project": "ucac",
+				"peerId":  peerConfig.PeerId,
 			},
 		},
 		Spec: apiv1.ServiceSpec{
@@ -448,9 +486,8 @@ func createPV(namespace string, peerConfig utils.PeerConfig, createResources boo
 			Name:      utils.PVName(peerConfig, namespace),
 			Namespace: namespace,
 			Labels: map[string]string{
-				"project":   "ucac",
-				"peerId":    peerConfig.PeerId,
-				"peersetId": peerConfig.PeersetId,
+				"project": "ucac",
+				"peerId":  peerConfig.PeerId,
 			},
 		},
 		Spec: apiv1.PersistentVolumeSpec{
@@ -494,9 +531,8 @@ func createPVC(namespace string, config utils.PeerConfig, createResources bool) 
 			Name:      utils.PVCName(config, namespace),
 			Namespace: namespace,
 			Labels: map[string]string{
-				"project":   "ucac",
-				"peerId":    config.PeerId,
-				"peersetId": config.PeersetId,
+				"project": "ucac",
+				"peerId":  config.PeerId,
 			},
 		},
 		Spec: apiv1.PersistentVolumeClaimSpec{
@@ -530,9 +566,8 @@ func createRedisConfigmap(namespace string, config utils.PeerConfig) {
 			Name:      utils.RedisConfigmapName(config),
 			Namespace: namespace,
 			Labels: map[string]string{
-				"project":   "ucac",
-				"peerId":    config.PeerId,
-				"peersetId": config.PeersetId,
+				"project": "ucac",
+				"peerId":  config.PeerId,
 			},
 		},
 		Data: map[string]string{

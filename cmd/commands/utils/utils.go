@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"strconv"
 	"strings"
 	"time"
 
@@ -55,10 +54,7 @@ func GetClientset() (*kubernetes.Clientset, error) {
 }
 
 type PeerConfig struct {
-	PeerId         string
-	PeersetId      string
-	PeersInPeerset int
-	PeersetsConfig []int
+	PeerId string
 }
 
 func ConfigMapName(peerConfig PeerConfig) string {
@@ -106,8 +102,7 @@ func generateServicesForPeers(peersInPeerset []int, startPort int) (string, stri
 		for i := 0; i < peersNumber; i++ {
 			port := startPort
 			sb.WriteString(fmt.Sprintf("peer%d=%s:%d;", peerCount, ServiceAddress(PeerConfig{
-				PeerId:    fmt.Sprintf("peer%d", peerCount),
-				PeersetId: strconv.Itoa(idx),
+				PeerId: fmt.Sprintf("peer%d", peerCount),
 			}), port))
 			sb2.WriteString(fmt.Sprintf("peer%d,", peerCount))
 			peerCount += 1
