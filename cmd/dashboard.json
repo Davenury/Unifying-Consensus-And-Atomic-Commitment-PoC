@@ -1044,7 +1044,7 @@
           },
           "editorMode": "code",
           "expr": "increase(leader_elected_total{kubernetes_namespace=~\"$namespace\"})",
-          "legendFormat": "__auto",
+          "legendFormat": "{{peerId}}",
           "range": true,
           "refId": "A"
         }
@@ -1126,8 +1126,8 @@
       {
         "current": {
           "selected": false,
-          "text": "ddebowski",
-          "value": "ddebowski"
+          "text": "default",
+          "value": "default"
         },
         "datasource": {
           "type": "prometheus",
