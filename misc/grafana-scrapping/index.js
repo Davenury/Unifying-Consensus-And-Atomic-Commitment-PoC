@@ -7,12 +7,21 @@ const getBaseDownloadPath = () => {
     return `${path.dirname(__filename)}/../data-processing`
 }
 
+const allPanels = [14, 18, 27, 4, 12, 31]
+// const panels = [14, 18, 27, 4, 12, 31, 21]
+const panelsWithoutChanges = [14, 18, 27, 4, 31]
+
+
 const baseDownloadPath = process.env.BASE_DOWNLOAD_PATH ?? getBaseDownloadPath()
 const namespace = process.env.NAMESPACE ?? "ddebowski"
-const from = process.env.START_TIMESTAMP ?? "1682887830000"
-const to = process.env.END_TIMESTAMP ?? "1682887965000"
+const from = process.env.START_TIMESTAMP ?? "1683028308725"
+const to = process.env.END_TIMESTAMP ?? "1683028433615"
 const protocol = process.env.PROTOCOL ?? "alvin"
 const experiment = process.env.EXPERIMENT ?? "3x1"
+const isChangeProcessed = process.env.IS_CHANGE_PROCESSED ?? "true"
+
+const panels = isChangeProcessed === "true" ? allPanels : panelsWithoutChanges
+
 
 const experiments = [
     {
@@ -26,8 +35,6 @@ const experiments = [
 
 console.log(experiments)
 
-const panels = [14, 18, 27, 4, 12, 31]
-// const panels = [14, 18, 27, 4, 12, 31, 21]
 const downloadFile = async (page, {
     namespace,
     panelId,
@@ -71,7 +78,7 @@ function delay(time) {
 }
 
 (async () => {
-    const browser = await puppeteer.launch({headless: true});
+    const browser = await puppeteer.launch({headless: false});
     const page = await browser.newPage();
     await page.setViewport({ width: 1366, height: 768});
 

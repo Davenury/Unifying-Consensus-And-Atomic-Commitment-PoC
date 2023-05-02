@@ -2,8 +2,8 @@ directory=$(dirname $0)
 echo $directory
 
 protocols=("alvin" "paxos" "raft")
-#protocols=("alvin" )
-scripts=("consensus" "stress-consensus-test")
+#scripts=("consensus" "stress-consensus-test")
+scripts=("stress-consensus-test" )
 
 peerset_size_start=3
 peerset_size_end=3
@@ -26,10 +26,21 @@ do
       echo "grafana pods: $grafana_pod"
       kubectl port-forward $grafana_pod 3000:3000 -n=rszuma &
       portForwardPID=$!
+      echo "During processing changes"
       sleep 5m
       END_TIMESTAMP=$(date +%s%3N)
-      echo "Grafana end: $END_TIMESTAMP"
-      BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$script" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+      sleep 1m
+      BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$script-during-processing-changes" IS_CHANGE_PROCESSED=true EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+
+      echo "After changes"
+      kubectl delete -n=ddebowski jobs.batch performance-test
+      sleep 1m
+      START_TIMESTAMP=$(date +%s%3N)
+      sleep 5m
+      END_TIMESTAMP=$(date +%s%3N)
+      sleep 1m
+      BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$script-after-processing-changes" IS_CHANGE_PROCESSED=false EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+
 
       echo "Cleanup state"
       cd $directory/cmd && "./ucac" cleanup -n=rszuma
