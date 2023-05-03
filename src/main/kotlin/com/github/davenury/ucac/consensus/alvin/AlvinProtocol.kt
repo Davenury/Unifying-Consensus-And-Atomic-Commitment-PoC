@@ -460,7 +460,7 @@ class AlvinProtocol(
                             return@launch
                         }
 
-                        if (entry != null && response.unauthorized) {
+                        if (epoch != -1 && entry != null && response.unauthorized) {
                             logger.info("Peer responded that our epoch is outdated, wait for newer messages")
                             resetFailureDetector(entry)
                             return@launch
