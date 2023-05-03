@@ -20,6 +20,7 @@ data class Config(
     val metricTest: Boolean,
     val experimentId: String?,
     val workerPoolSize: Int = 1,
+    val configureTraces: Boolean = false,
 ) {
     fun peerId() = PeerId(peerId)
 

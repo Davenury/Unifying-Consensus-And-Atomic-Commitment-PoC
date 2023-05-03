@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"github.com/davenury/ucac/cmd/commands/persistence"
 	"os"
 
 	"github.com/davenury/ucac/cmd/commands/performance"
@@ -9,9 +10,9 @@ import (
 )
 
 var rootCommand = &cobra.Command{
-	Use: "ucac",
+	Use:   "ucac",
 	Short: "Command for performing various tasks on UCAC project",
-	Run: func(cmd *cobra.Command, args []string) {},
+	Run:   func(cmd *cobra.Command, args []string) {},
 }
 
 func Execute() {
@@ -28,4 +29,5 @@ func init() {
 	rootCommand.AddCommand(CreateTestCommand())
 	rootCommand.AddCommand(performance.CreatePerformanceCommand())
 	rootCommand.AddCommand(CreateWholeCommand())
+	rootCommand.AddCommand(persistence.CreatePersistCommand())
 }

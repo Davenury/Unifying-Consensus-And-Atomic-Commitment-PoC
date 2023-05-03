@@ -16,6 +16,8 @@ type Config struct {
 	monitoringNamespace            string
 	createMonitoringNamespace      bool
 	numberOfPeersInPeersets        []int
+	numberOfPeersV2                int
+	peersetsConfigurationV2        string
 	createTestNamespace            bool
 	testNamespace                  string
 	applicationImageName           string
@@ -58,7 +60,11 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.monitoringNamespace, "monitoring-namespace", "test", "Namespace to deploy monitoring to")
 	cmd.Flags().BoolVar(&config.createMonitoringNamespace, "create-monitoring-namespace", false, "Include if passed monitoring namespace should be created")
 
-	cmd.Flags().IntSliceVar(&config.numberOfPeersInPeersets, "peers", make([]int, 0), "Number of peers in peersets; example usage '--peers=1,2,3'")
+	cmd.Flags().IntSliceVar(&config.numberOfPeersInPeersets, "peers", make([]int, 0), "Deprecated, does not support multiple peersets. Number of peers in peersets; example usage '--peers=1,2,3'")
+
+	cmd.Flags().IntVar(&config.numberOfPeersV2, "peers-v2", 0, "Number of peers to deploy")
+	cmd.Flags().StringVar(&config.peersetsConfigurationV2, "peersets-v2", "", "Peersets configuration, e.g. peerset1=peer0,peer1;peerset2=peer1,peer2")
+
 	cmd.Flags().BoolVar(&config.createTestNamespace, "create-test-namespace", false, "Include if should create namespace")
 	cmd.Flags().StringVar(&config.testNamespace, "test-namespace", "default", "Namespace to deploy cluster to")
 	cmd.Flags().StringVar(&config.applicationImageName, "application-image", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
@@ -94,11 +100,13 @@ func CreateWholeCommand() *cobra.Command {
 func perform(config Config) {
 	if config.deployMonitoring {
 		fmt.Println("Deploying monitoring...")
-		DoInit(config.monitoringNamespace, config.createMonitoringNamespace)
+		DoInit(config.monitoringNamespace, config.createMonitoringNamespace, false)
 	}
 	fmt.Println("Deploying application...")
 	DoDeploy(DeployConfig{
 		NumberOfPeersInPeersets: config.numberOfPeersInPeersets,
+		NumberOfPeersV2:         config.numberOfPeersV2,
+		PeersetsConfigurationV2: config.peersetsConfigurationV2,
 		DeployNamespace:         config.testNamespace,
 		DeployCreateNamespace:   config.createTestNamespace,
 		WaitForReadiness:        true,

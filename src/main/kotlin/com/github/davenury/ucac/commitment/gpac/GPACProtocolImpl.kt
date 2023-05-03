@@ -279,6 +279,7 @@ class GPACProtocolImpl(
         change: Change,
         iteration: Int
     ): Unit = span("GPAC.performProtocolAsLeader") {
+        this.setTag("changeId", change.id)
         logger.info("Starting performing GPAC iteration: $iteration")
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
 

@@ -6,7 +6,6 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import org.slf4j.LoggerFactory
-import kotlin.Exception
 
 interface Sender {
     suspend fun executeChange(address: PeerAddress, change: Change, peersetId: PeersetId): ChangeState
@@ -28,10 +27,11 @@ class HttpSender(
             logger.info("Received: ${response.execute().status.value}")
             ChangeState.ACCEPTED
         } catch (e: Exception) {
-            logger.error("Couldn't execute change with address: $address")
+            logger.error("Couldn't execute change with address: $address", e)
             when (e) {
                 is ClientRequestException -> Metrics.reportUnsuccessfulChange(e.response.status.value)
                 is ServerResponseException -> Metrics.reportUnsuccessfulChange(e.response.status.value)
+                else -> throw e
             }
             ChangeState.REJECTED
         }
@@ -39,7 +39,7 @@ class HttpSender(
 
     override suspend fun getConsensusLeaderId(address: PeerAddress, peersetId: PeersetId): PeerId? {
         return try {
-            httpClient.get<CurrentLeaderDto>("http://${address.address}/consensus/current-leader?peerset=${peersetId.peersetId}").currentLeaderPeerId
+            httpClient.get<PeersetInformation>("http://${address.address}/peerset-information?peerset=${peersetId.peersetId}").currentConsensusLeader
         } catch (e: Exception) {
             logger.error("Error while asking for consensus leader", e)
             null

@@ -1,9 +1,6 @@
 package com.github.davenury.tests
 
-import com.github.davenury.common.Notification
-import com.github.davenury.common.loadConfig
-import com.github.davenury.common.meterRegistry
-import com.github.davenury.common.objectMapper
+import com.github.davenury.common.*
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -30,20 +27,28 @@ fun main() {
 
 class TestNotificationService {
 
-    private val config = loadConfig<Config>(decoders = listOf(StrategyDecoder(), ACProtocolDecoder(), CreatingChangeStrategyDecoder()))
+    private val config =
+        loadConfig<Config>(decoders = listOf(StrategyDecoder(), ACProtocolDecoder(), CreatingChangeStrategyDecoder()))
 
     init {
         logger.info("Starting performance tests with config: $config")
     }
 
     private val peers = config.peerAddresses()
-    private val changes = Changes(peers, HttpSender(config.acProtocol), config.getSendingStrategy(), config.getCreateChangeStrategy(), config.acProtocol.protocol)
+    private val changes = Changes(
+        peers,
+        HttpSender(config.acProtocol),
+        config.getSendingStrategy(),
+        config.getCreateChangeStrategy(),
+        config.acProtocol.protocol,
+        config.notificationServiceAddress
+    )
     private val testExecutor = TestExecutor(
         changes,
         config
     )
 
-    private val server: NettyApplicationEngine = embeddedServer(Netty, port=8080, host = "0.0.0.0") {
+    private val server: NettyApplicationEngine = embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(objectMapper))
         }
@@ -65,6 +70,18 @@ class TestNotificationService {
                     call.respond(HttpStatusCode.OK)
                 } catch (e: Exception) {
                     logger.error("Error while handling notification", e)
+                    call.respond(HttpStatusCode.ServiceUnavailable)
+                }
+            }
+
+            post("/api/v1/new-consensus-leader") {
+                logger.info("Received new consensus leader notification")
+                try {
+                    val newConsensusLeaderId = call.receive<CurrentLeaderFullInfoDto>()
+                    changes.newConsensusLeader(newConsensusLeaderId)
+                    call.respond(HttpStatusCode.OK)
+                } catch (e: Exception) {
+                    logger.error("Error while handling new consensus leader message", e)
                     call.respond(HttpStatusCode.ServiceUnavailable)
                 }
             }

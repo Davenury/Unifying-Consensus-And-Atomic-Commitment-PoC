@@ -4,13 +4,13 @@ import com.github.davenury.common.*
 import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.PeersetProtocols
 import com.zopa.ktor.opentracing.span
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
-import java.lang.AssertionError
 import java.util.concurrent.CompletableFuture
 
 

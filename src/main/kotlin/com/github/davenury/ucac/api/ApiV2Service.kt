@@ -1,13 +1,12 @@
 package com.github.davenury.ucac.api
 
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.common.Changes
-import com.github.davenury.common.PeersetId
+import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.MultiplePeersetProtocols
+import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.common.structure.HttpSubscriber
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -22,6 +21,7 @@ class ApiV2Service(
     private val config: Config,
     private val multiplePeersetProtocols: MultiplePeersetProtocols,
     changeNotifier: ChangeNotifier,
+    private val peerResolver: PeerResolver,
 ) {
     private val workerPool = Executors.newFixedThreadPool(config.workerPoolSize)
         .asCoroutineDispatcher()
@@ -42,6 +42,10 @@ class ApiV2Service(
 
     fun getChanges(peersetId: PeersetId): Changes {
         return Changes.fromHistory(history(peersetId))
+    }
+
+    fun registerSubscriber(peersetId: PeersetId, address: SubscriberAddress) {
+        multiplePeersetProtocols.registerSubscriber(peersetId, HttpSubscriber(address.address))
     }
 
     fun getLastChange(peersetId: PeersetId): Change? =
@@ -69,6 +73,13 @@ class ApiV2Service(
         }
     } catch (e: TimeoutCancellationException) {
         null
+    }
+
+    fun getPeersetInformation(peersetId: PeersetId): PeersetInformation {
+        return PeersetInformation(
+            currentConsensusLeader = multiplePeersetProtocols.protocols[peersetId]?.consensusProtocol?.getLeaderId(),
+            peersInPeerset = peerResolver.getPeersFromPeerset(peersetId).map { it.peerId }
+        )
     }
 
     companion object {

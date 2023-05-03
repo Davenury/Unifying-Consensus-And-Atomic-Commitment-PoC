@@ -1,11 +1,14 @@
 package com.github.davenury.ucac
 
 import com.github.davenury.common.*
-import com.github.davenury.ucac.history.historyRouting
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.MultiplePeersetProtocols
+import com.github.davenury.ucac.common.structure.Subscribers
+import com.github.davenury.ucac.history.historyRouting
+import com.github.davenury.ucac.routing.consensusProtocolRouting
 import com.github.davenury.ucac.routing.gpacProtocolRouting
 import com.github.davenury.ucac.routing.metaRouting
 import com.zopa.ktor.opentracing.OpenTracingServer
@@ -66,14 +69,16 @@ fun main(args: Array<String>) {
 fun createApplication(
     signalListeners: Map<Signal, SignalListener> = emptyMap(),
     configOverrides: Map<String, Any> = emptyMap(),
+    subscribers: Map<PeersetId, Subscribers> = emptyMap(),
 ): ApplicationUcac {
     val config = loadConfig<Config>(configOverrides)
-    return ApplicationUcac(signalListeners, config)
+    return ApplicationUcac(signalListeners, config, subscribers)
 }
 
 class ApplicationUcac(
     private val signalListeners: Map<Signal, SignalListener> = emptyMap(),
     private val config: Config,
+    private val subscribers: Map<PeersetId, Subscribers>,
 ) {
     private val mdc: MutableMap<String, String> = HashMap(mapOf("peer" to config.peerId().toString()))
     private val peerResolver = config.newPeerResolver()
@@ -117,19 +122,27 @@ class ApplicationUcac(
 
         logger.info("My peersets: $peersetIds")
         val changeNotifier = ChangeNotifier(peerResolver)
-        val tracer = Configuration(peerResolver.peerName())
-            .withSampler(Configuration.SamplerConfiguration.fromEnv()
-                .withType(ConstSampler.TYPE)
-                .withParam(1))
-            .withReporter(Configuration.ReporterConfiguration.fromEnv()
-                .withLogSpans(false)
-                .withSender(
-                    Configuration.SenderConfiguration()
-                        .withAgentHost("tempo")
-                        .withAgentPort(6831))).tracerBuilder
-            .withScopeManager(ThreadContextElementScopeManager())
-            .build()
-        GlobalTracer.registerIfAbsent(tracer)
+
+        if (config.configureTraces) {
+            val tracer = Configuration("${peerResolver.peerName()}-${config.experimentId}")
+                .withSampler(
+                    Configuration.SamplerConfiguration.fromEnv()
+                        .withType(ConstSampler.TYPE)
+                        .withParam(1)
+                )
+                .withReporter(
+                    Configuration.ReporterConfiguration.fromEnv()
+                        .withLogSpans(false)
+                        .withSender(
+                            Configuration.SenderConfiguration()
+                                .withAgentHost("tempo")
+                                .withAgentPort(6831)
+                        )
+                ).tracerBuilder
+                .withScopeManager(ThreadContextElementScopeManager())
+                .build()
+            GlobalTracer.registerIfAbsent(tracer)
+        }
 
         val signalPublisher = SignalPublisher(signalListeners, peerResolver)
 
@@ -138,9 +151,10 @@ class ApplicationUcac(
             peerResolver,
             signalPublisher,
             changeNotifier,
+            subscribers,
         )
 
-        service = ApiV2Service(config, multiplePeersetProtocols, changeNotifier)
+        service = ApiV2Service(config, multiplePeersetProtocols, changeNotifier, peerResolver)
 
 
         install(OpenTracingServer) {
@@ -271,6 +285,13 @@ class ApplicationUcac(
                 call.respond(
                     status = HttpStatusCode.BadRequest,
                     ErrorMessage("Unknown peerset: ${cause.peersetId}")
+                )
+            }
+
+            exception<ImNotLeaderException> { cause ->
+                call.respond(
+                    status = HttpStatusCode.TemporaryRedirect,
+                    CurrentLeaderFullInfoDto(cause.peerId, cause.peersetId)
                 )
             }
 

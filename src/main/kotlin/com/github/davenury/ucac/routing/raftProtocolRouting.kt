@@ -1,7 +1,6 @@
 package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
-import com.github.davenury.common.CurrentLeaderDto
 import com.github.davenury.common.peersetId
 import com.github.davenury.ucac.common.MultiplePeersetProtocols
 import com.github.davenury.ucac.consensus.ConsensusProposeChange
@@ -36,10 +35,6 @@ fun Application.raftProtocolRouting(multiplePeersetProtocols: MultiplePeersetPro
             val message: ConsensusProposeChange = call.receive()
             val result = call.consensus().handleProposeChange(message).await()
             call.respond(result)
-        }
-
-        get("/consensus/current-leader") {
-            call.respond(CurrentLeaderDto(call.consensus().getLeaderId()))
         }
 
         get("/raft/proposed_changes") {
