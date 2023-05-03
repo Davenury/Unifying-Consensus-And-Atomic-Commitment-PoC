@@ -1,0 +1,14 @@
+apiVersion: lsc.davenury.github.com/v1
+kind: Scenario
+metadata:
+  name: gpac-chaos-delete-leaders
+  namespace: ddebowski
+spec:
+  phases:
+    - duration: PT60S
+      actions:
+        - namespace: ddebowski
+          resourceType: consensus leader
+          action: delete
+          deleteConsensusLeaderSpec:
+            peerUrl: http://peer0-service:8080/peerset-information?peerset=peerset0

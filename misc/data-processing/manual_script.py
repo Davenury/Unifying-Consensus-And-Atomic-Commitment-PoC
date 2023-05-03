@@ -38,7 +38,8 @@ if SWAP_LEADERS:
         leaders2[name] = swapped
     leaders = leaders2
 
-LEADERS = -1 # -1 - dont do anything, 0 - drop leaders, 1 - leave only leaders
+LEADERS = -1  # -1 - dont do anything, 0 - drop leaders, 1 - leave only leaders
+
 
 class Experiment:
     def __init__(self, name):
@@ -56,7 +57,8 @@ class Experiment:
         return np.nanmean(self.df.to_numpy()), np.nanstd(self.df.to_numpy())
 
     def calculate_box_plot_values(self):
-        self.df = self.df[self.df.columns.drop(list(self.df.filter(regex='nonheap')))]
+        self.df = self.df[self.df.columns.drop(
+            list(self.df.filter(regex='nonheap')))]
         self.df = self.df.dropna()
 
         if LEADERS == 1:
@@ -65,7 +67,7 @@ class Experiment:
             self.drop_leaders()
 
         data = self.df.to_numpy().flatten()
-        #data = [1/x for x in data]
+        # data = [1/x for x in data]
 
         bp = plt.boxplot(data)
         dict1 = {}
@@ -82,7 +84,9 @@ class Experiment:
 
     def drop_leaders(self):
         for leader in leaders[self._inner_name()]:
-            self.df = self.df[self.df.columns.drop(list(self.df.filter(regex=leader)))]
+            self.df = self.df[self.df.columns.drop(
+                list(self.df.filter(regex=leader)))]
+
     def _inner_name(self):
         split = self.name.split("/")
         return f"{split[1]}/{split[2]}"
@@ -109,7 +113,8 @@ def find_and_sort_results(results, protocol):
 
 
 def prepare_experiments():
-    results = [(ex.representative_name(), ex.calculate_box_plot_values()) for ex in experiments]
+    results = [(ex.representative_name(), ex.calculate_box_plot_values())
+               for ex in experiments]
     return find_and_sort_results(results, "gpac"), find_and_sort_results(results, "raft"), find_and_sort_results(
         results, "2pc")
 
@@ -119,40 +124,6 @@ def values_from_experiment(ex):
         "name": ex[0],
         **ex[1]
     }
-
-def latex_from_experiment(ex):
-    return """
-        \\addplot+[
-    boxplot prepared={
-      median=%s,
-      upper quartile=%s,
-      lower quartile=%s,
-      upper whisker=%s,
-      lower whisker=%s
-    },
-    ] coordinates {};
-    """%(ex["median"], ex["upper_quartile"], ex["lower_quartile"], ex["upper_whisker"], ex["lower_whisker"])
-
-
-def print_list_to_latex(l):
-    str = ""
-    for x in l:
-        str += f"{x},"
-    str = str[0:-1]
-    return str
-
-def latex_template(all):
-    return """
-    \\begin{tikzpicture}
-        \\begin{axis}
-        [
-        ytick={%s},
-        yticklabels={%s},
-        ]\n
-        <----PLOTS HERE---->
-        \\end{axis}
-    \\end{tikzpicture}\n
-    """%(print_list_to_latex(list(range(1, len(all)))), print_list_to_latex([x["name"] for x in all]))
 
 
 def get_values():
@@ -170,16 +141,18 @@ def get_data_in_csv():
 def separate_ac_from_consensus(df):
     def sort_func(input):
         def inner(k):
-            return int(k.split(" - ")[1].split("x")[0]), 0 if "gpac" in k else 1,0 if "cohort" in k else 1
+            return int(k.split(" - ")[1].split("x")[0]), 0 if "gpac" in k else 1, 0 if "cohort" in k else 1
         return input.apply(lambda x: inner(x))
 
     consensus = df.loc[df['name'].str.contains('raft')]
-    ac = df.loc[(df['name'].str.contains('2pc')) | (df['name'].str.contains('gpac'))]
+    ac = df.loc[(df['name'].str.contains('2pc')) |
+                (df['name'].str.contains('gpac'))]
 
     consensus = consensus.sort_values(by=['name'], key=sort_func)
     ac = ac.sort_values(by=['name'], key=sort_func)
 
-    consensus.to_csv(f"parsed_csvs/fixes/{FILE_NAME}-consensus.csv", index=False)
+    consensus.to_csv(
+        f"parsed_csvs/fixes/{FILE_NAME}-consensus.csv", index=False)
     ac.to_csv(f"parsed_csvs/fixes/{FILE_NAME}-ac.csv", index=False)
 
 
@@ -216,6 +189,7 @@ def merge_leaders_and_non_leaders(leaders_file, nonleaders_file):
 
 
 if __name__ == "__main__":
-    #separate_ac_from_consensus("parsed_csvs/fixes/avg-commit-latency.csv")
-    # get_data_in_csv()
-    separate_ac_from_consensus(merge_leaders_and_non_leaders(f"parsed_csvs/{FILE_NAME}-leaders.csv", f"parsed_csvs/{FILE_NAME}-non-leaders.csv"))
+    # separate_ac_from_consensus("parsed_csvs/fixes/avg-commit-latency.csv")
+    get_data_in_csv()
+    separate_ac_from_consensus(merge_leaders_and_non_leaders(
+        f"parsed_csvs/{FILE_NAME}-leaders.csv", f"parsed_csvs/{FILE_NAME}-non-leaders.csv"))

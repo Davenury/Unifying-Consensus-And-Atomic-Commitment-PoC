@@ -1,0 +1,15 @@
+apiVersion: lsc.davenury.github.com/v1
+kind: Scenario
+metadata:
+  name: gpac-chaos-delete-followers
+  namespace: ddebowski
+spec:
+  phases:
+    - duration: PT15S
+      actions:
+        - namespace: ddebowski
+          resourceType: consensus follower
+          action: delete count
+          deleteConsensusFollowerCountSpec:
+            peerUrl: http://peer0-service.ddebowski:8080/peerset-information?peerset=peerset0
+            count: 1

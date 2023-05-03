@@ -11,6 +11,8 @@ peerset_size_end=3
 echo "Script directory: $directory"
 cd "$directory/misc/grafana-scrapping" && npm i
 
+test_type=0
+
 for peerset_size in $(seq $peerset_size_start $peerset_size_end)
 do
   for protocol in $protocols
@@ -26,6 +28,8 @@ do
       echo "grafana pods: $grafana_pod"
       kubectl port-forward $grafana_pod 3000:3000 -n=rszuma &
       portForwardPID=$!
+
+#      if [[$test_type -eq 0]]; then
       echo "During processing changes"
       sleep 5m
       END_TIMESTAMP=$(date +%s%3N)
@@ -40,7 +44,15 @@ do
       END_TIMESTAMP=$(date +%s%3N)
       sleep 1m
       BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$script-after-processing-changes" IS_CHANGE_PROCESSED=false EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
-
+#      elif [[$test_type -eq 1]]; then
+#        echo "During processing changes"
+#        sleep 5m
+#        END_TIMESTAMP=$(date +%s%3N)
+#        sleep 1m
+#        BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$script-during-processing-changes" IS_CHANGE_PROCESSED=true EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+#      elif [[$test_type -eq 2]]; then
+#
+#      fi
 
       echo "Cleanup state"
       cd $directory/cmd && "./ucac" cleanup -n=rszuma
