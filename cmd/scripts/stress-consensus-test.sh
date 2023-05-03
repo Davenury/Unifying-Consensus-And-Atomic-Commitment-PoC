@@ -3,8 +3,8 @@
 echo "Run protocol: $CONSENSUS"
 
 ./ucac perform --monitoring-namespace=rszuma \
---peers=$(python3 -c "print('$1,' * $2, end=''); print('$1')") --test-namespace=ddebowski --application-image=ghcr.io/davenury/ucac:900973c5feac7f0bfdfddea5074cad71faa99daf  \
---performance-test-image=ghcr.io/davenury/tests:900973c5feac7f0bfdfddea5074cad71faa99daf \
+--peers=$(python3 -c "print('$1,' * $2, end=''); print('$1')") --test-namespace=ddebowski --application-image=ghcr.io/davenury/ucac:$(git rev-parse HEAD)  \
+--performance-test-image=ghcr.io/davenury/tests:$(git rev-parse HEAD) \
 --fixed-peersets-in-change=1 --tests-sending-strategy=delay_on_conflicts \
 --ac-protocol=two_pc --performance-test-timeout-deadline=PT120M --deploy-monitoring=true \
 --consensus-protocol=${CONSENSUS:-raft} \
