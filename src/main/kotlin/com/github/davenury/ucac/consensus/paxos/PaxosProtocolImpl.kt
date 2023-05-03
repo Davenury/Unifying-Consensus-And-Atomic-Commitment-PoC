@@ -10,6 +10,7 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.consensus.VotedFor
 import com.github.davenury.ucac.consensus.raft.ChangeToBePropagatedToLeader
@@ -36,7 +37,8 @@ class PaxosProtocolImpl(
     private val heartbeatTimeout: Duration = Duration.ofSeconds(4),
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
     private val transactionBlocker: TransactionBlocker,
-    private val isMetricTest: Boolean
+    private val isMetricTest: Boolean,
+    private val subscribers: Subscribers?,
 ) : PaxosProtocol, SignalSubject {
     //  General consesnus
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
@@ -230,7 +232,7 @@ class PaxosProtocolImpl(
             val result = changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
                 ?: changeIdToCompletableFuture[change.id]!!
 
-            if (amIALeader() && lastPropagatedEntryId == history.getCurrentEntryId()) {
+            if (amILeader() && lastPropagatedEntryId == history.getCurrentEntryId()) {
                 proposeChangeToLedger(result, change)
             } else {
                 logger.info("We are not a leader or some change maybe needed to propagate")
@@ -317,14 +319,14 @@ class PaxosProtocolImpl(
         span("PigPaxos.sendRequestToLeader") {
             with(CoroutineScope(leaderRequestExecutorService)) {
                 launch(MDCContext()) {
-                    if (amIALeader()) return@launch proposeChangeToLedger(cf, change)
+                    if (amILeader()) return@launch proposeChangeToLedger(cf, change)
 
                     var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
                     var retries = 0
                     while (result == null && retries < 3) {
                         val address: PeerAddress
-                        if (amIALeader()) {
+                        if (amILeader()) {
                             return@launch proposeChangeToLedger(cf, change)
                         } else {
                             address = peerResolver.resolve(votedFor!!.id)
@@ -420,7 +422,9 @@ class PaxosProtocolImpl(
 
                     isMoreThanHalf(votes) -> {
                         logger.info("I have been selected as a leader in round $round")
-                        Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
+                        val peerId = peerResolver.currentPeer()
+                        Metrics.bumpLeaderElection(peerId, peersetId)
+                        subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
                         votedFor = VotedFor(globalPeerId, true)
                         signalPublisher.signal(
                             Signal.PigPaxosLeaderElected,
@@ -475,7 +479,7 @@ class PaxosProtocolImpl(
         entryIdPaxosRound[entry.getId()] = PaxosRound(currentRound, entry, votedFor?.id!!)
         while (result == null) {
             result = sendAccepts(entry)
-            if (!amIALeader()) {
+            if (!amILeader()) {
                 logger.info("I am not a leader, so stop sending accepts")
                 changesToBePropagatedToLeader.add(
                     ChangeToBePropagatedToLeader(
@@ -513,7 +517,7 @@ class PaxosProtocolImpl(
                             PaxosCommit(result, entry.serialize(), currentRound, votedFor?.id!!)
                         )
                         if (response.message == null) delay(heartbeatDelay.toMillis())
-                    } while (response.message == null && amIALeader())
+                    } while (response.message == null && amILeader())
                 }
             }
         }
@@ -725,7 +729,7 @@ class PaxosProtocolImpl(
     private fun isMessageFromNotLeader(round: Int, leaderId: PeerId) =
         currentRound > round || (currentRound == round && leaderId != votedFor?.id)
 
-    private fun amIALeader() = votedFor?.elected == true && votedFor?.id == globalPeerId
+    override fun amILeader(): Boolean = votedFor?.elected == true && votedFor?.id == globalPeerId
 
     private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout.dividedBy(2), ctx)
 
@@ -737,7 +741,7 @@ class PaxosProtocolImpl(
         if (changesToBePropagatedToLeader.size > 0) logger.info("Try to propagate changes")
         while (true) {
             val changeToBePropagated = changesToBePropagatedToLeader.poll() ?: break
-            if (amIALeader()) {
+            if (amILeader()) {
                 logger.info("Processing a queued change as a leader: ${changeToBePropagated.change}")
                 proposeChangeToLedger(changeToBePropagated.cf, changeToBePropagated.change)
             } else {

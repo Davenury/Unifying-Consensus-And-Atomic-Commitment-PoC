@@ -564,7 +564,8 @@ class AlvinSpec : IntegrationTestBase() {
             peerResolver,
             protocolClient = AlvinProtocolClientImpl(peerset(0)),
             transactionBlocker =  PersistentTransactionBlocker(InMemoryPersistence()),
-            isMetricTest = false
+            isMetricTest = false,
+            subscribers = null
         )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()

@@ -11,6 +11,7 @@ import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimer
 import com.github.davenury.ucac.common.ProtocolTimerImpl
+import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.zopa.ktor.opentracing.span
 import kotlinx.coroutines.*
@@ -35,8 +36,9 @@ class AlvinProtocol(
     private val heartbeatTimeout: Duration = Duration.ofSeconds(4),
     private val heartbeatDelay: Duration = Duration.ofMillis(500),
     private val transactionBlocker: TransactionBlocker,
-    private val isMetricTest: Boolean
-) : AlvinBroadcastProtocol, SignalSubject {
+    private val isMetricTest: Boolean,
+    private val subscribers: Subscribers?,
+    ) : AlvinBroadcastProtocol, SignalSubject {
     //  General consesnus
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
     private val peerId = peerResolver.currentPeer()
@@ -60,6 +62,7 @@ class AlvinProtocol(
 
     override suspend fun begin() {
         Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
+        subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
         logger.info("Start alvin protocol")
     }
 
@@ -207,6 +210,8 @@ class AlvinProtocol(
                 .mapNotNull { Change.fromHistoryEntry(it) }
         }
     }
+
+    override fun amILeader(): Boolean = true
 
     override fun getLeaderId(): PeerId? = peerResolver.currentPeer()
 

@@ -6,7 +6,6 @@ import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
 import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.consensus.ConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.zopa.ktor.opentracing.span
 import io.micrometer.core.instrument.Tag
 import kotlinx.coroutines.ExecutorCoroutineDispatcher

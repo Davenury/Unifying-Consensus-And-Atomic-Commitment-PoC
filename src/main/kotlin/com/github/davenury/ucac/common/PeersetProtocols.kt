@@ -11,9 +11,6 @@ import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.common.structure.CodeSubscriber
 import com.github.davenury.ucac.common.structure.Subscribers
-import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
-import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher

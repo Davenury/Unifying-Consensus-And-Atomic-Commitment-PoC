@@ -9,6 +9,7 @@ import com.github.davenury.common.txblocker.PersistentTransactionBlocker
 import com.github.davenury.ucac.Config
 import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
 import com.github.davenury.ucac.consensus.paxos.PigPaxosProtocolClientImpl
@@ -48,7 +49,8 @@ interface ConsensusProtocol {
             ctx: ExecutorCoroutineDispatcher,
             transactionBlocker: PersistentTransactionBlocker,
             peerResolver: PeerResolver,
-            signalPublisher: SignalPublisher
+            signalPublisher: SignalPublisher,
+            subscribers: Subscribers?,
         ): ConsensusProtocol = when (config.consensus.name) {
 
             "raft" -> RaftConsensusProtocolImpl(
@@ -60,6 +62,7 @@ interface ConsensusProtocol {
                 signalPublisher,
                 RaftProtocolClientImpl(peersetId),
                 transactionBlocker = transactionBlocker,
+                subscribers
             )
 
             "alvin" -> AlvinProtocol(
@@ -73,6 +76,7 @@ interface ConsensusProtocol {
                 heartbeatDelay = config.consensus.leaderTimeout,
                 transactionBlocker = transactionBlocker,
                 config.metricTest,
+                subscribers,
             )
 
             "paxos" -> PaxosProtocolImpl(
@@ -86,6 +90,7 @@ interface ConsensusProtocol {
                 heartbeatDelay = config.consensus.leaderTimeout,
                 transactionBlocker = transactionBlocker,
                 config.metricTest,
+                subscribers,
             )
 
             else -> throw IllegalStateException("Unknow consensus type ${config.consensus.name}")

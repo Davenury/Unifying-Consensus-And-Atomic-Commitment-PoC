@@ -1,7 +1,6 @@
 package com.github.davenury.ucac.routing
 
 import com.github.davenury.common.Changes
-import com.github.davenury.common.CurrentLeaderDto
 import com.github.davenury.common.peersetId
 import com.github.davenury.ucac.common.MultiplePeersetProtocols
 import com.github.davenury.ucac.consensus.alvin.*
@@ -52,10 +51,6 @@ fun Application.alvinProtocolRouting(multiplePeersetProtocols: MultiplePeersetPr
             val message: AlvinFastRecovery = call.receive()
             val result = call.consensus().handleFastRecovery(message)
             call.respond(result)
-        }
-
-        get("/consensus/current-leader") {
-            call.respond(CurrentLeaderDto(call.consensus().getLeaderId()))
         }
 
         get("/alvin/proposed_changes") {
