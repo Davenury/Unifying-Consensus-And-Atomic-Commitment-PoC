@@ -38,7 +38,7 @@ class AlvinProtocol(
     private val transactionBlocker: TransactionBlocker,
     private val isMetricTest: Boolean,
     private val subscribers: Subscribers?,
-    ) : AlvinBroadcastProtocol, SignalSubject {
+) : AlvinBroadcastProtocol, SignalSubject {
     //  General consesnus
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
     private val peerId = peerResolver.currentPeer()
@@ -176,22 +176,24 @@ class AlvinProtocol(
             entryIdToVotesAbort.putIfAbsent(entryId, listOf())
 
             val votesContainer = if (message.result == AlvinResult.COMMIT) entryIdToVotesCommit else entryIdToVotesAbort
-            votesContainer[entryId] = (votesContainer.getOrDefault(entryId, listOf()) + listOf(message.peerId)).distinct()
+            votesContainer[entryId] =
+                (votesContainer.getOrDefault(entryId, listOf()) + listOf(message.peerId)).distinct()
             checkVotes(messageEntry, change)
 
             AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
         }
     }
 
-    override suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse = span("Alvin.handleFastRecovery") {
-        mutex.withLock {
-            val historyEntry = history.getEntryFromHistory(message.entryId)
+    override suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse =
+        span("Alvin.handleFastRecovery") {
+            mutex.withLock {
+                val historyEntry = history.getEntryFromHistory(message.entryId)
 
-            val alvinEntry = entryIdToAlvinEntry[message.entryId]
+                val alvinEntry = entryIdToAlvinEntry[message.entryId]
 
-            AlvinFastRecoveryResponse(alvinEntry?.toDto(), historyEntry?.serialize())
+                AlvinFastRecoveryResponse(alvinEntry?.toDto(), historyEntry?.serialize())
+            }
         }
-    }
 
 
     override suspend fun getProposedChanges(): List<Change> = span("Alvin.getProposedChanges") {
@@ -230,48 +232,51 @@ class AlvinProtocol(
     }
 
 
-    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> = span("Alvin.proposeChangeAsync") {
-        val result = CompletableFuture<ChangeResult>()
-        changeIdToCompletableFuture[change.id] = result
-        proposeChangeToLedger(result, change)
+    override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> =
+        span("Alvin.proposeChangeAsync") {
+            val result = CompletableFuture<ChangeResult>()
+            changeIdToCompletableFuture[change.id] = result
+            proposeChangeToLedger(result, change)
 
-        return result
-    }
+            return result
+        }
 
-    override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) = span("Alvin.proposeChangeToLedger") {
-        val entry = change.toHistoryEntry(peersetId)
-        mutex.withLock {
-            if (entryIdToAlvinEntry.containsKey(entry.getId()) || history.containsEntry(entry.getId())) {
-                logger.info("Already proposed that change: ${entry.getId()}")
-                return
-            }
+    override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) =
+        span("Alvin.proposeChangeToLedger") {
+            val entry = change.toHistoryEntry(peersetId)
+            mutex.withLock {
+                if (entryIdToAlvinEntry.containsKey(entry.getId()) || history.containsEntry(entry.getId())) {
+                    logger.info("Already proposed that change: ${entry.getId()}")
+                    return
+                }
 
 //          FIXME: show up in 1000 Alvin changes
 
-            val isAcquiredTransactionBlocker = transactionBlocker.tryAcquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
+                val isAcquiredTransactionBlocker =
+                    transactionBlocker.tryAcquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
 
-            if (!isAcquiredTransactionBlocker) {
-                logger.info("Transaction is blocked on protocol ${transactionBlocker.getProtocolName()}, timeout transaction")
-                result.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
-                return
-            }
+                if (!isAcquiredTransactionBlocker) {
+                    logger.info("Transaction is blocked on protocol ${transactionBlocker.getProtocolName()}, timeout transaction")
+                    result.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
+                    return
+                }
 
-            if (!history.isEntryCompatible(entry)) {
-                logger.info(
-                    "Proposed change is incompatible. \n CurrentChange: ${
-                        history.getCurrentEntry().getId()
-                    } \n Change.parentId: ${
-                        change.toHistoryEntry(peersetId).getParentId()
-                    }"
-                )
-                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-                transactionBlocker.release(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
-                return
+                if (!history.isEntryCompatible(entry)) {
+                    logger.info(
+                        "Proposed change is incompatible. \n CurrentChange: ${
+                            history.getCurrentEntry().getId()
+                        } \n Change.parentId: ${
+                            change.toHistoryEntry(peersetId).getParentId()
+                        }"
+                    )
+                    result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                    transactionBlocker.release(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
+                    return
+                }
             }
+            logger.info("Propose change to ledger: $change")
+            proposalPhase(change)
         }
-        logger.info("Propose change to ledger: $change")
-        proposalPhase(change)
-    }
 
 
     private suspend fun proposalPhase(change: Change) = span("Alvin.proposalPhase") {
@@ -305,54 +310,56 @@ class AlvinProtocol(
         decisionPhase(historyEntry, newPos, (myDeps + newDeps).distinct())
     }
 
-    private suspend fun decisionPhase(historyEntry: HistoryEntry, pos: Int, deps: List<HistoryEntry>) = span("Alvin.decisionPhase") {
-        var entry = entryIdToAlvinEntry[historyEntry.getId()]!!
-        entry = entry.copy(transactionId = pos, deps = deps, status = AlvinStatus.ACCEPTED)
-        mutex.withLock {
-            updateEntry(entry)
-        }
-        logger.info("Starts decision phase ${entry.entry.getId()}")
+    private suspend fun decisionPhase(historyEntry: HistoryEntry, pos: Int, deps: List<HistoryEntry>) =
+        span("Alvin.decisionPhase") {
+            var entry = entryIdToAlvinEntry[historyEntry.getId()]!!
+            entry = entry.copy(transactionId = pos, deps = deps, status = AlvinStatus.ACCEPTED)
+            mutex.withLock {
+                updateEntry(entry)
+            }
+            logger.info("Starts decision phase ${entry.entry.getId()}")
 
-        val jobs = scheduleMessages(historyEntry, acceptChannel, entry.epoch) { peerAddress ->
-            protocolClient.sendAccept(peerAddress, AlvinAccept(peerId, entry.toDto()))
-        }
+            val jobs = scheduleMessages(historyEntry, acceptChannel, entry.epoch) { peerAddress ->
+                protocolClient.sendAccept(peerAddress, AlvinAccept(peerId, entry.toDto()))
+            }
 
-        signalPublisher.signal(
-            Signal.AlvinAfterAcceptPhase,
-            this@AlvinProtocol,
-            mapOf(peersetId to otherConsensusPeers()),
-            change = Change.fromHistoryEntry(historyEntry)
-        )
+            signalPublisher.signal(
+                Signal.AlvinAfterAcceptPhase,
+                this@AlvinProtocol,
+                mapOf(peersetId to otherConsensusPeers()),
+                change = Change.fromHistoryEntry(historyEntry)
+            )
 
-        val newResponses = waitForQuorum(historyEntry, jobs, acceptChannel, AlvinStatus.PENDING)
+            val newResponses = waitForQuorum(historyEntry, jobs, acceptChannel, AlvinStatus.PENDING)
 
-        val newDeps = newResponses.flatMap { it.newDeps }.map { HistoryEntry.deserialize(it) }
+            val newDeps = newResponses.flatMap { it.newDeps }.map { HistoryEntry.deserialize(it) }
 
-        deliveryPhase(historyEntry, (deps + newDeps).distinct())
-    }
-
-    private suspend fun deliveryPhase(historyEntry: HistoryEntry, newDeps: List<HistoryEntry>) = span("Alvin.deliveryPhase") {
-        var entry = entryIdToAlvinEntry[historyEntry.getId()]!!
-        entry = entry.copy(deps = newDeps, status = AlvinStatus.STABLE)
-        mutex.withLock {
-            updateEntry(entry)
+            deliveryPhase(historyEntry, (deps + newDeps).distinct())
         }
 
-        logger.info("Starts delivery phase ${entry.entry.getId()}")
+    private suspend fun deliveryPhase(historyEntry: HistoryEntry, newDeps: List<HistoryEntry>) =
+        span("Alvin.deliveryPhase") {
+            var entry = entryIdToAlvinEntry[historyEntry.getId()]!!
+            entry = entry.copy(deps = newDeps, status = AlvinStatus.STABLE)
+            mutex.withLock {
+                updateEntry(entry)
+            }
 
-        scheduleMessages(historyEntry, null, entry.epoch) { peerAddress ->
-            protocolClient.sendStable(peerAddress, AlvinStable(peerId, entry.toDto()))
+            logger.info("Starts delivery phase ${entry.entry.getId()}")
+
+            scheduleMessages(historyEntry, null, entry.epoch) { peerAddress ->
+                protocolClient.sendStable(peerAddress, AlvinStable(peerId, entry.toDto()))
+            }
+
+            signalPublisher.signal(
+                Signal.AlvinAfterStablePhase,
+                this@AlvinProtocol,
+                mapOf(peersetId to otherConsensusPeers()),
+                change = Change.fromHistoryEntry(historyEntry)
+            )
+
+            deliverTransaction()
         }
-
-        signalPublisher.signal(
-            Signal.AlvinAfterStablePhase,
-            this@AlvinProtocol,
-            mapOf(peersetId to otherConsensusPeers()),
-            change = Change.fromHistoryEntry(historyEntry)
-        )
-
-        deliverTransaction()
-    }
 
     private suspend fun recoveryPhase(entry: AlvinEntry) = span("Alvin.recoveryPhase") {
 
@@ -638,7 +645,7 @@ class AlvinProtocol(
 
 
     //  Mutex function
-    private suspend fun checkVotes(entry: AlvinEntry, change: Change) {
+    private fun checkVotes(entry: AlvinEntry, change: Change) {
         val entryId = entry.entry.getId()
         val myselfVotesForCommit = history.isEntryCompatible(entry.entry)
 
@@ -649,7 +656,11 @@ class AlvinProtocol(
         val commitDecision = if (myselfVotesForCommit) isMoreThanHalf(commitVotes) else isMoreThanHalf(commitVotes - 1)
         val abortDecision = if (myselfVotesForCommit) isMoreThanHalf(abortVotes - 1) else isMoreThanHalf(abortVotes)
 
-        if ((commitDecision || abortDecision) && changeIdToCompletableFuture[change.id]?.isDone != true) {
+        if (entryIdToAlvinEntry.containsKey(entry.entry.getParentId())) {
+            logger.info("Waiting until parent will be processed ${entry.entry.getId()}")
+            return
+        }
+        else if ((commitDecision || abortDecision) && changeIdToCompletableFuture[change.id]?.isDone != true) {
             entryIdToAlvinEntry.remove(entryId)
             entryIdToFailureDetector[entryId]?.cancelCounting()
             entryIdToFailureDetector.remove(entryId)
@@ -666,7 +677,7 @@ class AlvinProtocol(
                         state = "accepted"
                     )
                 }
-                if(!history.containsEntry(entry.entry.getId()))history.addEntry(entry.entry)
+                if (!history.containsEntry(entry.entry.getId())) history.addEntry(entry.entry)
                 Pair(ChangeResult.Status.SUCCESS, Signal.AlvinCommitChange)
             } else {
                 Pair(ChangeResult.Status.CONFLICT, Signal.AlvinAbortChange)
@@ -675,7 +686,20 @@ class AlvinProtocol(
             changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(changeResult))
             signalPublisher.signal(signal, this, mapOf(peersetId to otherConsensusPeers()), change = change)
             transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
+            checkNextChanges(entryId)
         }
+    }
+
+    private fun checkNextChanges(entryId: String) {
+        var currentEntryId = entryId
+        do {
+            val entry = entryIdToAlvinEntry.toList().firstOrNull { it.second.entry.getParentId() == currentEntryId }?.second
+            if (entry != null) {
+                val change = Change.fromHistoryEntry(entry.entry)!!
+                checkVotes(entry, change)
+                currentEntryId = entry.entry.getId()
+            }
+        } while (entry != null)
     }
 
 
@@ -705,7 +729,12 @@ class AlvinProtocol(
                     history.addEntry(historyEntry)
                     val change = Change.fromHistoryEntry(historyEntry)!!
                     changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
-                    signalPublisher.signal(Signal.AlvinCommitChange, this, mapOf(peersetId to otherConsensusPeers()), change = change)
+                    signalPublisher.signal(
+                        Signal.AlvinCommitChange,
+                        this,
+                        mapOf(peersetId to otherConsensusPeers()),
+                        change = change
+                    )
                     true
                 }
 
@@ -746,7 +775,7 @@ class AlvinProtocol(
         val oldEntry = entryIdToAlvinEntry[entryId]
         val changeId: String = Change.fromHistoryEntry(entry.entry)!!.id
 
-        if (changeIdToCompletableFuture[changeId]?.isDone == true && entry.status != AlvinStatus.STABLE) return
+        if (changeIdToCompletableFuture[changeId]?.isDone == true || history.containsEntry(entryId)) return
 
         var updatedEntry = entry
         if (oldEntry?.status == AlvinStatus.STABLE) {

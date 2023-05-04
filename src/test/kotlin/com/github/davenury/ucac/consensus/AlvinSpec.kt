@@ -123,7 +123,7 @@ class AlvinSpec : IntegrationTestBase() {
 
 
         val peerChangeAccepted = SignalListener {
-            logger.info("Arrived change: ${it.change}")
+            logger.info("Arrived change $changeNum: ${it.change}")
             phaser.arrive()
         }
 
