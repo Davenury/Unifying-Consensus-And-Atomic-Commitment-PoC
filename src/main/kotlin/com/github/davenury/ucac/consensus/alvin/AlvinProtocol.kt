@@ -765,7 +765,11 @@ class AlvinProtocol(
         entryIdToFailureDetector[entryId]?.cancelCounting()
         entryIdToFailureDetector.putIfAbsent(entryId, getFailureDetectorTimer())
         if (entryIdToAlvinEntry.containsKey(entryId)) entryIdToFailureDetector[entryId]!!.startCounting(entry.epoch) {
-            recoveryPhase(entry)
+            try {
+                recoveryPhase(entry)
+            } catch (ex: Exception) {
+                logger.info("Exception was thrown during recovery" + ex.stackTrace)
+            }
         }
     }
 
