@@ -53,10 +53,7 @@ class AlvinProtocol(
     private var executorService: ExecutorCoroutineDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
     private val deliveryQueue: PriorityQueue<AlvinEntry> =
         PriorityQueue { o1, o2 -> o1.transactionId.compareTo(o2.transactionId) }
-    private val proposeChannel = Channel<RequestResult<AlvinAckPropose>>()
-    private val acceptChannel = Channel<RequestResult<AlvinAckAccept>>()
-    private val promiseChannel = Channel<RequestResult<AlvinPromise>>()
-    private val fastRecoveryChannel = Channel<RequestResult<AlvinFastRecoveryResponse?>>()
+
 
     override fun getPeerName() = peerId.toString()
 
@@ -284,18 +281,22 @@ class AlvinProtocol(
         val historyEntry = change.toHistoryEntry(peersetId)
         val myDeps = listOf(history.getCurrentEntry())
         val entry = AlvinEntry(historyEntry, getNextNum(), myDeps)
+        val entryId = historyEntry.getId()
 
         logger.info("Starts proposal phase ${historyEntry.getId()}")
 
         mutex.withLock {
+
             updateEntry(entry)
         }
 
-        val jobs = scheduleMessages(historyEntry, proposeChannel, entry.epoch) { peerAddress ->
+        val channel = Channel<RequestResult<AlvinAckPropose>>()
+
+        val jobs = scheduleMessages(historyEntry, channel, entry.epoch) { peerAddress ->
             protocolClient.sendProposal(peerAddress, AlvinPropose(peerId, entry.toDto()))
         }
         val responses: List<AlvinAckPropose> =
-            waitForQuorum(historyEntry, jobs, proposeChannel, AlvinStatus.PENDING)
+            waitForQuorum(historyEntry, jobs, channel, AlvinStatus.PENDING)
 
         val newPos = responses.maxOf { it.newPos }
         val newDeps = responses.flatMap { it.newDeps }.map { HistoryEntry.deserialize(it) }
@@ -318,6 +319,8 @@ class AlvinProtocol(
                 updateEntry(entry)
             }
             logger.info("Starts decision phase ${entry.entry.getId()}")
+
+            val acceptChannel = Channel<RequestResult<AlvinAckAccept>>()
 
             val jobs = scheduleMessages(historyEntry, acceptChannel, entry.epoch) { peerAddress ->
                 protocolClient.sendAccept(peerAddress, AlvinAccept(peerId, entry.toDto()))
@@ -369,6 +372,9 @@ class AlvinProtocol(
         mutex.withLock {
             updateEntry(newEntry)
         }
+
+        val promiseChannel = Channel<RequestResult<AlvinPromise>>()
+
         val jobs = scheduleMessages(entry.entry, promiseChannel, newEntry.epoch) { peerAddress ->
             protocolClient.sendPrepare(
                 peerAddress,
@@ -548,7 +554,7 @@ class AlvinProtocol(
         while (responses.size < otherConsensusPeers().size) {
             val response = channel.receive()
             if (response.entryId == entryId) responses.add(response.response)
-            else channel.send(response)
+            else if(!history.containsEntry(entryId)) channel.send(response)
         }
 
         return responses
@@ -656,10 +662,12 @@ class AlvinProtocol(
         val commitDecision = if (myselfVotesForCommit) isMoreThanHalf(commitVotes) else isMoreThanHalf(commitVotes - 1)
         val abortDecision = if (myselfVotesForCommit) isMoreThanHalf(abortVotes - 1) else isMoreThanHalf(abortVotes)
 
-        if (entryIdToAlvinEntry.containsKey(entry.entry.getParentId())) {
-            logger.info("Waiting until parent will be processed ${entry.entry.getId()}")
-            return
-        } else if ((commitDecision || abortDecision) && changeIdToCompletableFuture[change.id]?.isDone != true) {
+        if ((commitDecision || abortDecision) && changeIdToCompletableFuture[change.id]?.isDone != true) {
+            if (!history.containsEntry(entry.entry.getParentId()!!)) {
+                logger.info("Waiting until parent will be processed ${entry.entry.getId()}")
+
+                return
+            }
             entryIdToAlvinEntry.remove(entryId)
             entryIdToFailureDetector[entryId]?.cancelCounting()
             entryIdToFailureDetector.remove(entryId)
@@ -710,6 +718,8 @@ class AlvinProtocol(
             resetFailureDetector(entryIdToAlvinEntry[entryId]!!)
             return false
         }
+
+        val fastRecoveryChannel = Channel<RequestResult<AlvinFastRecoveryResponse?>>()
 
 //      epoch 1 because we don't current value
         scheduleMessagesOnce(entryId, fastRecoveryChannel) {
