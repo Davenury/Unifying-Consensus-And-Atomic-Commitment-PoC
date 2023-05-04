@@ -473,11 +473,11 @@ class AlvinProtocol(
                             return@launch
                         }
 
-                        if (response.message == null && !response.unauthorized) delay(heartbeatDelay.toMillis())
+                        if (response.message == null) delay(heartbeatDelay.toMillis())
 
-                    } while (response.message == null && !response.unauthorized)
+                    } while (response.message == null)
 
-                    if (response.message != null) channel?.send(
+                    channel?.send(
                         RequestResult(
                             entryId,
                             response.message!!,
@@ -659,8 +659,7 @@ class AlvinProtocol(
         if (entryIdToAlvinEntry.containsKey(entry.entry.getParentId())) {
             logger.info("Waiting until parent will be processed ${entry.entry.getId()}")
             return
-        }
-        else if ((commitDecision || abortDecision) && changeIdToCompletableFuture[change.id]?.isDone != true) {
+        } else if ((commitDecision || abortDecision) && changeIdToCompletableFuture[change.id]?.isDone != true) {
             entryIdToAlvinEntry.remove(entryId)
             entryIdToFailureDetector[entryId]?.cancelCounting()
             entryIdToFailureDetector.remove(entryId)
@@ -693,7 +692,8 @@ class AlvinProtocol(
     private fun checkNextChanges(entryId: String) {
         var currentEntryId = entryId
         do {
-            val entry = entryIdToAlvinEntry.toList().firstOrNull { it.second.entry.getParentId() == currentEntryId }?.second
+            val entry =
+                entryIdToAlvinEntry.toList().firstOrNull { it.second.entry.getParentId() == currentEntryId }?.second
             if (entry != null) {
                 val change = Change.fromHistoryEntry(entry.entry)!!
                 checkVotes(entry, change)
