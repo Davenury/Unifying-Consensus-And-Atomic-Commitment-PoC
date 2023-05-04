@@ -479,7 +479,10 @@ class AlvinProtocol(
                             return@launch
                         }
 
-                        if (response.message == null) delay(heartbeatDelay.toMillis())
+                        if (response.message == null) {
+                            logger.info("Delay message ${heartbeatDelay.toMillis()} ms")
+                            delay(heartbeatDelay.toMillis())
+                        }
 
                     } while (response.message == null)
 
