@@ -781,7 +781,14 @@ class AlvinProtocol(
         responses
             .flatMap { it.historyEntries.map { HistoryEntry.deserialize(it) } }
             .distinct()
-            .forEach { mutex.withLock { commitChange(it) } }
+            .forEach {
+                val change = Change.fromHistoryEntry(it)
+                mutex.withLock {
+                    commitChange(it)
+                    cleanAfterEntryFinished(it.getId())
+                    transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change!!.id))
+                }
+            }
 
 
         val findEntry = { response: AlvinFastRecoveryResponse ->
