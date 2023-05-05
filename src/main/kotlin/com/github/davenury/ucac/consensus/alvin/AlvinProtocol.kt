@@ -53,8 +53,7 @@ class AlvinProtocol(
     private val votesContainer = VotesContainer()
 
     private var executorService: ExecutorCoroutineDispatcher =
-//        Executors.newFixedThreadPool(10).asCoroutineDispatcher()
-            Executors.newCachedThreadPool().asCoroutineDispatcher()
+        Executors.newCachedThreadPool().asCoroutineDispatcher()
 
     private val deliveryQueue: PriorityQueue<AlvinEntry> =
         PriorityQueue { o1, o2 -> o1.transactionId.compareTo(o2.transactionId) }
@@ -63,6 +62,10 @@ class AlvinProtocol(
     override fun getPeerName() = peerId.toString()
 
     override suspend fun begin() {
+        transactionBlocker
+            .getChangeId()
+            ?.let { TransactionAcquisition(ProtocolName.CONSENSUS, it) }
+            ?.let { transactionBlocker.tryRelease(it) }
         Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
         subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
     }
@@ -484,10 +487,12 @@ class AlvinProtocol(
 
         val isTransactionBlockerAcquired = transactionBlocker.tryAcquireReentrant(transactionAcquisition)
 
-        if (!isTransactionBlockerAcquired) throw AlvinHistoryBlocked(
-            transactionBlocker.getChangeId()!!,
-            transactionBlocker.getProtocolName()!!
-        ) else {
+        if (!isTransactionBlockerAcquired) {
+            throw AlvinHistoryBlocked(
+                transactionBlocker.getChangeId()!!,
+                transactionBlocker.getProtocolName()!!
+            )
+        } else {
             logger.info("Transaction blocker acquired for entry: ${changeId}")
         }
     }
