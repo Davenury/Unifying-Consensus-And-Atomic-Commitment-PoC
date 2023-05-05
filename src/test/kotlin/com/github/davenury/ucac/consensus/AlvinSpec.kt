@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.measureTimeMillis
 import com.github.davenury.ucac.utils.TestApplicationSet
 import org.junit.jupiter.api.Disabled
+import java.time.Duration
 
 @ExtendWith(TestLogExtension::class)
 class AlvinSpec : IntegrationTestBase() {
@@ -519,8 +520,8 @@ class AlvinSpec : IntegrationTestBase() {
 
         logger.info("Network merged")
 
-        change2PropagatePhaser.arriveAndAwaitAdvanceWithTimeout()
-        change1AbortPhaser.arriveAndAwaitAdvanceWithTimeout()
+        change2PropagatePhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
+        change1AbortPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
         logger.info("After change 2")
 
@@ -804,7 +805,7 @@ class AlvinSpec : IntegrationTestBase() {
     }
 
 
-    @Disabled
+//    @Disabled
     @Test
     fun `process 50 changes, then one peer doesn't respond on 250 changes and finally synchronize on all`(): Unit =
         runBlocking {

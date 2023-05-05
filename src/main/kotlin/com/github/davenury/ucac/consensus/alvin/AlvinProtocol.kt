@@ -48,12 +48,14 @@ class AlvinProtocol(
     private var lastTransactionId = 0
     private val entryIdToAlvinEntry: ConcurrentHashMap<String, AlvinEntry> = ConcurrentHashMap()
     private val entryIdToFailureDetector: ConcurrentHashMap<String, ProtocolTimer> = ConcurrentHashMap()
-    private val entryIdToVotesCommit: ConcurrentHashMap<String, List<PeerId>> = ConcurrentHashMap()
-    private val entryIdToVotesAbort: ConcurrentHashMap<String, List<PeerId>> = ConcurrentHashMap()
-    private var executorService: ExecutorCoroutineDispatcher =
-        Executors.newFixedThreadPool(10).asCoroutineDispatcher()
 
-    //        Executors.newCachedThreadPool().asCoroutineDispatcher()
+
+    private val votesContainer = VotesContainer()
+
+    private var executorService: ExecutorCoroutineDispatcher =
+//        Executors.newFixedThreadPool(10).asCoroutineDispatcher()
+            Executors.newCachedThreadPool().asCoroutineDispatcher()
+
     private val deliveryQueue: PriorityQueue<AlvinEntry> =
         PriorityQueue { o1, o2 -> o1.transactionId.compareTo(o2.transactionId) }
 
@@ -64,7 +66,6 @@ class AlvinProtocol(
         Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
         subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
     }
-
 
     override suspend fun handleProposalPhase(message: AlvinPropose): AlvinAckPropose {
         logger.info("Handle proposal for entry: ${message.entry.toEntry().entry.getId()}")
@@ -175,7 +176,7 @@ class AlvinProtocol(
 
         logger.info("Handle prepare for entry: ${messageEntry.entry.getId()}, deps: ${messageEntry.deps.map { it.getId() }}")
 
-        if (history.containsEntry(entryId) || changeIdToCompletableFuture[change!!.id]?.isDone == true) {
+        if (isTransactionFinished(entryId, change!!.id)) {
             return AlvinPromise(messageEntry.toDto(), true)
         }
 
@@ -215,12 +216,8 @@ class AlvinProtocol(
         checkTransactionBlocker(messageEntry)
 
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-        entryIdToVotesCommit.putIfAbsent(entryId, listOf())
-        entryIdToVotesAbort.putIfAbsent(entryId, listOf())
-
-        val votesContainer = if (message.result == AlvinResult.COMMIT) entryIdToVotesCommit else entryIdToVotesAbort
-        votesContainer[entryId] =
-            (votesContainer.getOrDefault(entryId, listOf()) + listOf(message.peerId)).distinct()
+        votesContainer.initializeEntry(entryId)
+        votesContainer.voteOnEntry(entryId, message.result, message.peerId)
 
         checkVotes(messageEntry, change)
         checkNextChanges(entryId)
@@ -490,7 +487,9 @@ class AlvinProtocol(
         if (!isTransactionBlockerAcquired) throw AlvinHistoryBlocked(
             transactionBlocker.getChangeId()!!,
             transactionBlocker.getProtocolName()!!
-        )
+        ) else {
+            logger.info("Transaction blocker acquired for entry: ${changeId}")
+        }
     }
 
     private suspend fun <A> scheduleMessages(
@@ -556,6 +555,21 @@ class AlvinProtocol(
             }
         }
 
+    private suspend fun <A> scheduleMessagesOnce(
+        entryId: String,
+        channel: Channel<RequestResult<A?>>?,
+        sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<A?>
+    ) =
+        (0 until otherConsensusPeers().size).map {
+            with(CoroutineScope(executorService)) {
+                launchTraced(MDCContext()) {
+                    val peerAddress = otherConsensusPeers()[it]
+                    val response = sendMessage(peerAddress)
+                    channel?.send(RequestResult(entryId, response.message))
+                }
+            }
+        }
+
     private suspend fun <A> waitForQuorum(
         historyEntry: HistoryEntry,
         jobs: List<Job>,
@@ -592,21 +606,6 @@ class AlvinProtocol(
 
         return responses
     }
-
-    private suspend fun <A> scheduleMessagesOnce(
-        entryId: String,
-        channel: Channel<RequestResult<A?>>?,
-        sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<A?>
-    ) =
-        (0 until otherConsensusPeers().size).map {
-            with(CoroutineScope(executorService)) {
-                launchTraced(MDCContext()) {
-                    val peerAddress = otherConsensusPeers()[it]
-                    val response = sendMessage(peerAddress)
-                    channel?.send(RequestResult(entryId, response.message))
-                }
-            }
-        }
 
     private suspend fun <A> gatherResponses(
         entryId: String,
@@ -666,12 +665,12 @@ class AlvinProtocol(
         when {
             depsResult.all { it } && !history.isEntryCompatible(entry.entry) -> {
                 logger.info("Entry ${entry.entry.getId()} is incompatible, send abort, deps: $associatedDeps")
-                scheduleCommitMessages(entry, AlvinResult.ABORT)
+                scheduleCommitMessagesOnce(entry, AlvinResult.ABORT)
             }
 
             depsResult.all { it } -> {
                 logger.info("Entry ${entry.entry.getId()} is compatible, send commit")
-                scheduleCommitMessages(entry, AlvinResult.COMMIT)
+                scheduleCommitMessagesOnce(entry, AlvinResult.COMMIT)
             }
 
             else -> mutex.withLock {
@@ -701,60 +700,38 @@ class AlvinProtocol(
         val entryId = entry.entry.getId()
 
         if (changeIdToCompletableFuture[change.id]?.isDone == true) return
+        if (response.result == null) return@withLock
 
-        val entryIdToVotes = when (response.result) {
-            AlvinResult.COMMIT -> entryIdToVotesCommit
-            AlvinResult.ABORT -> entryIdToVotesAbort
-            else -> null
-        } ?: return@withLock
-
-        entryIdToVotes[entryId] = (entryIdToVotes.getOrDefault(entryId, listOf()) + listOf(response.peerId)).distinct()
+        votesContainer.voteOnEntry(entryId, response.result, response.peerId)
         checkVotes(entry, change)
         checkNextChanges(entryId)
     }
 
 
     //  Mutex function
-    private fun checkVotes(entry: AlvinEntry, change: Change) {
+    private suspend fun checkVotes(entry: AlvinEntry, change: Change) {
         val entryId = entry.entry.getId()
         val myselfVotesForCommit = history.isEntryCompatible(entry.entry)
 
-        val commitVotes = entryIdToVotesCommit.getOrDefault(entryId, listOf()).distinct().size
-        val abortVotes = entryIdToVotesAbort.getOrDefault(entryId, listOf()).distinct().size
-        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+        val (commitVotes, abortVotes) = votesContainer.getVotes(entryId, myselfVotesForCommit)
 
-        val commitDecision = if (myselfVotesForCommit) isMoreThanHalf(commitVotes) else isMoreThanHalf(commitVotes - 1)
-        val abortDecision = if (myselfVotesForCommit) isMoreThanHalf(abortVotes - 1) else isMoreThanHalf(abortVotes)
+        val (commitDecision, abortDecision) = Pair(isMoreThanHalf(commitVotes), isMoreThanHalf(abortVotes))
 
-        if ((commitDecision || abortDecision) && changeIdToCompletableFuture[change.id]?.isDone != true) {
+        if ((commitDecision || abortDecision) && !isTransactionFinished(entryId, change.id)) {
             if (commitDecision && !history.containsEntry(entry.entry.getParentId()!!)) {
                 logger.info("Waiting until parent will be processed ${entry.entry.getParentId()} \n CommitDecision: $commitDecision, abortDecision: $abortDecision")
                 return
             }
-            entryIdToAlvinEntry.remove(entryId)
-            entryIdToFailureDetector[entryId]?.cancelCounting()
-            entryIdToFailureDetector.remove(entryId)
-            entryIdToVotesCommit.remove(entryId)
-            entryIdToVotesAbort.remove(entryId)
+            cleanAfterEntryFinished(entryId)
 
-            val (changeResult, signal) = if (commitDecision) {
-                if (isMetricTest) {
-                    Metrics.bumpChangeMetric(
-                        changeId = change.id,
-                        peerId = peerId,
-                        peersetId = peersetId,
-                        protocolName = ProtocolName.CONSENSUS,
-                        state = "accepted"
-                    )
-                }
-                if (!history.containsEntry(entry.entry.getId())) history.addEntry(entry.entry)
-                Pair(ChangeResult.Status.SUCCESS, Signal.AlvinCommitChange)
+            val changeResult = if (commitDecision) {
+                commitChange(entry.entry)
+                ChangeResult.Status.SUCCESS
             } else {
-                Pair(ChangeResult.Status.CONFLICT, Signal.AlvinAbortChange)
+                abortChange(entry.entry)
+                ChangeResult.Status.CONFLICT
             }
             logger.info("The result of change (${change.id}) is $changeResult")
-            changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(changeResult))
-            signalPublisher.signal(signal, this, mapOf(peersetId to otherConsensusPeers()), change = change)
             transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
         }
     }
@@ -799,20 +776,7 @@ class AlvinProtocol(
         responses
             .flatMap { it.historyEntries.map { HistoryEntry.deserialize(it) } }
             .distinct()
-            .forEach {
-                mutex.withLock {
-                    history.addEntry(it)
-                    val change = Change.fromHistoryEntry(it)!!
-                    changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-                    changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
-                    signalPublisher.signal(
-                        Signal.AlvinCommitChange,
-                        this,
-                        mapOf(peersetId to otherConsensusPeers()),
-                        change = change
-                    )
-                }
-            }
+            .forEach { mutex.withLock { commitChange(it) } }
 
 
         val findEntry = { response: AlvinFastRecoveryResponse ->
@@ -833,6 +797,40 @@ class AlvinProtocol(
 
             else -> true
         }
+    }
+
+
+    //  mutex function
+    private fun commitChange(historyEntry: HistoryEntry) {
+        if (!history.containsEntry(historyEntry.getId())) history.addEntry(historyEntry)
+        val change = Change.fromHistoryEntry(historyEntry)!!
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+        changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
+        signalPublisher.signal(
+            Signal.AlvinCommitChange,
+            this,
+            mapOf(peersetId to otherConsensusPeers()),
+            change = change
+        )
+    }
+
+    private fun abortChange(historyEntry: HistoryEntry) {
+        val change = Change.fromHistoryEntry(historyEntry)!!
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+        changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+        signalPublisher.signal(
+            Signal.AlvinAbortChange,
+            this,
+            mapOf(peersetId to otherConsensusPeers()),
+            change = change
+        )
+    }
+
+    private suspend fun cleanAfterEntryFinished(entryId: String) {
+        entryIdToAlvinEntry.remove(entryId)
+        entryIdToFailureDetector[entryId]?.cancelCounting()
+        entryIdToFailureDetector.remove(entryId)
+        votesContainer.removeEntry(entryId)
     }
 
 
