@@ -41,12 +41,14 @@ enum class Signal {
     AlvinAfterProposalPhase,
     AlvinAfterAcceptPhase,
     AlvinAfterStablePhase,
+    AlvinHandleMessages,
     PigPaxosLeaderElected,
     PigPaxosChangeCommitted,
     PigPaxosChangeAborted,
     PigPaxosTryToBecomeLeader,
     PigPaxosAfterAcceptChange,
     PigPaxosReceivedAccept,
+    PigPaxosBeginHandleMessages,
     PigPaxosReceivedCommit,
 }
 

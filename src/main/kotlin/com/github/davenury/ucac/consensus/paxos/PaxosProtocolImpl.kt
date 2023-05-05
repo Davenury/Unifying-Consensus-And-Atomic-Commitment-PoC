@@ -110,9 +110,17 @@ class PaxosProtocolImpl(
 
     override suspend fun handleAccept(message: PaxosAccept): PaxosAccepted = span("PigPaxos.handleAccept") {
         mutex.withLock {
+
             val entry = HistoryEntry.deserialize(message.entry)
             val change = Change.fromHistoryEntry(entry)!!
             val changeId = change.id
+
+            signalPublisher.signal(
+                Signal.PigPaxosBeginHandleMessages,
+                this@PaxosProtocolImpl,
+                mapOf(peersetId to otherConsensusPeers()),
+                change = change
+            )
 
             logger.info("Handle PaxosAccept: ${message.paxosRound} ${message.proposer} ${entry.getId()}")
 
@@ -191,6 +199,12 @@ class PaxosProtocolImpl(
         mutex.withLock {
             val entry = HistoryEntry.deserialize(message.entry)
             val change = Change.fromHistoryEntry(entry)!!
+            signalPublisher.signal(
+                Signal.PigPaxosBeginHandleMessages,
+                this@PaxosProtocolImpl,
+                mapOf(peersetId to otherConsensusPeers()),
+                change = change
+            )
             signalPublisher.signal(
                 Signal.PigPaxosReceivedCommit,
                 this@PaxosProtocolImpl,
