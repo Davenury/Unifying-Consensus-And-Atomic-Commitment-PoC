@@ -343,7 +343,7 @@ class AlvinProtocol(
 
         val channel = Channel<RequestResult<AlvinAckPropose>>()
 
-        val jobs = scheduleMessages(historyEntry, channel, entry.epoch, change.id) { peerAddress ->
+        val jobs = scheduleMessages(historyEntry, channel, entry.epoch) { peerAddress ->
             protocolClient.sendProposal(peerAddress, AlvinPropose(peerId, entry.toDto()))
         }
         val responses: List<AlvinAckPropose> =
@@ -374,7 +374,7 @@ class AlvinProtocol(
 
         val acceptChannel = Channel<RequestResult<AlvinAckAccept>>()
 
-        val jobs = scheduleMessages(historyEntry, acceptChannel, entry.epoch, changeId) { peerAddress ->
+        val jobs = scheduleMessages(historyEntry, acceptChannel, entry.epoch) { peerAddress ->
             protocolClient.sendAccept(peerAddress, AlvinAccept(peerId, entry.toDto()))
         }
 
@@ -410,7 +410,7 @@ class AlvinProtocol(
                 peerIdToTransactionId[it.peerId] = entry.transactionId
         }
 
-        scheduleMessages(historyEntry, null, entry.epoch, changeId) { peerAddress ->
+        scheduleMessages(historyEntry, null, entry.epoch) { peerAddress ->
             if ((peerIdToTransactionId[peerAddress.peerId] ?: 0) == entry.transactionId)
                 protocolClient.sendStable(peerAddress, AlvinStable(peerId, entry.toDto()))
             else
@@ -441,7 +441,7 @@ class AlvinProtocol(
 
         val promiseChannel = Channel<RequestResult<AlvinPromise>>()
 
-        val jobs = scheduleMessages(entry.entry, promiseChannel, newEntry.epoch, changeId) { peerAddress ->
+        val jobs = scheduleMessages(entry.entry, promiseChannel, newEntry.epoch) { peerAddress ->
             protocolClient.sendPrepare(
                 peerAddress,
                 AlvinAccept(peerId, newEntry.toDto())
@@ -517,16 +517,14 @@ class AlvinProtocol(
         entry: HistoryEntry,
         channel: Channel<RequestResult<A>>?,
         epoch: Int,
-        changeId: String,
         sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<A?>
-    ) = scheduleMessages(entry.getId(), channel, epoch, changeId, sendMessage)
+    ) = scheduleMessages(entry.getId(), channel, epoch, sendMessage)
 
 
     private suspend fun <A> scheduleMessages(
         entryId: String,
         channel: Channel<RequestResult<A>>?,
         epoch: Int,
-        changeId: String,
         sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<A?>
     ) =
         (0 until otherConsensusPeers().size).map {
