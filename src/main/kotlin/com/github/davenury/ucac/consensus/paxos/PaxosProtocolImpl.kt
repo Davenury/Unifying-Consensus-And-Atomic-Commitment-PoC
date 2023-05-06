@@ -263,18 +263,27 @@ class PaxosProtocolImpl(
             return
         }
 
-        if (transactionBlocker.isAcquired() && transactionBlocker.getChangeId() != change.id) {
-            logger.info("Queued change, because: transaction is blocked")
+        val transactionAcquisition = TransactionAcquisition(ProtocolName.CONSENSUS, change.id)
+
+
+        if (!transactionBlocker.tryAcquireReentrant(transactionAcquisition)) {
+            logger.info("Transaction is blocked on protocol ${transactionBlocker.getProtocolName()}, timeout transaction, changeId: ${change.id}")
+            if (transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
+                val changeId = transactionBlocker.getChangeId()!!
+                val entry = entryIdPaxosRound
+                    .map { it.value.entry }
+                    .find { Change.fromHistoryEntry(it)?.id == changeId }
+                failureDetector.startCounting {
+                    if (entry != null) acceptPhase(entry)
+                    else {
+                        logger.error("Inconsistent state, release transaction blocker for change $changeId")
+                        transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
+                    }
+                }
+            }
+
             result.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
             return
-        }
-
-        try {
-            transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
-        } catch (ex: AlreadyLockedException) {
-            logger.info("Is already blocked on other transaction ${transactionBlocker.getProtocolName()}")
-            result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-            throw ex
         }
 
         if (!history.isEntryCompatible(entry)) {
@@ -286,7 +295,7 @@ class PaxosProtocolImpl(
                 }"
             )
             result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
-            transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
+            transactionBlocker.tryRelease(transactionAcquisition)
             return
         }
         logger.info("Propose change to ledger: $change")
@@ -518,16 +527,14 @@ class PaxosProtocolImpl(
 
         signalPublisher.signal(Signal.PigPaxosAfterAcceptChange, this, mapOf(peersetId to otherConsensusPeers()))
         mutex.withLock {
-            commitChange(result, change)
             if (result == PaxosResult.COMMIT) lastPropagatedEntryId = entry.getId()
             otherConsensusPeers().forEach {
                 peerIdToEntryId[it.peerId] = entry.getId()
             }
+            commitChange(result, change)
         }
 
-
-
-
+        logger.info("Send commit message to other peers for entry: ${entry.getId()}")
         (0 until otherConsensusPeers().size).map {
             with(CoroutineScope(executorService)) {
                 launch(MDCContext()) {
@@ -547,9 +554,13 @@ class PaxosProtocolImpl(
     private suspend fun commitChange(result: PaxosResult, change: Change) {
         val entry = change.toHistoryEntry(peersetId)
 
+        failureDetector.cancelCounting()
+
         when {
             changeIdToCompletableFuture[change.id]?.isDone == true -> {
+                logger.info("Entry is already finished, clean after this entry: ${entry.getId()}")
                 entryIdPaxosRound.remove(entry.getId())
+
             }
 
             result == PaxosResult.COMMIT && history.isEntryCompatible(entry) -> {
@@ -572,6 +583,7 @@ class PaxosProtocolImpl(
             }
 
             result == PaxosResult.COMMIT -> {
+                logger.info("Entry is incompatible even though we should commit it, try recover from it")
 
 //              TODO: Send propose in which you learnt about all committed changes since your currentEntryId
 //              Send PaxosPropose with PaxosRound on -1 to get consensus state about accepted entries
