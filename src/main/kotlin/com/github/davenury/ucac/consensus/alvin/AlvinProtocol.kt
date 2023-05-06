@@ -233,8 +233,20 @@ class AlvinProtocol(
 
     override suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse =
         mutex.withLock {
+            logger.info(
+                "Handle FastRecovery for entry: ${message.askedEntryId} and isCommitted: ${
+                    history.containsEntry(
+                        message.askedEntryId
+                    )
+                }, currentEntryId: ${message.currentEntryId}"
+            )
+
             val historyEntries = history.getAllEntriesUntilHistoryEntryId(message.currentEntryId)
 
+            if (historyEntries.size > maxChangesPerMessage) {
+                val limitedEntries = historyEntries.take(maxChangesPerMessage)
+                return@withLock AlvinFastRecoveryResponse(listOf(), limitedEntries.map { it.serialize() }, false)
+            }
 
             val alvinEntries = mutableListOf<AlvinEntry>()
             var alvinEntryId = message.askedEntryId
@@ -244,9 +256,16 @@ class AlvinProtocol(
                 alvinEntryId = alvinEntry.entry.getParentId()!!
             }
 
-            logger.info("Handle FastRecovery: $alvinEntries and isCommitted: ${history.containsEntry(message.askedEntryId)}")
+            if (historyEntries.size + alvinEntries.size > maxChangesPerMessage) {
+                val limitedAlvinEntries = alvinEntries.take(maxChangesPerMessage - historyEntries.size)
+                return@withLock AlvinFastRecoveryResponse(
+                    limitedAlvinEntries.map { it.toDto() },
+                    historyEntries.map { it.serialize() },
+                    false
+                )
+            }
 
-            AlvinFastRecoveryResponse(alvinEntries.map { it.toDto() }, historyEntries.map { it.serialize() })
+            AlvinFastRecoveryResponse(alvinEntries.map { it.toDto() }, historyEntries.map { it.serialize() }, true)
         }
 
 
@@ -790,26 +809,32 @@ class AlvinProtocol(
 
     private suspend fun fastRecoveryPhase(entryId: String): Boolean {
         logger.info("Start fast recovery for entryId: $entryId")
-        val fastRecoveryChannel = Channel<RequestResult<AlvinFastRecoveryResponse?>>()
+
+        var responses: List<AlvinFastRecoveryResponse>
+
+        do {
+            val fastRecoveryChannel = Channel<RequestResult<AlvinFastRecoveryResponse?>>()
 
 //      epoch 1 because we don't current value
-        scheduleMessagesOnce(entryId, fastRecoveryChannel) {
-            protocolClient.sendFastRecovery(it, AlvinFastRecovery(entryId, history.getCurrentEntryId()))
-        }
-
-        val responses: List<AlvinFastRecoveryResponse> = gatherResponses(entryId, fastRecoveryChannel).filterNotNull()
-
-        responses
-            .flatMap { it.historyEntries.map { HistoryEntry.deserialize(it) } }
-            .distinct()
-            .forEach {
-                val change = Change.fromHistoryEntry(it)
-                mutex.withLock {
-                    commitChange(it)
-                    cleanAfterEntryFinished(it.getId())
-                    transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change!!.id))
-                }
+            scheduleMessagesOnce(entryId, fastRecoveryChannel) {
+                protocolClient.sendFastRecovery(it, AlvinFastRecovery(entryId, history.getCurrentEntryId()))
             }
+
+            responses = gatherResponses(entryId, fastRecoveryChannel).filterNotNull()
+
+            responses
+                .flatMap { it.historyEntries.map { HistoryEntry.deserialize(it) } }
+                .distinct()
+                .forEach {
+                    val change = Change.fromHistoryEntry(it)
+                    mutex.withLock {
+                        commitChange(it)
+                        cleanAfterEntryFinished(it.getId())
+                        transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change!!.id))
+                    }
+                }
+        } while (responses.any { !it.isFinished })
+
 
 
         val findEntry = { response: AlvinFastRecoveryResponse ->
@@ -819,6 +844,7 @@ class AlvinProtocol(
         val alvinEntry = responses
             .find { findEntry(it) != null }
             ?.let { findEntry(it) }
+
 
         return when {
             history.containsEntry(entryId) -> true
@@ -889,7 +915,7 @@ class AlvinProtocol(
         }
     }
 
-//  mutex function
+    //  mutex function
     private suspend fun resetFailureDetector(entry: AlvinEntry, function: suspend () -> Unit) {
         val entryId = entry.entry.getId()
         entryIdToFailureDetector[entryId]?.cancelCounting()
