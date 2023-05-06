@@ -52,7 +52,6 @@ class PaxosProtocolImpl(
     private var failureDetector = ProtocolTimerImpl(Duration.ofSeconds(0), heartbeatTimeout, ctx)
     private var votedFor: VotedFor? = null
     private var currentRound = -1
-    private val acceptedChannel: Channel<Pair<String, PaxosAccepted?>> = Channel()
     private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
         ConcurrentLinkedDeque()
 
@@ -643,14 +642,15 @@ class PaxosProtocolImpl(
 
     private suspend fun sendAccepts(entry: HistoryEntry): PaxosResult? {
         val changeId = Change.fromHistoryEntry(entry)!!.id
-        val jobs = scheduleAccepts(changeId) {
+        val acceptedChannel = Channel<PaxosAccepted?>()
+        val jobs = scheduleAccepts(acceptedChannel) {
             protocolClient.sendAccept(
                 it,
                 PaxosAccept(entry.serialize(), currentRound, votedFor?.id!!, history.getCurrentEntryId())
             )
         }
 
-        val responses = gatherAccepts(currentRound, changeId).filterNotNull()
+        val responses = gatherAccepts(currentRound,acceptedChannel).filterNotNull()
         logger.info("Responses sendAccepts: $responses")
 
         val (accepted, rejected) = responses.partition { it.accepted }
@@ -668,7 +668,7 @@ class PaxosProtocolImpl(
 
     //  Send tou many nulls
     private suspend fun scheduleAccepts(
-        changeId: String,
+        acceptedChannel: Channel<PaxosAccepted?>,
         sendMessage: suspend (peerAddress: PeerAddress) -> ConsensusResponse<PaxosAccepted?>
     ) =
         (0 until otherConsensusPeers().size).map {
@@ -678,35 +678,32 @@ class PaxosProtocolImpl(
                     val response: ConsensusResponse<PaxosAccepted?> = sendMessage(peerAddress)
 
                     when {
-                        response.message == null -> acceptedChannel.send(Pair(changeId, null))
+                        response.message == null -> acceptedChannel.send(null)
                         response.message.isTransactionBlocked -> {
                             logger.info("Peer has transaction blocked")
-                            acceptedChannel.send(Pair(changeId, null))
+                            acceptedChannel.send(null)
                         }
 
                         history.containsEntry(response.message.currentEntryId) && response.message.currentEntryId != history.getCurrentEntryId() -> {
                             logger.info("Peer has outdated history")
                             sendBatchCommit(response.message.currentEntryId, peerAddress)
-                            acceptedChannel.send(Pair(changeId, null))
+                            acceptedChannel.send( null)
                         }
 
-                        else -> acceptedChannel.send(Pair(changeId, response.message))
+                        else -> acceptedChannel.send(response.message)
                     }
                 }
             }
         }
 
-    private suspend fun gatherAccepts(round: Int, changeId: String): List<PaxosAccepted?> {
+    private suspend fun gatherAccepts(round: Int,acceptedChannel: Channel<PaxosAccepted?>): List<PaxosAccepted?> {
         val responses: MutableList<PaxosAccepted?> = mutableListOf()
 
         val peers = otherConsensusPeers().size
 
         while (responses.size < peers) {
-            val tuple = acceptedChannel.receive()
+            val response = acceptedChannel.receive()
 
-            if (changeId != tuple.first) continue
-
-            val response = tuple.second
             responses.add(response)
 
             val (accepted, rejected) = responses.filterNotNull().partition { it.result }
