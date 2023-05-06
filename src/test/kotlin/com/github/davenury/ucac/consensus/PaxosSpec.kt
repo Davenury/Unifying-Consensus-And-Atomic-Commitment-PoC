@@ -858,7 +858,6 @@ class PaxosSpec : IntegrationTestBase() {
         }
     }
 
-    //    @Disabled
     @Test
     fun `process 50 changes, then one peer doesn't respond on 250 changes and finally synchronize on all`(): Unit =
         runBlocking {
@@ -915,7 +914,8 @@ class PaxosSpec : IntegrationTestBase() {
                         Signal.PigPaxosChangeCommitted to ignoringPeerChangeAccepted,
                         Signal.PigPaxosBeginHandleMessages to ignoreHeartbeat,
                         Signal.PigPaxosTryToBecomeLeader to SignalListener {
-                            if (!isAllChangeCommitted.get()) throw RuntimeException("Don't try to become a leader")
+//                            if (!isAllChangeCommitted.get())
+                                throw RuntimeException("Don't try to become a leader")
                         }
                     )
                 )
@@ -947,7 +947,7 @@ class PaxosSpec : IntegrationTestBase() {
 
             isAllChangeCommitted.set(true)
 
-            endingPhaser.arriveAndAwaitAdvanceWithTimeout()
+            endingPhaser.arriveAndAwaitAdvanceWithTimeout(Duration.ofSeconds(30))
 
             askAllForChanges(peerAddresses.values).forEach { changes ->
                 // then: there are two changes

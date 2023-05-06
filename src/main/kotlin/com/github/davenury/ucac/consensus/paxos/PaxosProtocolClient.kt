@@ -27,7 +27,7 @@ interface PigPaxosProtocolClient {
     suspend fun sendCommit(
         peer: PeerAddress,
         message: PaxosCommit
-    ): ConsensusResponse<String?>
+    ): ConsensusResponse<PaxosCommitResponse?>
 
     suspend fun sendBatchCommit(
         peer: PeerAddress,
@@ -60,7 +60,7 @@ class PigPaxosProtocolClientImpl(override val peersetId: PeersetId) : PigPaxosPr
         return sendRequest(Pair(peer, message), "paxos/accept")
     }
 
-    override suspend fun sendCommit(peer: PeerAddress, message: PaxosCommit): ConsensusResponse<String?> {
+    override suspend fun sendCommit(peer: PeerAddress, message: PaxosCommit): ConsensusResponse<PaxosCommitResponse?> {
         logger.debug("Sending commit request to ${peer.peerId}")
         return sendRequest(Pair(peer, message), "paxos/commit")
     }

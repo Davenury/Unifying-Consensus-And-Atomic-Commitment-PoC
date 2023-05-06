@@ -134,6 +134,13 @@ class PaxosProtocolImpl(
                 )
             }
 
+            if(isTransactionFinished(entry.getId(), changeId)) return@span PaxosAccepted(
+                true,
+                currentRound,
+                votedFor?.id,
+                currentEntryId = history.getCurrentEntryId()
+            )
+
             val transactionAcquisition = TransactionAcquisition(ProtocolName.CONSENSUS, changeId)
             val isTransactionBlockerAcquired = transactionBlocker.tryAcquireReentrant(transactionAcquisition)
 
@@ -167,12 +174,7 @@ class PaxosProtocolImpl(
                 change = change
             )
 
-            if (!history.containsEntry(entry.getId())) {
-                entryIdPaxosRound[entry.getId()] = PaxosRound(message.paxosRound, entry, message.proposer)
-            } else {
-                transactionBlocker.tryRelease(transactionAcquisition)
-            }
-
+            entryIdPaxosRound[entry.getId()] = PaxosRound(message.paxosRound, entry, message.proposer)
             resetFailureDetector(entry, change)
 
             return@withLock PaxosAccepted(
@@ -184,7 +186,7 @@ class PaxosProtocolImpl(
         }
     }
 
-    override suspend fun handleCommit(message: PaxosCommit): Unit = span("PigPaxos.handleCommit") {
+    override suspend fun handleCommit(message: PaxosCommit): PaxosCommitResponse = span("PigPaxos.handleCommit") {
         mutex.withLock {
             val entry = HistoryEntry.deserialize(message.entry)
             val change = Change.fromHistoryEntry(entry)!!
@@ -206,6 +208,7 @@ class PaxosProtocolImpl(
             updateVotedFor(message.paxosRound, message.proposer)
 
             commitChange(message.paxosResult, change)
+            return@span PaxosCommitResponse(history.getCurrentEntryId())
         }
     }
 
@@ -469,7 +472,8 @@ class PaxosProtocolImpl(
 
                     changesToBePropagatedToLeader = ConcurrentLinkedDeque()
 
-                    (committedEntries + newCommittedEntries + proposedEntries + oldChangesToBePropagated).distinct()
+                    (committedEntries + newCommittedEntries + proposedEntries + oldChangesToBePropagated)
+                        .distinct()
                         .forEach {
                             val change = Change.fromHistoryEntry(it)!!
                             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
@@ -541,12 +545,19 @@ class PaxosProtocolImpl(
                 launch(MDCContext()) {
                     do {
                         val peerAddress: PeerAddress = otherConsensusPeers()[it]
-                        val response: ConsensusResponse<String?> = protocolClient.sendCommit(
+                        val response: ConsensusResponse<PaxosCommitResponse?> = protocolClient.sendCommit(
                             peerAddress,
                             PaxosCommit(result, entry.serialize(), currentRound, votedFor?.id!!)
                         )
-                        if (response.message == null) delay(heartbeatDelay.toMillis())
-                    } while (response.message == null && amILeader() && peerIdToEntryId[peerAddress.peerId] == entry.getId())
+                        val updatedResponse: ConsensusResponse<PaxosCommitResponse?>
+                        if(response.message != null){
+                            sendBatchCommit(response.message.entryId, peerAddress)
+                            updatedResponse = response.copy(message = null)
+                        } else {
+                            updatedResponse = response
+                        }
+                        if (updatedResponse.message == null) delay(heartbeatDelay.toMillis())
+                    } while (updatedResponse.message == null && amILeader() && peerIdToEntryId[peerAddress.peerId] == entry.getId())
                 }
             }
         }
@@ -559,7 +570,7 @@ class PaxosProtocolImpl(
 
         when {
             changeIdToCompletableFuture[change.id]?.isDone == true -> {
-                logger.info("Entry is already finished, clean after this entry: ${entry.getId()}")
+//                logger.info("Entry is already finished, clean after this entry: ${entry.getId()}")
                 entryIdPaxosRound.remove(entry.getId())
 
             }
@@ -672,14 +683,7 @@ class PaxosProtocolImpl(
 
                         history.containsEntry(response.message.currentEntryId) && response.message.currentEntryId != history.getCurrentEntryId() -> {
                             logger.info("Peer has outdated history")
-                            val entries = history.getAllEntriesUntilHistoryEntryId(response.message.currentEntryId)
-                            val msg = PaxosBatchCommit(
-                                PaxosResult.COMMIT,
-                                entries.map { it.serialize() },
-                                currentRound,
-                                globalPeerId
-                            )
-                            protocolClient.sendBatchCommit(peerAddress, msg)
+                            sendBatchCommit(response.message.currentEntryId, peerAddress)
                             acceptedChannel.send(Pair(changeId, null))
                         }
 
@@ -773,6 +777,21 @@ class PaxosProtocolImpl(
         }
     }
 
+    private suspend fun sendBatchCommit(entryId: String, peerAddress: PeerAddress){
+        val entries = history.getAllEntriesUntilHistoryEntryId(entryId)
+        entries
+            .chunked(maxChangesPerMessage)
+            .forEach {
+                val msg = PaxosBatchCommit(
+                    PaxosResult.COMMIT,
+                    it.map { it.serialize() },
+                    currentRound,
+                    globalPeerId
+                )
+                protocolClient.sendBatchCommit(peerAddress, msg)
+            }
+    }
+
 
     private fun isNotValidLeader(message: PaxosResponse, round: Int = currentRound): Boolean =
         message.currentRound > round || (message.currentRound == round && message.currentLeaderId != globalPeerId)
@@ -781,6 +800,9 @@ class PaxosProtocolImpl(
         currentRound > round || (currentRound == round && leaderId != votedFor?.id)
 
     override fun amILeader(): Boolean = votedFor?.elected == true && votedFor?.id == globalPeerId
+
+    private fun isTransactionFinished(entryId: String, changeId: String) =
+        history.containsEntry(entryId) || changeIdToCompletableFuture[changeId]?.isDone == true
 
     private fun getHeartbeatTimer() = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout.dividedBy(2), ctx)
 
