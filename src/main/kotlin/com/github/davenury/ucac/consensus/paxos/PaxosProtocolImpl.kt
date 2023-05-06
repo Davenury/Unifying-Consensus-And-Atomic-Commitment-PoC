@@ -134,7 +134,7 @@ class PaxosProtocolImpl(
                 )
             }
 
-            if(isTransactionFinished(entry.getId(), changeId)) return@span PaxosAccepted(
+            if (isTransactionFinished(entry.getId(), changeId)) return@span PaxosAccepted(
                 true,
                 currentRound,
                 votedFor?.id,
@@ -383,6 +383,9 @@ class PaxosProtocolImpl(
     }
 
     private suspend fun becomeLeader(reason: String, round: Int = currentRound + 1): Unit {
+        transactionBlocker.getChangeId()
+            ?.let { TransactionAcquisition(ProtocolName.CONSENSUS, it) }
+            ?.let { transactionBlocker.tryRelease(it) }
 
         val isTheNewestRound: Boolean
         mutex.withLock {
@@ -550,7 +553,7 @@ class PaxosProtocolImpl(
                             PaxosCommit(result, entry.serialize(), currentRound, votedFor?.id!!)
                         )
                         val updatedResponse: ConsensusResponse<PaxosCommitResponse?>
-                        if(response.message != null){
+                        if (response.message != null) {
                             sendBatchCommit(response.message.entryId, peerAddress)
                             updatedResponse = response.copy(message = null)
                         } else {
@@ -777,7 +780,7 @@ class PaxosProtocolImpl(
         }
     }
 
-    private suspend fun sendBatchCommit(entryId: String, peerAddress: PeerAddress){
+    private suspend fun sendBatchCommit(entryId: String, peerAddress: PeerAddress) {
         val entries = history.getAllEntriesUntilHistoryEntryId(entryId)
         entries
             .chunked(maxChangesPerMessage)
