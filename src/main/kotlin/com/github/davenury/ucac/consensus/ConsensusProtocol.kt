@@ -77,6 +77,7 @@ interface ConsensusProtocol {
                 transactionBlocker = transactionBlocker,
                 config.metricTest,
                 subscribers,
+                maxChangesPerMessage = config.consensus.maxChangesPerMessage
             )
 
             "paxos" -> PaxosProtocolImpl(
@@ -91,6 +92,7 @@ interface ConsensusProtocol {
                 transactionBlocker = transactionBlocker,
                 config.metricTest,
                 subscribers,
+                maxChangesPerMessage = config.consensus.maxChangesPerMessage
             )
 
             else -> throw IllegalStateException("Unknow consensus type ${config.consensus.name}")

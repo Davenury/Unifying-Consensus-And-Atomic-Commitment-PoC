@@ -38,6 +38,7 @@ class AlvinProtocol(
     private val transactionBlocker: TransactionBlocker,
     private val isMetricTest: Boolean,
     private val subscribers: Subscribers?,
+    private val maxChangesPerMessage: Int,
 ) : AlvinBroadcastProtocol, SignalSubject {
     //  General consesnus
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()

@@ -567,7 +567,8 @@ class AlvinSpec : IntegrationTestBase() {
             protocolClient = AlvinProtocolClientImpl(peerset(0)),
             transactionBlocker =  PersistentTransactionBlocker(InMemoryPersistence()),
             isMetricTest = false,
-            subscribers = null
+            subscribers = null,
+            maxChangesPerMessage = 200
         )
         expect {
             that(consensus.isMoreThanHalf(0)).isFalse()

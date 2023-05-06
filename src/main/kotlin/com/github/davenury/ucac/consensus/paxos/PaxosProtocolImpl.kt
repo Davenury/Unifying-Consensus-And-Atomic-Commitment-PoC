@@ -39,6 +39,7 @@ class PaxosProtocolImpl(
     private val transactionBlocker: TransactionBlocker,
     private val isMetricTest: Boolean,
     private val subscribers: Subscribers?,
+    private val maxChangesPerMessage: Int,
 ) : PaxosProtocol, SignalSubject {
     //  General consesnus
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
