@@ -158,7 +158,7 @@ class AlvinProtocol(
         mutex.withLock {
             checkTransactionBlocker(entry)
             updateEntry(entry)
-            entryIdToFailureDetector[entryId]?.cancelCounting()
+            resetFailureDetector(entry)
         }
         deliverTransaction()
 
