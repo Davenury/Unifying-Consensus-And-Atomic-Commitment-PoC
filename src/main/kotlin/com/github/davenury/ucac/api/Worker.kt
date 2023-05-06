@@ -60,11 +60,11 @@ class Worker(
         }
     }
 
-    private suspend fun processQueueElement() = span("Worker.processQueueElement") {
+    private suspend fun processQueueElement()  {
         val job = queue.receive()
         logger.info("Received a job: $job")
         Metrics.startTimer(job.change.id)
-        this.setTag("changeId", job.change.id)
+//        this.setTag("changeId", job.change.id)
         val result =
             when (job.protocolName) {
                 ProtocolName.CONSENSUS -> peersetProtocols.consensusProtocol.proposeChangeAsync(job.change)
@@ -73,11 +73,12 @@ class Worker(
                     .proposeChangeAsync(job.change)
             }
         result.thenAccept {
+            logger.info("Job with changeId: ${job.change.id} finished with result $it")
             job.completableFuture.complete(it)
             Metrics.stopTimer(job.change.id, job.protocolName.name.lowercase(), it)
             Metrics.bumpChangeProcessed(it, job.protocolName.name.lowercase())
-            this.setTag("result", it.status.name.lowercase())
-            this.finish()
+//            this.setTag("result", it.status.name.lowercase())
+//            this.finish()
             changeNotifier.notify(job.change, it)
         }.await()
     }

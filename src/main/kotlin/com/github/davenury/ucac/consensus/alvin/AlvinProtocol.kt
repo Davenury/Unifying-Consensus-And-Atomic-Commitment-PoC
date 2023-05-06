@@ -890,6 +890,7 @@ class AlvinProtocol(
         }
     }
 
+//  mutex function
     private suspend fun resetFailureDetector(entry: AlvinEntry, function: suspend () -> Unit) {
         val entryId = entry.entry.getId()
         entryIdToFailureDetector[entryId]?.cancelCounting()
