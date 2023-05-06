@@ -48,6 +48,7 @@ class AlvinProtocol(
     private var lastTransactionId = 0
     private val entryIdToAlvinEntry: ConcurrentHashMap<String, AlvinEntry> = ConcurrentHashMap()
     private val entryIdToFailureDetector: ConcurrentHashMap<String, ProtocolTimer> = ConcurrentHashMap()
+    private val peerIdToTransactionId: ConcurrentHashMap<PeerId, Int> = ConcurrentHashMap()
 
 
     private val votesContainer = VotesContainer()
@@ -400,8 +401,19 @@ class AlvinProtocol(
 
         logger.info("Starts delivery phase ${entry.entry.getId()}")
 
+//      FIXME: Maybe instead of sending last stable we will send last 5?
+
+        otherConsensusPeers().forEach {
+            if (entry.transactionId > (peerIdToTransactionId[it.peerId] ?: -1))
+                peerIdToTransactionId[it.peerId] = entry.transactionId
+        }
+
         scheduleMessages(historyEntry, null, entry.epoch, changeId) { peerAddress ->
-            protocolClient.sendStable(peerAddress, AlvinStable(peerId, entry.toDto()))
+            if ((peerIdToTransactionId[peerAddress.peerId] ?: 0) == entry.transactionId)
+                protocolClient.sendStable(peerAddress, AlvinStable(peerId, entry.toDto()))
+            else
+//              Dummy response to stop repeat stable
+                ConsensusResponse(peerAddress.address, AlvinAckStable(peerAddress.peerId))
         }
 
         signalPublisher.signal(
@@ -416,6 +428,8 @@ class AlvinProtocol(
     private suspend fun recoveryPhase(entry: AlvinEntry) {
 
         logger.info("Starts recovery phase for ${entry.entry.getId()}")
+
+        checkTransactionBlocker(entry)
 
         var newEntry = entry.copy(epoch = entry.epoch + 1, status = AlvinStatus.UNKNOWN)
         mutex.withLock {
@@ -681,14 +695,6 @@ class AlvinProtocol(
             else -> mutex.withLock {
                 deliveryQueue.add(entry)
             }
-        }
-    }
-
-    private suspend fun scheduleCommitMessages(entry: AlvinEntry, result: AlvinResult) {
-        scheduleMessages(entry.entry, null, entry.epoch, Change.fromHistoryEntry(entry.entry)!!.id) { peerAddress ->
-            val response = protocolClient.sendCommit(peerAddress, AlvinCommit(entry.toDto(), result, peerId))
-            if (response.message != null) updateVotes(entry, response.message)
-            response
         }
     }
 
