@@ -59,7 +59,7 @@ class ApiV2Service(
 
     suspend fun addChange(peersetId: PeersetId, job: ProcessorJob): CompletableFuture<ChangeResult> =
         job.also {
-            logger.info("Service send job $job to queue")
+//            logger.info("Service send job $job to queue")
             workers[peersetId]!!.send(it)
         }.completableFuture
 

@@ -49,6 +49,7 @@ class AlvinProtocol(
     private val entryIdToAlvinEntry: ConcurrentHashMap<String, AlvinEntry> = ConcurrentHashMap()
     private val entryIdToFailureDetector: ConcurrentHashMap<String, ProtocolTimer> = ConcurrentHashMap()
     private val peerIdToTransactionId: ConcurrentHashMap<PeerId, Int> = ConcurrentHashMap()
+    private val initialChangeId = transactionBlocker.getChangeId()
 
 
     private val votesContainer = VotesContainer()
@@ -63,8 +64,7 @@ class AlvinProtocol(
     override fun getPeerName() = peerId.toString()
 
     override suspend fun begin() {
-        transactionBlocker
-            .getChangeId()
+        initialChangeId
             ?.let { TransactionAcquisition(ProtocolName.CONSENSUS, it) }
             ?.let { transactionBlocker.tryRelease(it) }
         Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
@@ -87,7 +87,8 @@ class AlvinProtocol(
         mutex.withLock {
             updateEntry(message.entry.toEntry())
             resetFailureDetector(message.entry.toEntry())
-            newDeps = deliveryQueue.map { it.entry }
+            val parentEntries = deliveryQueue.map { it.entry.getParentId() }.toSet()
+            newDeps = deliveryQueue.map { it.entry }.filter { !parentEntries.contains(it.getId()) }
             newPos = getNextNum(message.peerId)
         }
 
@@ -775,6 +776,7 @@ class AlvinProtocol(
 
 
     private suspend fun fastRecoveryPhase(entryId: String): Boolean {
+        logger.info("Start fast recovery for entryId: $entryId")
         val fastRecoveryChannel = Channel<RequestResult<AlvinFastRecoveryResponse?>>()
 
 //      epoch 1 because we don't current value
