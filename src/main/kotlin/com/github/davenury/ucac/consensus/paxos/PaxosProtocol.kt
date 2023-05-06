@@ -10,9 +10,7 @@ interface PaxosProtocol : ConsensusProtocol {
     suspend fun handlePropose(message: PaxosPropose): PaxosPromise
     suspend fun handleAccept(message: PaxosAccept): PaxosAccepted
     suspend fun handleCommit(message: PaxosCommit)
+    suspend fun handleBatchCommit(message: PaxosBatchCommit)
 
     suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult>
-
-    suspend fun <A>broadcast(message: A)
-    suspend fun <A>send(message: A, toNode: PeerAddress)
 }

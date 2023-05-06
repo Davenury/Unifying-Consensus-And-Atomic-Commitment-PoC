@@ -24,14 +24,20 @@ fun Application.pigPaxosProtocolRouting(multiplePeersetProtocols: MultiplePeerse
 
         post("/paxos/accept") {
             val message: PaxosAccept = call.receive()
-            val heartbeatResult = call.consensus().handleAccept(message)
-            call.respond(heartbeatResult)
+            val acceptResult = call.consensus().handleAccept(message)
+            call.respond(acceptResult)
         }
 
         post("/paxos/commit") {
             val message: PaxosCommit = call.receive()
-            val heartbeatResult = call.consensus().handleCommit(message)
-            call.respond(heartbeatResult)
+            val commitResult = call.consensus().handleCommit(message)
+            call.respond(commitResult)
+        }
+
+        post("/paxos/batch-commit") {
+            val message: PaxosBatchCommit = call.receive()
+            val batchCommitResult = call.consensus().handleBatchCommit(message)
+            call.respond(batchCommitResult)
         }
 
         post("/paxos/request_apply_change") {
