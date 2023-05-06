@@ -14,7 +14,7 @@ data class AlvinPromise(val entry: AlvinEntryDto?, val isFinished: Boolean)
 data class AlvinCommit(val entry: AlvinEntryDto, val result: AlvinResult, val peerId: PeerId)
 data class AlvinCommitResponse(val result: AlvinResult?, val peerId: PeerId)
 
-data class AlvinFastRecovery(val askedEntryId: String, val currentEntryId: String)
+data class AlvinFastRecovery(val askedEntryId: String, val currentEntryId: String, val peerId: PeerId)
 data class AlvinFastRecoveryResponse(val entries: List<AlvinEntryDto?>, val historyEntries: List<String>, val isFinished: Boolean)
 
 enum class AlvinResult{

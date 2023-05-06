@@ -234,7 +234,7 @@ class AlvinProtocol(
     override suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse =
         mutex.withLock {
             logger.info(
-                "Handle FastRecovery for entry: ${message.askedEntryId} and isCommitted: ${
+                "Handle FastRecovery from peer ${message.peerId.peerId} for entry: ${message.askedEntryId} and isCommitted: ${
                     history.containsEntry(
                         message.askedEntryId
                     )
@@ -698,8 +698,6 @@ class AlvinProtocol(
         }
 
         val depsResult = associatedDeps.map { it.value }
-        val entryId = entry.entry.getId()
-
 
         when {
             depsResult.all { it } && !history.isEntryCompatible(entry.entry) -> {
@@ -817,7 +815,7 @@ class AlvinProtocol(
 
 //      epoch 1 because we don't current value
             scheduleMessagesOnce(entryId, fastRecoveryChannel) {
-                protocolClient.sendFastRecovery(it, AlvinFastRecovery(entryId, history.getCurrentEntryId()))
+                protocolClient.sendFastRecovery(it, AlvinFastRecovery(entryId, history.getCurrentEntryId(), peerId))
             }
 
             responses = gatherResponses(entryId, fastRecoveryChannel).filterNotNull()
@@ -833,7 +831,7 @@ class AlvinProtocol(
                         transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change!!.id))
                     }
                 }
-        } while (responses.any { !it.isFinished })
+        } while (!responses.all { it.isFinished })
 
 
 
