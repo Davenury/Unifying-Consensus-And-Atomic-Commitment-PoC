@@ -680,21 +680,35 @@ class AlvinProtocol(
         }
 
         val depsResult = associatedDeps.map { it.value }
+        val entryId = entry.entry.getId()
 
 
         when {
             depsResult.all { it } && !history.isEntryCompatible(entry.entry) -> {
                 logger.info("Entry ${entry.entry.getId()} is incompatible, send abort, deps: $associatedDeps")
                 scheduleCommitMessagesOnce(entry, AlvinResult.ABORT)
+                mutex.withLock {
+                    resetFailureDetector(entry) {
+                        scheduleCommitMessagesOnce(entry, AlvinResult.ABORT)
+                    }
+                }
             }
 
             depsResult.all { it } -> {
                 logger.info("Entry ${entry.entry.getId()} is compatible, send commit")
                 scheduleCommitMessagesOnce(entry, AlvinResult.COMMIT)
+                mutex.withLock {
+                    resetFailureDetector(entry) {
+                        scheduleCommitMessagesOnce(entry, AlvinResult.COMMIT)
+                    }
+                }
             }
 
             else -> mutex.withLock {
                 deliveryQueue.add(entry)
+                resetFailureDetector(entry) {
+                    scheduleCommitMessagesOnce(entry, AlvinResult.COMMIT)
+                }
             }
         }
     }
@@ -867,16 +881,23 @@ class AlvinProtocol(
 
     //  mutex function
     private suspend fun resetFailureDetector(entry: AlvinEntry) {
-        val entryId = entry.entry.getId()
-        entryIdToFailureDetector[entryId]?.cancelCounting()
-        entryIdToFailureDetector.putIfAbsent(entryId, getFailureDetectorTimer())
-        if (entryIdToAlvinEntry.containsKey(entryId)) entryIdToFailureDetector[entryId]!!.startCounting(entry.epoch) {
+        resetFailureDetector(entry) {
             try {
                 recoveryPhase(entry)
             } catch (ex: Exception) {
                 logger.info("Exception was thrown during recovery" + ex.stackTrace)
             }
         }
+    }
+
+    private suspend fun resetFailureDetector(entry: AlvinEntry, function: suspend () -> Unit) {
+        val entryId = entry.entry.getId()
+        entryIdToFailureDetector[entryId]?.cancelCounting()
+        entryIdToFailureDetector.putIfAbsent(entryId, getFailureDetectorTimer())
+        if (entryIdToAlvinEntry.containsKey(entryId)) entryIdToFailureDetector[entryId]!!.startCounting(
+            entry.epoch,
+            function
+        )
     }
 
     //  Mutex function
