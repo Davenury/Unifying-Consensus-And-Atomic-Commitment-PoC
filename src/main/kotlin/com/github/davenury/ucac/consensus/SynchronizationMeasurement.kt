@@ -4,8 +4,12 @@ import com.github.davenury.common.Metrics
 import com.github.davenury.common.PeerAddress
 import com.github.davenury.common.PeerId
 import com.github.davenury.common.history.History
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -24,15 +28,24 @@ data class SynchronizationMeasurement(
     private val entryIdToTime: ConcurrentHashMap<String, Instant> = ConcurrentHashMap()
 
     suspend fun begin() {
-        val latestEntryId = getLatestEntryIdFromOtherPeers(currentEntryId)
-        mutex.withLock {
-            if (latestEntryId == null || latestEntryId == currentEntryId) {
-                isSynchronized = true
-                clearMap()
-            } else if (entryIdToTime.containsKey(latestEntryId)) {
-                isSynchronizationFinished(latestEntryId)
-            } else {
-                this.latestEntryId = latestEntryId
+        withContext(Dispatchers.IO) {
+            launch {
+                var latestEntryId: String? = null
+                while (latestEntryId == null) {
+                    latestEntryId = getLatestEntryIdFromOtherPeers(currentEntryId)
+                    delay(500)
+                }
+
+                mutex.withLock {
+                    if (latestEntryId == currentEntryId) {
+                        isSynchronized = true
+                        clearMap()
+                    } else if (entryIdToTime.containsKey(latestEntryId)) {
+                        isSynchronizationFinished(latestEntryId)
+                    } else {
+                        this@SynchronizationMeasurement.latestEntryId = latestEntryId
+                    }
+                }
             }
         }
     }
@@ -47,11 +60,13 @@ data class SynchronizationMeasurement(
 
     private fun clearMap() = entryIdToTime.keys().toList().forEach { entryIdToTime.remove(it) }
 
-    private suspend fun getLatestEntryIdFromOtherPeers(currentEntryId: String): String? = protocolClient
-        .sendLatestEntryIdQuery(otherConsensusPeers(), currentEntryId)
-        .mapNotNull { it.message }
-        .maxByOrNull { it.distanceFromInitial }
-        ?.entryId
+    private suspend fun getLatestEntryIdFromOtherPeers(currentEntryId: String): String? =
+        if (otherConsensusPeers().isEmpty()) currentEntryId
+        else protocolClient
+            .sendLatestEntryIdQuery(otherConsensusPeers(), currentEntryId)
+            .mapNotNull { it.message }
+            .maxByOrNull { it.distanceFromInitial }
+            ?.entryId
 
     suspend fun entryIdCommitted(entryId: String, instant: Instant) =
         if (!isSynchronized) {
