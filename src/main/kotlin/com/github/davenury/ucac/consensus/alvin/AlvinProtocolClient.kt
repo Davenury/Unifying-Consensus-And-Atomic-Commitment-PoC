@@ -3,21 +3,13 @@ package com.github.davenury.ucac.consensus.alvin
 import com.github.davenury.common.PeerAddress
 import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.consensus.ConsensusProtocolClient
+import com.github.davenury.ucac.consensus.ConsensusProtocolClientImpl
 import com.github.davenury.ucac.consensus.ConsensusResponse
-import com.github.davenury.ucac.raftHttpClient
-import io.ktor.client.features.*
-import io.ktor.client.request.*
-import io.ktor.http.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
 
-//FIXME: extract shared logic for protocol clients
 
-interface AlvinProtocolClient {
+interface AlvinProtocolClient: ConsensusProtocolClient {
 
     suspend fun sendProposal(
         peer: PeerAddress,
@@ -51,7 +43,7 @@ interface AlvinProtocolClient {
     ): ConsensusResponse<AlvinFastRecoveryResponse?>
 }
 
-public class AlvinProtocolClientImpl(override val peersetId: PeersetId) : AlvinProtocolClient, ConsensusProtocolClient(peersetId) {
+public class AlvinProtocolClientImplImpl(override val peersetId: PeersetId) : AlvinProtocolClient, ConsensusProtocolClientImpl(peersetId) {
 
     override suspend fun sendProposal(
         peer: PeerAddress,

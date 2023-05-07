@@ -12,7 +12,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
-open class ConsensusProtocolClient(open val peersetId: PeersetId){
+interface ConsensusProtocolClient{
+    suspend fun sendLatestEntryIdQuery(peers: List<PeerAddress>, entryId: String): List<ConsensusResponse<LatestEntryIdResponse?>>
+
+}
+
+open class ConsensusProtocolClientImpl(open val peersetId: PeersetId): ConsensusProtocolClient{
 
     suspend inline fun <T, reified K> sendRequest(
         peerWithBody: Pair<PeerAddress, T>,
@@ -77,6 +82,9 @@ open class ConsensusProtocolClient(open val peersetId: PeersetId){
 
             ConsensusResponse(it.first.address, result)
         }
+
+    override suspend fun sendLatestEntryIdQuery(peers: List<PeerAddress>, entryId: String): List<ConsensusResponse<LatestEntryIdResponse?>> =
+        sendRequests(peers.map { Pair(it,entryId) }, "/consensus/latest-entry")
 
     companion object {
         val logger = LoggerFactory.getLogger("consensus-client")

@@ -1,9 +1,6 @@
 package com.github.davenury.ucac.consensus
 
 import com.github.davenury.common.*
-import com.github.davenury.common.Change
-import com.github.davenury.common.ChangeResult
-import com.github.davenury.common.PeerId
 import com.github.davenury.common.history.History
 import com.github.davenury.common.txblocker.PersistentTransactionBlocker
 import com.github.davenury.ucac.Config
@@ -11,9 +8,9 @@ import com.github.davenury.ucac.SignalPublisher
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
-import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
-import com.github.davenury.ucac.consensus.paxos.PigPaxosProtocolClientImpl
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImplImpl
 import com.github.davenury.ucac.consensus.paxos.PaxosProtocolImpl
+import com.github.davenury.ucac.consensus.paxos.PigPaxosProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
 import com.github.davenury.ucac.consensus.raft.RaftProtocolClientImpl
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -71,7 +68,7 @@ interface ConsensusProtocol {
                 ctx,
                 peerResolver,
                 signalPublisher,
-                AlvinProtocolClientImpl(peersetId),
+                AlvinProtocolClientImplImpl(peersetId),
                 heartbeatTimeout = config.consensus.heartbeatTimeout,
                 heartbeatDelay = config.consensus.leaderTimeout,
                 transactionBlocker = transactionBlocker,
@@ -107,3 +104,5 @@ interface ConsensusProtocol {
 typealias ConsensusProposeChange = Change
 
 data class VotedFor(val id: PeerId, val elected: Boolean = false)
+
+data class LatestEntryIdResponse(val entryId: String, val distanceFromInitial: Int)

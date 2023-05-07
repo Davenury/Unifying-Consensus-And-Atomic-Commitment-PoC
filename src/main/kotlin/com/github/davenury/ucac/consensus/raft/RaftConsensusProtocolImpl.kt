@@ -14,7 +14,7 @@ import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.common.structure.Subscribers
-import com.github.davenury.ucac.consensus.VotedFor
+import com.github.davenury.ucac.consensus.*
 import com.github.davenury.ucac.utils.MdcProvider
 import com.zopa.ktor.opentracing.launchTraced
 import com.zopa.ktor.opentracing.span
@@ -75,6 +75,8 @@ class RaftConsensusProtocolImpl(
 
     private val mdcProvider = MdcProvider(mapOf("peerset" to peersetId.toString()))
     private val peerId = peerResolver.currentPeer()
+    private val synchronizationMeasurement =
+        SynchronizationMeasurement(history, protocolClient, { otherConsensusPeers() }, peerId)
 
     private var currentTerm: Int = 0
     private val peerToNextIndex: MutableMap<PeerId, PeerIndices> = mutableMapOf()
@@ -82,7 +84,7 @@ class RaftConsensusProtocolImpl(
     private var votedFor: VotedFor? = null
     private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
         ConcurrentLinkedDeque()
-    private var state: Ledger = Ledger(history)
+    private var state: Ledger = Ledger(history, synchronizationMeasurement)
 
     @Volatile
     private var role: RaftRole = RaftRole.Candidate
@@ -104,6 +106,7 @@ class RaftConsensusProtocolImpl(
     }
 
     override suspend fun begin() = mdcProvider.withMdc {
+        synchronizationMeasurement.begin()
         logger.info("Starting raft, other peers: ${otherConsensusPeers().map { it.peerId }}")
         timer.startCounting { sendLeaderRequest() }
     }
@@ -847,7 +850,7 @@ class RaftConsensusProtocolImpl(
         change: Change,
     ): CompletableFuture<ChangeResult> =
         span("Raft.proposeChangeAsync") {
-        this.setTag("changeId", change.id)
+            this.setTag("changeId", change.id)
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             val result = changeIdToCompletableFuture[change.id]!!
             when {
@@ -909,6 +912,7 @@ class RaftConsensusProtocolImpl(
 
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
+
 
     override fun stop() = mdcProvider.withMdc {
         logger.info("Stopping whole consensus")

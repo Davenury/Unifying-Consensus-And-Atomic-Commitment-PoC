@@ -62,6 +62,15 @@ object Metrics {
             .register(meterRegistry)
             .record(timeElapsed)
     }
+
+    fun synchronizationTimer(peerId: PeerId, timeElapsed: Duration) {
+        logger.info("Time elapsed for changes synchronization on peer: $peerId: $timeElapsed")
+        Timer
+            .builder("changes_synchronization_time")
+            .tag("protocol", "consensus")
+            .register(meterRegistry)
+            .record(timeElapsed)
+    }
     
     fun refreshLastHeartbeat() {
         lastHeartbeat = Instant.now()

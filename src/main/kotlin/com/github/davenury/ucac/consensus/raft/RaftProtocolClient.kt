@@ -5,20 +5,20 @@ import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.PeerAddress
 import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.consensus.ConsensusProtocolClient
+import com.github.davenury.ucac.consensus.ConsensusProtocolClientImpl
 import com.github.davenury.ucac.consensus.ConsensusResponse
+import com.github.davenury.ucac.consensus.LatestEntryIdResponse
 import com.github.davenury.ucac.httpClient
-import com.github.davenury.ucac.raftHttpClient
 import com.zopa.ktor.opentracing.asyncTraced
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
 
-interface RaftProtocolClient {
+interface RaftProtocolClient: ConsensusProtocolClient {
 
     suspend fun sendConsensusElectMe(
         otherPeers: List<PeerAddress>,
@@ -35,9 +35,10 @@ interface RaftProtocolClient {
         address: String,
         change: Change
     ): ChangeResult
+
 }
 
-class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolClient, ConsensusProtocolClient(peersetId) {
+class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolClient, ConsensusProtocolClientImpl(peersetId) {
     override suspend fun sendConsensusElectMe(
         otherPeers: List<PeerAddress>,
         message: ConsensusElectMe

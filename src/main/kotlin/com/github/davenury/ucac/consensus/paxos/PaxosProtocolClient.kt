@@ -5,13 +5,14 @@ import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.PeerAddress
 import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.consensus.ConsensusProtocolClient
+import com.github.davenury.ucac.consensus.ConsensusProtocolClientImpl
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.httpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
 
 
-interface PigPaxosProtocolClient {
+interface PigPaxosProtocolClient: ConsensusProtocolClient {
 
     suspend fun sendProposes(
         peers: List<PeerAddress>,
@@ -40,7 +41,7 @@ interface PigPaxosProtocolClient {
     ): ChangeResult
 }
 
-class PigPaxosProtocolClientImpl(override val peersetId: PeersetId) : PigPaxosProtocolClient, ConsensusProtocolClient(peersetId) {
+class PigPaxosProtocolClientImpl(override val peersetId: PeersetId) : PigPaxosProtocolClient, ConsensusProtocolClientImpl(peersetId) {
 
     override suspend fun sendProposes(
         peers: List<PeerAddress>,

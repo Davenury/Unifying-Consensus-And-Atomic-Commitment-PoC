@@ -5,14 +5,13 @@ import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.common.history.PersistentHistory
 import com.github.davenury.common.persistence.InMemoryPersistence
 import com.github.davenury.common.txblocker.PersistentTransactionBlocker
-import com.github.davenury.ucac.ApplicationUcac
 import com.github.davenury.ucac.Signal
 import com.github.davenury.ucac.SignalListener
 import com.github.davenury.ucac.commitment.gpac.Accept
 import com.github.davenury.ucac.commitment.gpac.Apply
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
-import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImpl
+import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImplImpl
 import com.github.davenury.ucac.testHttpClient
 import com.github.davenury.ucac.utils.IntegrationTestBase
 import com.github.davenury.ucac.utils.TestLogExtension
@@ -36,7 +35,6 @@ import java.util.concurrent.Phaser
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.measureTimeMillis
 import com.github.davenury.ucac.utils.TestApplicationSet
-import org.junit.jupiter.api.Disabled
 import java.time.Duration
 
 @ExtendWith(TestLogExtension::class)
@@ -564,7 +562,7 @@ class AlvinSpec : IntegrationTestBase() {
             PersistentHistory(InMemoryPersistence()),
             Executors.newSingleThreadExecutor().asCoroutineDispatcher(),
             peerResolver,
-            protocolClient = AlvinProtocolClientImpl(peerset(0)),
+            protocolClient = AlvinProtocolClientImplImpl(peerset(0)),
             transactionBlocker =  PersistentTransactionBlocker(InMemoryPersistence()),
             isMetricTest = false,
             subscribers = null,

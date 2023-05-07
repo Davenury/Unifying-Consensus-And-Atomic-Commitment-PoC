@@ -11,7 +11,9 @@ import com.github.davenury.ucac.SignalSubject
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.common.structure.Subscribers
+import com.github.davenury.ucac.consensus.ConsensusProtocolClient
 import com.github.davenury.ucac.consensus.ConsensusResponse
+import com.github.davenury.ucac.consensus.SynchronizationMeasurement
 import com.github.davenury.ucac.consensus.VotedFor
 import com.github.davenury.ucac.consensus.raft.ChangeToBePropagatedToLeader
 import com.zopa.ktor.opentracing.span
@@ -22,6 +24,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
 import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
@@ -59,6 +62,9 @@ class PaxosProtocolImpl(
     private var lastPropagatedEntryId: String = history.getCurrentEntryId()
     private val peerIdToEntryId: ConcurrentHashMap<PeerId, String> = ConcurrentHashMap()
 
+    private val synchronizationMeasurement =
+        SynchronizationMeasurement(history, protocolClient, { otherConsensusPeers() }, globalPeerId)
+
 
     companion object {
         private val logger = LoggerFactory.getLogger("pig-paxos")
@@ -67,6 +73,7 @@ class PaxosProtocolImpl(
     override fun getPeerName(): String = globalPeerId.toString()
 
     override suspend fun begin() {
+        synchronizationMeasurement.begin()
         failureDetector.startCounting {
             if (votedFor?.elected != true) becomeLeader("No leader was elected")
         }
@@ -581,6 +588,7 @@ class PaxosProtocolImpl(
                 logger.info("Commit entry $entry")
                 if (!history.containsEntry(entry.getId())) {
                     history.addEntry(entry)
+                    synchronizationMeasurement.entryIdCommitted(entry.getId(), Instant.now())
                     entryIdPaxosRound.remove(entry.getId())
                     transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
                     changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.SUCCESS))
@@ -612,11 +620,17 @@ class PaxosProtocolImpl(
                     .map { HistoryEntry.deserialize(it) }
 
                 responseEntries.forEach {
-                    if (history.isEntryCompatible(it)) history.addEntry(it)
+                    if (history.isEntryCompatible(it)) {
+                        history.addEntry(it)
+                        synchronizationMeasurement.entryIdCommitted(it.getId(), Instant.now())
+                    }
                 }
 
 
-                if (history.isEntryCompatible(entry)) history.addEntry(entry)
+                if (history.isEntryCompatible(entry)) {
+                    history.addEntry(entry)
+                    synchronizationMeasurement.entryIdCommitted(entry.getId(), Instant.now())
+                }
                 else {
                     logger.error("Missing some changes try to finish entry with id ${entry.getId()} after sometime")
                     resetFailureDetector(entry, change)

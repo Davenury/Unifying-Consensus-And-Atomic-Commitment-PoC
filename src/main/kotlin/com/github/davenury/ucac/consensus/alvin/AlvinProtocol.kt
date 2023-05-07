@@ -13,6 +13,7 @@ import com.github.davenury.ucac.common.ProtocolTimer
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.ConsensusResponse
+import com.github.davenury.ucac.consensus.SynchronizationMeasurement
 import com.zopa.ktor.opentracing.launchTraced
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -21,6 +22,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
 import java.time.Duration
+import java.time.Instant
 import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -52,8 +54,9 @@ class AlvinProtocol(
     private val peerIdToTransactionId: ConcurrentHashMap<PeerId, Int> = ConcurrentHashMap()
     private val initialChangeId = transactionBlocker.getChangeId()
 
-
     private val votesContainer = VotesContainer()
+    private val synchronizationMeasurement =
+        SynchronizationMeasurement(history, protocolClient, { otherConsensusPeers() }, peerId)
 
     private var executorService: ExecutorCoroutineDispatcher =
         Executors.newCachedThreadPool().asCoroutineDispatcher()
@@ -68,6 +71,7 @@ class AlvinProtocol(
         initialChangeId
             ?.let { TransactionAcquisition(ProtocolName.CONSENSUS, it) }
             ?.let { transactionBlocker.tryRelease(it) }
+        synchronizationMeasurement.begin()
         Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
         subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
     }
@@ -292,6 +296,7 @@ class AlvinProtocol(
 
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
+
 
     override fun otherConsensusPeers(): List<PeerAddress> {
         return peerResolver.getPeersFromPeerset(peersetId).filter { it.peerId != peerId }
@@ -834,7 +839,6 @@ class AlvinProtocol(
         } while (!responses.all { it.isFinished })
 
 
-
         val findEntry = { response: AlvinFastRecoveryResponse ->
             response.entries.find { it?.toEntry()?.entry?.getId() == entryId }?.toEntry()
         }
@@ -858,8 +862,11 @@ class AlvinProtocol(
 
 
     //  mutex function
-    private fun commitChange(historyEntry: HistoryEntry) {
-        if (!history.containsEntry(historyEntry.getId())) history.addEntry(historyEntry)
+    private suspend fun commitChange(historyEntry: HistoryEntry) {
+        if (!history.containsEntry(historyEntry.getId())) {
+            history.addEntry(historyEntry)
+            synchronizationMeasurement.entryIdCommitted(historyEntry.getId(), Instant.now())
+        }
         val change = Change.fromHistoryEntry(historyEntry)!!
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
