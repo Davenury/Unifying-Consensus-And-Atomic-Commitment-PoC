@@ -10,17 +10,17 @@ const getBaseDownloadPath = () => {
 const allPanels = [14, 18, 27, 4, 12, 31]
 // const panels = [14, 18, 27, 4, 12, 31, 21]
 const panelsWithoutChanges = [14, 18, 27, 4, 31]
-
+const panelWithChangeSynchronization = [14, 18, 27, 4, 12, 31,33]
 
 const baseDownloadPath = process.env.BASE_DOWNLOAD_PATH ?? getBaseDownloadPath()
 const namespace = process.env.NAMESPACE ?? "ddebowski"
-const from = process.env.START_TIMESTAMP ?? "1683028308725"
-const to = process.env.END_TIMESTAMP ?? "1683028433615"
+const from = process.env.START_TIMESTAMP ?? "1683454588474"
+const to = process.env.END_TIMESTAMP ?? "1683454599021"
 const protocol = process.env.PROTOCOL ?? "alvin"
 const experiment = process.env.EXPERIMENT ?? "3x1"
-const isChangeProcessed = process.env.IS_CHANGE_PROCESSED ?? "true"
+const scrapingType = process.env.SCRAPING_TYPE ?? "all"
 
-const panels = isChangeProcessed === "true" ? allPanels : panelsWithoutChanges
+const panels = scrapingType === "all" ? allPanels : scrapingType === "synchronization" ? panelWithChangeSynchronization : panelsWithoutChanges
 
 
 const experiments = [

@@ -1,7 +1,7 @@
 apiVersion: lsc.davenury.github.com/v1
 kind: Scenario
 metadata:
-  name: gpac-chaos-delete-one-follower
+  name: gpac-chaos-delete-two-followers
   namespace: ddebowski
 spec:
   phases:
@@ -12,4 +12,4 @@ spec:
           action: delete count
           deleteConsensusFollowerCountSpec:
             peerUrl: http://peer0-service.ddebowski:8080/peerset-information?peerset=peerset0
-            count: 1
+            count: 2

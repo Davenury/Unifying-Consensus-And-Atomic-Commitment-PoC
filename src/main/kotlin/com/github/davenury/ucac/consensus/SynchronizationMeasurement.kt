@@ -3,12 +3,9 @@ package com.github.davenury.ucac.consensus
 import com.github.davenury.common.Metrics
 import com.github.davenury.common.PeerId
 import com.github.davenury.common.history.History
-import kotlinx.coroutines.ExecutorCoroutineDispatcher
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.time.Instant
@@ -28,7 +25,7 @@ data class SynchronizationMeasurement(
     private var latestEntryId: String? = null
     private val entryIdToTime: ConcurrentHashMap<String, Instant> = ConcurrentHashMap()
 
-    suspend fun begin(ctx: ExecutorCoroutineDispatcher) {
+    suspend fun begin(ctx: ExecutorCoroutineDispatcher): Job =
         withContext(ctx) {
             launch {
                 var latestEntryId: String? = null
@@ -42,6 +39,7 @@ data class SynchronizationMeasurement(
 
                 mutex.withLock {
                     if (latestEntryId == currentEntryId) {
+                        logger.info("I am already synchronized")
                         isSynchronized = true
                         clearMap()
                     } else if (latestEntryId == null) {
@@ -49,14 +47,15 @@ data class SynchronizationMeasurement(
                         isSynchronized = true
                         clearMap()
                     } else if (entryIdToTime.containsKey(latestEntryId)) {
+                        logger.info("State was synchronized during asking for latest entry ID")
                         isSynchronizationFinished(latestEntryId)
                     } else {
+                        logger.info("Waiting for synchronization entry")
                         this@SynchronizationMeasurement.latestEntryId = latestEntryId
                     }
                 }
             }
         }
-    }
 
     public suspend fun isSynchronized(): Boolean = mutex.withLock { isSynchronized }
 
