@@ -76,7 +76,7 @@ class RaftConsensusProtocolImpl(
     private val mdcProvider = MdcProvider(mapOf("peerset" to peersetId.toString()))
     private val peerId = peerResolver.currentPeer()
     private val synchronizationMeasurement =
-        SynchronizationMeasurement(history, protocolClient, { otherConsensusPeers() }, peerId)
+        SynchronizationMeasurement(history, protocolClient, this, peerId)
 
     private var currentTerm: Int = 0
     private val peerToNextIndex: MutableMap<PeerId, PeerIndices> = mutableMapOf()

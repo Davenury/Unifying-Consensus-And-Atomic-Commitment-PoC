@@ -63,7 +63,7 @@ class PaxosProtocolImpl(
     private val peerIdToEntryId: ConcurrentHashMap<PeerId, String> = ConcurrentHashMap()
 
     private val synchronizationMeasurement =
-        SynchronizationMeasurement(history, protocolClient, { otherConsensusPeers() }, globalPeerId)
+        SynchronizationMeasurement(history, protocolClient, this, globalPeerId)
 
 
     companion object {

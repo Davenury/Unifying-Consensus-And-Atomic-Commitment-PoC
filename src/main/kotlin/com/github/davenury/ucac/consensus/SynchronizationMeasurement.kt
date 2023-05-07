@@ -4,20 +4,19 @@ import com.github.davenury.common.Metrics
 import com.github.davenury.common.PeerAddress
 import com.github.davenury.common.PeerId
 import com.github.davenury.common.history.History
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.coroutineContext
 
 data class SynchronizationMeasurement(
     val history: History,
     val protocolClient: ConsensusProtocolClient,
-    val otherConsensusPeers: () -> List<PeerAddress>,
+    val consensusProtocol: ConsensusProtocol,
     val peerId: PeerId
 ) {
     private val mutex = Mutex()
@@ -28,11 +27,14 @@ data class SynchronizationMeasurement(
     private val entryIdToTime: ConcurrentHashMap<String, Instant> = ConcurrentHashMap()
 
     suspend fun begin() {
-        withContext(Dispatchers.IO) {
+        withContext(coroutineContext) {
             launch {
                 var latestEntryId: String? = null
-                while (latestEntryId == null) {
+                var iter = 0
+                while (latestEntryId == null && iter < 3) {
+                    logger.info("Peers to which we send messages: ${consensusProtocol.otherConsensusPeers()}")
                     latestEntryId = getLatestEntryIdFromOtherPeers(currentEntryId)
+                    iter += 1
                     delay(500)
                 }
 
@@ -40,7 +42,9 @@ data class SynchronizationMeasurement(
                     if (latestEntryId == currentEntryId) {
                         isSynchronized = true
                         clearMap()
-                    } else if (entryIdToTime.containsKey(latestEntryId)) {
+                    } else if(latestEntryId == null) {
+                        logger.info("Unable to get information about latest entry id")
+                    }else if (entryIdToTime.containsKey(latestEntryId)) {
                         isSynchronizationFinished(latestEntryId)
                     } else {
                         this@SynchronizationMeasurement.latestEntryId = latestEntryId
@@ -61,9 +65,9 @@ data class SynchronizationMeasurement(
     private fun clearMap() = entryIdToTime.keys().toList().forEach { entryIdToTime.remove(it) }
 
     private suspend fun getLatestEntryIdFromOtherPeers(currentEntryId: String): String? =
-        if (otherConsensusPeers().isEmpty()) currentEntryId
+        if (consensusProtocol.otherConsensusPeers().isEmpty()) currentEntryId
         else protocolClient
-            .sendLatestEntryIdQuery(otherConsensusPeers(), currentEntryId)
+            .sendLatestEntryIdQuery(consensusProtocol.otherConsensusPeers(), currentEntryId)
             .mapNotNull { it.message }
             .maxByOrNull { it.distanceFromInitial }
             ?.entryId
@@ -78,4 +82,7 @@ data class SynchronizationMeasurement(
         } else {
         }
 
+    companion object {
+        val logger = LoggerFactory.getLogger("consensus-synchronization-measuremenet")
+    }
 }

@@ -56,7 +56,7 @@ class AlvinProtocol(
 
     private val votesContainer = VotesContainer()
     private val synchronizationMeasurement =
-        SynchronizationMeasurement(history, protocolClient, { otherConsensusPeers() }, peerId)
+        SynchronizationMeasurement(history, protocolClient, this, peerId)
 
     private var executorService: ExecutorCoroutineDispatcher =
         Executors.newCachedThreadPool().asCoroutineDispatcher()

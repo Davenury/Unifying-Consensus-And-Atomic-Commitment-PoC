@@ -151,8 +151,10 @@ fun Application.apiV2Routing(
         }
 
         post("/consensus/latest-entry") {
+
             val entryId = call.receive<String>()
             val peersetId = call.peersetId()
+            logger.info("Received question about latest entry in peerset: $peersetId")
             call.respond(service.getLatestEntryIdResponse(entryId, peersetId))
         }
     }
