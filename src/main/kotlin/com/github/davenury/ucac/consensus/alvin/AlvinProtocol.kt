@@ -71,7 +71,7 @@ class AlvinProtocol(
         initialChangeId
             ?.let { TransactionAcquisition(ProtocolName.CONSENSUS, it) }
             ?.let { transactionBlocker.tryRelease(it) }
-        synchronizationMeasurement.begin()
+        synchronizationMeasurement.begin(ctx)
         Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
         subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
     }
@@ -293,6 +293,7 @@ class AlvinProtocol(
     override fun getLeaderId(): PeerId? = peerResolver.currentPeer()
 
     override fun getState(): History = history
+    override suspend fun isSynchronized(): Boolean = synchronizationMeasurement.isSynchronized()
 
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]

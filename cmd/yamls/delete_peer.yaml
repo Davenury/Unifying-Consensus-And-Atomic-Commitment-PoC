@@ -12,4 +12,14 @@ spec:
           action: delete count
           deleteConsensusFollowerCountSpec:
             peerUrl: http://peer0-service.ddebowski:8080/peerset-information?peerset=peerset0
+            count: 2
+    - duration: PT180S
+      actions: [ ]
+    - duration: PT60S
+      actions:
+        - namespace: ddebowski
+          resourceType: consensus follower
+          action: delete count
+          deleteConsensusFollowerCountSpec:
+            peerUrl: http://peer0-service.ddebowski:8080/peerset-information?peerset=peerset0
             count: 1

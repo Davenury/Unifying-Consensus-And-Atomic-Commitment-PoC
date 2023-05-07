@@ -83,7 +83,7 @@ class ApiV2Service(
         )
     }
 
-    fun getLatestEntryIdResponse(entryId: String,peersetId: PeersetId): LatestEntryIdResponse{
+    fun getLatestEntryIdResponse(entryId: String, peersetId: PeersetId): LatestEntryIdResponse{
         val consensusProtocol = multiplePeersetProtocols.protocols[peersetId]?.consensusProtocol!!
         val entries = consensusProtocol.getState().getAllEntriesUntilHistoryEntryId(entryId)
         return LatestEntryIdResponse(

@@ -68,6 +68,10 @@ class HistoryRatisNode(
         return history
     }
 
+    override suspend fun isSynchronized(): Boolean {
+        TODO("Not yet implemented")
+    }
+
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
 

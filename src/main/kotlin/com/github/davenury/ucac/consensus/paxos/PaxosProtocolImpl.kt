@@ -73,7 +73,7 @@ class PaxosProtocolImpl(
     override fun getPeerName(): String = globalPeerId.toString()
 
     override suspend fun begin() {
-        synchronizationMeasurement.begin()
+        synchronizationMeasurement.begin(ctx)
         failureDetector.startCounting {
             if (votedFor?.elected != true) becomeLeader("No leader was elected")
         }
@@ -323,6 +323,7 @@ class PaxosProtocolImpl(
     }
 
     override fun getState(): History = history
+    override suspend fun isSynchronized(): Boolean = synchronizationMeasurement.isSynchronized()
 
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]

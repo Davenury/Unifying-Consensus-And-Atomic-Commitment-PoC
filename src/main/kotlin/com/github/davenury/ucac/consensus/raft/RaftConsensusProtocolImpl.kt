@@ -106,7 +106,7 @@ class RaftConsensusProtocolImpl(
     }
 
     override suspend fun begin() = mdcProvider.withMdc {
-        synchronizationMeasurement.begin()
+        synchronizationMeasurement.begin(ctx)
         logger.info("Starting raft, other peers: ${otherConsensusPeers().map { it.peerId }}")
         timer.startCounting { sendLeaderRequest() }
     }
@@ -909,6 +909,8 @@ class RaftConsensusProtocolImpl(
         }
         return history
     }
+
+    override suspend fun isSynchronized(): Boolean = synchronizationMeasurement.isSynchronized()
 
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
