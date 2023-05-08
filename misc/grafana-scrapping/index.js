@@ -57,8 +57,6 @@ const downloadFile = async (page, {
     });
     await page.goto(`http://localhost:3000/d/HSUzSq2Vk/poc?orgId=1&refresh=10s&&viewPanel=${panelId}&inspect=${panelId}&var-namespace=${namespace}&from=${from}&to=${to}`, {waitUntil: "load"});
 
-    console.log("PanelId:",panelId)
-
     await page.waitForSelector("div[role='dialog']")
     await new Promise(resolve => setTimeout(resolve, 1_000));
     const dataOptionsButton = await page.waitForSelector('button[aria-controls="Data options"]')
@@ -93,7 +91,11 @@ function delay(time) {
 
     for (let experiment of experiments) {
         for (let panel of panels) {
-            await downloadFile(page, {...experiment, panelId: panel})
+            try {
+                await downloadFile(page, {...experiment, panelId: panel})
+            }catch (error){
+                console.log("Failed during downloading panelId:",panelId)
+            }
             await delay(1000)
         }
     }
