@@ -235,7 +235,7 @@ class GPACProtocolImpl(
                     )
                 }
             } catch (ex: Exception) {
-                logger.error("Exception during applying change, set it to abort", ex)
+                logger.error("Exception during applying change ${(message.change as AddUserChange)}, set it to abort", ex)
                 transaction =
                     transaction.copy(ballotNumber = myBallotNumber, decision = true, initVal = Accept.ABORT, change = null)
             } finally {

@@ -88,7 +88,11 @@ class Worker(
             throw AssertionError("Job is not related to my peerset: $job")
         }
 
-        queue.send(job)
+        try {
+            queue.send(job)
+        } catch (e: Exception) {
+            logger.error("Error while sending job to queue", e)
+        }
     }
 
     companion object {
