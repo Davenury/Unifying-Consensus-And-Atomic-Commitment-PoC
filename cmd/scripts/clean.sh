@@ -9,6 +9,6 @@ helm uninstall loki -n=rszuma &
 helm uninstall loki &
 kubectl delete statefulsets.apps loki &
 kubectl delete services loki-memberlist loki &
- kill $(ps -aux | grep "alvin" | awk {'print $2'})
- kill $(ps -aux | grep "raft" | awk {'print $2'})
- kill $(ps -aux | grep "paxos" | awk {'print $2'})
+kill $(ps -aux | grep "alvin" | awk {'print $2'})
+kill $(ps -aux | grep "raft" | awk {'print $2'})
+kill $(ps -aux | grep "paxos" | awk {'print $2'})
