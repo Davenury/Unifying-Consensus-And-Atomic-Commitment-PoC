@@ -11,7 +11,8 @@ const allPanels = [14, 18, 27, 4, 12, 21]
 // const panels = [14, 18, 27, 4, 12, 31, 21]
 const panelsWithoutChanges = [14, 18, 27, 4, 21]
 const panelWithChangeSynchronization = [14, 18, 27, 4, 12, 33, 21]
-const leaderPanel = [31]
+const chaosOperator = [31]
+const leaderPanel = [32]
 
 const baseDownloadPath = process.env.BASE_DOWNLOAD_PATH ?? getBaseDownloadPath()
 const namespace = process.env.NAMESPACE ?? "ddebowski"
@@ -25,6 +26,7 @@ let panels = []
 if (scrapingType === "all") panels = allPanels
 else if (scrapingType === "synchronization") panels = panelWithChangeSynchronization
 else if (scrapingType === "leader") panels = leaderPanel
+else if (scrapingType === "chaos") panels = chaosOperator
 else if (scrapingType === "without-changes") panels = panelsWithoutChanges
 
 
