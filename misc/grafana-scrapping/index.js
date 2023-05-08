@@ -96,7 +96,7 @@ function delay(time) {
             try {
                 await downloadFile(page, {...experiment, panelId: panel})
             }catch (error){
-                console.log("Failed during downloading panelId:",panelId)
+                console.log("Failed during downloading panelId:",panel)
             }
             await delay(1000)
         }
