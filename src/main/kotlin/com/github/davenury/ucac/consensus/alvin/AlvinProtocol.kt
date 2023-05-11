@@ -336,6 +336,11 @@ class AlvinProtocol(
                 return
             }
 
+        }
+        if (!history.isEntryCompatible(entry))
+            fastRecoveryPhase(entry.getParentId()!!)
+
+        mutex.withLock {
             if (!history.isEntryCompatible(entry)) {
                 logger.info(
                     "Proposed change is incompatible. \n CurrentChange: ${
@@ -519,7 +524,7 @@ class AlvinProtocol(
     }
 
 
-    private fun checkTransactionBlocker(entry: AlvinEntry) {
+    private suspend fun checkTransactionBlocker(entry: AlvinEntry) {
         val changeId = Change.fromHistoryEntry(entry.entry)!!.id
         val transactionAcquisition =
             TransactionAcquisition(ProtocolName.CONSENSUS, Change.fromHistoryEntry(entry.entry)!!.id)
@@ -529,6 +534,20 @@ class AlvinProtocol(
         val isTransactionBlockerAcquired = transactionBlocker.tryAcquireReentrant(transactionAcquisition)
 
         if (!isTransactionBlockerAcquired) {
+
+            val changeId = transactionBlocker.getChangeId()
+
+            val alvinEntry = entryIdToAlvinEntry
+                .values
+                .first { Change.fromHistoryEntry(it.entry)?.id == changeId }
+
+            entryIdToFailureDetector.putIfAbsent(alvinEntry.entry.getId(), getFailureDetectorTimer())
+            entryIdToFailureDetector[alvinEntry.entry.getId()]!!.startCounting {
+                logger.info("Fast recovery from being blocked on changeId: $changeId, entryId: ${alvinEntry.entry.getId()}")
+                fastRecoveryPhase(alvinEntry.entry.getId())
+            }
+
+
             throw AlvinHistoryBlocked(
                 transactionBlocker.getChangeId()!!,
                 transactionBlocker.getProtocolName()!!
@@ -819,6 +838,8 @@ class AlvinProtocol(
         do {
             val fastRecoveryChannel = Channel<RequestResult<AlvinFastRecoveryResponse?>>()
 
+            logger.info("Send fast recovery with id: ${history.getCurrentEntryId()}")
+
 //      epoch 1 because we don't current value
             scheduleMessagesOnce(entryId, fastRecoveryChannel) {
                 protocolClient.sendFastRecovery(it, AlvinFastRecovery(entryId, history.getCurrentEntryId(), peerId))
@@ -870,6 +891,15 @@ class AlvinProtocol(
         }
         val change = Change.fromHistoryEntry(historyEntry)!!
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+        if (isMetricTest) {
+            Metrics.bumpChangeMetric(
+                changeId = change.id,
+                peerId = peerId,
+                peersetId = peersetId,
+                protocolName = ProtocolName.CONSENSUS,
+                state = "accepted"
+            )
+        }
         changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.SUCCESS))
         signalPublisher.signal(
             Signal.AlvinCommitChange,
