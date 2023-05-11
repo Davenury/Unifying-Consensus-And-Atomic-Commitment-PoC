@@ -54,7 +54,7 @@ class PaxosProtocolImpl(
     private var failureDetector = ProtocolTimerImpl(Duration.ofSeconds(0), heartbeatTimeout, ctx)
     private var votedFor: VotedFor? = null
     private var currentRound = -1
-    private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
+    private var queuedChange: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
         ConcurrentLinkedDeque()
 
     private val leaderRequestExecutorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
@@ -260,7 +260,7 @@ class PaxosProtocolImpl(
             proposeChangeToLedger(result, change)
         } else {
             logger.info("We are not a leader or some change maybe needed to propagate")
-            changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, result))
+            queuedChange.add(ChangeToBePropagatedToLeader(change, result))
             becomeLeader("Try to process change")
         }
 
@@ -293,7 +293,7 @@ class PaxosProtocolImpl(
                 }
             }
 
-            result.complete(ChangeResult(ChangeResult.Status.TIMEOUT))
+            queuedChange.add(ChangeToBePropagatedToLeader(change, result))
             return
         }
 
@@ -376,7 +376,7 @@ class PaxosProtocolImpl(
 
                 if (result == null) {
                     logger.info("Sending request to leader failed, try to become a leader myself")
-                    changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
+                    queuedChange.add(ChangeToBePropagatedToLeader(change, cf))
                     return@launch becomeLeader("Leader doesn't respond to my request")
                 }
 
@@ -479,16 +479,16 @@ class PaxosProtocolImpl(
                     val proposedEntries = responses.flatMap { it.notFinishedEntries.deserialize() }
 
                     val oldChangesToBePropagated =
-                        changesToBePropagatedToLeader.toList().map { it.change.toHistoryEntry(peersetId) }
+                        queuedChange.toList().map { it.change.toHistoryEntry(peersetId) }
 
-                    changesToBePropagatedToLeader = ConcurrentLinkedDeque()
+                    queuedChange = ConcurrentLinkedDeque()
 
                     (committedEntries + newCommittedEntries + proposedEntries + oldChangesToBePropagated)
                         .distinct()
                         .forEach {
                             val change = Change.fromHistoryEntry(it)!!
                             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-                            changesToBePropagatedToLeader.add(
+                            queuedChange.add(
                                 ChangeToBePropagatedToLeader(
                                     change,
                                     changeIdToCompletableFuture[change.id]!!
@@ -521,7 +521,7 @@ class PaxosProtocolImpl(
             result = sendAccepts(entry)
             if (!amILeader()) {
                 logger.info("I am not a leader, so stop sending accepts")
-                changesToBePropagatedToLeader.add(
+                queuedChange.add(
                     ChangeToBePropagatedToLeader(
                         change,
                         changeIdToCompletableFuture[change.id]!!
@@ -572,6 +572,14 @@ class PaxosProtocolImpl(
                 }
             }
         }
+
+        checkIfQueuedChanges()
+    }
+
+    private suspend fun checkIfQueuedChanges() {
+        if (queuedChange.isEmpty()) return
+        val changeToBePropagatedToLeader = queuedChange.poll()
+        proposeChangeToLedger(changeToBePropagatedToLeader.cf, changeToBePropagatedToLeader.change)
     }
 
     private suspend fun commitChange(result: PaxosResult, change: Change) {
@@ -581,13 +589,13 @@ class PaxosProtocolImpl(
             failureDetector.cancelCounting()
         }
         when {
-            changeIdToCompletableFuture[change.id]?.isDone == true -> mutex.withLock{
+            changeIdToCompletableFuture[change.id]?.isDone == true -> mutex.withLock {
 //                logger.info("Entry is already finished, clean after this entry: ${entry.getId()}")
                 entryIdPaxosRound.remove(entry.getId())
 
             }
 
-            result == PaxosResult.COMMIT && history.isEntryCompatible(entry) -> mutex.withLock{
+            result == PaxosResult.COMMIT && history.isEntryCompatible(entry) -> mutex.withLock {
                 logger.info("Commit entry $entry")
                 if (!history.containsEntry(entry.getId())) {
                     history.addEntry(entry)
@@ -643,7 +651,7 @@ class PaxosProtocolImpl(
 
             }
 
-            result == PaxosResult.ABORT -> mutex.withLock{
+            result == PaxosResult.ABORT -> mutex.withLock {
                 logger.info("Abort entry $entry")
                 changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                 signalPublisher.signal(
@@ -755,7 +763,7 @@ class PaxosProtocolImpl(
         oldEntries.forEach {
             val change = Change.fromHistoryEntry(it.entry)!!
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-            changesToBePropagatedToLeader.add(
+            queuedChange.add(
                 ChangeToBePropagatedToLeader(
                     change,
                     changeIdToCompletableFuture[change.id]!!
@@ -777,7 +785,7 @@ class PaxosProtocolImpl(
         failureDetector.startCounting {
             logger.info("Try to finish entry with id: ${entry.getId()}")
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-            changesToBePropagatedToLeader.add(
+            queuedChange.add(
                 ChangeToBePropagatedToLeader(
                     change,
                     changeIdToCompletableFuture[change.id]!!
@@ -829,9 +837,9 @@ class PaxosProtocolImpl(
         // TODO mutex?
         val votedFor = this.votedFor
         if (votedFor == null || !votedFor.elected) return
-        if (changesToBePropagatedToLeader.size > 0) logger.info("Try to propagate changes")
+        if (queuedChange.size > 0) logger.info("Try to propagate changes")
         while (true) {
-            val changeToBePropagated = changesToBePropagatedToLeader.poll() ?: break
+            val changeToBePropagated = queuedChange.poll() ?: break
             if (amILeader()) {
                 logger.info("Processing a queued change as a leader: ${changeToBePropagated.change}")
                 proposeChangeToLedger(changeToBePropagated.cf, changeToBePropagated.change)
