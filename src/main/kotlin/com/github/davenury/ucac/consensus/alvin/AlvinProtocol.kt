@@ -730,7 +730,7 @@ class AlvinProtocol(
                 scheduleCommitMessagesOnce(entry, AlvinResult.ABORT)
                 mutex.withLock {
                     resetFailureDetector(entry) {
-                        scheduleCommitMessagesOnce(entry, AlvinResult.ABORT)
+                        failureDetectorScheduleRepeat(entry,AlvinResult.ABORT)
                     }
                 }
             }
@@ -740,7 +740,7 @@ class AlvinProtocol(
                 scheduleCommitMessagesOnce(entry, AlvinResult.COMMIT)
                 mutex.withLock {
                     resetFailureDetector(entry) {
-                        scheduleCommitMessagesOnce(entry, AlvinResult.COMMIT)
+                        failureDetectorScheduleRepeat(entry,AlvinResult.COMMIT)
                     }
                 }
             }
@@ -748,8 +748,20 @@ class AlvinProtocol(
             else -> mutex.withLock {
                 deliveryQueue.add(entry)
                 resetFailureDetector(entry) {
-                    scheduleCommitMessagesOnce(entry, AlvinResult.COMMIT)
+                    deliverTransaction()
                 }
+            }
+        }
+    }
+
+    private suspend fun failureDetectorScheduleRepeat(entry: AlvinEntry, result: AlvinResult) {
+        val changeId: String = Change.fromHistoryEntry(entry.entry)!!.id
+        if (changeIdToCompletableFuture[changeId]?.isDone == true) return
+        logger.info("Send result again: $result for entry: ${entry.entry.getId()}")
+        scheduleCommitMessagesOnce(entry, result)
+        mutex.withLock {
+            resetFailureDetector(entry) {
+                failureDetectorScheduleRepeat(entry, result)
             }
         }
     }
