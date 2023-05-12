@@ -184,7 +184,7 @@ class AlvinProtocol(
             change = change
         )
 
-        logger.info("Handle prepare for entry: ${messageEntry.entry.getId()}, deps: ${messageEntry.deps.map { it.getId() }}")
+        logger.info("Handle prepare for entry: (${message.peerId},${messageEntry.entry.getId()}), deps: ${messageEntry.deps.map { it.getId() }}")
 
         if (isTransactionFinished(entryId, change!!.id)) {
             return AlvinPromise(messageEntry.toDto(), true)
@@ -461,8 +461,9 @@ class AlvinProtocol(
 
         logger.info("Starts recovery phase for ${entry.entry.getId()}")
 
-        checkTransactionBlocker(entry)
-
+        mutex.withLock {
+            checkTransactionBlocker(entry)
+        }
         var newEntry = entry.copy(epoch = entry.epoch + 1, status = AlvinStatus.UNKNOWN)
         mutex.withLock {
             updateEntry(newEntry)
@@ -539,7 +540,19 @@ class AlvinProtocol(
 
             val alvinEntry = entryIdToAlvinEntry
                 .values
-                .first { Change.fromHistoryEntry(it.entry)?.id == changeId }
+                .firstOrNull { Change.fromHistoryEntry(it.entry)?.id == changeId }
+
+            if (alvinEntry == null) {
+                logger.info("Release transaction blocker because doesn't have entry")
+                transactionBlocker.tryRelease(
+                    TransactionAcquisition(
+                        ProtocolName.CONSENSUS,
+                        changeId!!
+                    )
+                )
+                checkTransactionBlocker(entry)
+                return
+            }
 
             entryIdToFailureDetector.putIfAbsent(alvinEntry.entry.getId(), getFailureDetectorTimer())
             entryIdToFailureDetector[alvinEntry.entry.getId()]!!.startCountingIfEmpty {
@@ -730,7 +743,7 @@ class AlvinProtocol(
                 scheduleCommitMessagesOnce(entry, AlvinResult.ABORT)
                 mutex.withLock {
                     resetFailureDetector(entry) {
-                        failureDetectorScheduleRepeat(entry,AlvinResult.ABORT)
+                        failureDetectorScheduleRepeat(entry, AlvinResult.ABORT)
                     }
                 }
             }
@@ -740,7 +753,7 @@ class AlvinProtocol(
                 scheduleCommitMessagesOnce(entry, AlvinResult.COMMIT)
                 mutex.withLock {
                     resetFailureDetector(entry) {
-                        failureDetectorScheduleRepeat(entry,AlvinResult.COMMIT)
+                        failureDetectorScheduleRepeat(entry, AlvinResult.COMMIT)
                     }
                 }
             }
