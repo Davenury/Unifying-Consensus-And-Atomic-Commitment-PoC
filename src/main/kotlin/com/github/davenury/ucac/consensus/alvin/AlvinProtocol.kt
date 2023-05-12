@@ -542,7 +542,7 @@ class AlvinProtocol(
                 .first { Change.fromHistoryEntry(it.entry)?.id == changeId }
 
             entryIdToFailureDetector.putIfAbsent(alvinEntry.entry.getId(), getFailureDetectorTimer())
-            entryIdToFailureDetector[alvinEntry.entry.getId()]!!.startCounting {
+            entryIdToFailureDetector[alvinEntry.entry.getId()]!!.startCountingIfEmpty {
                 logger.info("Fast recovery from being blocked on changeId: $changeId, entryId: ${alvinEntry.entry.getId()}")
                 fastRecoveryPhase(alvinEntry.entry.getId())
             }
