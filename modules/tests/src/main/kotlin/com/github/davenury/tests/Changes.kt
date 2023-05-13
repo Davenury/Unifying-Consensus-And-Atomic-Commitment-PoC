@@ -25,8 +25,9 @@ class Changes(
     private val createChangeStrategy: CreateChangeStrategy,
     private val acProtocol: ACProtocol?,
     private val ownAddress: String,
+    private val enforceConsensusLeader: Boolean = true,
 ) {
-    private val changes = peers.mapValues { OnePeersetChanges(it.value, sender, it.key) }
+    private val changes = peers.mapValues { OnePeersetChanges(it.value, sender, it.key, enforceConsensusLeader) }
 
     private val handledChanges: MutableMap<String, Int> = mutableMapOf()
     private val mutex = Mutex()
@@ -41,7 +42,7 @@ class Changes(
     private fun populateConsensusLeaders() {
         peers.map { (peersetId, _) ->
             val consensusLeaderId = GlobalScope.async {
-                changes[peersetId]!!.populateConsensusLeader()
+                changes[peersetId]!!.populateChangesReceiver()
             }
             peersetId to consensusLeaderId
         }.let {
@@ -170,50 +171,55 @@ class OnePeersetChanges(
     private val peersAddresses: List<PeerAddress>,
     private val sender: Sender,
     private val peersetId: PeersetId,
+    private val enforceConsensusLeader: Boolean,
 ) {
     private var parentId = AtomicReference(InitialHistoryEntry.getId())
-    private var consensusLeader = AtomicReference<PeerAddress?>(null)
+    private var changesReceiver = AtomicReference<PeerAddress?>(null)
 
     suspend fun introduceChange(change: Change): ChangeState {
         return try {
             sender.executeChange(
-                consensusLeader.get()!!,
+                changesReceiver.get()!!,
                 change,
                 peersetId
             )
         } catch (e: IOException) {
-            logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
-            populateConsensusLeader()
+            logger.info("Consensus leader ${changesReceiver.get()} is dead, I'm trying to get a new one")
+            populateChangesReceiver()
             return introduceChange(change)
         }
     }
 
     suspend fun getChange(): Change {
         return try {
-            httpClient.get("http://${consensusLeader.get()!!.address}/v2/last-change?peerset=${peersetId.peersetId}")
+            httpClient.get("http://${changesReceiver.get()!!.address}/v2/last-change?peerset=${peersetId.peersetId}")
         } catch (e: IOException) {
-            logger.info("Consensus leader ${consensusLeader.get()} is dead, I'm trying to get a new one")
-            populateConsensusLeader()
+            logger.info("Consensus leader ${changesReceiver.get()} is dead, I'm trying to get a new one")
+            populateChangesReceiver()
             return getChange()
         }
     }
 
-    suspend fun populateConsensusLeader() {
-        consensusLeader.set(getConsensusLeader())
+    suspend fun populateChangesReceiver() {
+        changesReceiver.set(getChangesRecevier())
     }
 
-    private suspend fun getConsensusLeader(peerAddresses: List<PeerAddress> = peersAddresses): PeerAddress {
-        val address = peersAddresses.firstOrNull() ?: throw IllegalStateException("I have no more peers to ask!")
+    private suspend fun getChangesRecevier(innerPeersAddresses: List<PeerAddress> = peersAddresses): PeerAddress {
+        val address = innerPeersAddresses.firstOrNull() ?: throw IllegalStateException("I have no more peers to ask!")
         val peerId = try {
             sender.getConsensusLeaderId(address, peersetId)
         } catch (e: IOException) {
             logger.info("$address is dead, I'm trying to get consensus leader from another one")
-            return getConsensusLeader(peerAddresses.drop(1))
+            return getChangesRecevier(innerPeersAddresses.drop(1))
         }
-        return peersAddresses.find { it.peerId == peerId } ?: runBlocking {
-            logger.info("Consensus leader is not elected yet, I'm trying to get one in 500 ms")
-            delay(500)
-            getConsensusLeader(peerAddresses)
+        return if (enforceConsensusLeader) {
+            innerPeersAddresses.find { it.peerId == peerId } ?: runBlocking {
+                logger.info("Consensus leader is not elected yet, I'm trying to get one in 500 ms")
+                delay(500)
+                getChangesRecevier(innerPeersAddresses)
+            }
+        } else {
+            address
         }
     }
 
@@ -225,7 +231,9 @@ class OnePeersetChanges(
     }
 
     fun newConsensusLeader(peerId: PeerId) {
-        this.consensusLeader.set(peersAddresses.find { it.peerId == peerId }!!)
+        if (enforceConsensusLeader) {
+            this.changesReceiver.set(peersAddresses.find { it.peerId == peerId }!!)
+        }
     }
 
     companion object {

@@ -41,7 +41,8 @@ class TestNotificationService {
         config.getSendingStrategy(),
         config.getCreateChangeStrategy(),
         config.acProtocol.protocol,
-        config.notificationServiceAddress
+        config.notificationServiceAddress,
+        config.enforceConsensusLeader,
     )
     private val testExecutor = TestExecutor(
         changes,

@@ -44,6 +44,7 @@ type Config struct {
 	increasingLoadBound            float64
 	increasingLoadIncreaseDelay    string
 	increasingLoadIncreaseStep     float64
+	enforceConsensusLeader         bool
 }
 
 func CreateWholeCommand() *cobra.Command {
@@ -93,6 +94,7 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().Float64Var(&config.increasingLoadBound, "load-bound", float64(100), "Bound of changes per second for increasing load generator")
 	cmd.Flags().StringVar(&config.increasingLoadIncreaseDelay, "load-increase-delay", "PT60S", "Determines how long load should be constant before increasing")
 	cmd.Flags().Float64Var(&config.increasingLoadIncreaseStep, "load-increase-step", float64(1), "Determines how much load should change after load-increase-delay time")
+	cmd.Flags().BoolVar(&config.enforceConsensusLeader, "enforce-consensus-leader", true, "Determines if tests should always send changes to consensus leader")
 
 	return cmd
 }
@@ -143,6 +145,7 @@ func perform(config Config) {
 		IncreasingLoadBound:         config.increasingLoadBound,
 		IncreasingLoadIncreaseDelay: config.increasingLoadIncreaseDelay,
 		IncreasingLoadIncreaseStep:  config.increasingLoadIncreaseStep,
+		EnforceConsensusLeader:      config.enforceConsensusLeader,
 	})
 	fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
 	waitUntilJobPodCompleted(config)

@@ -1,0 +1,35 @@
+apiVersion: lsc.davenury.github.com/v1
+kind: Scenario
+metadata:
+  name: gpac-chaos-delete-followers
+  namespace: ddebowski
+spec:
+  phases:
+    - duration: PT60S
+      actions:
+        - namespace: ddebowski
+          resourceType: consensus follower
+          action: delete percentage
+          deleteConsensusFollowerPercentageSpec:
+            peerUrl: http://peer0-service:8080/peerset-information?peerset=peerset0
+            percentage: 25
+        - namespace: ddebowski
+          resourceType: consensus follower
+          action: delete percentage
+          deleteConsensusFollowerPercentageSpec:
+            peerUrl: http://peer9-service:8080/peerset-information?peerset=peerset0
+            percentage: 25
+    - duration: PT60S
+      actions:
+        - namespace: ddebowski
+          resourceType: consensus follower
+          action: delete percentage
+          deleteConsensusFollowerPercentageSpec:
+            peerUrl: http://peer0-service:8080/peerset-information?peerset=peerset0
+            percentage: 75
+        - namespace: ddebowski
+          resourceType: consensus follower
+          action: delete percentage
+          deleteConsensusFollowerPercentageSpec:
+            peerUrl: http://peer9-service:8080/peerset-information?peerset=peerset0
+            percentage: 75
