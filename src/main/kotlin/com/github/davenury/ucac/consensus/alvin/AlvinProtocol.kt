@@ -123,8 +123,8 @@ class AlvinProtocol(
             change = change
         )
 
+        checkTransactionBlocker(entry)
         mutex.withLock {
-            checkTransactionBlocker(entry)
             updateEntry(entry)
             resetFailureDetector(entry)
 
@@ -161,8 +161,8 @@ class AlvinProtocol(
             change = change
         )
 
+        checkTransactionBlocker(entry)
         mutex.withLock {
-            checkTransactionBlocker(entry)
             updateEntry(entry)
             resetFailureDetector(entry)
         }
@@ -207,32 +207,37 @@ class AlvinProtocol(
         return AlvinPromise(updatedEntry.toDto(), false)
     }
 
-    override suspend fun handleCommit(message: AlvinCommit): AlvinCommitResponse = mutex.withLock {
+    override suspend fun handleCommit(message: AlvinCommit): AlvinCommitResponse {
         val messageEntry = message.entry.toEntry()
-        logger.info("Handle commit: ${message.result} from peer: ${message.peerId}, for entry: ${messageEntry.entry.getId()}")
         val change = Change.fromHistoryEntry(messageEntry.entry)!!
         val entryId = messageEntry.entry.getId()
+        mutex.withLock {
+            logger.info("Handle commit: ${message.result} from peer: ${message.peerId}, for entry: ${messageEntry.entry.getId()}")
+            signalPublisher.signal(
+                Signal.AlvinHandleMessages,
+                this@AlvinProtocol,
+                mapOf(peersetId to otherConsensusPeers()),
+                change = change
+            )
 
-        signalPublisher.signal(
-            Signal.AlvinHandleMessages,
-            this@AlvinProtocol,
-            mapOf(peersetId to otherConsensusPeers()),
-            change = change
-        )
+            if (isTransactionFinished(entryId, change.id))
+                return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
 
-        if (isTransactionFinished(entryId, change.id))
-            return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
+        }
+
 
         checkTransactionBlocker(messageEntry)
 
-        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-        votesContainer.initializeEntry(entryId)
-        votesContainer.voteOnEntry(entryId, message.result, message.peerId)
+        mutex.withLock {
+            changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+            votesContainer.initializeEntry(entryId)
+            votesContainer.voteOnEntry(entryId, message.result, message.peerId)
 
-        checkVotes(messageEntry, change)
-        checkNextChanges(entryId)
+            checkVotes(messageEntry, change)
+            checkNextChanges(entryId)
 
-        AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
+            return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
+        }
     }
 
     override suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse =
@@ -461,9 +466,7 @@ class AlvinProtocol(
 
         logger.info("Starts recovery phase for ${entry.entry.getId()}")
 
-        mutex.withLock {
-            checkTransactionBlocker(entry)
-        }
+        checkTransactionBlocker(entry)
         var newEntry = entry.copy(epoch = entry.epoch + 1, status = AlvinStatus.UNKNOWN)
         mutex.withLock {
             updateEntry(newEntry)
@@ -874,6 +877,8 @@ class AlvinProtocol(
 
             responses = gatherResponses(entryId, fastRecoveryChannel).filterNotNull()
 
+            logger.info("Received responses from fast recovery: ${history.getCurrentEntryId()}")
+
             responses
                 .flatMap { it.historyEntries.map { HistoryEntry.deserialize(it) } }
                 .distinct()
@@ -962,7 +967,8 @@ class AlvinProtocol(
             alvinEntry != null && alvinEntry.transactionId < entry.transactionId
         }
 
-        val unknownDeps = entry.deps.filter { !history.containsEntry(it.getId()) && it.getId() != entry.entry.getId() }
+        val unknownDeps =
+            entry.deps.filter { !history.containsEntry(it.getId()) && it.getId() != entry.entry.getId() }
 
         return entry.copy(deps = unknownDeps + finalDeps)
     }
