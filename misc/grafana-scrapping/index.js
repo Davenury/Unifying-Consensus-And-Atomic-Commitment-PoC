@@ -11,7 +11,7 @@ const allPanels = [14, 18, 27, 4, 12, 21]
 // const panels = [14, 18, 27, 4, 12, 31, 21]
 const panelsWithoutChanges = [14, 18, 27, 4, 21]
 const panelWithChangeSynchronization = [14, 18, 27, 4, 12, 33, 21]
-const chaosOperator = [31]
+const chaosOperator = [34]
 const leaderPanel = [32]
 
 const baseDownloadPath = process.env.BASE_DOWNLOAD_PATH ?? getBaseDownloadPath()
