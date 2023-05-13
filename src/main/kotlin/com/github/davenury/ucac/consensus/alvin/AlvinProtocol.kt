@@ -982,7 +982,7 @@ class AlvinProtocol(
             try {
                 recoveryPhase(entry)
             } catch (ex: Exception) {
-                logger.info("Exception was thrown during recovery" + ex.stackTrace)
+                logger.error("Exception was thrown during recovery",ex)
             }
         }
     }
