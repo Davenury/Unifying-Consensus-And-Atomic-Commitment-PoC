@@ -68,12 +68,14 @@ class AlvinProtocol(
     override fun getPeerName() = peerId.toString()
 
     override suspend fun begin() {
-        initialChangeId
-            ?.let { TransactionAcquisition(ProtocolName.CONSENSUS, it) }
-            ?.let { transactionBlocker.tryRelease(it) }
-
+        mutex.withLock {
+            initialChangeId
+                ?.let { TransactionAcquisition(ProtocolName.CONSENSUS, it) }
+                ?.let { transactionBlocker.tryRelease(it) }
+        }
         synchronizationMeasurement.begin(ctx)
         Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
+        subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
     }
 
     override suspend fun handleProposalPhase(message: AlvinPropose): AlvinAckPropose {
@@ -123,8 +125,8 @@ class AlvinProtocol(
             change = change
         )
 
-        checkTransactionBlocker(entry)
         mutex.withLock {
+            checkTransactionBlocker(entry)
             updateEntry(entry)
             resetFailureDetector(entry)
 
@@ -161,8 +163,8 @@ class AlvinProtocol(
             change = change
         )
 
-        checkTransactionBlocker(entry)
         mutex.withLock {
+            checkTransactionBlocker(entry)
             updateEntry(entry)
             resetFailureDetector(entry)
         }
@@ -226,9 +228,9 @@ class AlvinProtocol(
         }
 
 
-        checkTransactionBlocker(messageEntry)
 
         mutex.withLock {
+            checkTransactionBlocker(messageEntry)
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             votesContainer.initializeEntry(entryId)
             votesContainer.voteOnEntry(entryId, message.result, message.peerId)
@@ -469,7 +471,10 @@ class AlvinProtocol(
 
         logger.info("Starts recovery phase for ${entry.entry.getId()}")
 
-        checkTransactionBlocker(entry)
+        mutex.withLock {
+            checkTransactionBlocker(entry)
+        }
+
         var newEntry = entry.copy(epoch = entry.epoch + 1, status = AlvinStatus.UNKNOWN)
         mutex.withLock {
             updateEntry(newEntry)
@@ -562,7 +567,7 @@ class AlvinProtocol(
 
             logger.info("Try to fast recovery from being blocked on entryId: ${alvinEntry.entry.getId()}")
 
-            entryIdToFailureDetector.putIfAbsent(alvinEntry.entry.getId(), getFailureDetectorTimer())
+            entryIdToFailureDetector.putIfAbsent(alvinEntry.entry.getId(), getFastRecoveryTimer())
             entryIdToFailureDetector[alvinEntry.entry.getId()]!!.startCountingIfEmpty {
                 logger.info("Fast recovery from being blocked on changeId: $changeId, entryId: ${alvinEntry.entry.getId()}")
                 fastRecoveryPhase(alvinEntry.entry.getId())
@@ -574,7 +579,7 @@ class AlvinProtocol(
                 transactionBlocker.getProtocolName()!!
             )
         } else {
-            logger.info("Transaction blocker acquired for entry: ${changeId}")
+            logger.info("Transaction blocker acquired for entry: $changeId")
         }
     }
 
@@ -980,7 +985,9 @@ class AlvinProtocol(
     private suspend fun resetFailureDetector(entry: AlvinEntry) {
         resetFailureDetector(entry) {
             try {
-                recoveryPhase(entry)
+                val change = Change.fromHistoryEntry(entry.entry)!!
+                if(changeIdToCompletableFuture[change.id]?.isDone == false)
+                    recoveryPhase(entry)
             } catch (ex: Exception) {
                 logger.error("Exception was thrown during recovery",ex)
             }
@@ -1044,6 +1051,7 @@ class AlvinProtocol(
     }
 
     private fun getFailureDetectorTimer() = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout.dividedBy(2), ctx)
+    private fun getFastRecoveryTimer() = ProtocolTimerImpl(heartbeatDelay, heartbeatDelay.dividedBy(2), ctx)
 
     private fun isTransactionFinished(entryId: String, changeId: String) =
         history.containsEntry(entryId) || changeIdToCompletableFuture[changeId]?.isDone == true
