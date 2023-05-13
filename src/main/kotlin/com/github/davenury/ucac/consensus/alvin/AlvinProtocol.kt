@@ -209,37 +209,32 @@ class AlvinProtocol(
         return AlvinPromise(updatedEntry.toDto(), false)
     }
 
-    override suspend fun handleCommit(message: AlvinCommit): AlvinCommitResponse {
+    override suspend fun handleCommit(message: AlvinCommit): AlvinCommitResponse = mutex.withLock {
         val messageEntry = message.entry.toEntry()
         val change = Change.fromHistoryEntry(messageEntry.entry)!!
         val entryId = messageEntry.entry.getId()
-        mutex.withLock {
-            logger.info("Handle commit: ${message.result} from peer: ${message.peerId}, for entry: ${messageEntry.entry.getId()}")
-            signalPublisher.signal(
-                Signal.AlvinHandleMessages,
-                this@AlvinProtocol,
-                mapOf(peersetId to otherConsensusPeers()),
-                change = change
-            )
 
-            if (isTransactionFinished(entryId, change.id))
-                return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
+        logger.info("Handle commit: ${message.result} from peer: ${message.peerId}, for entry: ${messageEntry.entry.getId()}")
+        signalPublisher.signal(
+            Signal.AlvinHandleMessages,
+            this@AlvinProtocol,
+            mapOf(peersetId to otherConsensusPeers()),
+            change = change
+        )
 
-        }
-
-
-
-        mutex.withLock {
-            checkTransactionBlocker(messageEntry)
-            changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-            votesContainer.initializeEntry(entryId)
-            votesContainer.voteOnEntry(entryId, message.result, message.peerId)
-
-            checkVotes(messageEntry, change)
-            checkNextChanges(entryId)
-
+        if (isTransactionFinished(entryId, change.id))
             return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
-        }
+
+
+        checkTransactionBlocker(messageEntry)
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+        votesContainer.initializeEntry(entryId)
+        votesContainer.voteOnEntry(entryId, message.result, message.peerId)
+
+        checkVotes(messageEntry, change)
+        checkNextChanges(entryId)
+
+        return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
     }
 
     override suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse =
@@ -318,7 +313,7 @@ class AlvinProtocol(
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
 
-        if(changeIdToCompletableFuture.containsKey(change.id)) return changeIdToCompletableFuture[change.id]!!
+        if (changeIdToCompletableFuture.containsKey(change.id)) return changeIdToCompletableFuture[change.id]!!
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture<ChangeResult>())
         val result = changeIdToCompletableFuture[change.id]!!
         proposeChangeToLedger(result, change)
@@ -359,7 +354,12 @@ class AlvinProtocol(
                         change.toHistoryEntry(peersetId).getParentId()
                     } \n Change.id: ${change.toHistoryEntry(peersetId).getId()}"
                 )
-                result.complete(ChangeResult(ChangeResult.Status.CONFLICT,currentEntryId = history.getCurrentEntryId()))
+                result.complete(
+                    ChangeResult(
+                        ChangeResult.Status.CONFLICT,
+                        currentEntryId = history.getCurrentEntryId()
+                    )
+                )
                 transactionBlocker.release(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
                 return
             }
@@ -554,14 +554,14 @@ class AlvinProtocol(
                 .firstOrNull { Change.fromHistoryEntry(it.entry)?.id == changeId }
 
             if (alvinEntry == null) {
-                logger.info("Release transaction blocker because doesn't have change with Id ${changeId}")
+                logger.info("Release transaction blocker because doesn't have change with Id $changeId")
                 transactionBlocker.tryRelease(
                     TransactionAcquisition(
                         ProtocolName.CONSENSUS,
                         changeId!!
                     )
                 )
-                checkTransactionBlocker(entry)
+//                checkTransactionBlocker(entry)
                 return
             }
 
@@ -952,7 +952,12 @@ class AlvinProtocol(
     private fun abortChange(historyEntry: HistoryEntry) {
         val change = Change.fromHistoryEntry(historyEntry)!!
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-        changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT,currentEntryId = history.getCurrentEntryId()))
+        changeIdToCompletableFuture[change.id]!!.complete(
+            ChangeResult(
+                ChangeResult.Status.CONFLICT,
+                currentEntryId = history.getCurrentEntryId()
+            )
+        )
         signalPublisher.signal(
             Signal.AlvinAbortChange,
             this,
@@ -986,10 +991,10 @@ class AlvinProtocol(
         resetFailureDetector(entry) {
             try {
                 val change = Change.fromHistoryEntry(entry.entry)!!
-                if(changeIdToCompletableFuture[change.id]?.isDone == false)
+                if (changeIdToCompletableFuture[change.id]?.isDone != false)
                     recoveryPhase(entry)
             } catch (ex: Exception) {
-                logger.error("Exception was thrown during recovery",ex)
+                logger.error("Exception was thrown during recovery", ex)
             }
         }
     }
