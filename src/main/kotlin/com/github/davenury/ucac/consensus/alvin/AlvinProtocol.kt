@@ -543,7 +543,7 @@ class AlvinProtocol(
                 .firstOrNull { Change.fromHistoryEntry(it.entry)?.id == changeId }
 
             if (alvinEntry == null) {
-                logger.info("Release transaction blocker because doesn't have entry")
+                logger.info("Release transaction blocker because doesn't have change with Id ${changeId}")
                 transactionBlocker.tryRelease(
                     TransactionAcquisition(
                         ProtocolName.CONSENSUS,
@@ -553,6 +553,8 @@ class AlvinProtocol(
                 checkTransactionBlocker(entry)
                 return
             }
+
+            logger.info("Try to fast recovery from being blocked on entryId: ${alvinEntry.entry.getId()}")
 
             entryIdToFailureDetector.putIfAbsent(alvinEntry.entry.getId(), getFailureDetectorTimer())
             entryIdToFailureDetector[alvinEntry.entry.getId()]!!.startCountingIfEmpty {
