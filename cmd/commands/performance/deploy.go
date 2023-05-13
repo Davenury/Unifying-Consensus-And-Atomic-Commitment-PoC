@@ -37,6 +37,8 @@ type Config struct {
 	IncreasingLoadBound         float64
 	IncreasingLoadIncreaseDelay string
 	IncreasingLoadIncreaseStep  float64
+
+	EnforceConsensusLeader bool
 }
 
 func createPerformanceDeployCommand() *cobra.Command {
@@ -62,6 +64,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 	var increasingLoadBound float64
 	var increasingLoadIncreaseDelay string
 	var increasingLoadIncreaseStep float64
+	var enforceConsensusLeader bool
 
 	var cmd = &cobra.Command{
 		Use:   "deploy",
@@ -88,6 +91,8 @@ func createPerformanceDeployCommand() *cobra.Command {
 				IncreasingLoadBound:         increasingLoadBound,
 				IncreasingLoadIncreaseDelay: increasingLoadIncreaseDelay,
 				IncreasingLoadIncreaseStep:  increasingLoadIncreaseStep,
+
+				EnforceConsensusLeader: enforceConsensusLeader,
 			})
 		},
 	}
@@ -114,6 +119,7 @@ func createPerformanceDeployCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&consensusProtocol, "consensus-protocol", "", "", "Consensus protocol to use. For now it's one protocol")
 	cmd.Flags().StringVar(&constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
 	cmd.Flags().StringVar(&fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
+	cmd.Flags().BoolVar(&enforceConsensusLeader, "enforce-consensus-leader", true, "Determines if tests should always send changes to consensus leader")
 
 	return cmd
 }
@@ -222,6 +228,7 @@ func createConfigmap(clientset *kubernetes.Clientset, config Config) {
 		"INCREASING_LOAD_BOUND":           fmt.Sprintf("%f", config.IncreasingLoadBound),
 		"INCREASING_LOAD_INCREASE_DELAY":  config.IncreasingLoadIncreaseDelay,
 		"INCREASING_LOAD_INCREASE_STEP":   fmt.Sprintf("%f", config.IncreasingLoadIncreaseStep),
+		"ENFORCE_CONSENSUS_LEADER":        strconv.FormatBool(config.EnforceConsensusLeader),
 	}
 
 	if config.FixedPeersetsInChange != "" {

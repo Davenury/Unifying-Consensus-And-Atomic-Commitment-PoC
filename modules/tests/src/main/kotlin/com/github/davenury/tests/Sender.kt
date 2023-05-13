@@ -7,6 +7,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import kotlin.Exception
 
 interface Sender {
     suspend fun executeChange(address: PeerAddress, change: Change, peersetId: PeersetId): ChangeState
