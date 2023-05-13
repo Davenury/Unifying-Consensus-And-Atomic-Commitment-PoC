@@ -305,7 +305,7 @@ class PaxosProtocolImpl(
                     change.toHistoryEntry(peersetId).getParentId()
                 }"
             )
-            result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+            result.complete(ChangeResult(ChangeResult.Status.CONFLICT, currentEntryId = history.getCurrentEntryId()))
             transactionBlocker.tryRelease(transactionAcquisition)
             return
         }
@@ -653,7 +653,12 @@ class PaxosProtocolImpl(
 
             result == PaxosResult.ABORT -> mutex.withLock {
                 logger.info("Abort entry $entry")
-                changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                changeIdToCompletableFuture[change.id]?.complete(
+                    ChangeResult(
+                        ChangeResult.Status.CONFLICT,
+                        currentEntryId = history.getCurrentEntryId()
+                    )
+                )
                 signalPublisher.signal(
                     Signal.PigPaxosChangeAborted,
                     this,

@@ -357,7 +357,7 @@ class AlvinProtocol(
                         change.toHistoryEntry(peersetId).getParentId()
                     } \n Change.id: ${change.toHistoryEntry(peersetId).getId()}"
                 )
-                result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+                result.complete(ChangeResult(ChangeResult.Status.CONFLICT,currentEntryId = history.getCurrentEntryId()))
                 transactionBlocker.release(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
                 return
             }
@@ -947,7 +947,7 @@ class AlvinProtocol(
     private fun abortChange(historyEntry: HistoryEntry) {
         val change = Change.fromHistoryEntry(historyEntry)!!
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-        changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT))
+        changeIdToCompletableFuture[change.id]!!.complete(ChangeResult(ChangeResult.Status.CONFLICT,currentEntryId = history.getCurrentEntryId()))
         signalPublisher.signal(
             Signal.AlvinAbortChange,
             this,
