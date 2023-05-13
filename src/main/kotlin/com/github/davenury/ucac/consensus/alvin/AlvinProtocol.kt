@@ -71,9 +71,9 @@ class AlvinProtocol(
         initialChangeId
             ?.let { TransactionAcquisition(ProtocolName.CONSENSUS, it) }
             ?.let { transactionBlocker.tryRelease(it) }
+
         synchronizationMeasurement.begin(ctx)
         Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
-        subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
     }
 
     override suspend fun handleProposalPhase(message: AlvinPropose): AlvinAckPropose {
@@ -315,8 +315,10 @@ class AlvinProtocol(
 
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
-        val result = CompletableFuture<ChangeResult>()
-        changeIdToCompletableFuture[change.id] = result
+
+        if(changeIdToCompletableFuture.containsKey(change.id)) return changeIdToCompletableFuture[change.id]!!
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture<ChangeResult>())
+        val result = changeIdToCompletableFuture[change.id]!!
         proposeChangeToLedger(result, change)
 
         return result
@@ -325,7 +327,7 @@ class AlvinProtocol(
     override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
         val entry = change.toHistoryEntry(peersetId)
         mutex.withLock {
-            if (entryIdToAlvinEntry.containsKey(entry.getId()) || history.containsEntry(entry.getId())) {
+            if (history.containsEntry(entry.getId()) || entryIdToAlvinEntry.contains(entry.getId())) {
                 logger.info("Already proposed that change: ${entry.getId()}")
                 return
             }
@@ -342,17 +344,18 @@ class AlvinProtocol(
             }
 
         }
-        if (!history.isEntryCompatible(entry))
-            fastRecoveryPhase(entry.getParentId()!!)
+        val fastRecoveryResult: Boolean? =
+            if (!history.isEntryCompatible(entry)) fastRecoveryPhase(entry.getParentId()!!)
+            else null
 
         mutex.withLock {
             if (!history.isEntryCompatible(entry)) {
                 logger.info(
-                    "Proposed change is incompatible. \n CurrentChange: ${
+                    "Proposed change is incompatible. FastRecovery result: $fastRecoveryResult \n CurrentChange: ${
                         history.getCurrentEntry().getId()
                     } \n Change.parentId: ${
                         change.toHistoryEntry(peersetId).getParentId()
-                    }"
+                    } \n Change.id: ${change.toHistoryEntry(peersetId).getId()}"
                 )
                 result.complete(ChangeResult(ChangeResult.Status.CONFLICT))
                 transactionBlocker.release(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
@@ -877,7 +880,7 @@ class AlvinProtocol(
 
             responses = gatherResponses(entryId, fastRecoveryChannel).filterNotNull()
 
-            logger.info("Received responses from fast recovery: ${history.getCurrentEntryId()}")
+
 
             responses
                 .flatMap { it.historyEntries.map { HistoryEntry.deserialize(it) } }
