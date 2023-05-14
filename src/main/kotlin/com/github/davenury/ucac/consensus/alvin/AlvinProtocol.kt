@@ -583,7 +583,13 @@ class AlvinProtocol(
 
                 logger.info("Try to fast recovery from being blocked on entryId: ${alvinEntry.entry.getId()}")
 
-                val resultRecovery = fastRecoveryPhase(alvinEntry.entry.getId())
+                val resultRecovery: Boolean
+                mutex.withLock {
+                    if (transactionBlocker.getChangeId() == changeId)
+                        resultRecovery = fastRecoveryPhase(alvinEntry.entry.getId())
+                    else
+                        return
+                }
 
                 if (resultRecovery) {
                     logger.info("Entry: ${entry.entry.getId()} was aborted, when I was inactive")
