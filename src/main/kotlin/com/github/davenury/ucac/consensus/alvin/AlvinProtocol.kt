@@ -77,7 +77,7 @@ class AlvinProtocol(
     }
 
     override suspend fun handleProposalPhase(message: AlvinPropose): AlvinAckPropose {
-        logger.info("Handle proposal for entry: ${message.entry.toEntry().entry.getId()}")
+        logger.info("Handle proposal from peer ${message.peerId} for entry: ${message.entry.toEntry().entry.getId()}")
         val change = Change.fromHistoryEntry(message.entry.toEntry().entry)
 
         signalPublisher.signal(
@@ -114,7 +114,7 @@ class AlvinProtocol(
         val change = Change.fromHistoryEntry(entry.entry)
         val changeId = change!!.id
 
-        logger.info("Handle accept for entry: ${entry.entry.getId()}, deps: ${entry.deps.map { it.getId() }}")
+        logger.info("Handle accept from peer ${message.peerId} for entry: ${entry.entry.getId()}, deps: ${entry.deps.map { it.getId() }}")
 
         signalPublisher.signal(
             Signal.AlvinHandleMessages,
@@ -153,7 +153,7 @@ class AlvinProtocol(
         val entryId = entry.entry.getId()
         val change = Change.fromHistoryEntry(entry.entry)
 
-        logger.info("Handle stable for entry: ${entry.entry.getId()}, deps: ${entry.deps.map { it.getId() }}")
+        logger.info("Handle stable from peer ${message.peerId} for entry: ${entry.entry.getId()}, deps: ${entry.deps.map { it.getId() }}")
 
         signalPublisher.signal(
             Signal.AlvinHandleMessages,
@@ -186,7 +186,7 @@ class AlvinProtocol(
             change = change
         )
 
-        logger.info("Handle prepare for entry: (${message.peerId},${messageEntry.entry.getId()}), deps: ${messageEntry.deps.map { it.getId() }}")
+        logger.info("Handle prepare from peer ${message.peerId} for entry: (${message.peerId},${messageEntry.entry.getId()}), deps: ${messageEntry.deps.map { it.getId() }}")
 
         if (isTransactionFinished(entryId, change!!.id)) {
             return AlvinPromise(messageEntry.toDto(), true)
@@ -394,8 +394,13 @@ class AlvinProtocol(
         val jobs = scheduleMessages(historyEntry, channel, entry.epoch) { peerAddress ->
             protocolClient.sendProposal(peerAddress, AlvinPropose(peerId, entry.toDto()))
         }
-        val responses: List<AlvinAckPropose> =
+        val responses: List<AlvinAckPropose>? =
             waitForQuorum(historyEntry, jobs, channel, AlvinStatus.PENDING)
+
+        if(responses == null){
+            resetFailureDetector(entry)
+            return
+        }
 
         val newPos = responses.maxOf { it.newPos }
         val newDeps = responses.flatMap { it.newDeps }.map { HistoryEntry.deserialize(it) }
@@ -434,6 +439,11 @@ class AlvinProtocol(
         )
 
         val newResponses = waitForQuorum(historyEntry, jobs, acceptChannel, AlvinStatus.PENDING)
+
+        if(newResponses == null) {
+            resetFailureDetector(entry)
+            return
+        }
 
         val newDeps = newResponses.flatMap { it.newDeps }.map { HistoryEntry.deserialize(it) }
 
@@ -497,6 +507,11 @@ class AlvinProtocol(
         }
 
         val responses = waitForQuorum(entry.entry, jobs, promiseChannel, AlvinStatus.UNKNOWN, includeMyself = false)
+
+        if(responses == null){
+            resetFailureDetector(entry)
+            return
+        }
 
         val newDeps = responses
             .filter { it.entry != null }
@@ -637,11 +652,22 @@ class AlvinProtocol(
                         mutex.withLock {
                             entry = entryIdToAlvinEntry[entryId]
                         }
+
+//                      FIXME: These returns leads to infinity waiting in waitforQurum messages
+
                         if (entry != null && entry.epoch > epoch) {
-                            logger.info("Our entry epoch increased so stop sending message, scheduleMessage epoch ${epoch}, new epoch: ${entry.epoch}")
+                            logger.info("Our entry epoch increased so stop sending message, scheduleMessage epoch ${epoch}, new epoch: ${entry.epoch}, entryId: ${entryId}")
                             mutex.withLock {
                                 resetFailureDetector(entry)
                             }
+                            channel?.send(
+                                RequestResult(
+                                    entryId,
+                                    response.message,
+                                    response.unauthorized,
+                                    isInterrupted = true
+                                )
+                            )
                             return@launchTraced
                         }
 
@@ -650,11 +676,19 @@ class AlvinProtocol(
                             mutex.withLock {
                                 resetFailureDetector(entry)
                             }
+                            channel?.send(
+                                RequestResult(
+                                    entryId,
+                                    response.message,
+                                    response.unauthorized,
+                                    isInterrupted = true
+                                )
+                            )
                             return@launchTraced
                         }
 
                         if (response.message == null) {
-                            logger.info("Delay message ${heartbeatDelay.toMillis()} ms")
+                            logger.info("Delay message to peer ${peerAddress.peerId} for ${heartbeatDelay.toMillis()} ms")
                             delay(heartbeatDelay.toMillis())
                         }
 
@@ -692,7 +726,7 @@ class AlvinProtocol(
         channel: Channel<RequestResult<A>>,
         status: AlvinStatus,
         includeMyself: Boolean = true
-    ): List<A> = waitForQuorum<A>(historyEntry.getId(), jobs, channel, status, includeMyself)
+    ): List<A>? = waitForQuorum<A>(historyEntry.getId(), jobs, channel, status, includeMyself)
 
     private suspend fun <A> waitForQuorum(
         entryId: String,
@@ -700,7 +734,7 @@ class AlvinProtocol(
         channel: Channel<RequestResult<A>>,
         status: AlvinStatus,
         includeMyself: Boolean = true
-    ): List<A> {
+    ): List<A>? {
         val responses: MutableList<A> = mutableListOf()
         val changeSize = if (includeMyself) 0 else -1
         while (!isMoreThanHalf(responses.size + changeSize)) {
@@ -708,7 +742,10 @@ class AlvinProtocol(
             val entry = entryIdToAlvinEntry[entryId]
 
             when {
-                response.entryId == entryId && !response.unauthorized -> responses.add(response.response)
+                response.isInterrupted -> {
+                    return null
+                }
+                response.entryId == entryId && !response.unauthorized -> responses.add(response.response!!)
                 response.entryId == entryId -> mutex.withLock {
                     resetFailureDetector(entry!!)
                     throw AlvinLeaderBecameOutdatedException(Change.fromHistoryEntry(entry.entry)!!.id)
@@ -726,11 +763,12 @@ class AlvinProtocol(
     private suspend fun <A> gatherResponses(
         entryId: String,
         channel: Channel<RequestResult<A>>,
-    ): List<A> {
-        val responses: MutableList<A> = mutableListOf()
+    ): List<A?>? {
+        val responses: MutableList<A?> = mutableListOf()
         while (responses.size < otherConsensusPeers().size) {
             val response = channel.receive()
-            if (response.entryId == entryId) responses.add(response.response)
+            if(response.isInterrupted) return null
+            else if (response.entryId == entryId) responses.add(response.response)
             else if (!history.containsEntry(entryId)) channel.send(response)
         }
 
@@ -896,7 +934,7 @@ class AlvinProtocol(
     private suspend fun fastRecoveryPhase(entryId: String): Boolean {
         logger.info("Start fast recovery for entryId: $entryId")
 
-        var responses: List<AlvinFastRecoveryResponse>
+        var responses: List<AlvinFastRecoveryResponse>?
 
         do {
             val fastRecoveryChannel = Channel<RequestResult<AlvinFastRecoveryResponse?>>()
@@ -908,19 +946,18 @@ class AlvinProtocol(
                 protocolClient.sendFastRecovery(it, AlvinFastRecovery(entryId, history.getCurrentEntryId(), peerId))
             }
 
-            responses = gatherResponses(entryId, fastRecoveryChannel).filterNotNull()
-
+            responses = gatherResponses(entryId, fastRecoveryChannel)?.filterNotNull()
 
             responses
-                .flatMap { it.historyEntries.map { HistoryEntry.deserialize(it) } }
-                .distinct()
-                .forEach {
+                ?.flatMap { it.historyEntries.map { HistoryEntry.deserialize(it) } }
+                ?.distinct()
+                ?.forEach {
                     val change = Change.fromHistoryEntry(it)
                     commitChange(it)
                     cleanAfterEntryFinished(it.getId())
                     transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change!!.id))
                 }
-        } while (!responses.all { it.isFinished })
+        } while (responses == null || !responses.all { it.isFinished })
 
 
         val findEntry = { response: AlvinFastRecoveryResponse ->
@@ -1119,8 +1156,9 @@ data class AlvinEntryDto(
 
 data class RequestResult<A>(
     val entryId: String,
-    val response: A,
-    val unauthorized: Boolean = false
+    val response: A?,
+    val unauthorized: Boolean = false,
+    val isInterrupted: Boolean = false,
 )
 
 
