@@ -68,11 +68,9 @@ class AlvinProtocol(
     override fun getPeerName() = peerId.toString()
 
     override suspend fun begin() {
-        mutex.withLock {
-            initialChangeId
-                ?.let { TransactionAcquisition(ProtocolName.CONSENSUS, it) }
-                ?.let { transactionBlocker.tryRelease(it) }
-        }
+        initialChangeId
+            ?.let { TransactionAcquisition(ProtocolName.CONSENSUS, it) }
+            ?.let { transactionBlocker.tryRelease(it) }
         synchronizationMeasurement.begin(ctx)
         Metrics.bumpLeaderElection(peerResolver.currentPeer(), peersetId)
         subscribers?.notifyAboutConsensusLeaderChange(peerId, peersetId)
@@ -313,9 +311,8 @@ class AlvinProtocol(
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
 
-        if (changeIdToCompletableFuture.containsKey(change.id)) return changeIdToCompletableFuture[change.id]!!
-        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture<ChangeResult>())
-        val result = changeIdToCompletableFuture[change.id]!!
+        val result = CompletableFuture<ChangeResult>()
+        changeIdToCompletableFuture[change.id] = result
         proposeChangeToLedger(result, change)
 
         return result
