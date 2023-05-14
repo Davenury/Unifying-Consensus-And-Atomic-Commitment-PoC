@@ -476,9 +476,11 @@ class AlvinProtocol(
         scheduleMessages(historyEntry, null, entry.epoch) { peerAddress ->
             if ((peerIdToTransactionId[peerAddress.peerId] ?: 0) == entry.transactionId)
                 protocolClient.sendStable(peerAddress, AlvinStable(peerId, entry.toDto()))
-            else
+            else {
 //              Dummy response to stop repeat stable
+                logger.info("Stop sending stable to peer: ${peerAddress.peerId} for entry: ${entry.entry.getId()}")
                 ConsensusResponse(peerAddress.address, AlvinAckStable(peerAddress.peerId))
+            }
         }
 
         signalPublisher.signal(
