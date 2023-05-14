@@ -350,12 +350,10 @@ class AlvinProtocol(
                 return
             }
 
-        }
-        val fastRecoveryResult: Boolean? =
-            if (!history.isEntryCompatible(entry)) fastRecoveryPhase(entry.getParentId()!!)
-            else null
+            val fastRecoveryResult: Boolean? =
+                if (!history.isEntryCompatible(entry)) fastRecoveryPhase(entry.getParentId()!!)
+                else null
 
-        mutex.withLock {
             if (!history.isEntryCompatible(entry)) {
                 logger.info(
                     "Proposed change is incompatible. FastRecovery result: $fastRecoveryResult \n CurrentChange: ${
@@ -510,7 +508,7 @@ class AlvinProtocol(
         newEntry = newEntry.copy(transactionId = newPos, deps = newDeps.map { HistoryEntry.deserialize(it) })
 
         when {
-            responses.any { it.isFinished } -> {
+            responses.any { it.isFinished } -> mutex.withLock {
                 if (!fastRecoveryPhase(entry.entry.getId())) {
                     logger.error("Some state is inconsistent entryId: ${entry.entry.getId()}")
                 }
@@ -588,9 +586,8 @@ class AlvinProtocol(
                     if (transactionBlocker.getChangeId() == changeId)
                         resultRecovery = fastRecoveryPhase(alvinEntry.entry.getId())
                     else
-                        return
+                        return checkTransactionBlocker(entry)
                 }
-
                 if (resultRecovery) {
                     logger.info("Entry: ${entry.entry.getId()} was aborted, when I was inactive")
                     transactionBlocker.tryRelease(
@@ -885,12 +882,10 @@ class AlvinProtocol(
     }
 
     //  FIXME: we should only wait until all deps are finished not necessarily committed
-    private suspend fun isEntryFinished(entryId: String): Boolean {
+    private suspend fun isEntryFinished(entryId: String): Boolean = mutex.withLock {
         if (history.containsEntry(entryId)) return true
         if (entryIdToAlvinEntry[entryId] != null) {
-            mutex.withLock {
-                resetFailureDetector(entryIdToAlvinEntry[entryId]!!)
-            }
+            resetFailureDetector(entryIdToAlvinEntry[entryId]!!)
             return false
         }
 
@@ -916,17 +911,14 @@ class AlvinProtocol(
             responses = gatherResponses(entryId, fastRecoveryChannel).filterNotNull()
 
 
-
             responses
                 .flatMap { it.historyEntries.map { HistoryEntry.deserialize(it) } }
                 .distinct()
                 .forEach {
                     val change = Change.fromHistoryEntry(it)
-                    mutex.withLock {
-                        commitChange(it)
-                        cleanAfterEntryFinished(it.getId())
-                        transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change!!.id))
-                    }
+                    commitChange(it)
+                    cleanAfterEntryFinished(it.getId())
+                    transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change!!.id))
                 }
         } while (!responses.all { it.isFinished })
 
@@ -943,7 +935,7 @@ class AlvinProtocol(
         return when {
             history.containsEntry(entryId) -> true
 
-            alvinEntry != null -> mutex.withLock {
+            alvinEntry != null -> {
                 resetFailureDetector(alvinEntry)
                 false
             }
