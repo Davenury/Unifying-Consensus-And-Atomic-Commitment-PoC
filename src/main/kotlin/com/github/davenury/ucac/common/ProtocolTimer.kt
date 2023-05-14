@@ -12,6 +12,8 @@ import kotlin.math.pow
 interface ProtocolTimer {
     suspend fun startCounting(iteration: Int = 0, action: suspend () -> Unit)
     fun cancelCounting()
+
+    fun isTaskFinished(): Boolean
 }
 
 class ProtocolTimerImpl(
@@ -52,5 +54,8 @@ class ProtocolTimerImpl(
             logger.error("Cancellation exception occurred", e)
         }
     }
+
+    override fun isTaskFinished(): Boolean = task == null || task?.isCompleted ==true || task?.isCancelled == true
+
 
 }
