@@ -241,42 +241,49 @@ class AlvinProtocol(
         }
     }
 
-    override suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse =
+    override suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse {
+
+        logger.info(
+            "Handle FastRecovery from peer ${message.peerId.peerId} for entry: ${message.askedEntryId} and isCommitted: ${
+                history.containsEntry(
+                    message.askedEntryId
+                )
+            }, currentEntryId: ${message.currentEntryId}"
+        )
+
+        val historyEntries = history.getAllEntriesUntilHistoryEntryId(message.currentEntryId)
+
+        logger.info("HandleFastRecovery Entries size: ${historyEntries.size}")
+
+        if (historyEntries.size > maxChangesPerMessage) {
+            val limitedEntries = historyEntries.take(maxChangesPerMessage)
+            return AlvinFastRecoveryResponse(listOf(), limitedEntries.map { it.serialize() }, false)
+        }
+
+
+        val alvinEntries = mutableListOf<AlvinEntry>()
+        var alvinEntryId = message.askedEntryId
         mutex.withLock {
-            logger.info(
-                "Handle FastRecovery from peer ${message.peerId.peerId} for entry: ${message.askedEntryId} and isCommitted: ${
-                    history.containsEntry(
-                        message.askedEntryId
-                    )
-                }, currentEntryId: ${message.currentEntryId}"
-            )
-
-            val historyEntries = history.getAllEntriesUntilHistoryEntryId(message.currentEntryId)
-
-            if (historyEntries.size > maxChangesPerMessage) {
-                val limitedEntries = historyEntries.take(maxChangesPerMessage)
-                return@withLock AlvinFastRecoveryResponse(listOf(), limitedEntries.map { it.serialize() }, false)
-            }
-
-            val alvinEntries = mutableListOf<AlvinEntry>()
-            var alvinEntryId = message.askedEntryId
             while (entryIdToAlvinEntry.containsKey(alvinEntryId)) {
                 val alvinEntry = entryIdToAlvinEntry[alvinEntryId]!!
                 alvinEntries.add(alvinEntry)
                 alvinEntryId = alvinEntry.entry.getParentId()!!
             }
-
-            if (historyEntries.size + alvinEntries.size > maxChangesPerMessage) {
-                val limitedAlvinEntries = alvinEntries.take(maxChangesPerMessage - historyEntries.size)
-                return@withLock AlvinFastRecoveryResponse(
-                    limitedAlvinEntries.map { it.toDto() },
-                    historyEntries.map { it.serialize() },
-                    false
-                )
-            }
-
-            AlvinFastRecoveryResponse(alvinEntries.map { it.toDto() }, historyEntries.map { it.serialize() }, true)
         }
+
+        logger.info("HandleFastRecovery Gathered alvinEntries: ${alvinEntries.size}, historyEntries: ${historyEntries.size}")
+
+        if (historyEntries.size + alvinEntries.size > maxChangesPerMessage) {
+            val limitedAlvinEntries = alvinEntries.take(maxChangesPerMessage - historyEntries.size)
+            return AlvinFastRecoveryResponse(
+                limitedAlvinEntries.map { it.toDto() },
+                historyEntries.map { it.serialize() },
+                false
+            )
+        }
+
+        return AlvinFastRecoveryResponse(alvinEntries.map { it.toDto() }, historyEntries.map { it.serialize() }, true)
+    }
 
 
     override suspend fun getProposedChanges(): List<Change> =
@@ -549,7 +556,10 @@ class AlvinProtocol(
 
         when {
             !isTransactionBlockerAcquired && transactionBlocker.getProtocolName() != ProtocolName.CONSENSUS -> {
-                throw AlvinHistoryBlockedException(transactionBlocker.getChangeId()!!, transactionBlocker.getProtocolName()!!)
+                throw AlvinHistoryBlockedException(
+                    transactionBlocker.getChangeId()!!,
+                    transactionBlocker.getProtocolName()!!
+                )
             }
 
             !isTransactionBlockerAcquired -> {
