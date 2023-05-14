@@ -223,8 +223,11 @@ class AlvinProtocol(
                 change = change
             )
 
-            if (isTransactionFinished(entryId, change.id))
-                return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
+            if (isTransactionFinished(entryId, change.id)) {
+                val entryStatus = getEntryStatus(messageEntry.entry, change.id)
+                logger.info("Entry was finished with status: $entryStatus, entryId: $entryId")
+                return AlvinCommitResponse(entryStatus, peerId)
+            }
         }
 
 
@@ -237,7 +240,10 @@ class AlvinProtocol(
             checkVotes(messageEntry, change)
             checkNextChanges(entryId)
 
-            return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
+            val entryStatus = getEntryStatus(messageEntry.entry, change.id)
+
+            logger.info("HandleCommit entry was status: $entryStatus, entryId: $entryId")
+            return AlvinCommitResponse(entryStatus, peerId)
         }
     }
 
@@ -323,9 +329,8 @@ class AlvinProtocol(
 
 
     override suspend fun proposeChangeAsync(change: Change): CompletableFuture<ChangeResult> {
-
-        val result = CompletableFuture<ChangeResult>()
-        changeIdToCompletableFuture[change.id] = result
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture<ChangeResult>())
+        val result = changeIdToCompletableFuture[change.id]!!
         proposeChangeToLedger(result, change)
 
         return result
@@ -397,7 +402,7 @@ class AlvinProtocol(
         val responses: List<AlvinAckPropose>? =
             waitForQuorum(historyEntry, jobs, channel, AlvinStatus.PENDING)
 
-        if(responses == null){
+        if (responses == null) {
             resetFailureDetector(entry)
             return
         }
@@ -440,7 +445,7 @@ class AlvinProtocol(
 
         val newResponses = waitForQuorum(historyEntry, jobs, acceptChannel, AlvinStatus.PENDING)
 
-        if(newResponses == null) {
+        if (newResponses == null) {
             resetFailureDetector(entry)
             return
         }
@@ -508,7 +513,7 @@ class AlvinProtocol(
 
         val responses = waitForQuorum(entry.entry, jobs, promiseChannel, AlvinStatus.UNKNOWN, includeMyself = false)
 
-        if(responses == null){
+        if (responses == null) {
             resetFailureDetector(entry)
             return
         }
@@ -597,11 +602,12 @@ class AlvinProtocol(
                 logger.info("Try to fast recovery from being blocked on entryId: ${alvinEntry.entry.getId()}")
 
                 val resultRecovery: Boolean
-                mutex.withLock {
-                    if (transactionBlocker.getChangeId() == changeId)
-                        resultRecovery = fastRecoveryPhase(alvinEntry.entry.getId())
-                    else
-                        return checkTransactionBlocker(entry)
+
+                if (transactionBlocker.getChangeId() == changeId) mutex.withLock {
+                    resultRecovery = fastRecoveryPhase(alvinEntry.entry.getId())
+                }
+                else {
+                    return checkTransactionBlocker(entry)
                 }
                 if (resultRecovery) {
                     logger.info("Entry: ${entry.entry.getId()} was aborted, when I was inactive")
@@ -745,6 +751,7 @@ class AlvinProtocol(
                 response.isInterrupted -> {
                     return null
                 }
+
                 response.entryId == entryId && !response.unauthorized -> responses.add(response.response!!)
                 response.entryId == entryId -> mutex.withLock {
                     resetFailureDetector(entry!!)
@@ -767,7 +774,7 @@ class AlvinProtocol(
         val responses: MutableList<A?> = mutableListOf()
         while (responses.size < otherConsensusPeers().size) {
             val response = channel.receive()
-            if(response.isInterrupted) return null
+            if (response.isInterrupted) return null
             else if (response.entryId == entryId) responses.add(response.response)
             else if (!history.containsEntry(entryId)) channel.send(response)
         }
@@ -850,6 +857,7 @@ class AlvinProtocol(
         if (changeIdToCompletableFuture[changeId]?.isDone == true) return
         logger.info("Send result again: $result for entry: ${entry.entry.getId()}")
         scheduleCommitMessagesOnce(entry, result)
+
         mutex.withLock {
             resetFailureDetector(entry) {
                 failureDetectorScheduleRepeat(entry, result)
@@ -857,7 +865,10 @@ class AlvinProtocol(
         }
     }
 
-    private suspend fun scheduleCommitMessagesOnce(entry: AlvinEntry, result: AlvinResult) {
+    private suspend fun scheduleCommitMessagesOnce(
+        entry: AlvinEntry,
+        result: AlvinResult,
+    ) {
         scheduleMessagesOnce(entry.entry.getId(), null) { peerAddress ->
             val response = protocolClient.sendCommit(peerAddress, AlvinCommit(entry.toDto(), result, peerId))
             if (response.message != null) updateVotes(entry, response.message)
@@ -886,6 +897,8 @@ class AlvinProtocol(
         val (commitVotes, abortVotes) = votesContainer.getVotes(entryId, myselfVotesForCommit)
 
         val (commitDecision, abortDecision) = Pair(isMoreThanHalf(commitVotes), isMoreThanHalf(abortVotes))
+
+        logger.info("Votes for committing: $commitVotes, aborting: $abortVotes, for entryId: $entryId")
 
         if ((commitDecision || abortDecision) && !isTransactionFinished(entryId, change.id)) {
             if (commitDecision && !history.containsEntry(entry.entry.getParentId()!!)) {
