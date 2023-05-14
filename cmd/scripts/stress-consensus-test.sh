@@ -7,5 +7,5 @@ echo "Run protocol: $CONSENSUS"
 --performance-test-image=ghcr.io/davenury/tests:$(git rev-parse HEAD) \
 --fixed-peersets-in-change=1 --tests-sending-strategy=delay_on_conflicts \
 --ac-protocol=two_pc --performance-test-timeout-deadline=PT120M --deploy-monitoring=true \
---consensus-protocol=${CONSENSUS:-raft} \
+--consensus-protocol=${CONSENSUS:-raft} --enforce-consensus-leader=true \
 --load-generator-type=increasing --load-bound=1000 --load-increase-delay=PT20S --load-increase-step=5

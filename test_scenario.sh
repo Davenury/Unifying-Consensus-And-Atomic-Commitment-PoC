@@ -2,6 +2,8 @@ directory=$(dirname $0)
 echo $directory
 
 protocols=("alvin" "paxos" "raft")
+#protocols=("alvin" )
+#protocols=("paxos" )
 
 peerset_size_start=5
 peerset_size_end=5
@@ -16,14 +18,15 @@ cd "$directory/misc/grafana-scrapping" && npm i
 # 3. FT tests after killing leader repeated n times
 # 4. FT tests after killing half of followers
 
-ft_repeat=3
+ft_repeat=0
 
-start_test=1
+start_test=3
 end_test=4
 
-initial_sleep="5m"
+initial_sleep="3m"
 resource_sleep="3m"
 ft_sleep="3m"
+finish_sleep="3m"
 
 for peerset_size in $(seq $peerset_size_start $peerset_size_end); do
   for protocol in $protocols; do
@@ -43,11 +46,11 @@ for peerset_size in $(seq $peerset_size_start $peerset_size_end); do
       echo "grafana pods: $grafana_pod"
       kubectl port-forward $grafana_pod 3000:3000 -n=rszuma &
       portForwardPID=$!
+      sleep $initial_sleep
 
       if [[ $test_type -eq 0 ]]; then
         test_name="stress-test"
         echo "$test_name - During processing changes"
-        sleep $initial_sleep
         START_TIMESTAMP=$(date +%s%3N)
         sleep 2m
         END_TIMESTAMP=$(date +%s%3N)
@@ -61,6 +64,7 @@ for peerset_size in $(seq $peerset_size_start $peerset_size_end); do
         END_TIMESTAMP=$(date +%s%3N)
         sleep 1m
         BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-during-processing-changes" SCRAPING_TYPE="all" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+        BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-during-processing-changes" SCRAPING_TYPE="leader" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=START_LEADER END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
 
         echo "$test_name - After changes"
         kubectl delete -n=ddebowski jobs.batch performance-test
@@ -75,7 +79,7 @@ for peerset_size in $(seq $peerset_size_start $peerset_size_end); do
         test_name="ft-follower"
         echo "$test_name - During processing changes"
         START_TIMESTAMP=$(date +%s%3N)
-        sleep $initial_sleep
+        sleep $ft_sleep
 
         for i in $(seq 0 $ft_repeat); do
           echo "$test_name iteration $i"
@@ -84,15 +88,18 @@ for peerset_size in $(seq $peerset_size_start $peerset_size_end); do
           sleep $ft_sleep
         done
 
+        sleep $ft_sleep
+
         END_TIMESTAMP=$(date +%s%3N)
 
-        BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-followers" SCRAPING_TYPE="synchronization" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
-        BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-followers" SCRAPING_TYPE="leader" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_LEADER END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+        BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-follower" SCRAPING_TYPE="synchronization" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+        BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-follower" SCRAPING_TYPE="leader" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_LEADER END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+        BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-follower" SCRAPING_TYPE="chaos" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_LEADER END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
       elif [[ $test_type -eq 3 ]]; then
         test_name="ft-leader"
         echo "$test_name - During processing changes"
         START_TIMESTAMP=$(date +%s%3N)
-        sleep $initial_sleep
+        sleep $ft_sleep
 
         for i in $(seq 0 $ft_repeat); do
           echo "$test_name iteration $i"
@@ -101,15 +108,18 @@ for peerset_size in $(seq $peerset_size_start $peerset_size_end); do
           sleep $ft_sleep
         done
 
+        sleep $ft_sleep
+
         END_TIMESTAMP=$(date +%s%3N)
 
         BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-leaders" SCRAPING_TYPE="synchronization" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+        BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-leaders" SCRAPING_TYPE="chaos" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
         BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-leaders" SCRAPING_TYPE="leader" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_LEADER END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
       elif [[ $test_type -eq 4 ]]; then
         test_name="ft-half-followers"
         echo "$test_name - During processing changes"
         START_TIMESTAMP=$(date +%s%3N)
-        sleep $initial_sleep
+        sleep $ft_sleep
 
         for i in $(seq 0 $ft_repeat); do
           echo "$test_name iteration $i"
@@ -118,11 +128,16 @@ for peerset_size in $(seq $peerset_size_start $peerset_size_end); do
           sleep $ft_sleep
         done
 
+        sleep $ft_sleep
+
         END_TIMESTAMP=$(date +%s%3N)
 
         BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-two-peers" SCRAPING_TYPE="all" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+        BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-two-peers" SCRAPING_TYPE="chaos" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
         BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-two-peers" SCRAPING_TYPE="leader" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_LEADER END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
       fi
+
+      sleep $finish_sleep
 
       echo "Cleanup state"
       cd $directory/cmd && "./ucac" cleanup -n=rszuma
