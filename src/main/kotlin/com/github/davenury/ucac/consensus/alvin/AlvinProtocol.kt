@@ -468,13 +468,15 @@ class AlvinProtocol(
 
 //      FIXME: Maybe instead of sending last stable we will send last 5?
 
-        otherConsensusPeers().forEach {
-            if (entry.transactionId > (peerIdToTransactionId[it.peerId] ?: -1))
-                peerIdToTransactionId[it.peerId] = entry.transactionId
+        mutex.withLock {
+            otherConsensusPeers().forEach {
+                if (entry.transactionId > (peerIdToTransactionId[it.peerId] ?: -1))
+                    peerIdToTransactionId[it.peerId] = entry.transactionId
+            }
         }
 
         scheduleMessages(historyEntry, null, entry.epoch) { peerAddress ->
-            if ((peerIdToTransactionId[peerAddress.peerId] ?: 0) == entry.transactionId)
+            if ((peerIdToTransactionId[peerAddress.peerId] ?: 0) <= entry.transactionId)
                 protocolClient.sendStable(peerAddress, AlvinStable(peerId, entry.toDto()))
             else {
 //              Dummy response to stop repeat stable
