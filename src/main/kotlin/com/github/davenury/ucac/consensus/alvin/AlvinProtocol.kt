@@ -123,8 +123,9 @@ class AlvinProtocol(
             change = change
         )
 
+        checkTransactionBlocker(entry)
+
         mutex.withLock {
-            checkTransactionBlocker(entry)
             updateEntry(entry)
             resetFailureDetector(entry)
 
@@ -161,8 +162,9 @@ class AlvinProtocol(
             change = change
         )
 
+        checkTransactionBlocker(entry)
+
         mutex.withLock {
-            checkTransactionBlocker(entry)
             updateEntry(entry)
             resetFailureDetector(entry)
         }
@@ -207,32 +209,36 @@ class AlvinProtocol(
         return AlvinPromise(updatedEntry.toDto(), false)
     }
 
-    override suspend fun handleCommit(message: AlvinCommit): AlvinCommitResponse = mutex.withLock {
+    override suspend fun handleCommit(message: AlvinCommit): AlvinCommitResponse {
         val messageEntry = message.entry.toEntry()
         val change = Change.fromHistoryEntry(messageEntry.entry)!!
         val entryId = messageEntry.entry.getId()
 
-        logger.info("Handle commit: ${message.result} from peer: ${message.peerId}, for entry: ${messageEntry.entry.getId()}")
-        signalPublisher.signal(
-            Signal.AlvinHandleMessages,
-            this@AlvinProtocol,
-            mapOf(peersetId to otherConsensusPeers()),
-            change = change
-        )
+        mutex.withLock {
+            logger.info("Handle commit: ${message.result} from peer: ${message.peerId}, for entry: ${messageEntry.entry.getId()}")
+            signalPublisher.signal(
+                Signal.AlvinHandleMessages,
+                this@AlvinProtocol,
+                mapOf(peersetId to otherConsensusPeers()),
+                change = change
+            )
 
-        if (isTransactionFinished(entryId, change.id))
-            return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
+            if (isTransactionFinished(entryId, change.id))
+                return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
+        }
 
 
         checkTransactionBlocker(messageEntry)
-        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-        votesContainer.initializeEntry(entryId)
-        votesContainer.voteOnEntry(entryId, message.result, message.peerId)
+        mutex.withLock {
+            changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+            votesContainer.initializeEntry(entryId)
+            votesContainer.voteOnEntry(entryId, message.result, message.peerId)
 
-        checkVotes(messageEntry, change)
-        checkNextChanges(entryId)
+            checkVotes(messageEntry, change)
+            checkNextChanges(entryId)
 
-        return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
+            return AlvinCommitResponse(getEntryStatus(messageEntry.entry, change.id), peerId)
+        }
     }
 
     override suspend fun handleFastRecovery(message: AlvinFastRecovery): AlvinFastRecoveryResponse =
@@ -468,9 +474,7 @@ class AlvinProtocol(
 
         logger.info("Starts recovery phase for ${entry.entry.getId()}")
 
-        mutex.withLock {
-            checkTransactionBlocker(entry)
-        }
+        checkTransactionBlocker(entry)
 
         var newEntry = entry.copy(epoch = entry.epoch + 1, status = AlvinStatus.UNKNOWN)
         mutex.withLock {
@@ -542,42 +546,55 @@ class AlvinProtocol(
 
         val isTransactionBlockerAcquired = transactionBlocker.tryAcquireReentrant(transactionAcquisition)
 
-        if (!isTransactionBlockerAcquired) {
 
-            val changeId = transactionBlocker.getChangeId()
+        when {
+            !isTransactionBlockerAcquired && transactionBlocker.getProtocolName() != ProtocolName.CONSENSUS -> {
+                throw AlvinHistoryBlockedException(transactionBlocker.getChangeId()!!, transactionBlocker.getProtocolName()!!)
+            }
 
-            val alvinEntry = entryIdToAlvinEntry
-                .values
-                .firstOrNull { Change.fromHistoryEntry(it.entry)?.id == changeId }
+            !isTransactionBlockerAcquired -> {
+                val changeId = transactionBlocker.getChangeId()
 
-            if (alvinEntry == null) {
-                logger.info("Release transaction blocker because doesn't have change with Id $changeId")
-                transactionBlocker.tryRelease(
-                    TransactionAcquisition(
-                        ProtocolName.CONSENSUS,
-                        changeId!!
+                val alvinEntry = entryIdToAlvinEntry
+                    .values
+                    .firstOrNull { Change.fromHistoryEntry(it.entry)?.id == changeId }
+
+                if (alvinEntry == null) {
+                    logger.info("Release transaction blocker because doesn't have change with Id $changeId")
+                    transactionBlocker.tryRelease(
+                        TransactionAcquisition(
+                            ProtocolName.CONSENSUS,
+                            changeId!!
+                        )
                     )
+                    checkTransactionBlocker(entry)
+                    return
+                }
+
+                logger.info("Try to fast recovery from being blocked on entryId: ${alvinEntry.entry.getId()}")
+
+                val resultRecovery = fastRecoveryPhase(alvinEntry.entry.getId())
+
+                if (resultRecovery) {
+                    logger.info("Entry: ${entry.entry.getId()} was aborted, when I was inactive")
+                    transactionBlocker.tryRelease(
+                        TransactionAcquisition(
+                            ProtocolName.CONSENSUS,
+                            changeId!!
+                        )
+                    )
+                    checkTransactionBlocker(entry)
+                } else throw AlvinHistoryBlockedException(
+                    transactionBlocker.getChangeId()!!,
+                    transactionBlocker.getProtocolName()!!
                 )
-//                checkTransactionBlocker(entry)
-                return
             }
 
-            logger.info("Try to fast recovery from being blocked on entryId: ${alvinEntry.entry.getId()}")
-
-            entryIdToFailureDetector.putIfAbsent(alvinEntry.entry.getId(), getFastRecoveryTimer())
-            entryIdToFailureDetector[alvinEntry.entry.getId()]!!.startCountingIfEmpty {
-                logger.info("Fast recovery from being blocked on changeId: $changeId, entryId: ${alvinEntry.entry.getId()}")
-                fastRecoveryPhase(alvinEntry.entry.getId())
+            else -> {
+                logger.info("Transaction blocker acquired for entry: $changeId")
             }
-
-
-            throw AlvinHistoryBlocked(
-                transactionBlocker.getChangeId()!!,
-                transactionBlocker.getProtocolName()!!
-            )
-        } else {
-            logger.info("Transaction blocker acquired for entry: $changeId")
         }
+
     }
 
     private suspend fun <A> scheduleMessages(

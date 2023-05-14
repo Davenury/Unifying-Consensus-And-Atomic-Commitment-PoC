@@ -11,7 +11,6 @@ import kotlin.math.pow
 
 interface ProtocolTimer {
     suspend fun startCounting(iteration: Int = 0, action: suspend () -> Unit)
-    suspend fun startCountingIfEmpty(iteration: Int = 0, action: suspend () -> Unit)
     fun cancelCounting()
 }
 
@@ -44,11 +43,6 @@ class ProtocolTimerImpl(
                 action()
             }
         }
-    }
-
-    override suspend fun startCountingIfEmpty(iteration: Int, action: suspend () -> Unit) {
-        if (task?.isCompleted == false) return
-        startCounting(iteration, action)
     }
 
     override fun cancelCounting() {
