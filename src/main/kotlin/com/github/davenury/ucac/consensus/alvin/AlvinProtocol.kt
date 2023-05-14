@@ -470,17 +470,21 @@ class AlvinProtocol(
 
         mutex.withLock {
             otherConsensusPeers().forEach {
-                if (entry.transactionId > (peerIdToTransactionId[it.peerId] ?: -1))
-                    peerIdToTransactionId[it.peerId] = entry.transactionId
+//                if (entry.transactionId > (peerIdToTransactionId[it.peerId] ?: -1))
+                peerIdToTransactionId[it.peerId] = entry.transactionId
+//                else {
+//                    logger.info("Not setting transactionId for peer: ${it.peerId}, current transactionId: ${peerIdToTransactionId[it.peerId]}, entry transactionId: ${entry.transactionId}")
+//                }
             }
         }
 
+
         scheduleMessages(historyEntry, null, entry.epoch) { peerAddress ->
-            if ((peerIdToTransactionId[peerAddress.peerId] ?: 0) <= entry.transactionId)
+            if ((peerIdToTransactionId[peerAddress.peerId] ?: 0) == entry.transactionId)
                 protocolClient.sendStable(peerAddress, AlvinStable(peerId, entry.toDto()))
             else {
 //              Dummy response to stop repeat stable
-                logger.info("Stop sending stable to peer: ${peerAddress.peerId} for entry: ${entry.entry.getId()}")
+                logger.info("Stop sending stable to peer: ${peerAddress.peerId} for entry: ${entry.entry.getId()}, peer transactionId: ${entry.transactionId}")
                 ConsensusResponse(peerAddress.address, AlvinAckStable(peerAddress.peerId))
             }
         }
