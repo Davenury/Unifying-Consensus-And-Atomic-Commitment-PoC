@@ -22,7 +22,7 @@ data class PaxosAccepted(val accepted: Boolean, override val currentRound: Int, 
 
 data class PaxosCommit(val paxosResult: PaxosResult, val entry: String, val paxosRound: Int, val proposer: PeerId)
 data class PaxosBatchCommit(val paxosResult: PaxosResult, val entries: List<String>, val paxosRound: Int, val proposer: PeerId)
-data class PaxosCommitResponse(val entryId: String)
+data class PaxosCommitResponse(val entryId: String,val isFinished: Boolean)
 
 open class PaxosResponse(val result: Boolean, open val currentRound: Int, open val currentLeaderId: PeerId?)
 

@@ -196,7 +196,7 @@ class PaxosProtocolImpl(
         val entry = HistoryEntry.deserialize(message.entry)
         val change = Change.fromHistoryEntry(entry)!!
         if (isTransactionFinished(entry.getId(), change.id)) {
-            return@span PaxosCommitResponse(history.getCurrentEntryId())
+            return@span PaxosCommitResponse(history.getCurrentEntryId(), true)
         }
 
         signalPublisher.signal(
@@ -217,7 +217,7 @@ class PaxosProtocolImpl(
             updateVotedFor(message.paxosRound, message.proposer)
         }
         commitChange(message.paxosResult, change)
-        return@span PaxosCommitResponse(history.getCurrentEntryId())
+        return@span PaxosCommitResponse(history.getCurrentEntryId(), isTransactionFinished(entry.getId(), change.id))
     }
 
     override suspend fun handleBatchCommit(message: PaxosBatchCommit) {
@@ -305,6 +305,8 @@ class PaxosProtocolImpl(
                         transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
                         tryPropagatingChangesToLeader()
                     }
+                } else{
+                    logger.info("Leader failure detector task is not finished")
                 }
             }
 
@@ -577,20 +579,23 @@ class PaxosProtocolImpl(
                             peerAddress,
                             PaxosCommit(result, entry.serialize(), currentRound, globalPeerId)
                         )
-                        val updatedResponse: ConsensusResponse<PaxosCommitResponse?>
 
-                        when {
+
+
+                        val updatedResponse: ConsensusResponse<PaxosCommitResponse?> = when {
                             response.message == null -> {
-                                updatedResponse = response
+                                logger.info("PaxosCommit response from peer ${peerAddress.peerId} response is null")
+                                response
                             }
 
-                            history.containsEntry(response.message.entryId) && response.message.entryId != entry.getId() -> {
+                            !response.message.isFinished -> {
+                                logger.info("PaxosCommit response from peer ${peerAddress.peerId} response is entry")
                                 sendBatchCommit(response.message.entryId, peerAddress)
-                                updatedResponse = response.copy(message = null)
+                                response.copy(message = null)
                             }
 
                             else -> {
-                                updatedResponse = response
+                                response
                             }
 
                         }
