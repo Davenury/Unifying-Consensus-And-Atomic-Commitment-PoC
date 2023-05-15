@@ -578,12 +578,23 @@ class PaxosProtocolImpl(
                             PaxosCommit(result, entry.serialize(), currentRound, globalPeerId)
                         )
                         val updatedResponse: ConsensusResponse<PaxosCommitResponse?>
-                        if (response.message != null) {
-                            sendBatchCommit(response.message.entryId, peerAddress)
-                            updatedResponse = response.copy(message = null)
-                        } else {
-                            updatedResponse = response
+
+                        when {
+                            response.message == null -> {
+                                updatedResponse = response
+                            }
+
+                            history.containsEntry(response.message.entryId) && response.message.entryId != entry.getId() -> {
+                                sendBatchCommit(response.message.entryId, peerAddress)
+                                updatedResponse = response.copy(message = null)
+                            }
+
+                            else -> {
+                                updatedResponse = response
+                            }
+
                         }
+
                         if (updatedResponse.message == null) delay(heartbeatDelay.toMillis())
                     } while (updatedResponse.message == null && amILeader() && peerIdToEntryId[peerAddress.peerId] == entry.getId())
                 }
@@ -729,6 +740,7 @@ class PaxosProtocolImpl(
                             logger.info("Peer ${peerAddress.peerId} responded with null")
                             acceptedChannel.send(null)
                         }
+
                         response.message.isTransactionBlocked -> {
                             logger.info("Peer ${peerAddress.peerId} has transaction blocked")
                             acceptedChannel.send(null)
