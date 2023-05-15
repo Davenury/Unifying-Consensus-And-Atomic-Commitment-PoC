@@ -195,11 +195,10 @@ class PaxosProtocolImpl(
 
         val entry = HistoryEntry.deserialize(message.entry)
         val change = Change.fromHistoryEntry(entry)!!
-        if (isTransactionFinished(
-                entry.getId(),
-                change.id
-            )
-        ) return@span PaxosCommitResponse(history.getCurrentEntryId())
+        if (isTransactionFinished(entry.getId(), change.id)) {
+            return@span PaxosCommitResponse(history.getCurrentEntryId())
+        }
+
         signalPublisher.signal(
             Signal.PigPaxosBeginHandleMessages,
             this@PaxosProtocolImpl,
@@ -283,7 +282,7 @@ class PaxosProtocolImpl(
 
 
         if (!transactionBlocker.tryAcquireReentrant(transactionAcquisition)) {
-            logger.info("Transaction is blocked on protocol ${transactionBlocker.getProtocolName()}, timeout transaction, changeId: ${change.id}")
+            logger.info("Transaction is blocked on protocol ${transactionBlocker.getProtocolName()}, add transaction to queue, changeId: ${change.id}")
             if (transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
                 val changeId = transactionBlocker.getChangeId()!!
                 val entry = entryIdPaxosRound
@@ -299,10 +298,12 @@ class PaxosProtocolImpl(
 
 
                 if (leaderFailureDetector.isTaskFinished()) leaderFailureDetector.startCounting {
+                    logger.info("Recovery from unfinished entry")
                     if (entry != null) acceptPhase(entry)
                     else {
                         logger.error("Inconsistent state, release transaction blocker for change $changeId")
                         transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
+                        tryPropagatingChangesToLeader()
                     }
                 }
             }
@@ -571,6 +572,7 @@ class PaxosProtocolImpl(
                 launch(MDCContext()) {
                     do {
                         val peerAddress: PeerAddress = otherConsensusPeers()[it]
+                        logger.info("Send PaxosCommit to ${peerAddress.peerId} for entry: ${entry.getId()}")
                         val response: ConsensusResponse<PaxosCommitResponse?> = protocolClient.sendCommit(
                             peerAddress,
                             PaxosCommit(result, entry.serialize(), currentRound, globalPeerId)
@@ -723,19 +725,25 @@ class PaxosProtocolImpl(
                     val response: ConsensusResponse<PaxosAccepted?> = sendMessage(peerAddress)
 
                     when {
-                        response.message == null -> acceptedChannel.send(null)
+                        response.message == null -> {
+                            logger.info("Peer ${peerAddress.peerId} responded with null")
+                            acceptedChannel.send(null)
+                        }
                         response.message.isTransactionBlocked -> {
-                            logger.info("Peer has transaction blocked")
+                            logger.info("Peer ${peerAddress.peerId} has transaction blocked")
                             acceptedChannel.send(null)
                         }
 
                         history.containsEntry(response.message.currentEntryId) && response.message.currentEntryId != history.getCurrentEntryId() -> {
-                            logger.info("Peer has outdated history")
+                            logger.info("Peer ${peerAddress.peerId} has outdated history")
                             sendBatchCommit(response.message.currentEntryId, peerAddress)
                             acceptedChannel.send(null)
                         }
 
-                        else -> acceptedChannel.send(response.message)
+                        else -> {
+                            logger.info("Peer ${peerAddress.peerId} responded with proper message")
+                            acceptedChannel.send(response.message)
+                        }
                     }
                 }
             }
@@ -836,6 +844,7 @@ class PaxosProtocolImpl(
         entries
             .chunked(maxChangesPerMessage)
             .forEach {
+                logger.info("Send BatchCommit to peer ${peerAddress.peerId}")
                 val msg = PaxosBatchCommit(
                     PaxosResult.COMMIT,
                     it.map { it.serialize() },
