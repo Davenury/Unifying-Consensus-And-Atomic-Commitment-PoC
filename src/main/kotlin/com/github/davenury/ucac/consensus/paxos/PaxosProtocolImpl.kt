@@ -298,7 +298,7 @@ class PaxosProtocolImpl(
                 }
 
 
-                leaderFailureDetector.startCounting {
+                if (leaderFailureDetector.isTaskFinished()) leaderFailureDetector.startCounting {
                     if (entry != null) acceptPhase(entry)
                     else {
                         logger.error("Inconsistent state, release transaction blocker for change $changeId")
