@@ -15,6 +15,7 @@ import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.*
+import com.github.davenury.ucac.consensus.paxos.PaxosProtocolImpl
 import com.github.davenury.ucac.utils.MdcProvider
 import com.zopa.ktor.opentracing.launchTraced
 import com.zopa.ktor.opentracing.span
@@ -457,6 +458,7 @@ class RaftConsensusProtocolImpl(
             subject = this@RaftConsensusProtocolImpl,
             peers = mapOf(peersetId to otherConsensusPeers()),
         )
+        logger.info("Send heartbeat to peer ${peer.peerId}")
         val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
 
         // We should schedule heartbeat even if something failed during handling response
@@ -937,6 +939,7 @@ class RaftConsensusProtocolImpl(
         // TODO mutex?
         val votedFor = this.votedFor
         if (votedFor == null || !votedFor.elected) return
+        if (changesToBePropagatedToLeader.size > 0) logger.info("Try to propagate changes")
         while (true) {
             val changeToBePropagated = changesToBePropagatedToLeader.poll() ?: break
             if (votedFor.id == peerId) {
