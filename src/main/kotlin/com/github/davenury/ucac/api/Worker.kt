@@ -75,7 +75,7 @@ class Worker(
         result.thenAccept {
             job.completableFuture.complete(it)
             Metrics.stopTimer(job.change.id, job.protocolName.name.lowercase(), it)
-            Metrics.bumpChangeProcessed(it, job.protocolName.name.lowercase())
+            Metrics.bumpChangeProcessed(it, job.protocolName.name.lowercase(), peersetProtocols.peersetId)
             this.setTag("result", it.status.name.lowercase())
             this.finish()
             changeNotifier.notify(job.change, it)
