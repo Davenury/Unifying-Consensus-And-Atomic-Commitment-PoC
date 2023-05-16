@@ -14,8 +14,8 @@ import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.common.structure.Subscribers
-import com.github.davenury.ucac.consensus.*
-import com.github.davenury.ucac.consensus.paxos.PaxosProtocolImpl
+import com.github.davenury.ucac.consensus.SynchronizationMeasurement
+import com.github.davenury.ucac.consensus.VotedFor
 import com.github.davenury.ucac.utils.MdcProvider
 import com.zopa.ktor.opentracing.launchTraced
 import com.zopa.ktor.opentracing.span
@@ -458,7 +458,6 @@ class RaftConsensusProtocolImpl(
             subject = this@RaftConsensusProtocolImpl,
             peers = mapOf(peersetId to otherConsensusPeers()),
         )
-        logger.info("Send heartbeat to peer ${peer.peerId}")
         val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
 
         // We should schedule heartbeat even if something failed during handling response
@@ -578,7 +577,7 @@ class RaftConsensusProtocolImpl(
             state.acceptItems(acceptedIds)
 
             acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
-                transactionBlocker.release(TransactionAcquisition(ProtocolName.CONSENSUS, it.changeId))
+                transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, it.changeId))
             }
 
             voteContainer.removeChanges(acceptedIds)
@@ -723,11 +722,11 @@ class RaftConsensusProtocolImpl(
         span("Raft.proposeChangeToLedger") {
             this.setTag("changeId", change.id)
             var entry = change.toHistoryEntry(peersetId)
-            changeIdToCompletableFuture[change.id] = result
 
             mutex.withLock {
                 if (state.entryAlreadyProposed(entry)) {
                     logger.info("Already proposed that change: $change")
+                    scheduleHeartbeatToPeers(isRegular = false)
                     return
                 }
 
@@ -737,13 +736,16 @@ class RaftConsensusProtocolImpl(
                 val acquisition = TransactionAcquisition(ProtocolName.CONSENSUS, updatedChange.id)
                 val acquisitionResult = transactionBlocker.tryAcquireReentrant(acquisition)
 
-                if (isDuring2PAndChangeDoesntFinishIt(change) || !acquisitionResult) {
-                    val msg = if (!acquisitionResult) "transaction is blocked"
-                    else "is during 2PC"
-
-                    logger.info("Queued change, because: $msg")
+                if(isDuring2PAndChangeDoesntFinishIt(change)){
+                    logger.info("Queued change, because is during 2PC")
                     queuedChanges.add(change)
                     transactionBlocker.tryRelease(acquisition)
+                    return
+                }
+
+                if (!acquisitionResult && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
+                    logger.info("Queued change, because transaction is blocked")
+                    recoveryEntry(transactionBlocker.getChangeId()!!)
                     return
                 }
 
@@ -779,6 +781,32 @@ class RaftConsensusProtocolImpl(
                 applyAcceptedChanges(listOf(entry.getId()))
             }
         }
+
+    private suspend fun recoveryEntry(changeId: String) {
+
+        val blockedEntry = state.getLogEntries().firstOrNull { Change.fromHistoryEntry(it.entry)?.id == changeId }
+
+        if (blockedEntry == null) {
+            logger.info("Change $changeId was lost, release transactionBlocker")
+            transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
+            return
+        }
+
+        if(history.containsEntry(blockedEntry.entry.getId()) || !history.isEntryCompatible(blockedEntry.entry)){
+            logger.info("Blocked entry is no longer valid")
+            transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
+            return
+        }
+
+        logger.info("We must inform leader about blocked entry")
+
+        queuedChanges.add(0, Change.fromHistoryEntry(blockedEntry.entry)!!)
+        withContext(leaderRequestExecutorService) {
+            launch {
+                tryPropagatingChangesToLeader()
+            }
+        }
+    }
 
     private fun isDuring2PAndChangeDoesntFinishIt(change: Change): Boolean {
         val currentHistoryChange = history
@@ -833,7 +861,7 @@ class RaftConsensusProtocolImpl(
                         result = try {
                             protocolClient.sendRequestApplyChange(address, change)
                         } catch (e: Exception) {
-                            logger.error("Request to leader ($address, ${votedFor?.id}) failed", e.message)
+                            logger.error("Request to leader ($address, ${votedFor?.id}) failed", e)
                             null
                         }
                         if (result == null) delay(heartbeatDelay.toMillis())
