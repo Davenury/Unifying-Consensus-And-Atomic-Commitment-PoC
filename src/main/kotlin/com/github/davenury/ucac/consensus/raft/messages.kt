@@ -22,6 +22,7 @@ data class ConsensusHeartbeatResponse(
     val transactionBlocked: Boolean = false,
     val incompatibleWithHistory: Boolean = false,
     val missingValues: Boolean = false,
-    val lastCommittedEntryId: String? = null
+    val lastCommittedEntryId: String? = null,
+    val isLeaderCurrentEntryOutdated: Boolean = false
 )
 

@@ -246,134 +246,134 @@ class RaftConsensusProtocolImpl(
         tryPropagatingChangesToLeader()
     }
 
-    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
-        return mutex.withLock {
-            logger.debug("Handling heartbeat: first change ${heartbeat.logEntries.firstOrNull()}, last change: ${heartbeat.logEntries.lastOrNull()}, overall: ${heartbeat.logEntries.size}")
-            heartbeat.logEntries.forEach {
-                val entry = HistoryEntry.deserialize(it.serializedEntry)
-                signalPublisher.signal(
-                    signal = Signal.ConsensusFollowerHeartbeatReceived,
-                    subject = this@RaftConsensusProtocolImpl,
-                    peers = mapOf(peersetId to otherConsensusPeers()),
-                    change = Change.fromHistoryEntry(entry),
-                    historyEntry = entry,
-                )
-            }
+    override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse = mutex.withLock {
+        logger.debug("Handling heartbeat: first change ${heartbeat.logEntries.firstOrNull()}, last change: ${heartbeat.logEntries.lastOrNull()}, overall: ${heartbeat.logEntries.size}")
+        heartbeat.logEntries.forEach {
+            val entry = HistoryEntry.deserialize(it.serializedEntry)
+            signalPublisher.signal(
+                signal = Signal.ConsensusFollowerHeartbeatReceived,
+                subject = this@RaftConsensusProtocolImpl,
+                peers = mapOf(peersetId to otherConsensusPeers()),
+                change = Change.fromHistoryEntry(entry),
+                historyEntry = entry,
+            )
+        }
 
-            Metrics.registerTimerHeartbeat()
-            val term = heartbeat.term
-            val leaderCommitId = heartbeat.leaderCommitId
-            val isUpdatedCommitIndex = state.isNotApplied(leaderCommitId)
-            val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
-            val prevEntryId = heartbeat.prevEntryId
+        Metrics.registerTimerHeartbeat()
+        val term = heartbeat.term
+        val leaderCommitId = heartbeat.leaderCommitId
+        val isUpdatedCommitIndex = state.isNotApplied(leaderCommitId)
+        val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
+        val prevEntryId = heartbeat.prevEntryId
 
-            if (term < currentTerm) {
-                logger.info("The received heartbeat has an old term ($term vs $currentTerm)")
-                return@withLock ConsensusHeartbeatResponse(false, currentTerm)
-            }
 
-            if (currentTerm < term || votedFor == null || votedFor?.elected == false) {
-                newLeaderElected(heartbeat.leaderId, term)
-            }
 
-            val leaderCurrentEntryIsOutdated =
-                history.containsEntry(heartbeat.currentHistoryEntryId) && history.getCurrentEntryId() != heartbeat.currentHistoryEntryId
+        if (term < currentTerm || (term == currentTerm && votedFor != null && heartbeat.leaderId != votedFor?.id)) {
+            logger.info("The received heartbeat is not from current leader ($term vs $currentTerm)")
+            return@withLock ConsensusHeartbeatResponse(false, currentTerm)
+        }
 
-            if (leaderCurrentEntryIsOutdated) {
-                logger.warn("Received heartbeat from leader that has outdated history my commit - ${state.commitIndex} leader commit - $leaderCommitId")
-                return@withLock ConsensusHeartbeatResponse(false, currentTerm)
-            }
+        if (currentTerm < term || votedFor == null || votedFor?.elected == false) {
+            newLeaderElected(heartbeat.leaderId, term)
+        }
+
+        val leaderCurrentEntryIsOutdated =
+            history.containsEntry(heartbeat.currentHistoryEntryId) && history.getCurrentEntryId() != heartbeat.currentHistoryEntryId
+
+        if (leaderCurrentEntryIsOutdated) {
+            logger.warn("Received heartbeat from leader that has outdated history my commit - ${state.commitIndex} leader commit - $leaderCommitId")
+            return@withLock ConsensusHeartbeatResponse(false, currentTerm, isLeaderCurrentEntryOutdated = true)
+        }
 
 
 //      Restart timer because we received heartbeat from proper leader
-            if (currentTerm < term) {
-                currentTerm = term
-                releaseBlockerFromPreviousTermChanges()
-            }
-
-            lastHeartbeatTime = Instant.now()
-
-            restartTimer()
-
-            val notAppliedProposedChanges =
-                proposedChanges.filter { state.isNotAppliedNorProposed(it.entry.getId()) }
-
-            val prevLogEntryExists = prevEntryId == null || state.checkIfItemExist(prevEntryId)
-
-            val commitIndexEntryExists = notAppliedProposedChanges
-                .find { it.entry.getId() == leaderCommitId }
-                ?.let { true }
-                ?: state.checkIfItemExist(leaderCommitId)
-
-
-            val areProposedChangesIncompatible =
-                notAppliedProposedChanges.isNotEmpty() && notAppliedProposedChanges.any {
-                    !history.isEntryCompatible(it.entry)
-                }
-
-            val acceptedChangesFromProposed = notAppliedProposedChanges
-                .indexOfFirst { it.entry.getId() == leaderCommitId }
-                .let { notAppliedProposedChanges.take(it + 1) }
-
-
-            when {
-                !commitIndexEntryExists -> {
-                    logger.info("I miss some entries to commit (I am behind), lastCommitedEntryId: ${state.commitIndex}")
-                    return@withLock ConsensusHeartbeatResponse(
-                        false,
-                        currentTerm,
-                        missingValues = true,
-                        lastCommittedEntryId = state.commitIndex
-                    )
-                }
-
-                !prevLogEntryExists -> {
-                    logger.info("The received heartbeat is missing some changes (I am behind)")
-                    state.removeNotAcceptedItems()
-                    return@withLock ConsensusHeartbeatResponse(
-                        false,
-                        currentTerm,
-                        missingValues = true,
-                        lastCommittedEntryId = state.commitIndex
-                    )
-                }
-
-                isUpdatedCommitIndex && transactionBlocker.isAcquiredByProtocol(ProtocolName.CONSENSUS) -> {
-                    logger.info("Received heartbeat when is blocked so only accepted changes, blocked on ${transactionBlocker.getChangeId()}")
-                    updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
-                    return@withLock ConsensusHeartbeatResponse(true, currentTerm, true)
-                }
-
-                notAppliedProposedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
-                    logger.info("Received heartbeat but is blocked, so can't accept proposed changes")
-                    return@withLock ConsensusHeartbeatResponse(false, currentTerm, true)
-                }
-
-                isUpdatedCommitIndex && areProposedChangesIncompatible -> {
-                    logger.info("Received heartbeat but changes are incompatible, updated accepted changes")
-                    updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
-                    return@withLock ConsensusHeartbeatResponse(true, currentTerm, incompatibleWithHistory = true)
-                }
-
-                areProposedChangesIncompatible -> {
-                    logger.info("Received heartbeat but changes are incompatible")
-                    return@withLock ConsensusHeartbeatResponse(false, currentTerm, incompatibleWithHistory = true)
-                }
-
-                notAppliedProposedChanges.isNotEmpty() -> {
-                    logger.info("Introduce new changes")
-                    val changeId = notAppliedProposedChanges.first().changeId
-                    transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
-                }
-            }
-
-            logger.debug("Updating ledger with {}", notAppliedProposedChanges)
-            updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
-
-            tryPropagatingChangesToLeader()
-
-            return@withLock ConsensusHeartbeatResponse(true, currentTerm)
+        if (currentTerm < term) {
+            currentTerm = term
+            releaseBlockerFromPreviousTermChanges()
         }
+
+        lastHeartbeatTime = Instant.now()
+
+        restartTimer()
+
+        val notAppliedProposedChanges =
+            proposedChanges.filter { state.isNotAppliedNorProposed(it.entry.getId()) }
+
+        val prevLogEntryExists = prevEntryId == null || state.checkIfItemExist(prevEntryId)
+
+        val commitIndexEntryExists = notAppliedProposedChanges
+            .find { it.entry.getId() == leaderCommitId }
+            ?.let { true }
+            ?: state.checkIfItemExist(leaderCommitId)
+
+
+        val areProposedChangesIncompatible =
+            notAppliedProposedChanges.isNotEmpty() && notAppliedProposedChanges.any {
+                !history.isEntryCompatible(it.entry)
+            }
+
+        val acceptedChangesFromProposed = notAppliedProposedChanges
+            .indexOfFirst { it.entry.getId() == leaderCommitId }
+            .let { notAppliedProposedChanges.take(it + 1) }
+
+
+        when {
+            !commitIndexEntryExists -> {
+                logger.info("I miss some entries to commit (I am behind), lastCommitedEntryId: ${state.commitIndex}")
+                return@withLock ConsensusHeartbeatResponse(
+                    false,
+                    currentTerm,
+                    missingValues = true,
+                    lastCommittedEntryId = state.commitIndex
+                )
+            }
+
+            !prevLogEntryExists -> {
+                logger.info("The received heartbeat is missing some changes (I am behind)")
+                state.removeNotAcceptedItems()
+                return@withLock ConsensusHeartbeatResponse(
+                    false,
+                    currentTerm,
+                    missingValues = true,
+                    lastCommittedEntryId = state.commitIndex
+                )
+            }
+
+            isUpdatedCommitIndex && transactionBlocker.isAcquiredByProtocol(ProtocolName.CONSENSUS) -> {
+                logger.info("Received heartbeat when is blocked so only accepted changes, blocked on ${transactionBlocker.getChangeId()}")
+                updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
+                return@withLock ConsensusHeartbeatResponse(true, currentTerm, true)
+            }
+
+            notAppliedProposedChanges.isNotEmpty() && transactionBlocker.isAcquired() -> {
+                logger.info("Received heartbeat but is blocked, so can't accept proposed changes")
+                return@withLock ConsensusHeartbeatResponse(false, currentTerm, true)
+            }
+
+            isUpdatedCommitIndex && areProposedChangesIncompatible -> {
+                logger.info("Received heartbeat but changes are incompatible, updated accepted changes")
+                updateLedger(heartbeat, leaderCommitId, acceptedChangesFromProposed)
+                return@withLock ConsensusHeartbeatResponse(true, currentTerm, incompatibleWithHistory = true)
+            }
+
+            areProposedChangesIncompatible -> {
+                logger.info("Received heartbeat but changes are incompatible")
+                return@withLock ConsensusHeartbeatResponse(false, currentTerm, incompatibleWithHistory = true)
+            }
+
+            notAppliedProposedChanges.isNotEmpty() -> {
+                logger.info("Introduce new changes")
+                val changeId = notAppliedProposedChanges.first().changeId
+                transactionBlocker.acquireReentrant(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
+            }
+        }
+
+        logger.debug("Updating ledger with {}", notAppliedProposedChanges)
+        updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
+
+        tryPropagatingChangesToLeader()
+
+        return@withLock ConsensusHeartbeatResponse(true, currentTerm)
     }
 
     private suspend fun updateLedger(
@@ -517,14 +517,6 @@ class RaftConsensusProtocolImpl(
                 }
             }
 
-            response.message.term > currentTerm -> {
-                logger.info("Based on info from $peer, someone else is currently leader")
-                mutex.withLock {
-                    stopBeingLeader(response.message.term)
-                    votedFor = null
-                }
-            }
-
             response.message.missingValues -> {
                 logger.info("Peer ${peerAddress.peerId} is not up to date, decrementing index (they told me their commit entry is ${response.message.lastCommittedEntryId})")
                 val oldValues = peerToNextIndex[peerAddress.peerId]
@@ -539,13 +531,17 @@ class RaftConsensusProtocolImpl(
                     ?: PeerIndices()
             }
 
-            !response.message.success -> {
+            response.message.isLeaderCurrentEntryOutdated -> {
                 logger.info("Peer ${peerAddress.peerId} doesn't accept heartbeat, because I have outdated history")
 
-                if (isRegular) {
-                    launchHeartBeatToPeer(peer, delay = heartbeatDelay)
-                }
+            }
 
+            response.message.term >= currentTerm && !response.message.success -> {
+                logger.info("Based on info from $peer, someone else is currently leader")
+                mutex.withLock {
+                    stopBeingLeader(response.message.term)
+                    votedFor = null
+                }
             }
         }
 
@@ -736,7 +732,7 @@ class RaftConsensusProtocolImpl(
                 val acquisition = TransactionAcquisition(ProtocolName.CONSENSUS, updatedChange.id)
                 val acquisitionResult = transactionBlocker.tryAcquireReentrant(acquisition)
 
-                if(isDuring2PAndChangeDoesntFinishIt(change)){
+                if (isDuring2PAndChangeDoesntFinishIt(change)) {
                     logger.info("Queued change, because is during 2PC")
                     queuedChanges.add(change)
                     transactionBlocker.tryRelease(acquisition)
@@ -792,7 +788,7 @@ class RaftConsensusProtocolImpl(
             return
         }
 
-        if(history.containsEntry(blockedEntry.entry.getId()) || !history.isEntryCompatible(blockedEntry.entry)){
+        if (history.containsEntry(blockedEntry.entry.getId()) || !history.isEntryCompatible(blockedEntry.entry)) {
             logger.info("Blocked entry is no longer valid")
             transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
             return
