@@ -738,7 +738,7 @@ class RaftConsensusProtocolImpl(
                 val acquisitionResult = transactionBlocker.tryAcquireReentrant(acquisition)
 
                 if (isDuring2PAndChangeDoesntFinishIt(change) || !acquisitionResult) {
-                    val msg = if (acquisitionResult) "transaction is blocked"
+                    val msg = if (!acquisitionResult) "transaction is blocked"
                     else "is during 2PC"
 
                     logger.info("Queued change, because: $msg")
@@ -828,7 +828,7 @@ class RaftConsensusProtocolImpl(
                         } else {
                             address = peerResolver.resolve(votedFor!!.id).address
                         }
-                        logger.info("Send request to leader again")
+                        logger.info("Send request to leader ${votedFor?.id} again")
 
                         result = try {
                             protocolClient.sendRequestApplyChange(address, change)
