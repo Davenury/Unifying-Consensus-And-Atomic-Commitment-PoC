@@ -30,11 +30,12 @@ object Metrics {
 
     private var lastHeartbeat: Instant = Instant.now()
 
-    fun bumpChangeProcessed(changeResult: ChangeResult, protocol: String) {
+    fun bumpChangeProcessed(changeResult: ChangeResult, protocol: String, peersetId: PeersetId) {
         Counter
             .builder("change_processed")
             .tag("result", changeResult.status.name.lowercase())
             .tag("protocol", protocol)
+            .tag("peerset_id", peersetId.peersetId)
             .register(meterRegistry)
             .increment()
     }
