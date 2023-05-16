@@ -89,7 +89,7 @@ class RaftConsensusProtocolImpl(
 
     @Volatile
     private var role: RaftRole = RaftRole.Candidate
-    private var timer = ProtocolTimerImpl(Duration.ofSeconds(0), Duration.ofSeconds(2), ctx)
+    private var timer = ProtocolTimerImpl(heartbeatTimeout, heartbeatTimeout, ctx)
     private var lastHeartbeatTime = Instant.now()
 
     //    DONE: Use only one mutex
