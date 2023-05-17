@@ -247,7 +247,7 @@ class RaftConsensusProtocolImpl(
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse = mutex.withLock {
-        logger.debug("Handling heartbeat: first change ${heartbeat.logEntries.firstOrNull()}, last change: ${heartbeat.logEntries.lastOrNull()}, overall: ${heartbeat.logEntries.size}")
+        logger.info("Handling heartbeat from ${heartbeat.leaderId}, entries overall: ${heartbeat.logEntries.size}")
         heartbeat.logEntries.forEach {
             val entry = HistoryEntry.deserialize(it.serializedEntry)
             signalPublisher.signal(
@@ -463,13 +463,13 @@ class RaftConsensusProtocolImpl(
         // We should schedule heartbeat even if something failed during handling response
         when {
             role != RaftRole.Leader ->
-                logger.debug("I am not longer leader so not schedule heartbeat again")
+                logger.info("I am not longer leader so not schedule heartbeat again")
 
             !otherConsensusPeers().any { it.peerId == peer } ->
-                logger.debug("Peer $peer is not one of other consensus peer ${otherConsensusPeers()}")
+                logger.info("Peer $peer is not one of other consensus peer ${otherConsensusPeers()}")
 
             executorService == null ->
-                logger.debug("Executor service is null")
+                logger.info("Executor service is null")
 
             !isRegular ->
                 logger.debug("Heartbeat message is not regular")
