@@ -301,7 +301,6 @@ class TwoPC(
         recentResponses: Map<PeerAddress, TwoPCRequestResponse>,
         iteration: Int = 0,
     ): Boolean {
-        println("here: $iteration, ${peers.keys.maxOf { peerResolver.getPeersFromPeerset(it).size }}")
         if (iteration > peers.keys.maxOf { peerResolver.getPeersFromPeerset(it).size }) {
             return false
         }
