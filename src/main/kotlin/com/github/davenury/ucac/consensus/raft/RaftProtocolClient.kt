@@ -59,7 +59,8 @@ class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolCl
             val result = try {
                 it.await()
             } catch (e: Exception) {
-                logger.error("Error while evaluating response from ${peer.peerId}", e)
+//                logger.error("Error while evaluating response from ${peer.peerId}", e)
+                logger.error("Error while evaluating response from ${peer.peerId}")
                 null
             }
             ConsensusResponse(peer.address, result)
