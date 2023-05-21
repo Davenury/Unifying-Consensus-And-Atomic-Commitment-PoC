@@ -282,7 +282,7 @@ class PaxosProtocolImpl(
 
 
         if (!transactionBlocker.tryAcquireReentrant(transactionAcquisition)) {
-            logger.info("Transaction is blocked on protocol ${transactionBlocker.getProtocolName()}, add transaction to queue, changeId: ${change.id}")
+            logger.info("Transaction is blocked on protocol ${transactionBlocker.getProtocolName()}, changeId: ${transactionBlocker.getChangeId()}, add transaction to queue, changeId: ${change.id}")
             if (transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
                 val changeId = transactionBlocker.getChangeId()!!
                 val entry = entryIdPaxosRound
