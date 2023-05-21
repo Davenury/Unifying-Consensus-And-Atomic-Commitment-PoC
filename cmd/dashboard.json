@@ -808,7 +808,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "max(rate(change_processed_total{kubernetes_namespace=~\"$namespace\"}[1m]))",
+          "expr": "max(rate(change_processed_total{kubernetes_namespace=~\"$namespace\"}[15s]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -1014,7 +1014,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1106,7 +1107,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1198,7 +1200,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1260,7 +1263,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1290,7 +1294,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.5.1",
+      "pluginVersion": "9.4.3",
       "targets": [
         {
           "datasource": {
