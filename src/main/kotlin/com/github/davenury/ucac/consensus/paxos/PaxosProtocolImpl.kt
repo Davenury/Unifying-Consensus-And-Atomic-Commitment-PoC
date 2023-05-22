@@ -306,7 +306,7 @@ class PaxosProtocolImpl(
                         tryPropagatingChangesToLeader()
                     }
                 } else{
-                    logger.info("Leader failure detector task is not finished")
+                    logger.info("Leader failure detector task is not finished for changeId ${transactionBlocker.getChangeId()}")
                 }
             }
 

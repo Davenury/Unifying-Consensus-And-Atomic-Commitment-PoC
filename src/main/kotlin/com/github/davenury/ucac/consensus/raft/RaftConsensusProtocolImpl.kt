@@ -722,7 +722,7 @@ class RaftConsensusProtocolImpl(
             mutex.withLock {
                 if (state.entryAlreadyProposed(entry)) {
                     logger.info("Already proposed that change: $change")
-                    scheduleHeartbeatToPeers(isRegular = false)
+//                    scheduleHeartbeatToPeers(isRegular = false)
                     return
                 }
 
