@@ -360,7 +360,7 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 		resources = apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
 				"cpu":    resource.MustParse("1"),
-				"memory": resource.MustParse("550Mi"),
+				"memory": resource.MustParse("750Mi"),
 			},
 			Requests: apiv1.ResourceList{
 				"cpu":    resource.MustParse("500m"),
@@ -413,7 +413,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 		},
 		Data: map[string]string{
 			"CONFIG_FILE":                  "application-kubernetes.conf",
-			"JAVA_OPTS":                    "-Xmx200m",
+			"JAVA_OPTS":                    "-Xmx450m",
 			"config_port":                  "8081",
 			"config_peerId":                peerConfig.PeerId,
 			"config_peers":                 peers,
