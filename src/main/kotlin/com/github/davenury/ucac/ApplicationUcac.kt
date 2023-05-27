@@ -308,6 +308,7 @@ class ApplicationUcac(
         gpacProtocolRouting(multiplePeersetProtocols)
         when (config.consensus.name){
             "raft" -> raftProtocolRouting(multiplePeersetProtocols)
+            "oldRaft" -> oldRaftProtocolRouting(multiplePeersetProtocols)
             "alvin" -> alvinProtocolRouting(multiplePeersetProtocols)
             "paxos" -> pigPaxosProtocolRouting(multiplePeersetProtocols)
             else -> throw IllegalStateException("Unknown consensus type ${config.consensus.name}")

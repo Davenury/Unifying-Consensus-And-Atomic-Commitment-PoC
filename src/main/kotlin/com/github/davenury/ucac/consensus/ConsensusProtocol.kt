@@ -9,6 +9,8 @@ import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocol
 import com.github.davenury.ucac.consensus.alvin.AlvinProtocolClientImplImpl
+import com.github.davenury.ucac.consensus.oldRaft.OldRaftConsensusProtocolImpl
+import com.github.davenury.ucac.consensus.oldRaft.OldRaftProtocolClientImpl
 import com.github.davenury.ucac.consensus.paxos.PaxosProtocolImpl
 import com.github.davenury.ucac.consensus.paxos.PigPaxosProtocolClientImpl
 import com.github.davenury.ucac.consensus.raft.RaftConsensusProtocolImpl
@@ -60,6 +62,18 @@ interface ConsensusProtocol {
                 peerResolver,
                 signalPublisher,
                 RaftProtocolClientImpl(peersetId),
+                transactionBlocker = transactionBlocker,
+                subscribers
+            )
+
+            "oldRaft" -> OldRaftConsensusProtocolImpl(
+                peersetId,
+                history,
+                config,
+                ctx,
+                peerResolver,
+                signalPublisher,
+                OldRaftProtocolClientImpl(peersetId),
                 transactionBlocker = transactionBlocker,
                 subscribers
             )
