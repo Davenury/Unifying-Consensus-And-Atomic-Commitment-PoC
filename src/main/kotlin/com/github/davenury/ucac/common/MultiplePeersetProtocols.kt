@@ -37,10 +37,6 @@ class MultiplePeersetProtocols(
         return protocols[peersetId] ?: throw UnknownPeersetException(peersetId)
     }
 
-    fun getHistories(): Map<PeersetId, History> {
-        return protocols.mapValues { it.value.history }
-    }
-
     fun registerSubscriber(peersetId: PeersetId, subscriber: Subscriber) {
         subscribers[peersetId]?.registerSubscriber(subscriber)
     }

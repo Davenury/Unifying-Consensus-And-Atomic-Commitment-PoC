@@ -5,8 +5,6 @@ import com.github.davenury.common.PeerAddress
 class VoteContainer {
     private val map: MutableMap<String, List<PeerAddress>> = mutableMapOf()
 
-    fun getVotes(id: String) = map[id]
-
     fun initializeChange(id: String) = map.put(id, listOf())
 
     fun voteForChange(id: String, address: PeerAddress) =
