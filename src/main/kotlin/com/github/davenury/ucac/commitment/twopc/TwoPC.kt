@@ -365,14 +365,16 @@ class TwoPC(
         }
         logger.info("Change to commit: $commitChange")
 
-        protocolClient.sendDecision(otherPeers, commitChange)
-        val changeResult = checkChangeAndProposeToConsensus(
+        val changeResultLocally = checkChangeAndProposeToConsensus(
             commitChange.copyWithNewParentId(
                 peersetId,
                 acceptChangeId,
             ),
             acceptChange.change.id
-        ).await()
+        )
+
+        protocolClient.sendDecision(otherPeers, commitChange)
+        val changeResult = changeResultLocally.await()
 
         if (changeResult.status != ChangeResult.Status.SUCCESS) {
             throw TwoPCConflictException("Change failed during committing locally")
