@@ -1,0 +1,3 @@
+Index,mean,std,Protocol,Name,Size,Type,Role,name
+0,0.008152698041051256,0.002534698798673121,paxos,idle,5x1,paxos-leader,leader,paxos 5x1
+1,0.008716488569875261,0.006253223778088426,paxos,idle,5x1,paxos-cohorts,cohorts,paxos 5x1

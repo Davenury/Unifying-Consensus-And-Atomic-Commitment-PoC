@@ -104,17 +104,16 @@ data class Ledger(
                 ?: history.containsEntry(historyEntryId)
         }
 
-    suspend fun checkIfProposedItemsAreStillValid() =
-        mutex.withLock {
-            val newProposedItems = proposedEntries.fold(listOf<LedgerItem>()) { acc, ledgerItem ->
-                if (acc.isEmpty() && history.isEntryCompatible(ledgerItem.entry)) acc.plus(ledgerItem)
-                else if (acc.isNotEmpty() && acc.last().entry.getId() == ledgerItem.entry.getParentId()) acc.plus(
-                    ledgerItem
-                )
-                else acc
-            }
-            proposedEntries.removeAll { newProposedItems.contains(it) }
+    suspend fun checkIfProposedItemsAreStillValid() = mutex.withLock {
+        val newProposedItems = proposedEntries.fold(listOf<LedgerItem>()) { acc, ledgerItem ->
+            if (acc.isEmpty() && history.isEntryCompatible(ledgerItem.entry)) acc.plus(ledgerItem)
+            else if (acc.isNotEmpty() && acc.last().entry.getId() == ledgerItem.entry.getParentId()) acc.plus(
+                ledgerItem
+            )
+            else acc
         }
+        proposedEntries.removeAll { newProposedItems.contains(it) }
+    }
 
     suspend fun removeNotAcceptedItems() =
         mutex.withLock {
@@ -143,6 +142,7 @@ data class Ledger(
         val isKnownEntry = history.containsEntry(entryId) || proposedEntries.any { it.entry.getId() == entryId }
         return isKnownEntry && lastKnownEntryId != entryId
     }
+
     suspend fun isNotAppliedNorProposed(entryId: String): Boolean =
         mutex.withLock { !history.containsEntry(entryId) && !proposedEntries.any { it.entry.getId() == entryId } }
 

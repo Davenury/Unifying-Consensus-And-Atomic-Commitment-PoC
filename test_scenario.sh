@@ -1,9 +1,10 @@
 directory=$(dirname $0)
 echo $directory
 
-#protocols=("alvin" "paxos" "raft")
+#protocols=("alvin" "paxos" "raft" "oldRaft")
+protocols=("alvin" "paxos" "raft")
 #protocols=("alvin" "paxos")
-protocols=("raft")
+#protocols=("paxos")
 
 peerset_size_start=5
 peerset_size_end=5
@@ -20,30 +21,30 @@ cd "$directory/misc/grafana-scrapping" && npm i
 
 synch_repeat=5
 ft_repeat=0
-total_repeats=5
-start_test=0
-end_test=0
+total_repeats=0
+start_test=4
+end_test=4
 
-initial_sleep="6m"
+initial_sleep="4m"
 resource_sleep="3m"
 ft_sleep="2m"
-stress_sleep="2m"
+stress_sleep="1m"
 finish_sleep="0m"
 
 for repeat in $(seq 0 $total_repeats); do
   echo "Repeat: $repeat"
-#  for peerset_size in $(seq $peerset_size_start $peerset_size_end); do
-  for peerset_size in {3,4,5,6,10,15}; do
+  for peerset_size in $(seq $peerset_size_start $peerset_size_end); do
+    #  for peerset_size in {3,4,5,6,10,15}; do
     for protocol in $protocols; do
       for test_type in $(seq $start_test $end_test); do
         echo "Run experiment type $test_type for protocol: $protocol for peerset_size: $peerset_size"
-        if [[ $test_type -eq 0 ]]; then
-          echo "Increasing load script"
-          cd $directory/cmd && CONSENSUS=$protocol "./scripts/stress-consensus-test.sh" $peerset_size 0 &
-        else
-          echo "Constant load script"
-          cd $directory/cmd && CONSENSUS=$protocol "./scripts/consensus.sh" $peerset_size 0 &
-        fi
+        #        if [[ $test_type -eq 0 ]]; then
+        #          echo "Increasing load script"
+        #          cd $directory/cmd && CONSENSUS=$protocol "./scripts/stress-consensus-test.sh" $peerset_size 0 &
+        #        else
+        echo "Constant load script"
+        cd $directory/cmd && CONSENSUS=$protocol "./scripts/consensus.sh" $peerset_size 0 &
+        #        fi
         scriptPID=$!
         START_LEADER=$(date +%s%3N)
         sleep 1m
@@ -59,8 +60,8 @@ for repeat in $(seq 0 $total_repeats); do
           START_TIMESTAMP=$(date +%s%3N)
           sleep $stress_sleep
           END_TIMESTAMP=$(date +%s%3N)
-          BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-during-processing-changes" SCRAPING_TYPE="all" EXPERIMENT="${peerset_size}x1" PROTOCOL="$protocol-2" START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
-          BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-during-processing-changes" SCRAPING_TYPE="leader" EXPERIMENT="${peerset_size}x1" PROTOCOL="$protocol-2" START_TIMESTAMP=$START_LEADER END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+          BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-during-processing-changes" SCRAPING_TYPE="all" EXPERIMENT="${peerset_size}x1" PROTOCOL="$protocol" START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
+          BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-during-processing-changes" SCRAPING_TYPE="leader" EXPERIMENT="${peerset_size}x1" PROTOCOL="$protocol" START_TIMESTAMP=$START_LEADER END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
         elif [[ $test_type -eq 1 ]]; then
           test_name="resource-usage"
           echo "$test_name - During processing changes"

@@ -618,13 +618,16 @@ class RaftConsensusProtocolImpl(
         val peerIndices = peerToNextIndex.getOrDefault(otherPeerId, PeerIndices())
 
         if (newProposedChanges.isNotEmpty()) {
-            val proposedChanges = newProposedChanges.map { it.toLedgerItem() }
 
-            proposedChanges
+            newProposedChanges
+                .map { it.toLedgerItem() }
                 .filter { state.isNotApplied(it.entry.getId()) }
                 .forEach { voteContainer.voteForChange(it.entry.getId(), peerAddress) }
+
             peerToNextIndex[otherPeerId] =
-                peerIndices.copy(acknowledgedEntryId = proposedChanges.last().entry.getId())
+                peerIndices.copy(
+                    acknowledgedEntryId = newProposedChanges.last().toLedgerItem().entry.getId()
+                )
         }
 
         if (peerIndices.acceptedEntryId != leaderCommitId) {

@@ -1,0 +1,4 @@
+Index,mean,std,Protocol,Name,Size,Type,name
+0,13.222675302469131,0.5511322022464885,alvin,during changes,5x1,alvin,alvin - 5x1
+1,16.76434085185185,1.3483958172627688,paxos,during changes,5x1,paxos,paxos - 5x1
+2,38.94241130769231,0.722921847065979,raft,during changes,5x1,raft,raft - 5x1
