@@ -1,26 +1,49 @@
 import puppeteer from "puppeteer";
 import path from 'path';
-import { fileURLToPath } from 'url';
+import {fileURLToPath} from 'url';
 
 const getBaseDownloadPath = () => {
     const __filename = fileURLToPath(import.meta.url)
     return `${path.dirname(__filename)}/../data-processing`
 }
 
+const allPanels = [14, 18, 27, 4, 12, 21]
+// const panels = [14, 18, 27, 4, 12, 31, 21]
+const panelsWithoutChanges = [14, 18, 27, 4, 21]
+const panelWithChangeSynchronization = [14, 18, 27, 4, 12, 33, 21]
+const chaosOperator = [34]
+const leaderPanel = [32]
+
 const baseDownloadPath = process.env.BASE_DOWNLOAD_PATH ?? getBaseDownloadPath()
+const namespace = process.env.NAMESPACE ?? "ddebowski"
+const from = process.env.START_TIMESTAMP ?? "1683454588474"
+const to = process.env.END_TIMESTAMP ?? "1683454599021"
+const protocol = process.env.PROTOCOL ?? "alvin"
+const experiment = process.env.EXPERIMENT ?? "3x1"
+const scrapingType = process.env.SCRAPING_TYPE ?? "all"
+
+let panels = []
+if (scrapingType === "all") panels = allPanels
+else if (scrapingType === "synchronization") panels = panelWithChangeSynchronization
+else if (scrapingType === "leader") panels = leaderPanel
+else if (scrapingType === "chaos") panels = chaosOperator
+else if (scrapingType === "without-changes") panels = panelsWithoutChanges
 
 
 const experiments = [
     {
-        namespace: "ddebowski",
-        from: "1679148002592",
-        to: "1679148130702",
-        protocol: "gpac",
-        experiment: "3x2",
+        namespace: namespace,
+        from: from,
+        to: to,
+        protocol: protocol,
+        experiment: experiment,
+        scrapingType: scrapingType,
+        panels: panels
     }
 ]
 
-const panels = [14, 18, 27, 4, 12, 21]
+console.log(experiments)
+
 const downloadFile = async (page, {
     namespace,
     panelId,
@@ -37,6 +60,7 @@ const downloadFile = async (page, {
     await page.goto(`http://localhost:3000/d/HSUzSq2Vk/poc?orgId=1&refresh=10s&&viewPanel=${panelId}&inspect=${panelId}&var-namespace=${namespace}&from=${from}&to=${to}`, {waitUntil: "load"});
 
     await page.waitForSelector("div[role='dialog']")
+    await new Promise(resolve => setTimeout(resolve, 1_000));
     const dataOptionsButton = await page.waitForSelector('button[aria-controls="Data options"]')
     await dataOptionsButton.click()
 
@@ -57,19 +81,23 @@ const downloadFile = async (page, {
 }
 
 function delay(time) {
-    return new Promise(function(resolve) {
+    return new Promise(function (resolve) {
         setTimeout(resolve, time)
     });
 }
 
 (async () => {
-    const browser = await puppeteer.launch({headless: false});
+    const browser = await puppeteer.launch({headless: true});
     const page = await browser.newPage();
-    await page.setViewport({ width: 1366, height: 768});
+    await page.setViewport({width: 1366, height: 768});
 
     for (let experiment of experiments) {
         for (let panel of panels) {
-            await downloadFile(page, {...experiment, panelId: panel})
+            try {
+                await downloadFile(page, {...experiment, panelId: panel})
+            }catch (error){
+                console.log("Failed during downloading panelId:",panel)
+            }
             await delay(1000)
         }
     }
