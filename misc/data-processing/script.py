@@ -11,7 +11,8 @@ scripts = ["consensus", "stress-consensus-test"]
 # scripts = ["consensus"]
 # scripts = ["stress-consensus-test"]
 # protocols = ["alvin", "paxos","raft", "oldRaft"]
-protocols = ["alvin", "paxos","raft"]
+# protocols = ["alvin", "paxos","raft"]
+protocols = ["two_pc"]
 
 all_files_prefix = [
     "Avg commit latency",
@@ -372,10 +373,10 @@ def synchronization_time_csv():
 
 if __name__ == "__main__":
 
-    # stress_test_csv()
+    stress_test_csv()
     # resource_usage_csv()
     # resource_usage_after_csv()
-    delete_followers_csv()
+    # delete_followers_csv()
     # delete_leaders_csv()
     # synchronization_time_csv()
 
