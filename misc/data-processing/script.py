@@ -11,8 +11,8 @@ scripts = ["consensus", "stress-consensus-test"]
 # scripts = ["consensus"]
 # scripts = ["stress-consensus-test"]
 # protocols = ["alvin", "paxos","raft", "oldRaft"]
-# protocols = ["alvin", "paxos","raft"]
-protocols = ["two_pc"]
+protocols = ["alvin", "paxos","raft"]
+# protocols = ["two_pc"]
 
 all_files_prefix = [
     "Avg commit latency",
@@ -371,6 +371,77 @@ def synchronization_time_csv():
         
     get_data_in_csv("synchronization-time", f"synchronization-time", experiments, lambda exs:  get_values_resource_usage(exs), True, "Index")
 
+
+def delete_article_csv():
+    directory = "ft-half-followers-after-deleting-article"
+
+    for protocol in protocols:
+        new_path = os.path.join(current_directory, directory,protocol)
+
+        for peerset_size in os.listdir(new_path):
+            experiment_dir_path = os.path.join(new_path, peerset_size)
+            # leader_id = find_leader(experiment_dir_path)
+            for experiment in os.listdir(experiment_dir_path):
+                experiment_path = os.path.join(experiment_dir_path, experiment)
+                dir_path = f"parsed_csvs/delete-article"
+                if experiment.startswith("RPS"):
+                    df = pd.read_csv(experiment_path, na_values="undefined")
+                    df=df.set_axis(['Time','rps'], axis=1, inplace=False)
+                    df['Time'] -= df['Time'].min()
+                    df['Time'] /= 1000
+                    from pathlib import Path
+                    output_dir = Path.joinpath(Path(os.getcwd()), dir_path)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    df.to_csv(f"{dir_path}/{protocol}.csv",sep=",", index=True, index_label="Index")
+
+                if experiment.startswith("Chaos"):
+                    df = pd.read_csv(experiment_path, na_values="undefined")
+                    df['chaos-phase'] = df.apply(lambda row: new_value(row[1:]),axis=1) 
+                    df['Time'] -= df['Time'].min()
+                    df['Time'] /= 1000
+                    df = df[['Time', 'chaos-phase']]
+                    df = df[df["chaos-phase"]==1]
+                    df.reset_index(drop=True)
+                    from pathlib import Path
+                    output_dir = Path.joinpath(Path(os.getcwd()), dir_path)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    df.to_csv(f"{dir_path}/chaos-phases.csv",sep=",", index=True, index_label="Index")
+
+def delete_leaders_article_csv():
+    directory = "ft-leader-after-deleting-leaders"
+
+    for protocol in protocols:
+        new_path = os.path.join(current_directory, directory,protocol)
+
+        for peerset_size in os.listdir(new_path):
+            experiment_dir_path = os.path.join(new_path, peerset_size)
+            # leader_id = find_leader(experiment_dir_path)
+            for experiment in os.listdir(experiment_dir_path):
+                experiment_path = os.path.join(experiment_dir_path, experiment)
+                dir_path = f"parsed_csvs/delete-leaders-article"
+                if experiment.startswith("RPS"):
+                    df = pd.read_csv(experiment_path, na_values="undefined")
+                    df = df.set_axis(['Time', 'rps'], axis=1, inplace=False)
+                    df['Time'] -= df['Time'].min()
+                    df['Time'] /= 1000
+                    from pathlib import Path
+                    output_dir = Path.joinpath(Path(os.getcwd()), dir_path)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    df.to_csv(f"{dir_path}/{protocol}.csv",sep=",", index=True, index_label="Index")
+
+                if experiment.startswith("Chaos"):
+                    df = pd.read_csv(experiment_path, na_values="undefined")
+                    df['chaos-phase'] = df.apply(lambda row: new_value(row[1:]),axis=1) 
+                    df['Time'] -= df['Time'].min()
+                    df['Time'] /= 1000
+                    df = df[['Time', 'chaos-phase']]
+                    df = df[df["chaos-phase"]==1]
+                    df.reset_index(drop=True)
+                    from pathlib import Path
+                    output_dir = Path.joinpath(Path(os.getcwd()), dir_path)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    df.to_csv(f"{dir_path}/chaos-phases.csv",sep=",", index=True, index_label="Index")
+
 if __name__ == "__main__":
 
     stress_test_csv()
@@ -379,4 +450,6 @@ if __name__ == "__main__":
     # delete_followers_csv()
     # delete_leaders_csv()
     # synchronization_time_csv()
+    delete_article_csv()
+    delete_leaders_article_csv()
 

@@ -2,9 +2,9 @@ directory=$(dirname $0)
 echo $directory
 
 #protocols=("alvin" "paxos" "raft" "oldRaft")
-protocols=("alvin" "paxos" "raft")
+#protocols=("alvin" "paxos" "raft")
 #protocols=("alvin" "paxos")
-#protocols=("paxos")
+protocols=("raft")
 
 peerset_size_start=5
 peerset_size_end=5
@@ -142,7 +142,6 @@ for repeat in $(seq 0 $total_repeats); do
           BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-two-peers" SCRAPING_TYPE="all" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
           BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-two-peers" SCRAPING_TYPE="chaos" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_TIMESTAMP END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
           BASE_DOWNLOAD_PATH="$directory/misc/data-processing/$test_name-after-deleting-two-peers" SCRAPING_TYPE="leader" EXPERIMENT="${peerset_size}x1" PROTOCOL=$protocol START_TIMESTAMP=$START_LEADER END_TIMESTAMP=$END_TIMESTAMP node "$directory/misc/grafana-scrapping/index.js"
-        fi
         elif [[ $test_type -eq 5 ]]; then
           test_name="ft-half-followers"
           echo "$test_name - During processing changes"
@@ -151,12 +150,13 @@ for repeat in $(seq 0 $total_repeats); do
 
           for i in $(seq 0 $ft_repeat); do
             echo "$test_name iteration $i"
-            kubectl -n=ddebowski delete scenarioes.lsc.davenury.github.com gpac-chaos-delete-peers
-            kubectl apply -f "$directory/cmd/yamls/delete_half_peers.yaml"
+            kubectl -n=ddebowski delete scenarioes.lsc.davenury.github.com gpac-chaos-delete-followers
+            kubectl apply -f "$directory/cmd/yamls/delete_peers.yaml"
             sleep $ft_sleep
           done
 
           sleep $ft_sleep
+          sleep 2m
 
           END_TIMESTAMP=$(date +%s%3N)
 

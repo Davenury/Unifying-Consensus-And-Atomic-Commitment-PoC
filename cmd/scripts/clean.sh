@@ -6,6 +6,10 @@ helm uninstall grafana -n=rszuma &
 helm uninstall victoria -n=rszuma &
 helm uninstall tempo -n=rszuma &
 helm uninstall loki -n=rszuma &
+helm uninstall grafana -n=ddebowski &
+helm uninstall victoria -n=ddebowski &
+helm uninstall tempo -n=ddebowski &
+helm uninstall loki -n=ddebowski &
 helm uninstall loki &
 kubectl delete statefulsets.apps loki &
 kubectl delete services loki-memberlist loki &
