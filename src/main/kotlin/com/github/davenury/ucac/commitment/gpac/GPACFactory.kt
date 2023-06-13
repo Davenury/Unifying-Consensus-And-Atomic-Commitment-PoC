@@ -30,7 +30,7 @@ class GPACFactory(
                 history,
                 config.gpac,
                 context,
-                GPACProtocolClientImpl(),
+                GPACProtocolClientImpl(peersetId),
                 transactionBlocker,
                 peerResolver,
                 signalPublisher,

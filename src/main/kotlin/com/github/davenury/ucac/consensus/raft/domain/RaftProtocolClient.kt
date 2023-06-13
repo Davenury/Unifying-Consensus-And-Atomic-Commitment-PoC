@@ -109,7 +109,7 @@ class RaftProtocolClientImpl(private val peersetId: PeersetId) : RaftProtocolCli
         message: Message,
     ): Response? {
         logger.debug("Sending request to: ${peer.peerId}, message: $message")
-        return raftHttpClient.post<Response>("http://${peer.address}/${suffix}?peerset=${peersetId}") {
+        return raftHttpClient.post<Response>("http://${peer.address}/${suffix}?peerset=${peersetId}&sender=${peersetId}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = message!!

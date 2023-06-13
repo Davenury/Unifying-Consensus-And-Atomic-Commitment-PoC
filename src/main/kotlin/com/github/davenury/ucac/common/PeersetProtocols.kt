@@ -68,7 +68,7 @@ class PeersetProtocols(
             history,
             config.twoPC,
             ctx,
-            TwoPCProtocolClientImpl(),
+            TwoPCProtocolClientImpl(peersetId),
             consensusProtocol,
             peerResolver,
             signalPublisher,

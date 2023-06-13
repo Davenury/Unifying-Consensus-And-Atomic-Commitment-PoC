@@ -33,7 +33,9 @@ interface TwoPCProtocolClient {
     suspend fun askForChangeStatus(peer: PeerAddress, change: Change, otherPeerset: PeersetId): Change?
 }
 
-class TwoPCProtocolClientImpl : TwoPCProtocolClient {
+class TwoPCProtocolClientImpl(
+    private val myPeersetId: PeersetId,
+) : TwoPCProtocolClient {
 
     override suspend fun sendAccept(peers: Map<PeersetId, PeerAddress>, change: Change): Map<PeerAddress, TwoPCRequestResponse> =
         sendMessages(peers, change, "2pc/accept")
@@ -43,7 +45,7 @@ class TwoPCProtocolClientImpl : TwoPCProtocolClient {
         sendMessages(peers, decisionChange, "2pc/decision")
 
     override suspend fun askForChangeStatus(peer: PeerAddress, change: Change, peersetId: PeersetId): Change? {
-        val url = "http://${peer.address}/2pc/ask/${change.id}?peerset=${peersetId}"
+        val url = "http://${peer.address}/2pc/ask/${change.id}?peerset=${peersetId}&sender=${myPeersetId.peersetId}"
         logger.info("Sending to: $url")
         return try {
             httpClient.get<Change?>(url) {

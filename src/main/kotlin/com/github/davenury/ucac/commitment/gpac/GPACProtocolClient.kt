@@ -31,7 +31,9 @@ interface GPACProtocolClient {
     ): Map<PeersetId, List<Deferred<HttpResponse?>>>
 }
 
-class GPACProtocolClientImpl : GPACProtocolClient {
+class GPACProtocolClientImpl(
+    private val myPeersetId: PeersetId
+) : GPACProtocolClient {
 
     override suspend fun sendElectMe(
         otherPeers: Map<PeersetId, List<PeerAddress>>,
@@ -70,7 +72,7 @@ class GPACProtocolClientImpl : GPACProtocolClient {
         peerset.map { peer ->
             CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
                 gpacHttpCall<K, T>(
-                    "http://${peer.address}/$urlPath?peerset=${peersetId}",
+                    "http://${peer.address}/$urlPath?peerset=${peersetId}&sender=${myPeersetId.peersetId}",
                     requestBody,
                 ) { throwable -> errorMessage(peer, throwable) }
             }
