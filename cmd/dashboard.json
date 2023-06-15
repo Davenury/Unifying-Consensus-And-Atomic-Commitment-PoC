@@ -134,6 +134,7 @@
           },
           "editorMode": "code",
           "expr": "max(rate(container_cpu_usage_seconds_total{pod=~\"peer.*\", namespace=~\"$namespace\"}[30s])) by (pod)",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -226,6 +227,7 @@
           },
           "editorMode": "code",
           "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"peer.*\", namespace=\"$namespace\"}[30s]))",
+          "interval": "5s",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -238,6 +240,7 @@
           "editorMode": "code",
           "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"performance-test.*\", namespace=\"$namespace\"}[30s]))",
           "hide": false,
+          "interval": "5s",
           "legendFormat": "performance tests",
           "range": true,
           "refId": "B"
@@ -331,6 +334,7 @@
           },
           "editorMode": "code",
           "expr": "sum(jvm_memory_used_bytes{area=\"heap\", app_name=~\"peer.*\", kubernetes_namespace=~\"$namespace\"}) by (app_name)",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -424,6 +428,7 @@
           },
           "editorMode": "code",
           "expr": "sum(container_memory_usage_bytes{pod=~\"peer.*\", namespace=~\"$namespace\"}) by (pod)",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -517,6 +522,7 @@
           },
           "editorMode": "code",
           "expr": "rate(container_network_receive_bytes_total{pod=~\"peer.*\", namespace=~\"$namespace\", interface=\"eth0\"}[30s])",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -610,6 +616,7 @@
           },
           "editorMode": "code",
           "expr": "rate(container_network_transmit_bytes_total{pod=~\"peer.*\", namespace=~\"$namespace\", interface=\"eth0\"}[30s])",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -715,6 +722,7 @@
           },
           "editorMode": "code",
           "expr": "sum(rate(ktor_http_server_requests_seconds_count{route=\"/v2/change/async\", kubernetes_namespace=~\"$namespace\"}[1m]))",
+          "interval": "5s",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -809,6 +817,7 @@
           },
           "editorMode": "code",
           "expr": "max(rate(change_processed_total{kubernetes_namespace=~\"$namespace\"}[20s])) or vector(0)",
+          "interval": "5s",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -869,6 +878,7 @@
           },
           "editorMode": "code",
           "expr": "(sum(change_processed_total{kubernetes_namespace=~\"$namespace\"}) by (result))",
+          "interval": "5s",
           "legendFormat": "{{result}}",
           "range": true,
           "refId": "A"
@@ -961,6 +971,7 @@
           },
           "editorMode": "code",
           "expr": "avg(changes_synchronization_time_seconds_sum{kubernetes_namespace=~\"$namespace\"}/changes_synchronization_time_seconds_count{kubernetes_namespace=~\"$namespace\"})",
+          "interval": "5s",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -1053,6 +1064,7 @@
           },
           "editorMode": "code",
           "expr": "increase(chaos_operator_phase_change_total)",
+          "interval": "5s",
           "legendFormat": "phase change",
           "range": true,
           "refId": "A"
@@ -1147,6 +1159,7 @@
           },
           "editorMode": "code",
           "expr": "avg(rate(change_processing_time_seconds_sum{result=\"success\", kubernetes_namespace=~\"$namespace\"}[1m]) / rate(change_processing_time_seconds_count{result=\"success\", kubernetes_namespace=~\"$namespace\"}[1m]))",
+          "interval": "5s",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -1230,7 +1243,7 @@
           "mode": "single",
           "sort": "none"
         }
-      },
+      },"interval": "5s",
       "pluginVersion": "9.4.3",
       "targets": [
         {
@@ -1240,6 +1253,7 @@
           },
           "editorMode": "code",
           "expr": "increase(leader_elected_total{kubernetes_namespace=~\"$namespace\"})",
+          "interval": "5s",
           "legendFormat": "{{peerId}}",
           "range": true,
           "refId": "A"
@@ -1303,6 +1317,7 @@
           },
           "editorMode": "code",
           "expr": "kube_pod_container_status_restarts_total{kubernetes_namespace=~\"$namespace\"}",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
