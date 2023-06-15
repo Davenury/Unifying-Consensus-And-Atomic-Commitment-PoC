@@ -43,6 +43,7 @@ class ProtocolTimerImpl(
                 val timeout = delay.plus(backoff)
                 delay(timeout.toMillis())
                 action()
+                task = null
             }
         }
     }
@@ -52,6 +53,7 @@ class ProtocolTimerImpl(
             this.task?.cancel()
         } catch (e: CancellationException) {
             logger.error("Cancellation exception occurred", e)
+            this.task = null
         }
     }
 
