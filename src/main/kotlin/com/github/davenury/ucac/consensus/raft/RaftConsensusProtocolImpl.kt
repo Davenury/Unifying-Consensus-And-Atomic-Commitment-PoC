@@ -451,8 +451,8 @@ class RaftConsensusProtocolImpl(
         val peerMessage: ConsensusHeartbeat
         mutex.withLock {
             peerAddress = peerResolver.resolve(peer)
-            peerMessage = getMessageForPeer(peerAddress)
         }
+        peerMessage = getMessageForPeer(peerAddress)
         signalPublisher.signal(
             signal = Signal.ConsensusSendHeartbeat,
             subject = this@RaftConsensusProtocolImpl,
@@ -641,13 +641,16 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun getMessageForPeer(peerAddress: PeerAddress): ConsensusHeartbeat {
 
-        if (state.checkCommitIndex()) {
-            peerToNextIndex.keys.forEach {
-                peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
+        val peerIndices: PeerIndices
+        mutex.withLock {
+            if (state.checkCommitIndex()) {
+                peerToNextIndex.keys.forEach {
+                    peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
+                }
             }
-        }
 
-        val peerIndices = peerToNextIndex.getOrDefault(peerAddress.peerId, PeerIndices())
+            peerIndices = peerToNextIndex.getOrDefault(peerAddress.peerId, PeerIndices())
+        }
         val newCommittedChanges = state.getCommittedItems(peerIndices.acknowledgedEntryId)
         val newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
         val allChanges = newCommittedChanges + newProposedChanges
