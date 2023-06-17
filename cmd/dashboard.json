@@ -114,6 +114,7 @@
         "y": 1
       },
       "id": 14,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -207,6 +208,7 @@
         "y": 1
       },
       "id": 16,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -314,6 +316,7 @@
         "y": 9
       },
       "id": 18,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -408,6 +411,7 @@
         "y": 9
       },
       "id": 27,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -502,6 +506,7 @@
         "y": 17
       },
       "id": 21,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -596,6 +601,7 @@
         "y": 17
       },
       "id": 29,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -702,6 +708,7 @@
         "y": 29
       },
       "id": 2,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -797,6 +804,7 @@
         "y": 29
       },
       "id": 4,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -857,6 +865,7 @@
         "y": 38
       },
       "id": 6,
+      "interval": "5s",
       "options": {
         "orientation": "auto",
         "reduceOptions": {
@@ -951,6 +960,7 @@
         "y": 48
       },
       "id": 33,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -1044,6 +1054,7 @@
         "y": 55
       },
       "id": 34,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -1139,6 +1150,7 @@
         "y": 63
       },
       "id": 12,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -1232,6 +1244,7 @@
         "y": 70
       },
       "id": 32,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -1243,7 +1256,7 @@
           "mode": "single",
           "sort": "none"
         }
-      },"interval": "5s",
+      },
       "pluginVersion": "9.4.3",
       "targets": [
         {
@@ -1296,6 +1309,7 @@
         "y": 77
       },
       "id": 10,
+      "interval": "5s",
       "options": {
         "orientation": "auto",
         "reduceOptions": {

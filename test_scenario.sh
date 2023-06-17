@@ -4,7 +4,7 @@ echo $directory
 #protocols=("alvin" "paxos" "raft" "oldRaft")
 #protocols=("alvin" "paxos" "raft")
 #protocols=("alvin" "paxos")
-protocols=("raft")
+protocols=("oldRaft")
 
 peerset_size_start=5
 peerset_size_end=5
@@ -23,14 +23,14 @@ cd "$directory/misc/grafana-scrapping" && npm i
 synch_repeat=5
 ft_repeat=0
 total_repeats=0
-start_test=5
-end_test=5
+start_test=3
+end_test=3
 
 initial_sleep="4m"
 resource_sleep="3m"
 ft_sleep="2m"
 stress_sleep="1m"
-finish_sleep="0m"
+finish_sleep="10m"
 
 for repeat in $(seq 0 $total_repeats); do
   echo "Repeat: $repeat"

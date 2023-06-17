@@ -444,7 +444,7 @@ def delete_leaders_article_csv():
 
 if __name__ == "__main__":
 
-    stress_test_csv()
+    # stress_test_csv()
     # resource_usage_csv()
     # resource_usage_after_csv()
     # delete_followers_csv()
