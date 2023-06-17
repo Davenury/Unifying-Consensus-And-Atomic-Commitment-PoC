@@ -169,6 +169,8 @@ class OldRaftConsensusProtocolImpl(
             null
         )
 
+        Metrics.bumpLeaderElection(peerId, peersetId)
+
         peerToNextIndex.keys.forEach {
             peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
         }
