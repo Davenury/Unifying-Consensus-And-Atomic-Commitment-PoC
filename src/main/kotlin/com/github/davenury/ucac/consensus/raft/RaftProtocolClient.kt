@@ -7,18 +7,20 @@ import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.consensus.ConsensusProtocolClient
 import com.github.davenury.ucac.consensus.ConsensusProtocolClientImpl
 import com.github.davenury.ucac.consensus.ConsensusResponse
-import com.github.davenury.ucac.consensus.LatestEntryIdResponse
 import com.github.davenury.ucac.httpClient
 import com.zopa.ktor.opentracing.asyncTraced
+import com.zopa.ktor.opentracing.launchTraced
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
 
-interface RaftProtocolClient: ConsensusProtocolClient {
+interface RaftProtocolClient : ConsensusProtocolClient {
 
     suspend fun sendConsensusElectMe(
         otherPeers: List<PeerAddress>,
@@ -28,7 +30,8 @@ interface RaftProtocolClient: ConsensusProtocolClient {
     suspend fun sendConsensusHeartbeat(
         peer: PeerAddress,
         message: ConsensusHeartbeat,
-    ): ConsensusResponse<ConsensusHeartbeatResponse?>
+        channel: Channel<ConsensusResponse<ConsensusHeartbeatResponse?>>
+    ): Unit
 
 
     suspend fun sendRequestApplyChange(
@@ -38,7 +41,8 @@ interface RaftProtocolClient: ConsensusProtocolClient {
 
 }
 
-class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolClient, ConsensusProtocolClientImpl(peersetId) {
+class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolClient,
+    ConsensusProtocolClientImpl(peersetId) {
     override suspend fun sendConsensusElectMe(
         otherPeers: List<PeerAddress>,
         message: ConsensusElectMe
@@ -50,20 +54,22 @@ class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolCl
     }
 
     override suspend fun sendConsensusHeartbeat(
-        peer: PeerAddress, message: ConsensusHeartbeat,
-    ): ConsensusResponse<ConsensusHeartbeatResponse?> {
-
-        return CoroutineScope(Dispatchers.IO).asyncTraced(MDCContext()) {
-            sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(peer, "raft/heartbeat", message)
-        }.let {
-            val result = try {
-                it.await()
+        peer: PeerAddress,
+        message: ConsensusHeartbeat,
+        channel: Channel<ConsensusResponse<ConsensusHeartbeatResponse?>>
+    ): Unit {
+        CoroutineScope(Dispatchers.IO).launchTraced(MDCContext()) {
+            try {
+                val result = sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(
+                    peer,
+                    "raft/heartbeat",
+                    message
+                )
+                ConsensusResponse(peer.address, result)
             } catch (e: Exception) {
-//                logger.error("Error while evaluating response from ${peer.peerId}", e)
                 logger.error("Error while evaluating response from ${peer.peerId}")
-                null
-            }
-            ConsensusResponse(peer.address, result)
+                ConsensusResponse(peer.address, null)
+            }.let { channel.send(it as ConsensusResponse<ConsensusHeartbeatResponse?>) }
         }
     }
 
@@ -73,7 +79,6 @@ class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolCl
             accept(ContentType.Application.Json)
             body = change
         }
-
 
 
     companion object {
