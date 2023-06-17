@@ -96,6 +96,7 @@ class RaftConsensusProtocolImpl(
 
     //    DONE: Use only one mutex
     private val mutex = Mutex()
+    private val mutexChangeToBePropagatedToLeader = Mutex()
     private var executorService: ExecutorCoroutineDispatcher? = null
     private val leaderRequestExecutorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
@@ -183,8 +184,10 @@ class RaftConsensusProtocolImpl(
         }
 
         scheduleHeartbeatToPeers(true)
-        tryPropagatingChangesToLeader()
+        propagateChangesToLeaderInCourtine(executorService!!)
     }
+
+
 
     override suspend fun handleRequestVote(
         peerId: PeerId,
@@ -244,8 +247,15 @@ class RaftConsensusProtocolImpl(
         releaseBlockerFromPreviousTermChanges()
 
         state.removeNotAcceptedItems()
+        propagateChangesToLeaderInCourtine()
+    }
 
-        tryPropagatingChangesToLeader()
+    private suspend fun propagateChangesToLeaderInCourtine(ctx: ExecutorCoroutineDispatcher = leaderRequestExecutorService) {
+        withContext(ctx) {
+            launch {
+                tryPropagatingChangesToLeader()
+            }
+        }
     }
 
     override suspend fun handleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse = mutex.withLock {
@@ -366,6 +376,8 @@ class RaftConsensusProtocolImpl(
 
         logger.debug("Updating ledger with {}", notAppliedProposedChanges)
         updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
+
+        propagateChangesToLeaderInCourtine()
 
         return@withLock ConsensusHeartbeatResponse(true, currentTerm)
     }
@@ -641,6 +653,11 @@ class RaftConsensusProtocolImpl(
                 .filter { state.isNotApplied(it.entry.getId()) }
                 .forEach { voteContainer.voteForChange(it.entry.getId(), peerAddress) }
 
+            newProposedChanges
+                .map { it.toLedgerItem() }
+                .filter { state.isNotApplied(it.entry.getId()) }
+                .forEach { logger.info("Votes after message to peer ${peerAddress.peerId},  ${voteContainer.getVotes(it.entry.getId())} for entry: ${it.entry.getId()}")}
+
             peerToNextIndex[otherPeerId] =
                 peerIndices.copy(
                     acknowledgedEntryId = newProposedChanges.last().toLedgerItem().entry.getId()
@@ -652,6 +669,7 @@ class RaftConsensusProtocolImpl(
             peerToNextIndex[otherPeerId] =
                 newPeerIndices.copy(acceptedEntryId = leaderCommitId)
         }
+
 
         applyAcceptedChanges(listOf())
     }
@@ -820,12 +838,9 @@ class RaftConsensusProtocolImpl(
         logger.info("We must inform leader about blocked entry")
 
         queuedChanges.add(0, Change.fromHistoryEntry(blockedEntry.entry)!!)
-        withContext(leaderRequestExecutorService) {
-            launch {
-                tryPropagatingChangesToLeader()
-            }
-        }
+        propagateChangesToLeaderInCourtine()
     }
+
 
     private fun isDuring2PAndChangeDoesntFinishIt(change: Change): Boolean {
         val currentHistoryChange = history
@@ -988,7 +1003,10 @@ class RaftConsensusProtocolImpl(
         if (votedFor == null || !votedFor.elected) return
         if (changesToBePropagatedToLeader.size > 0) logger.info("Try to propagate changes")
         while (true) {
-            val changeToBePropagated = changesToBePropagatedToLeader.poll() ?: break
+            val changeToBePropagated: ChangeToBePropagatedToLeader
+            mutexChangeToBePropagatedToLeader.withLock {
+                changeToBePropagated = changesToBePropagatedToLeader.poll() ?: return
+            }
             if (votedFor.id == peerId) {
                 logger.info("Processing a queued change as a leader: ${changeToBePropagated.change}")
                 proposeChangeToLedger(changeToBePropagated.cf, changeToBePropagated.change)
