@@ -275,8 +275,8 @@ class RaftConsensusProtocolImpl(
             return@withLock ConsensusHeartbeatResponse(false, currentTerm)
         }
 
-        if (currentTerm < term || votedFor == null || votedFor?.elected == false) {
-            newLeaderElected(heartbeat.leaderId, term)
+        if(currentTerm < term){
+            currentTerm = term
         }
 
         val leaderCurrentEntryIsOutdated =
@@ -287,11 +287,11 @@ class RaftConsensusProtocolImpl(
             return@withLock ConsensusHeartbeatResponse(false, currentTerm, isLeaderCurrentEntryOutdated = true)
         }
 
-
 //      Restart timer because we received heartbeat from proper leader
-        if (currentTerm < term) {
-            currentTerm = term
+        if (currentTerm < term || votedFor == null || votedFor?.elected == false) {
+            newLeaderElected(heartbeat.leaderId, term)
             releaseBlockerFromPreviousTermChanges()
+            tryPropagatingChangesToLeader()
         }
 
         lastHeartbeatTime = Instant.now()
@@ -372,8 +372,6 @@ class RaftConsensusProtocolImpl(
 
         logger.debug("Updating ledger with {}", notAppliedProposedChanges)
         updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
-
-        tryPropagatingChangesToLeader()
 
         return@withLock ConsensusHeartbeatResponse(true, currentTerm)
     }
@@ -509,7 +507,23 @@ class RaftConsensusProtocolImpl(
 
             response.message.incompatibleWithHistory -> {
                 logger.info("Peer $peer's history is incompatible with proposed change")
-                state.checkIfProposedItemsAreStillValid()
+//                TODO: fix this
+                val removedEntries = state.checkIfProposedItemsAreStillValid()
+
+                removedEntries.forEach {
+                    val change = Change.fromHistoryEntry(it.entry)!!
+                    changeIdToCompletableFuture[change.id]?.complete(
+                        ChangeResult(
+                            ChangeResult.Status.CONFLICT,
+                            detailedMessage = "Change incompatible",
+                            currentEntryId = history.getCurrentEntryId()
+                        )
+                    )
+                }
+
+                logger.info("Entries removed: ${removedEntries.size}")
+
+
             }
 
             response.message.success -> {

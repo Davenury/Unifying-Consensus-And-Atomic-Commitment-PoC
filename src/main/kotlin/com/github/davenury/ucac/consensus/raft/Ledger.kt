@@ -104,7 +104,7 @@ data class Ledger(
                 ?: history.containsEntry(historyEntryId)
         }
 
-    suspend fun checkIfProposedItemsAreStillValid() = mutex.withLock {
+    suspend fun checkIfProposedItemsAreStillValid(): List<LedgerItem> = mutex.withLock {
         val newProposedItems = proposedEntries.fold(listOf<LedgerItem>()) { acc, ledgerItem ->
             if (acc.isEmpty() && history.isEntryCompatible(ledgerItem.entry)) acc.plus(ledgerItem)
             else if (acc.isNotEmpty() && acc.last().entry.getId() == ledgerItem.entry.getParentId()) acc.plus(
@@ -112,7 +112,9 @@ data class Ledger(
             )
             else acc
         }
-        proposedEntries.removeAll { newProposedItems.contains(it) }
+        val removedEntries = proposedEntries.filter { !newProposedItems.contains(it) }
+        proposedEntries.removeAll(removedEntries)
+        removedEntries
     }
 
     suspend fun removeNotAcceptedItems() =
