@@ -275,8 +275,9 @@ class RaftConsensusProtocolImpl(
             return@withLock ConsensusHeartbeatResponse(false, currentTerm)
         }
 
-        if(currentTerm < term){
-            currentTerm = term
+        //      Restart timer because we received heartbeat from proper leader
+        if (currentTerm < term || votedFor == null || votedFor?.elected == false) {
+            newLeaderElected(heartbeat.leaderId, term)
         }
 
         val leaderCurrentEntryIsOutdated =
@@ -285,13 +286,6 @@ class RaftConsensusProtocolImpl(
         if (leaderCurrentEntryIsOutdated) {
             logger.warn("Received heartbeat from leader that has outdated history my commit - ${state.commitIndex} leader commit - $leaderCommitId")
             return@withLock ConsensusHeartbeatResponse(false, currentTerm, isLeaderCurrentEntryOutdated = true)
-        }
-
-//      Restart timer because we received heartbeat from proper leader
-        if (currentTerm < term || votedFor == null || votedFor?.elected == false) {
-            newLeaderElected(heartbeat.leaderId, term)
-            releaseBlockerFromPreviousTermChanges()
-            tryPropagatingChangesToLeader()
         }
 
         lastHeartbeatTime = Instant.now()
