@@ -15,6 +15,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
@@ -29,9 +30,8 @@ interface RaftProtocolClient : ConsensusProtocolClient {
 
     suspend fun sendConsensusHeartbeat(
         peer: PeerAddress,
-        message: ConsensusHeartbeat,
-        channel: Channel<ConsensusResponse<ConsensusHeartbeatResponse?>>
-    ): Unit
+        message: ConsensusHeartbeat
+    ): ConsensusResponse<ConsensusHeartbeatResponse?>
 
 
     suspend fun sendRequestApplyChange(
@@ -56,21 +56,9 @@ class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolCl
     override suspend fun sendConsensusHeartbeat(
         peer: PeerAddress,
         message: ConsensusHeartbeat,
-        channel: Channel<ConsensusResponse<ConsensusHeartbeatResponse?>>
-    ): Unit {
-        CoroutineScope(Dispatchers.IO).launchTraced(MDCContext()) {
-            try {
-                val result = sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(
-                    peer,
-                    "raft/heartbeat",
-                    message
-                )
-                ConsensusResponse(peer.address, result)
-            } catch (e: Exception) {
-                logger.error("Error while evaluating response from ${peer.peerId}")
-                ConsensusResponse(peer.address, null)
-            }.let { channel.send(it as ConsensusResponse<ConsensusHeartbeatResponse?>) }
-        }
+    ): ConsensusResponse<ConsensusHeartbeatResponse?> {
+        logger.debug("Sending heartbeat to ${peer.peerId}")
+        return sendRequest<ConsensusHeartbeat,ConsensusHeartbeatResponse>(Pair(peer,message), "raft/heartbeat")
     }
 
     override suspend fun sendRequestApplyChange(address: String, change: Change) =
