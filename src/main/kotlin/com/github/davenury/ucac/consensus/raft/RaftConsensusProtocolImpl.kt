@@ -17,10 +17,8 @@ import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.consensus.SynchronizationMeasurement
 import com.github.davenury.ucac.consensus.VotedFor
-import com.github.davenury.ucac.consensus.paxos.PaxosAccepted
 import com.github.davenury.ucac.utils.MdcProvider
 import com.zopa.ktor.opentracing.asyncTraced
-import com.zopa.ktor.opentracing.launchTraced
 import com.zopa.ktor.opentracing.span
 import com.zopa.ktor.opentracing.tracingContext
 import kotlinx.coroutines.*
@@ -36,7 +34,6 @@ import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
 import kotlin.collections.set
 import kotlin.system.measureTimeMillis
-import kotlin.time.measureTime
 
 
 /** @author Kamil Jarosz */
@@ -105,9 +102,6 @@ class RaftConsensusProtocolImpl(
     private val leaderRequestExecutorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
-
-    //    TODO: Useless, it should use a worker queue.
-    private val queuedChanges: MutableList<Change> = mutableListOf()
 
     override fun otherConsensusPeers(): List<PeerAddress> {
         return peerResolver.getPeersFromPeerset(peersetId).filter { it.peerId != peerId }
@@ -255,7 +249,7 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun propagateChangesToLeaderInCourtine(ctx: ExecutorCoroutineDispatcher = leaderRequestExecutorService) {
         withContext(ctx) {
-            launch {
+            async {
                 tryPropagatingChangesToLeader()
             }
         }
@@ -454,7 +448,7 @@ class RaftConsensusProtocolImpl(
                 history.toEntryList() + entries.take(index + 1).map { it.entry }
             }.mapNotNull { Change.fromHistoryEntry(it) }
 
-    private suspend fun sendHeartbeatToPeer(peer: PeerId, isRegular: Boolean): Unit = span("Raft.sendHeartbeatToPeer") {
+    private suspend fun sendHeartbeatToPeer(peer: PeerId, isRegular: Boolean): Unit {
         val peerAddress: PeerAddress
         val peerMessage: ConsensusHeartbeat
         mutex.withLock {
@@ -640,8 +634,8 @@ class RaftConsensusProtocolImpl(
 
     //  TODO: Useless function
     private suspend fun checkIfQueuedChanges() {
-        if (queuedChanges.isEmpty()) return
-        val change = queuedChanges.removeAt(0)
+        if (changesToBePropagatedToLeader.isEmpty()) return
+        val change = changesToBePropagatedToLeader.pop().change
         mutex.withLock {
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         }
@@ -799,7 +793,7 @@ class RaftConsensusProtocolImpl(
 
                 if (isDuring2PAndChangeDoesntFinishIt(change)) {
                     logger.info("Queued change, because is during 2PC")
-                    queuedChanges.add(change)
+                    changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, result))
                     transactionBlocker.tryRelease(acquisition)
                     return
                 }
@@ -861,7 +855,13 @@ class RaftConsensusProtocolImpl(
 
         logger.info("We must inform leader about blocked entry")
 
-        queuedChanges.add(0, Change.fromHistoryEntry(blockedEntry.entry)!!)
+        changesToBePropagatedToLeader
+            .addFirst(
+                ChangeToBePropagatedToLeader(
+                    Change.fromHistoryEntry(blockedEntry.entry)!!,
+                    changeIdToCompletableFuture[changeId]!!
+                )
+            )
         propagateChangesToLeaderInCourtine()
     }
 
@@ -903,14 +903,14 @@ class RaftConsensusProtocolImpl(
     private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit =
         span("Raft.sendRequestToLeader") {
             with(CoroutineScope(leaderRequestExecutorService) + tracingContext()) {
-                launchTraced(MDCContext()) {
+                asyncTraced(MDCContext()) {
                     var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
                     while (result == null) {
                         val address: String
                         if (votedFor == null || votedFor!!.id == peerId) {
                             changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
-                            return@launchTraced
+                            return@asyncTraced
                         } else {
                             address = peerResolver.resolve(votedFor!!.id).address
                         }
@@ -971,12 +971,10 @@ class RaftConsensusProtocolImpl(
         isRegular: Boolean = false,
         sendInstantly: Boolean = false,
         delay: Duration = heartbeatDelay
-    ): Unit = span("Raft.launchHeartbeatToPeer") {
-        this.setTag("toPeer", peerId.peerId)
+    ): Unit {
         if (shouldISendHeartbeatToPeer(peer)) {
             with(CoroutineScope(executorService!!)) {
-                val context = if (sendInstantly) MDCContext() + tracingContext() else MDCContext()
-                asyncTraced(context) {
+                async {
                     if (!sendInstantly) {
                         logger.debug("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
                         delay(delay.toMillis())
