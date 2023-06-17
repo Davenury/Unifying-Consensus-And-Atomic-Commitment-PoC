@@ -14,6 +14,7 @@ import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.common.structure.Subscribers
+import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.consensus.SynchronizationMeasurement
 import com.github.davenury.ucac.consensus.VotedFor
 import com.github.davenury.ucac.utils.MdcProvider
@@ -31,6 +32,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
 import kotlin.collections.set
+import kotlin.system.measureTimeMillis
 
 
 /** @author Kamil Jarosz */
@@ -458,7 +460,6 @@ class RaftConsensusProtocolImpl(
             subject = this@RaftConsensusProtocolImpl,
             peers = mapOf(peersetId to otherConsensusPeers()),
         )
-        val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
 
         // We should schedule heartbeat even if something failed during handling response
         when {
@@ -478,6 +479,14 @@ class RaftConsensusProtocolImpl(
         if (isRegular && shouldISendHeartbeatToPeer(peer)) {
             launchHeartBeatToPeer(peer, true)
         }
+
+        val response: ConsensusResponse<ConsensusHeartbeatResponse?>
+
+        val time = measureTimeMillis {
+            response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
+        }
+
+        logger.info("Peer $peer respond in $time ms")
 
         when {
             response.message == null -> {
