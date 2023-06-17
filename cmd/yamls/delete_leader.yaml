@@ -5,7 +5,7 @@ metadata:
   namespace: ddebowski
 spec:
   phases:
-    - duration: PT60S
+    - duration: PT300S
       actions:
         - namespace: ddebowski
           resourceType: consensus leader
