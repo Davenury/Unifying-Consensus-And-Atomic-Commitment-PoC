@@ -619,6 +619,14 @@ class RaftConsensusProtocolImpl(
                 .filter { state.isNotApplied(it.entry.getId()) }
                 .forEach { voteContainer.voteForChange(it.entry.getId(), peerAddress) }
 
+            newProposedChanges
+                .map { it.toLedgerItem() }
+                .filter { state.isNotApplied(it.entry.getId()) }
+                .map { Pair(it.entry.getId(),voteContainer.getVotes(it.entry.getId())) }
+                .toMap()
+                .let { logger.info("Votes for changes: $it after heartbeat from ${peerAddress.peerId}") }
+
+
             peerToNextIndex[otherPeerId] =
                 peerIndices.copy(
                     acknowledgedEntryId = newProposedChanges.last().toLedgerItem().entry.getId()
