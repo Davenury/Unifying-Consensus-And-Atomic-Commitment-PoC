@@ -188,7 +188,6 @@ class RaftConsensusProtocolImpl(
     }
 
 
-
     override suspend fun handleRequestVote(
         peerId: PeerId,
         iteration: Int,
@@ -274,10 +273,9 @@ class RaftConsensusProtocolImpl(
         Metrics.registerTimerHeartbeat()
         val term = heartbeat.term
         val leaderCommitId = heartbeat.leaderCommitId
-        val isUpdatedCommitIndex = state.isNotApplied(leaderCommitId)
+        val isUpdatedCommitIndex = leaderCommitId != state.commitIndex
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
         val prevEntryId = heartbeat.prevEntryId
-
 
 
         if (term < currentTerm || (term == currentTerm && votedFor != null && heartbeat.leaderId != votedFor?.id)) {
@@ -290,8 +288,11 @@ class RaftConsensusProtocolImpl(
             newLeaderElected(heartbeat.leaderId, term)
         }
 
-        val leaderCurrentEntryIsOutdated =
-            history.containsEntry(heartbeat.currentHistoryEntryId) && history.getCurrentEntryId() != heartbeat.currentHistoryEntryId
+        val leaderCurrentEntryIsOutdated: Boolean
+        measureTimeMillis {
+            leaderCurrentEntryIsOutdated =
+                history.getCurrentEntryId() != heartbeat.currentHistoryEntryId && history.containsEntry(heartbeat.currentHistoryEntryId)
+        }.let { logger.info("LeaderCurrentEntryIsOutdated took: $it ms") }
 
         if (leaderCurrentEntryIsOutdated) {
             logger.warn("Received heartbeat from leader that has outdated history my commit - ${state.commitIndex} leader commit - $leaderCommitId")
@@ -302,26 +303,39 @@ class RaftConsensusProtocolImpl(
 
         restartTimer()
 
-        val notAppliedProposedChanges =
-            proposedChanges.filter { state.isNotAppliedNorProposed(it.entry.getId()) }
+        val notAppliedProposedChanges: List<LedgerItem>
 
-        val prevLogEntryExists = prevEntryId == null || state.checkIfItemExist(prevEntryId)
+        measureTimeMillis {
+            notAppliedProposedChanges = proposedChanges.filter { state.isNotAppliedNorProposed(it.entry.getId()) }
+        }.let { logger.info("notAppliedProposedChanges took: $it ms") }
 
-        val commitIndexEntryExists = notAppliedProposedChanges
-            .find { it.entry.getId() == leaderCommitId }
-            ?.let { true }
-            ?: state.checkIfItemExist(leaderCommitId)
+        val prevLogEntryExists: Boolean
+        measureTimeMillis {
+            prevLogEntryExists = prevEntryId == null || state.checkIfItemExist(prevEntryId)
+        }.let { logger.info("prevLogEntryExists took: $it ms") }
 
+        val commitIndexEntryExists: Boolean
+        measureTimeMillis {
+            commitIndexEntryExists = notAppliedProposedChanges
+                .find { it.entry.getId() == leaderCommitId }
+                ?.let { true }
+                ?: state.checkIfItemExist(leaderCommitId)
+        }.let { logger.info("commitIndexEntryExists took: $it ms") }
 
-        val areProposedChangesIncompatible =
-            notAppliedProposedChanges.isNotEmpty() && notAppliedProposedChanges.any {
+        val areProposedChangesIncompatible: Boolean
+
+        measureTimeMillis {
+            areProposedChangesIncompatible = notAppliedProposedChanges.isNotEmpty() && notAppliedProposedChanges.any {
                 !history.isEntryCompatible(it.entry)
             }
+        }.let { logger.info("areProposedChangesIncompatible took: $it ms") }
 
-        val acceptedChangesFromProposed = notAppliedProposedChanges
-            .indexOfFirst { it.entry.getId() == leaderCommitId }
-            .let { notAppliedProposedChanges.take(it + 1) }
-
+        val acceptedChangesFromProposed: List<LedgerItem>
+        measureTimeMillis {
+            acceptedChangesFromProposed = notAppliedProposedChanges
+                .indexOfFirst { it.entry.getId() == leaderCommitId }
+                .let { notAppliedProposedChanges.take(it + 1) }
+        }.let { logger.info("acceptedChangesFromProposed took: $it ms") }
 
         when {
             !commitIndexEntryExists -> {
@@ -375,6 +389,7 @@ class RaftConsensusProtocolImpl(
         }
 
         logger.debug("Updating ledger with {}", notAppliedProposedChanges)
+
         updateLedger(heartbeat, leaderCommitId, notAppliedProposedChanges)
 
         propagateChangesToLeaderInCourtine()
@@ -656,7 +671,7 @@ class RaftConsensusProtocolImpl(
             newProposedChanges
                 .map { it.toLedgerItem() }
                 .filter { state.isNotApplied(it.entry.getId()) }
-                .forEach { logger.info("Votes after message to peer ${peerAddress.peerId},  ${voteContainer.getVotes(it.entry.getId())} for entry: ${it.entry.getId()}")}
+                .forEach { logger.info("Votes after message to peer ${peerAddress.peerId},  ${voteContainer.getVotes(it.entry.getId())} for entry: ${it.entry.getId()}") }
 
             peerToNextIndex[otherPeerId] =
                 peerIndices.copy(
