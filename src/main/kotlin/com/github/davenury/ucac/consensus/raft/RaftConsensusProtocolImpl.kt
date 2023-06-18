@@ -183,7 +183,7 @@ class RaftConsensusProtocolImpl(
         }
 
 
-        scheduleHeartbeatToPeers(isRegular = true, sendInstantly = true)
+        mutex.withLock { scheduleHeartbeatToPeers(isRegular = true, sendInstantly = true) }
         propagateChangesToLeaderInCourtine(executorService!!)
         CoroutineScope(executorService!!).launchTraced(MDCContext()) {
             handleHeartbeatResponses()
@@ -695,7 +695,7 @@ class RaftConsensusProtocolImpl(
 
             if (!acquisitionResult && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
                 logger.info("Queued change, because transaction is blocked")
-                recoveryEntry(transactionBlocker.getChangeId()!!)
+//                recoveryEntry(transactionBlocker.getChangeId()!!)
                 return
             }
 
@@ -721,15 +721,15 @@ class RaftConsensusProtocolImpl(
             logger.info("Propose change to ledger: $updatedChange")
             state.proposeEntry(entry, updatedChange.id)
             voteContainer.initializeChange(entry.getId())
-        }
 
-        if (otherConsensusPeers().isEmpty()) {
-            logger.info("No other consensus peers, applying change")
-            applyAcceptedChanges(listOf(entry.getId()))
-        } else {
-            scheduleHeartbeatToPeers(isRegular = false, sendInstantly = true)
-        }
 
+            if (otherConsensusPeers().isEmpty()) {
+                logger.info("No other consensus peers, applying change")
+                applyAcceptedChanges(listOf(entry.getId()))
+            } else {
+                scheduleHeartbeatToPeers(isRegular = false, sendInstantly = true)
+            }
+        }
     }
 
     private suspend fun recoveryEntry(changeId: String) {
@@ -810,7 +810,11 @@ class RaftConsensusProtocolImpl(
                 logger.info("Send request to leader ${votedFor?.id} again")
 
                 result = try {
-                    protocolClient.sendRequestApplyChange(address, change)
+                    val changeResult: ChangeResult
+                    measureTimeMillis {
+                        changeResult = protocolClient.sendRequestApplyChange(address, change)
+                    }.also { logger.info("Sending request apply took $it ms for ${change.id}") }
+                    changeResult
                 } catch (e: Exception) {
                     logger.error("Request to leader ($address, ${votedFor?.id}) failed", e)
                     null
@@ -830,24 +834,23 @@ class RaftConsensusProtocolImpl(
     ): CompletableFuture<ChangeResult> {
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         val result = changeIdToCompletableFuture[change.id]!!
-        measureTimeMillis {
-            when {
-                amILeader() -> {
-                    logger.info("Proposing change: $change")
-                    proposeChangeToLedger(result, change)
-                }
-
-                votedFor?.elected == true -> {
-                    logger.info("Forwarding change to the leader(${votedFor!!}): $change")
-                    sendRequestToLeader(result, change)
-                }
-//              TODO: Change after queue
-                else -> {
-                    logger.info("Queueing a change to be propagated when leader is elected")
-                    changesToBePropagatedToLeader.push(ChangeToBePropagatedToLeader(change, result))
-                }
+        when {
+            amILeader() -> {
+                logger.info("Proposing change: $change")
+                proposeChangeToLedger(result, change)
             }
-        }.also { logger.info("ProposeChangeAsync took $it ms") }
+
+            votedFor?.elected == true -> {
+                logger.info("Forwarding change to the leader(${votedFor!!}): $change")
+                sendRequestToLeader(result, change)
+            }
+//              TODO: Change after queue
+            else -> {
+                logger.info("Queueing a change to be propagated when leader is elected")
+                changesToBePropagatedToLeader.push(ChangeToBePropagatedToLeader(change, result))
+            }
+        }
+
         return result
     }
 
@@ -942,13 +945,16 @@ class RaftConsensusProtocolImpl(
                         votedFor = null
                     }
                 }
+
+
+                applyAcceptedChanges(listOf())
             }
 
-            applyAcceptedChanges(listOf())
             checkIfQueuedChanges()
         }
     }
 
+    //  mutex function
     private suspend fun scheduleHeartbeatToPeers(
         isRegular: Boolean,
         sendInstantly: Boolean = false,
@@ -960,27 +966,27 @@ class RaftConsensusProtocolImpl(
             delay(delay.toMillis())
         }
 
-        mutex.withLock {
-            val currentTime = Instant.now()
-            otherConsensusPeers()
-                .filter { shouldISendHeartbeatToPeer(it.peerId) }
-                .filter {
-                    val isTimeForHeartbeat: Boolean = Duration.between(
-                        currentTime,
-                        peerToLastInstant.getOrDefault(it.peerId, Instant.MIN)
-                    ) > heartbeatTimeout
-                    if (sendInstantly && !isTimeForHeartbeat) peerToHeartbeatJob[it.peerId]?.cancel()
-                    sendInstantly || isTimeForHeartbeat
-                }
-                .map {
-                    Pair(it.peerId, getMessageForPeer(it))
-                }.forEach {
-                    peerToHeartbeatJob[it.first] = sendHeartbeatToPeerInCouritine(it.first, it.second)
-                }
-        }
+        val currentTime = Instant.now()
+        otherConsensusPeers()
+            .filter { shouldISendHeartbeatToPeer(it.peerId) }
+            .filter {
+                val isTimeForHeartbeat: Boolean = Duration.between(
+                    currentTime,
+                    peerToLastInstant.getOrDefault(it.peerId, Instant.MIN)
+                ) > heartbeatTimeout
+                if (sendInstantly && !isTimeForHeartbeat) peerToHeartbeatJob[it.peerId]?.cancel()
+                sendInstantly || isTimeForHeartbeat
+            }
+            .map {
+                Pair(it.peerId, getMessageForPeer(it))
+            }.map {
+                it.first to sendHeartbeatToPeerInCouritine(it.first, it.second)
+            }.forEach {
+                peerToHeartbeatJob[it.first] = it.second
+            }
         if (isRegular) {
             CoroutineScope(executorService!!).launch {
-                scheduleHeartbeatToPeers(isRegular = true, sendInstantly = false)
+                mutex.withLock { scheduleHeartbeatToPeers(isRegular = true, sendInstantly = false) }
             }
         }
     }
