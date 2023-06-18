@@ -82,6 +82,7 @@ class RaftConsensusProtocolImpl(
 
     private var currentTerm: Int = 0
     private val peerToNextIndex: MutableMap<PeerId, PeerIndices> = mutableMapOf()
+    private val peerToLastInstant: MutableMap<PeerId, Instant> = mutableMapOf()
     private val voteContainer: VoteContainer = VoteContainer()
     private var votedFor: VotedFor? = null
     private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
@@ -269,6 +270,7 @@ class RaftConsensusProtocolImpl(
 
         return@withLock result
     }
+
     private suspend fun doHandleHeartbeat(heartbeat: ConsensusHeartbeat): ConsensusHeartbeatResponse {
         logger.info("Handling heartbeat from ${heartbeat.leaderId}, entries overall: ${heartbeat.logEntries.size}")
         heartbeat.logEntries.forEach {
@@ -477,14 +479,14 @@ class RaftConsensusProtocolImpl(
             peers = mapOf(peersetId to otherConsensusPeers()),
         )
 
-//        logger.info("Start sending heartbeat to peer $peer")
+        logger.info("Start sending heartbeat to peer $peer")
 
-//        val time = measureTimeMillis {
+        val time = measureTimeMillis {
             val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
             channel.send(HeartbeatResponse(peer, peerAddress, response, peerMessage))
-//        }
+        }
 
-//        logger.info("Respond from peer $peer took $time ms")
+        logger.info("Respond from peer $peer took $time ms")
     }
 
     private fun shouldISendHeartbeatToPeer(peer: PeerId): Boolean =
@@ -855,9 +857,9 @@ class RaftConsensusProtocolImpl(
             val peerAddress = heartbeatResponse.peerAddress
             val peerMessage = heartbeatResponse.peerMessage
 
-            logger.info("Received response1 from peer $peer")
             mutex.withLock {
-                logger.info("Received response2 from peer $peer")
+                peerToLastInstant[peer] = Instant.now()
+
                 when {
                     response.message == null -> {
                         logger.info("Peer $peer did not respond to heartbeat")
@@ -938,7 +940,6 @@ class RaftConsensusProtocolImpl(
                 }
             }
 
-
             applyAcceptedChanges(listOf())
             checkIfQueuedChanges()
         }
@@ -958,8 +959,15 @@ class RaftConsensusProtocolImpl(
         val messages: List<Pair<PeerId, ConsensusHeartbeat>>
 
         mutex.withLock {
+            val currentTime = Instant.now()
             messages = otherConsensusPeers()
                 .filter { shouldISendHeartbeatToPeer(it.peerId) }
+                .filter {
+                    sendInstantly || Duration.between(
+                        currentTime,
+                        peerToLastInstant.getOrDefault(it.peerId, Instant.MIN)
+                    ) > heartbeatTimeout
+                }
                 .map {
                     Pair(it.peerId, getMessageForPeer(it))
                 }
