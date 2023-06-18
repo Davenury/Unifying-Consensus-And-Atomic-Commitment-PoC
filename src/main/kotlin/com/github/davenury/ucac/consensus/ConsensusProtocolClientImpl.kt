@@ -3,6 +3,7 @@ package com.github.davenury.ucac.consensus
 import com.github.davenury.common.PeerAddress
 import com.github.davenury.common.PeersetId
 import com.github.davenury.ucac.raftHttpClient
+import io.ktor.client.*
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -22,11 +23,13 @@ open class ConsensusProtocolClientImpl(open val peersetId: PeersetId): Consensus
     suspend inline fun <T, reified K> sendRequest(
         peerWithBody: Pair<PeerAddress, T>,
         urlPath: String,
+        httpClient: HttpClient = raftHttpClient,
     ): ConsensusResponse<K?> = CoroutineScope(Dispatchers.IO).async(MDCContext()) {
         sendConsensusMessage<T, K>(
             peerWithBody.first,
             urlPath,
-            peerWithBody.second
+            peerWithBody.second,
+            httpClient
         )
     }.let {
         try {
@@ -51,9 +54,10 @@ open class ConsensusProtocolClientImpl(open val peersetId: PeersetId): Consensus
         peer: PeerAddress,
         suffix: String,
         message: Message,
+        httpClient: HttpClient = raftHttpClient
     ): Response? {
         logger.debug("Sending request to: ${peer.peerId} ${peer.address}, message: $message")
-        return raftHttpClient.post<Response>("http://${peer.address}/${suffix}?peerset=${peersetId}") {
+        return httpClient.post<Response>("http://${peer.address}/${suffix}?peerset=${peersetId}") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             body = message!!

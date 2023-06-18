@@ -8,16 +8,9 @@ import com.github.davenury.ucac.consensus.ConsensusProtocolClient
 import com.github.davenury.ucac.consensus.ConsensusProtocolClientImpl
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.httpClient
-import com.zopa.ktor.opentracing.asyncTraced
-import com.zopa.ktor.opentracing.launchTraced
+import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
 
@@ -30,7 +23,8 @@ interface RaftProtocolClient : ConsensusProtocolClient {
 
     suspend fun sendConsensusHeartbeat(
         peer: PeerAddress,
-        message: ConsensusHeartbeat
+        message: ConsensusHeartbeat,
+        httpClient: HttpClient
     ): ConsensusResponse<ConsensusHeartbeatResponse?>
 
 
@@ -56,9 +50,14 @@ class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolCl
     override suspend fun sendConsensusHeartbeat(
         peer: PeerAddress,
         message: ConsensusHeartbeat,
+        httpClient: HttpClient
     ): ConsensusResponse<ConsensusHeartbeatResponse?> {
         logger.debug("Sending heartbeat to ${peer.peerId}")
-        return sendRequest<ConsensusHeartbeat,ConsensusHeartbeatResponse>(Pair(peer,message), "raft/heartbeat")
+        return sendRequest<ConsensusHeartbeat, ConsensusHeartbeatResponse>(
+            Pair(peer, message),
+            "raft/heartbeat",
+            httpClient
+        )
     }
 
     override suspend fun sendRequestApplyChange(address: String, change: Change) =

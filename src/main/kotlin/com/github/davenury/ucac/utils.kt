@@ -25,6 +25,21 @@ val raftHttpClient = HttpClient(OkHttp) {
     }
     install(OpenTracingClient)
 }
+
+val raftHttpClients = (0..5).map {
+    HttpClient(OkHttp) {
+        install(JsonFeature) {
+            serializer = JacksonSerializer(objectMapper)
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 750
+        }
+        install(OpenTracingClient)
+    }
+}
+
+
+
 val testHttpClient = HttpClient(OkHttp) {
     install(JsonFeature) {
         serializer = JacksonSerializer(objectMapper)

@@ -6,10 +6,7 @@ import com.github.davenury.common.history.HistoryEntry
 import com.github.davenury.common.history.InitialHistoryEntry
 import com.github.davenury.common.txblocker.TransactionAcquisition
 import com.github.davenury.common.txblocker.TransactionBlocker
-import com.github.davenury.ucac.Config
-import com.github.davenury.ucac.Signal
-import com.github.davenury.ucac.SignalPublisher
-import com.github.davenury.ucac.SignalSubject
+import com.github.davenury.ucac.*
 import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
@@ -22,7 +19,6 @@ import com.zopa.ktor.opentracing.asyncTraced
 import com.zopa.ktor.opentracing.span
 import com.zopa.ktor.opentracing.tracingContext
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.slf4j.MDCContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -482,8 +478,10 @@ class RaftConsensusProtocolImpl(
 
         val response: ConsensusResponse<ConsensusHeartbeatResponse?>
 
+        val idx = otherConsensusPeers().indexOf(peerAddress)
+
         val time = measureTimeMillis {
-            response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
+            response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage, raftHttpClients[idx])
         }
 
         logger.info("Respond from peer $peer took $time ms")
@@ -776,6 +774,7 @@ class RaftConsensusProtocolImpl(
             var entry = change.toHistoryEntry(peersetId)
 
             mutex.withLock {
+                logger.info("ProposedEntries: ${state.proposedEntries.size}")
                 if (state.entryAlreadyProposed(entry)) {
                     logger.info("Already proposed that change: $change")
 //                    scheduleHeartbeatToPeers(isRegular = false)
@@ -913,8 +912,13 @@ class RaftConsensusProtocolImpl(
                         }
                         logger.info("Send request to leader ${votedFor?.id} again")
 
+
                         result = try {
-                            protocolClient.sendRequestApplyChange(address, change)
+                            val changeResult: ChangeResult
+                            measureTimeMillis {
+                                changeResult = protocolClient.sendRequestApplyChange(address, change)
+                            }.also { logger.info("Sending message to leader took $it ms") }
+                            changeResult
                         } catch (e: Exception) {
                             logger.error("Request to leader ($address, ${votedFor?.id}) failed", e)
                             null
@@ -938,22 +942,24 @@ class RaftConsensusProtocolImpl(
             this.setTag("changeId", change.id)
             changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             val result = changeIdToCompletableFuture[change.id]!!
-            when {
-                amILeader() -> {
-                    logger.info("Proposing change: $change")
-                    proposeChangeToLedger(result, change)
-                }
+            measureTimeMillis {
+                when {
+                    amILeader() -> {
+                        logger.info("Proposing change: $change")
+                        proposeChangeToLedger(result, change)
+                    }
 
-                votedFor?.elected == true -> {
-                    logger.info("Forwarding change to the leader(${votedFor!!}): $change")
-                    sendRequestToLeader(result, change)
-                }
+                    votedFor?.elected == true -> {
+                        logger.info("Forwarding change to the leader(${votedFor!!}): $change")
+                        sendRequestToLeader(result, change)
+                    }
 //              TODO: Change after queue
-                else -> {
-                    logger.info("Queueing a change to be propagated when leader is elected")
-                    changesToBePropagatedToLeader.push(ChangeToBePropagatedToLeader(change, result))
+                    else -> {
+                        logger.info("Queueing a change to be propagated when leader is elected")
+                        changesToBePropagatedToLeader.push(ChangeToBePropagatedToLeader(change, result))
+                    }
                 }
-            }
+            }.also { logger.info("ProposeChangeAsync took $it ms") }
             return result
         }
 
