@@ -83,6 +83,7 @@ class RaftConsensusProtocolImpl(
     private var currentTerm: Int = 0
     private val peerToNextIndex: MutableMap<PeerId, PeerIndices> = mutableMapOf()
     private val peerToLastInstant: MutableMap<PeerId, Instant> = mutableMapOf()
+    private val peerToHeartbeatJob: MutableMap<PeerId, Job> = mutableMapOf()
     private val voteContainer: VoteContainer = VoteContainer()
     private var votedFor: VotedFor? = null
     private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
@@ -98,7 +99,7 @@ class RaftConsensusProtocolImpl(
     private val mutex = Mutex()
     private val mutexChangeToBePropagatedToLeader = Mutex()
     private var executorService: ExecutorCoroutineDispatcher? = null
-    private val leaderRequestExecutorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    private val leaderRequestExecutorService = Executors.newFixedThreadPool(10).asCoroutineDispatcher()
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
     private val channel = Channel<HeartbeatResponse>()
@@ -456,6 +457,7 @@ class RaftConsensusProtocolImpl(
 
     override suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult> =
         proposeChangeAsync(change)
+
 
     override suspend fun getProposedChanges(): List<Change> = state.getLogEntries()
         .reversed()
@@ -828,22 +830,24 @@ class RaftConsensusProtocolImpl(
     ): CompletableFuture<ChangeResult> {
         changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
         val result = changeIdToCompletableFuture[change.id]!!
-        when {
-            amILeader() -> {
-                logger.info("Proposing change: $change")
-                proposeChangeToLedger(result, change)
-            }
+        measureTimeMillis {
+            when {
+                amILeader() -> {
+                    logger.info("Proposing change: $change")
+                    proposeChangeToLedger(result, change)
+                }
 
-            votedFor?.elected == true -> {
-                logger.info("Forwarding change to the leader(${votedFor!!}): $change")
-                sendRequestToLeader(result, change)
-            }
+                votedFor?.elected == true -> {
+                    logger.info("Forwarding change to the leader(${votedFor!!}): $change")
+                    sendRequestToLeader(result, change)
+                }
 //              TODO: Change after queue
-            else -> {
-                logger.info("Queueing a change to be propagated when leader is elected")
-                changesToBePropagatedToLeader.push(ChangeToBePropagatedToLeader(change, result))
+                else -> {
+                    logger.info("Queueing a change to be propagated when leader is elected")
+                    changesToBePropagatedToLeader.push(ChangeToBePropagatedToLeader(change, result))
+                }
             }
-        }
+        }.also { logger.info("ProposeChangeAsync took $it ms") }
         return result
     }
 
@@ -956,24 +960,23 @@ class RaftConsensusProtocolImpl(
             delay(delay.toMillis())
         }
 
-        val messages: List<Pair<PeerId, ConsensusHeartbeat>>
-
         mutex.withLock {
             val currentTime = Instant.now()
-            messages = otherConsensusPeers()
+            otherConsensusPeers()
                 .filter { shouldISendHeartbeatToPeer(it.peerId) }
                 .filter {
-                    sendInstantly || Duration.between(
+                    val isTimeForHeartbeat: Boolean = Duration.between(
                         currentTime,
                         peerToLastInstant.getOrDefault(it.peerId, Instant.MIN)
                     ) > heartbeatTimeout
+                    if (sendInstantly && !isTimeForHeartbeat) peerToHeartbeatJob[it.peerId]?.cancel()
+                    sendInstantly || isTimeForHeartbeat
                 }
                 .map {
                     Pair(it.peerId, getMessageForPeer(it))
+                }.forEach {
+                    peerToHeartbeatJob[it.first] = sendHeartbeatToPeerInCouritine(it.first, it.second)
                 }
-        }
-        messages.forEach {
-            sendHeartbeatToPeerInCouritine(it.first, it.second)
         }
         if (isRegular) {
             CoroutineScope(executorService!!).launch {
