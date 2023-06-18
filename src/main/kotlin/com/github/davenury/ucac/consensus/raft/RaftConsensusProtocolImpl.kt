@@ -898,7 +898,7 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit =
         span("Raft.sendRequestToLeader") {
-            with(CoroutineScope(leaderRequestExecutorService) + tracingContext()) {
+            with(CoroutineScope(Dispatchers.IO) + tracingContext()) {
                 asyncTraced(MDCContext()) {
                     var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one

@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 
-data class Ledger(
+data class OldLedger(
     private val history: History,
     val proposedEntries: MutableList<LedgerItem> = mutableListOf(),
     private val mutex: Mutex = Mutex(),
@@ -17,13 +17,13 @@ data class Ledger(
     var commitIndex: String = history.getCurrentEntryId()
     var lastApplied: String = history.getCurrentEntryId()
 
-    suspend fun updateLedger(leaderCommitHistoryEntryId: String, proposedItems: List<LedgerItem>): LedgerUpdateResult =
+    suspend fun updateLedger(leaderCommitHistoryEntryId: String, proposedItems: List<LedgerItem>): OldLedgerUpdateResult =
         mutex.withLock {
             this.proposedEntries.addAll(proposedItems)
 
             val newAcceptedItems = updateCommitIndex(leaderCommitHistoryEntryId)
 
-            return LedgerUpdateResult(
+            return OldLedgerUpdateResult(
                 acceptedItems = newAcceptedItems,
                 proposedItems = proposedItems,
             )
@@ -162,4 +162,4 @@ data class LedgerItem(val entry: HistoryEntry, val changeId: String) {
     fun toDto(): LedgerItemDto = LedgerItemDto(entry.serialize(), changeId)
 }
 
-data class LedgerUpdateResult(val acceptedItems: List<LedgerItem>, val proposedItems: List<LedgerItem>)
+data class OldLedgerUpdateResult(val acceptedItems: List<LedgerItem>, val proposedItems: List<LedgerItem>)

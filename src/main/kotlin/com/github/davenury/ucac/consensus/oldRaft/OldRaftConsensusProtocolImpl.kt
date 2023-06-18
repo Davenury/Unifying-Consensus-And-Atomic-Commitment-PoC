@@ -14,6 +14,9 @@ import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.common.structure.Subscribers
+import com.github.davenury.ucac.consensus.oldRaft.OldRaftConsensusProtocol
+import com.github.davenury.ucac.consensus.oldRaft.OldLedger
+import com.github.davenury.ucac.consensus.oldRaft.OldLedgerUpdateResult
 import com.github.davenury.ucac.utils.MdcProvider
 import com.zopa.ktor.opentracing.launchTraced
 import com.zopa.ktor.opentracing.span
@@ -81,7 +84,8 @@ class OldRaftConsensusProtocolImpl(
     private var votedFor: VotedFor? = null
     private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
         ConcurrentLinkedDeque()
-    private var state: Ledger = Ledger(history)
+    private var state: OldLedger = OldLedger(history)
+
 
     @Volatile
     private var role: RaftRole = RaftRole.Candidate
@@ -168,6 +172,8 @@ class OldRaftConsensusProtocolImpl(
             mapOf(peersetId to otherConsensusPeers()),
             null
         )
+
+        Metrics.bumpLeaderElection(peerId, peersetId)
 
         peerToNextIndex.keys.forEach {
             peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
@@ -374,7 +380,7 @@ class OldRaftConsensusProtocolImpl(
         leaderCommitId: String,
         proposedChanges: List<LedgerItem> = listOf()
     ): Unit = span("Raft.updateLedger") {
-        val updateResult: LedgerUpdateResult = state.updateLedger(leaderCommitId, proposedChanges)
+        val updateResult: OldLedgerUpdateResult = state.updateLedger(leaderCommitId, proposedChanges)
 
         updateResult.acceptedItems.forEach { acceptedItem ->
             signalPublisher.signal(
@@ -947,11 +953,7 @@ class OldRaftConsensusProtocolImpl(
 data class PeerIndices(
     val acceptedEntryId: String = InitialHistoryEntry.getId(),
     val acknowledgedEntryId: String = InitialHistoryEntry.getId()
-) {
-    suspend fun decrement(ledger: Ledger): PeerIndices = ledger
-        .getPreviousEntryId(acceptedEntryId)
-        .let { PeerIndices(it, it) }
-}
+)
 
 data class VotedFor(val id: PeerId, val elected: Boolean = false)
 
