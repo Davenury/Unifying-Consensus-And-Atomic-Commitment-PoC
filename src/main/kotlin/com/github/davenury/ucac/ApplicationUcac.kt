@@ -134,7 +134,7 @@ class ApplicationUcac(
                         .withLogSpans(false)
                         .withSender(
                             Configuration.SenderConfiguration()
-                                .withAgentHost("tempo")
+                                .withAgentHost(System.getenv("TEMPO_HOST"))
                                 .withAgentPort(6831)
                         )
                 ).tracerBuilder
