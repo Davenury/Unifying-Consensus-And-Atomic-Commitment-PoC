@@ -8,16 +8,11 @@ import com.github.davenury.ucac.consensus.ConsensusProtocolClient
 import com.github.davenury.ucac.consensus.ConsensusProtocolClientImpl
 import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.httpClient
-import com.zopa.ktor.opentracing.asyncTraced
-import com.zopa.ktor.opentracing.launchTraced
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
 
 
@@ -30,9 +25,8 @@ interface RaftProtocolClient : ConsensusProtocolClient {
 
     suspend fun sendConsensusHeartbeat(
         peer: PeerAddress,
-        message: ConsensusHeartbeat,
-        channel: Channel<ConsensusResponse<ConsensusHeartbeatResponse?>>
-    ): Unit
+        message: ConsensusHeartbeat
+    ): ConsensusResponse<ConsensusHeartbeatResponse?>
 
 
     suspend fun sendRequestApplyChange(
@@ -57,24 +51,12 @@ class RaftProtocolClientImpl(override val peersetId: PeersetId) : RaftProtocolCl
     override suspend fun sendConsensusHeartbeat(
         peer: PeerAddress,
         message: ConsensusHeartbeat,
-        channel: Channel<ConsensusResponse<ConsensusHeartbeatResponse?>>
-    ): Unit {
-        CoroutineScope(Dispatchers.IO).async() {
-            try {
-                val result = sendConsensusMessage<ConsensusHeartbeat, ConsensusHeartbeatResponse>(
-                    peer,
-                    "raft/heartbeat",
-                    message
-                )
-                ConsensusResponse(peer.address, result)
-                channel.send(ConsensusResponse(peer.address, result))
-            } catch (e: Exception) {
-                logger.error("Error while evaluating response from ${peer.peerId}")
-                ConsensusResponse(peer.address, null)
-                channel.send(ConsensusResponse(peer.address, null))
-            }
-        }
+    ): ConsensusResponse<ConsensusHeartbeatResponse?> {
+        logger.debug("Sending heartbeat request to ${peer.peerId}")
+        return sendRequest(Pair(peer, message), "raft/heartbeat")
     }
+
+
 
     override suspend fun sendRequestApplyChange(address: String, change: Change) =
         httpClient.post<ChangeResult>("http://${address}/raft/request_apply_change?peerset=${peersetId}") {

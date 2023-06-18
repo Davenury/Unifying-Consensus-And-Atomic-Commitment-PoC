@@ -18,9 +18,7 @@ import com.github.davenury.ucac.consensus.ConsensusResponse
 import com.github.davenury.ucac.consensus.SynchronizationMeasurement
 import com.github.davenury.ucac.consensus.VotedFor
 import com.github.davenury.ucac.utils.MdcProvider
-import com.zopa.ktor.opentracing.asyncTraced
-import com.zopa.ktor.opentracing.span
-import com.zopa.ktor.opentracing.tracingContext
+import com.zopa.ktor.opentracing.launchTraced
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.slf4j.MDCContext
@@ -102,6 +100,7 @@ class RaftConsensusProtocolImpl(
     private val leaderRequestExecutorService = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
+    private val channel = Channel<HeartbeatResponse>()
 
     override fun otherConsensusPeers(): List<PeerAddress> {
         return peerResolver.getPeersFromPeerset(peersetId).filter { it.peerId != peerId }
@@ -115,7 +114,7 @@ class RaftConsensusProtocolImpl(
 
     override fun getPeerName() = peerId.toString()
 
-    private suspend fun sendLeaderRequest(): Unit = span("Raft.sendLeaderRequest") {
+    private suspend fun sendLeaderRequest(): Unit {
         if (executorService != null) {
             mutex.withLock {
                 restartTimer(RaftRole.Candidate)
@@ -181,8 +180,12 @@ class RaftConsensusProtocolImpl(
             peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
         }
 
+
         scheduleHeartbeatToPeers(true)
         propagateChangesToLeaderInCourtine(executorService!!)
+        CoroutineScope(executorService!!).launchTraced(MDCContext()) {
+            handleHeartbeatResponses()
+        }
     }
 
 
@@ -190,7 +193,7 @@ class RaftConsensusProtocolImpl(
         peerId: PeerId,
         iteration: Int,
         lastLogId: String
-    ): ConsensusElectedYou = span("Raft.handleRequestVote") {
+    ): ConsensusElectedYou {
         logger.info(
             "Handling vote request: peerId=$peerId,iteration=$iteration,lastLogIndex=$lastLogId, " +
                     "currentTerm=$currentTerm,lastApplied=${state.lastApplied}"
@@ -224,7 +227,7 @@ class RaftConsensusProtocolImpl(
         return ConsensusElectedYou(this@RaftConsensusProtocolImpl.peerId, currentTerm, true)
     }
 
-    private suspend fun newLeaderElected(leaderId: PeerId, term: Int) = span("Raft.newLeaderElected") {
+    private suspend fun newLeaderElected(leaderId: PeerId, term: Int) {
         logger.info("A leader has been elected: $leaderId (in term $term)")
         votedFor = VotedFor(leaderId, true)
 //          DONE: Check if stop() function make sure if you need to wait to all job finish ->
@@ -248,8 +251,8 @@ class RaftConsensusProtocolImpl(
     }
 
     private suspend fun propagateChangesToLeaderInCourtine(ctx: ExecutorCoroutineDispatcher = leaderRequestExecutorService) {
-        withContext(ctx) {
-            async {
+        with(CoroutineScope(ctx)) {
+            launchTraced(MDCContext()) {
                 tryPropagatingChangesToLeader()
             }
         }
@@ -271,7 +274,7 @@ class RaftConsensusProtocolImpl(
         Metrics.registerTimerHeartbeat()
         val term = heartbeat.term
         val leaderCommitId = heartbeat.leaderCommitId
-        val isUpdatedCommitIndex = leaderCommitId != state.commitIndex
+        val isUpdatedCommitIndex = state.isNotApplied(leaderCommitId)
         val proposedChanges = heartbeat.logEntries.map { it.toLedgerItem() }
         val prevEntryId = heartbeat.prevEntryId
 
@@ -316,6 +319,8 @@ class RaftConsensusProtocolImpl(
         val acceptedChangesFromProposed: List<LedgerItem> = notAppliedProposedChanges
             .indexOfFirst { it.entry.getId() == leaderCommitId }
             .let { notAppliedProposedChanges.take(it + 1) }
+
+        logger.info("Before when")
 
         when {
             !commitIndexEntryExists -> {
@@ -382,7 +387,7 @@ class RaftConsensusProtocolImpl(
         heartbeat: ConsensusHeartbeat,
         leaderCommitId: String,
         proposedChanges: List<LedgerItem> = listOf()
-    ): Unit = span("Raft.updateLedger") {
+    ): Unit {
         val updateResult: LedgerUpdateResult = state.updateLedger(leaderCommitId, proposedChanges)
 
         updateResult.acceptedItems.forEach { acceptedItem ->
@@ -449,12 +454,9 @@ class RaftConsensusProtocolImpl(
             }.mapNotNull { Change.fromHistoryEntry(it) }
 
     private suspend fun sendHeartbeatToPeer(peer: PeerId, isRegular: Boolean): Unit {
-        val peerAddress: PeerAddress
-        val peerMessage: ConsensusHeartbeat
-        mutex.withLock {
-            peerAddress = peerResolver.resolve(peer)
-        }
-        peerMessage = getMessageForPeer(peerAddress)
+        val peerAddress: PeerAddress = peerResolver.resolve(peer)
+        val peerMessage: ConsensusHeartbeat = getMessageForPeer(peerAddress)
+
         signalPublisher.signal(
             signal = Signal.ConsensusSendHeartbeat,
             subject = this@RaftConsensusProtocolImpl,
@@ -480,135 +482,43 @@ class RaftConsensusProtocolImpl(
             launchHeartBeatToPeer(peer, true)
         }
 
-        val channel = Channel<ConsensusResponse<ConsensusHeartbeatResponse?>>()
-        val response: ConsensusResponse<ConsensusHeartbeatResponse?>
+        logger.info("Start sending heartbeat to peer $peer")
 
         val time = measureTimeMillis {
-            protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage, channel)
-
-            response = channel.receive()
+            val response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage)
+            channel.send(HeartbeatResponse(peer, peerAddress, response, peerMessage))
         }
 
         logger.info("Respond from peer $peer took $time ms")
-
-        when {
-            response.message == null -> {
-                logger.info("Peer $peer did not respond to heartbeat")
-            }
-
-            response.message.transactionBlocked && response.message.success -> {
-                logger.info("Peer $peer has transaction blocker on but accepted changes was applied")
-                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.leaderCommitId)
-            }
-
-            response.message.success && response.message.incompatibleWithHistory -> {
-                logger.info("Peer $peer's history is incompatible with proposed change but accepted some changes so retry proposing")
-                handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.leaderCommitId)
-            }
-
-            response.message.transactionBlocked -> {
-                logger.info("Peer $peer has transaction blocker on")
-            }
-
-            response.message.incompatibleWithHistory -> {
-                logger.info("Peer $peer's history is incompatible with proposed change")
-//                TODO: fix this
-                val removedEntries = state.checkIfProposedItemsAreStillValid()
-
-                removedEntries.forEach {
-                    val change = Change.fromHistoryEntry(it.entry)!!
-                    changeIdToCompletableFuture[change.id]?.complete(
-                        ChangeResult(
-                            ChangeResult.Status.CONFLICT,
-                            detailedMessage = "Change incompatible",
-                            currentEntryId = history.getCurrentEntryId()
-                        )
-                    )
-                }
-
-                logger.info("Entries removed: ${removedEntries.size}")
-
-
-            }
-
-            response.message.success -> {
-                handleSuccessHeartbeatResponseFromPeer(
-                    peerAddress,
-                    peerMessage.leaderCommitId,
-                    peerMessage.logEntries
-                )
-
-                val isPeerMissingSomeEntries = peerToNextIndex[peer]?.acceptedEntryId != state.commitIndex
-
-                if (isPeerMissingSomeEntries) {
-                    launchHeartBeatToPeer(peer, delay = heartbeatDelay, sendInstantly = true)
-                }
-            }
-
-            response.message.missingValues -> {
-                logger.info("Peer ${peerAddress.peerId} is not up to date, decrementing index (they told me their commit entry is ${response.message.lastCommittedEntryId})")
-                val oldValues = peerToNextIndex[peerAddress.peerId]
-//                Done: Add decrement method for PeerIndices
-
-                mutex.withLock {
-                    peerToNextIndex[peerAddress.peerId] = oldValues
-                        ?.let {
-                            PeerIndices(
-                                response.message.lastCommittedEntryId!!,
-                                response.message.lastCommittedEntryId
-                            )
-                        }
-                        ?: PeerIndices()
-                }
-            }
-
-            response.message.isLeaderCurrentEntryOutdated -> {
-                logger.info("Peer ${peerAddress.peerId} doesn't accept heartbeat, because I have outdated history")
-
-            }
-
-            response.message.term >= currentTerm && !response.message.success -> {
-                logger.info("Based on info from $peer, someone else is currently leader")
-                mutex.withLock {
-                    stopBeingLeader(response.message.term)
-                    votedFor = null
-                }
-            }
-        }
-
-
-        checkIfQueuedChanges()
     }
 
     private fun shouldISendHeartbeatToPeer(peer: PeerId): Boolean =
         role == RaftRole.Leader && otherConsensusPeers().any { it.peerId == peer } && executorService != null
 
-    private suspend fun applyAcceptedChanges(additionalAcceptedIds: List<String>) = span("Raft.applyAcceptedChanges") {
+    private suspend fun applyAcceptedChanges(additionalAcceptedIds: List<String>) {
         val acceptedItems: List<LedgerItem>
 
-        mutex.withLock {
-            val acceptedIds: List<String> =
-                voteContainer.getAcceptedChanges { isMoreThanHalf(it) } + additionalAcceptedIds
-            acceptedItems = state.getLogEntries(acceptedIds)
+        val acceptedIds: List<String> =
+            voteContainer.getAcceptedChanges { isMoreThanHalf(it) } + additionalAcceptedIds
+        acceptedItems = state.getLogEntries(acceptedIds)
 
-            acceptedItems.forEach {
-                signalPublisher.signal(
-                    signal = Signal.ConsensusAfterProposingChange,
-                    subject = this@RaftConsensusProtocolImpl,
-                    peers = mapOf(peersetId to otherConsensusPeers()),
-                    change = Change.fromHistoryEntry(it.entry),
-                    historyEntry = it.entry,
-                )
-            }
-
-            state.acceptItems(acceptedIds)
-
-            acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
-                transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, it.changeId))
-            }
-
-            voteContainer.removeChanges(acceptedIds)
+        acceptedItems.forEach {
+            signalPublisher.signal(
+                signal = Signal.ConsensusAfterProposingChange,
+                subject = this@RaftConsensusProtocolImpl,
+                peers = mapOf(peersetId to otherConsensusPeers()),
+                change = Change.fromHistoryEntry(it.entry),
+                historyEntry = it.entry,
+            )
         }
+
+        state.acceptItems(acceptedIds)
+
+        acceptedItems.find { it.changeId == transactionBlocker.getChangeId() }?.let {
+            transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, it.changeId))
+        }
+
+        voteContainer.removeChanges(acceptedIds)
 
         acceptedItems.forEach {
             changeIdToCompletableFuture.putIfAbsent(it.changeId, CompletableFuture())
@@ -649,42 +559,38 @@ class RaftConsensusProtocolImpl(
     ) {
         val otherPeerId = peerAddress.peerId
 
-        mutex.withLock {
-            val peerIndices = peerToNextIndex.getOrDefault(otherPeerId, PeerIndices())
-            if (newProposedChanges.isNotEmpty()) {
+        val peerIndices = peerToNextIndex.getOrDefault(otherPeerId, PeerIndices())
+        if (newProposedChanges.isNotEmpty()) {
 
-                newProposedChanges
-                    .map { it.toLedgerItem() }
-                    .filter { state.isNotApplied(it.entry.getId()) }
-                    .forEach { voteContainer.voteForChange(it.entry.getId(), peerAddress) }
+            newProposedChanges
+                .map { it.toLedgerItem() }
+                .filter { state.isNotApplied(it.entry.getId()) }
+                .forEach { voteContainer.voteForChange(it.entry.getId(), peerAddress) }
 
-                newProposedChanges
-                    .map { it.toLedgerItem() }
-                    .filter { state.isNotApplied(it.entry.getId()) }
-                    .forEach {
-                        logger.info(
-                            "Votes after message to peer ${peerAddress.peerId},  ${
-                                voteContainer.getVotes(
-                                    it.entry.getId()
-                                )
-                            } for entry: ${it.entry.getId()}"
-                        )
-                    }
-
-                peerToNextIndex[otherPeerId] =
-                    peerIndices.copy(
-                        acknowledgedEntryId = newProposedChanges.last().toLedgerItem().entry.getId()
+            newProposedChanges
+                .map { it.toLedgerItem() }
+                .filter { state.isNotApplied(it.entry.getId()) }
+                .forEach {
+                    logger.info(
+                        "Votes after message to peer ${peerAddress.peerId},  ${
+                            voteContainer.getVotes(
+                                it.entry.getId()
+                            )
+                        } for entry: ${it.entry.getId()}"
                     )
-            }
+                }
 
-            if (peerIndices.acceptedEntryId != leaderCommitId) {
-                val newPeerIndices = peerToNextIndex.getOrDefault(otherPeerId, PeerIndices())
-                peerToNextIndex[otherPeerId] =
-                    newPeerIndices.copy(acceptedEntryId = leaderCommitId)
-            }
-
+            peerToNextIndex[otherPeerId] =
+                peerIndices.copy(
+                    acknowledgedEntryId = newProposedChanges.last().toLedgerItem().entry.getId()
+                )
         }
 
+        if (peerIndices.acceptedEntryId != leaderCommitId) {
+            val newPeerIndices = peerToNextIndex.getOrDefault(otherPeerId, PeerIndices())
+            peerToNextIndex[otherPeerId] =
+                newPeerIndices.copy(acceptedEntryId = leaderCommitId)
+        }
 
         applyAcceptedChanges(listOf())
     }
@@ -704,8 +610,8 @@ class RaftConsensusProtocolImpl(
             peerIndices = peerToNextIndex.getOrDefault(peerAddress.peerId, PeerIndices())
             newCommittedChanges = state.getCommittedItems(peerIndices.acknowledgedEntryId)
             newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
-
         }
+
         val allChanges = newCommittedChanges + newProposedChanges
         val lastAppliedChangeId = peerIndices.acceptedEntryId
 
@@ -773,69 +679,66 @@ class RaftConsensusProtocolImpl(
     }
 
     //  TODO: sync change will have to use Condition/wait/notifyAll
-    override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change): Unit =
-        span("Raft.proposeChangeToLedger") {
-            this.setTag("changeId", change.id)
-            var entry = change.toHistoryEntry(peersetId)
+    override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change): Unit {
+        var entry = change.toHistoryEntry(peersetId)
 
-            mutex.withLock {
-                if (state.entryAlreadyProposed(entry)) {
-                    logger.info("Already proposed that change: $change")
-//                    scheduleHeartbeatToPeers(isRegular = false)
-                    return
-                }
-
-                val updatedChange: Change = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
-                entry = updatedChange.toHistoryEntry(peersetId)
-
-                val acquisition = TransactionAcquisition(ProtocolName.CONSENSUS, updatedChange.id)
-                val acquisitionResult = transactionBlocker.tryAcquireReentrant(acquisition)
-
-                if (isDuring2PAndChangeDoesntFinishIt(change)) {
-                    logger.info("Queued change, because is during 2PC")
-                    changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, result))
-                    transactionBlocker.tryRelease(acquisition)
-                    return
-                }
-
-                if (!acquisitionResult && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
-                    logger.info("Queued change, because transaction is blocked")
-                    recoveryEntry(transactionBlocker.getChangeId()!!)
-                    return
-                }
-
-                if (!history.isEntryCompatible(entry)) {
-                    logger.info(
-                        "Proposed change is incompatible. \n CurrentChange: ${
-                            history.getCurrentEntryId()
-                        } \n Change.parentId: ${
-                            entry.getParentId()
-                        }"
-                    )
-                    result.complete(
-                        ChangeResult(
-                            ChangeResult.Status.CONFLICT,
-                            detailedMessage = "Change incompatible",
-                            currentEntryId = history.getCurrentEntryId()
-                        )
-                    )
-                    transactionBlocker.release(acquisition)
-                    this.setTag("result", "conflict")
-                    this.finish()
-                    return
-                }
-
-                logger.info("Propose change to ledger: $updatedChange")
-                state.proposeEntry(entry, updatedChange.id)
-                voteContainer.initializeChange(entry.getId())
-                scheduleHeartbeatToPeers(false)
+        mutex.withLock {
+            if (state.entryAlreadyProposed(entry)) {
+                logger.info("Already proposed that change: $change")
+//                scheduleHeartbeatToPeers(isRegular = false)
+                return
             }
+
+            val updatedChange: Change = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
+            entry = updatedChange.toHistoryEntry(peersetId)
+
+            val acquisition = TransactionAcquisition(ProtocolName.CONSENSUS, updatedChange.id)
+            val acquisitionResult = transactionBlocker.tryAcquireReentrant(acquisition)
+
+            if (isDuring2PAndChangeDoesntFinishIt(change)) {
+                logger.info("Queued change, because is during 2PC")
+                changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, result))
+                transactionBlocker.tryRelease(acquisition)
+                return
+            }
+
+            if (!acquisitionResult && transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
+                logger.info("Queued change, because transaction is blocked")
+                recoveryEntry(transactionBlocker.getChangeId()!!)
+                return
+            }
+
+            if (!history.isEntryCompatible(entry)) {
+                logger.info(
+                    "Proposed change is incompatible. \n CurrentChange: ${
+                        history.getCurrentEntryId()
+                    } \n Change.parentId: ${
+                        entry.getParentId()
+                    }"
+                )
+                result.complete(
+                    ChangeResult(
+                        ChangeResult.Status.CONFLICT,
+                        detailedMessage = "Change incompatible",
+                        currentEntryId = history.getCurrentEntryId()
+                    )
+                )
+                transactionBlocker.release(acquisition)
+                return
+            }
+
+            logger.info("Propose change to ledger: $updatedChange")
+            state.proposeEntry(entry, updatedChange.id)
+            voteContainer.initializeChange(entry.getId())
 
             if (otherConsensusPeers().isEmpty()) {
                 logger.info("No other consensus peers, applying change")
                 applyAcceptedChanges(listOf(entry.getId()))
+            } else {
+                scheduleHeartbeatToPeers(false)
             }
         }
+    }
 
     private suspend fun recoveryEntry(changeId: String) {
 
@@ -900,87 +803,179 @@ class RaftConsensusProtocolImpl(
         }
     }
 
-    private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit =
-        span("Raft.sendRequestToLeader") {
-            with(CoroutineScope(leaderRequestExecutorService) + tracingContext()) {
-                asyncTraced(MDCContext()) {
-                    var result: ChangeResult? = null
+    private suspend fun sendRequestToLeader(cf: CompletableFuture<ChangeResult>, change: Change): Unit {
+        CoroutineScope(leaderRequestExecutorService).launch {
+            var result: ChangeResult? = null
 //              It won't be infinite loop because if leader exists we will finally send message to him and if not we will try to become one
-                    while (result == null) {
-                        val address: String
-                        if (votedFor == null || votedFor!!.id == peerId) {
-                            changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
-                            return@asyncTraced
-                        } else {
-                            address = peerResolver.resolve(votedFor!!.id).address
-                        }
-                        logger.info("Send request to leader ${votedFor?.id} again")
-
-                        result = try {
-                            protocolClient.sendRequestApplyChange(address, change)
-                        } catch (e: Exception) {
-                            logger.error("Request to leader ($address, ${votedFor?.id}) failed", e)
-                            null
-                        }
-                        if (result == null) delay(heartbeatDelay.toMillis())
-                    }
-                    if (result.status != ChangeResult.Status.SUCCESS) {
-                        this@span.setTag("result", result.status.name.lowercase())
-                        this@span.finish()
-                        cf.complete(result)
-                    }
+            while (result == null) {
+                val address: String
+                if (votedFor == null || votedFor!!.id == peerId) {
+                    changesToBePropagatedToLeader.add(ChangeToBePropagatedToLeader(change, cf))
+                    return@launch
+                } else {
+                    address = peerResolver.resolve(votedFor!!.id).address
                 }
+                logger.info("Send request to leader ${votedFor?.id} again")
+
+                result = try {
+                    protocolClient.sendRequestApplyChange(address, change)
+                } catch (e: Exception) {
+                    logger.error("Request to leader ($address, ${votedFor?.id}) failed", e)
+                    null
+                }
+                if (result == null) delay(heartbeatDelay.toMillis())
+            }
+            if (result.status != ChangeResult.Status.SUCCESS) {
+                cf.complete(result)
             }
         }
+    }
+
 
     //   TODO: only one change can be proposed at the same time
     override suspend fun proposeChangeAsync(
         change: Change,
-    ): CompletableFuture<ChangeResult> =
-        span("Raft.proposeChangeAsync") {
-            this.setTag("changeId", change.id)
-            changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
-            val result = changeIdToCompletableFuture[change.id]!!
-            when {
-                amILeader() -> {
-                    logger.info("Proposing change: $change")
-                    proposeChangeToLedger(result, change)
-                }
+    ): CompletableFuture<ChangeResult> {
+        changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
+        val result = changeIdToCompletableFuture[change.id]!!
+        when {
+            amILeader() -> {
+                logger.info("Proposing change: $change")
+                proposeChangeToLedger(result, change)
+            }
 
-                votedFor?.elected == true -> {
-                    logger.info("Forwarding change to the leader(${votedFor!!}): $change")
-                    sendRequestToLeader(result, change)
-                }
+            votedFor?.elected == true -> {
+                logger.info("Forwarding change to the leader(${votedFor!!}): $change")
+                sendRequestToLeader(result, change)
+            }
 //              TODO: Change after queue
-                else -> {
-                    logger.info("Queueing a change to be propagated when leader is elected")
-                    changesToBePropagatedToLeader.push(ChangeToBePropagatedToLeader(change, result))
+            else -> {
+                logger.info("Queueing a change to be propagated when leader is elected")
+                changesToBePropagatedToLeader.push(ChangeToBePropagatedToLeader(change, result))
+            }
+        }
+        return result
+    }
+
+
+    private suspend fun handleHeartbeatResponses() {
+
+        while (true) {
+            val heartbeatResponse = channel.receive()
+            val response = heartbeatResponse.response
+            val peer = heartbeatResponse.peer
+            val peerAddress = heartbeatResponse.peerAddress
+            val peerMessage = heartbeatResponse.peerMessage
+
+            logger.info("Received response1 from peer $peer")
+            mutex.withLock {
+                logger.info("Received response2 from peer $peer")
+                when {
+                    response.message == null -> {
+                        logger.info("Peer $peer did not respond to heartbeat")
+                    }
+
+                    response.message.transactionBlocked && response.message.success -> {
+                        logger.info("Peer $peer has transaction blocker on but accepted changes was applied")
+                        handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.leaderCommitId)
+                    }
+
+                    response.message.success && response.message.incompatibleWithHistory -> {
+                        logger.info("Peer $peer's history is incompatible with proposed change but accepted some changes so retry proposing")
+                        handleSuccessHeartbeatResponseFromPeer(peerAddress, peerMessage.leaderCommitId)
+                    }
+
+                    response.message.transactionBlocked -> {
+                        logger.info("Peer $peer has transaction blocker on")
+                    }
+
+                    response.message.incompatibleWithHistory -> {
+                        logger.info("Peer $peer's history is incompatible with proposed change")
+//                TODO: fix this
+                        val removedEntries = state.checkIfProposedItemsAreStillValid()
+
+                        removedEntries.forEach {
+                            val change = Change.fromHistoryEntry(it.entry)!!
+                            changeIdToCompletableFuture[change.id]?.complete(
+                                ChangeResult(
+                                    ChangeResult.Status.CONFLICT,
+                                    detailedMessage = "Change incompatible",
+                                    currentEntryId = history.getCurrentEntryId()
+                                )
+                            )
+                        }
+
+                        logger.info("Entries removed: ${removedEntries.size}")
+
+
+                    }
+
+                    response.message.success -> {
+                        handleSuccessHeartbeatResponseFromPeer(
+                            peerAddress,
+                            peerMessage.leaderCommitId,
+                            peerMessage.logEntries
+                        )
+
+                        val isPeerMissingSomeEntries = peerToNextIndex[peer]?.acceptedEntryId != state.commitIndex
+
+                        if (isPeerMissingSomeEntries) {
+                            launchHeartBeatToPeer(peer, delay = heartbeatDelay, sendInstantly = true)
+                        }
+                    }
+
+                    response.message.missingValues -> {
+                        logger.info("Peer ${peerAddress.peerId} is not up to date, decrementing index (they told me their commit entry is ${response.message.lastCommittedEntryId})")
+                        val oldValues = peerToNextIndex[peerAddress.peerId]
+//                Done: Add decrement method for PeerIndices
+
+                        peerToNextIndex[peerAddress.peerId] = oldValues
+                            ?.let {
+                                PeerIndices(
+                                    response.message.lastCommittedEntryId!!,
+                                    response.message.lastCommittedEntryId
+                                )
+                            }
+                            ?: PeerIndices()
+                    }
+
+                    response.message.isLeaderCurrentEntryOutdated -> {
+                        logger.info("Peer ${peerAddress.peerId} doesn't accept heartbeat, because I have outdated history")
+
+                    }
+
+                    response.message.term >= currentTerm && !response.message.success -> {
+                        logger.info("Based on info from $peer, someone else is currently leader")
+                        stopBeingLeader(response.message.term)
+                        votedFor = null
+                    }
                 }
             }
-            return result
-        }
 
-    private fun scheduleHeartbeatToPeers(isRegular: Boolean) {
+            checkIfQueuedChanges()
+        }
+    }
+
+    private suspend fun scheduleHeartbeatToPeers(isRegular: Boolean) {
         otherConsensusPeers().forEach {
             launchHeartBeatToPeer(it.peerId, isRegular, true)
         }
     }
 
-    private fun launchHeartBeatToPeer(
+    private suspend fun launchHeartBeatToPeer(
         peer: PeerId,
         isRegular: Boolean = false,
         sendInstantly: Boolean = false,
         delay: Duration = heartbeatDelay
     ): Unit {
         if (shouldISendHeartbeatToPeer(peer)) {
-            with(CoroutineScope(executorService!!)) {
-                async {
-                    if (!sendInstantly) {
-                        logger.debug("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
-                        delay(delay.toMillis())
-                    }
-                    sendHeartbeatToPeer(peer, isRegular)
+            CoroutineScope(executorService!!).launchTraced(MDCContext()) {
+                if (!sendInstantly) {
+                    logger.info("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
+                    delay(delay.toMillis())
                 }
+
+                sendHeartbeatToPeer(peer, isRegular)
             }
         }
     }
@@ -1059,4 +1054,11 @@ data class PeerIndices(
 data class ChangeToBePropagatedToLeader(
     val change: Change,
     val cf: CompletableFuture<ChangeResult>,
+)
+
+data class HeartbeatResponse(
+    val peer: PeerId,
+    val peerAddress: PeerAddress,
+    val response: ConsensusResponse<ConsensusHeartbeatResponse?>,
+    val peerMessage: ConsensusHeartbeat
 )
