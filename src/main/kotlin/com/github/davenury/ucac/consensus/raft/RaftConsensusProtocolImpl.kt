@@ -80,6 +80,7 @@ class RaftConsensusProtocolImpl(
 
     private var currentTerm: Int = 0
     private val peerToNextIndex: MutableMap<PeerId, PeerIndices> = mutableMapOf()
+    private val peerToDeferred: MutableMap<PeerId, Deferred<ConsensusResponse<ConsensusHeartbeatResponse?>>> = mutableMapOf()
     private val voteContainer: VoteContainer = VoteContainer()
     private var votedFor: VotedFor? = null
     private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
@@ -477,11 +478,21 @@ class RaftConsensusProtocolImpl(
         }
 
         val response: ConsensusResponse<ConsensusHeartbeatResponse?>
+        val deferred: Deferred<ConsensusResponse<ConsensusHeartbeatResponse?>>
 
         val idx = otherConsensusPeers().indexOf(peerAddress)
 
+
+
         val time = measureTimeMillis {
-            response = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage, raftHttpClients[idx])
+            deferred = protocolClient.sendConsensusHeartbeat(peerAddress, peerMessage, raftHttpClients[idx])
+
+            mutex.withLock {
+                peerToDeferred[peer]?.cancel()
+                peerToDeferred[peer] = deferred
+            }
+
+            response = deferred.await()
         }
 
         logger.info("Respond from peer $peer took $time ms")
