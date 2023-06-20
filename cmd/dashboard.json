@@ -824,7 +824,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "max(rate(change_processed_total{kubernetes_namespace=~\"$namespace\"}[20s])) or vector(0)",
+          "expr": "max(rate(change_processed_total{kubernetes_namespace=~\"$namespace\"}[15s])) or vector(0)",
           "interval": "5s",
           "legendFormat": "__auto",
           "range": true,
@@ -1035,8 +1035,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1130,8 +1129,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1225,8 +1223,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1290,8 +1287,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
