@@ -280,7 +280,6 @@ class PaxosProtocolImpl(
 
         val transactionAcquisition = TransactionAcquisition(ProtocolName.CONSENSUS, change.id)
 
-
         if (!transactionBlocker.tryAcquireReentrant(transactionAcquisition)) {
             logger.info("Transaction is blocked on protocol ${transactionBlocker.getProtocolName()}, changeId: ${transactionBlocker.getChangeId()}, add transaction to queue, changeId: ${change.id}")
             if (transactionBlocker.getProtocolName() == ProtocolName.CONSENSUS) {
@@ -897,6 +896,7 @@ class PaxosProtocolImpl(
             if (amILeader()) {
                 logger.info("Processing a queued change as a leader: ${changeToBePropagated.change}")
                 proposeChangeToLedger(changeToBePropagated.cf, changeToBePropagated.change)
+                if(changeIdToCompletableFuture[changeToBePropagated.change.id]?.isDone == false) return
             } else {
                 logger.info("Propagating a change to the leader (${votedFor.id}): ${changeToBePropagated.change}")
                 sendRequestToLeader(changeToBePropagated.cf, changeToBePropagated.change)
