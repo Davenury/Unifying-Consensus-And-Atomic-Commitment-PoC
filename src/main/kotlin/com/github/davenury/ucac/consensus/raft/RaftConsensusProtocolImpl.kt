@@ -80,7 +80,9 @@ class RaftConsensusProtocolImpl(
 
     private var currentTerm: Int = 0
     private val peerToNextIndex: MutableMap<PeerId, PeerIndices> = mutableMapOf()
-    private val peerToDeferred: MutableMap<PeerId, Deferred<ConsensusResponse<ConsensusHeartbeatResponse?>>> = mutableMapOf()
+    private val peerToLastHeartbeat: MutableMap<PeerId, ConsensusHeartbeat> = mutableMapOf()
+    private val peerToDeferred: MutableMap<PeerId, Deferred<ConsensusResponse<ConsensusHeartbeatResponse?>>> =
+        mutableMapOf()
     private val voteContainer: VoteContainer = VoteContainer()
     private var votedFor: VotedFor? = null
     private var changesToBePropagatedToLeader: ConcurrentLinkedDeque<ChangeToBePropagatedToLeader> =
@@ -447,11 +449,12 @@ class RaftConsensusProtocolImpl(
 
     private suspend fun sendHeartbeatToPeer(peer: PeerId, isRegular: Boolean): Unit {
         val peerAddress: PeerAddress
-        val peerMessage: ConsensusHeartbeat
+        peerAddress = peerResolver.resolve(peer)
+        val peerMessage: ConsensusHeartbeat = getMessageForPeer(peerAddress)
+
         mutex.withLock {
-            peerAddress = peerResolver.resolve(peer)
+            peerToLastHeartbeat[peer] = peerMessage
         }
-        peerMessage = getMessageForPeer(peerAddress)
         signalPublisher.signal(
             signal = Signal.ConsensusSendHeartbeat,
             subject = this@RaftConsensusProtocolImpl,
@@ -481,7 +484,6 @@ class RaftConsensusProtocolImpl(
         val deferred: Deferred<ConsensusResponse<ConsensusHeartbeatResponse?>>
 
         val idx = otherConsensusPeers().indexOf(peerAddress)
-
 
 
         val time = measureTimeMillis {
@@ -698,6 +700,8 @@ class RaftConsensusProtocolImpl(
     private suspend fun getMessageForPeer(peerAddress: PeerAddress): ConsensusHeartbeat {
 
         val peerIndices: PeerIndices
+        val previousHeartbeat: ConsensusHeartbeat?
+
         val newCommittedChanges: List<LedgerItem>
         val newProposedChanges: List<LedgerItem>
         mutex.withLock {
@@ -708,10 +712,15 @@ class RaftConsensusProtocolImpl(
             }
 
             peerIndices = peerToNextIndex.getOrDefault(peerAddress.peerId, PeerIndices())
+            previousHeartbeat = peerToLastHeartbeat[peerAddress.peerId]
+            if (previousHeartbeat != null && peerIndices.acknowledgedEntryId != previousHeartbeat.leaderCommitId && previousHeartbeat.logEntries.size == maxChangesPerMessage) {
+                return previousHeartbeat.copy(term = currentTerm, currentHistoryEntryId = history.getCurrentEntryId())
+            }
             newCommittedChanges = state.getCommittedItems(peerIndices.acknowledgedEntryId)
             newProposedChanges = state.getNewProposedItems(peerIndices.acknowledgedEntryId)
-
         }
+
+
         val allChanges = newCommittedChanges + newProposedChanges
         val lastAppliedChangeId = peerIndices.acceptedEntryId
 
@@ -792,10 +801,14 @@ class RaftConsensusProtocolImpl(
                     return
                 }
 
-                val updatedChange: Change = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
+                val acquisition: TransactionAcquisition
+                val updatedChange: Change
+
+
+                updatedChange = TwoPC.updateParentIdFor2PCCompatibility(change, history, peersetId)
                 entry = updatedChange.toHistoryEntry(peersetId)
 
-                val acquisition = TransactionAcquisition(ProtocolName.CONSENSUS, updatedChange.id)
+                acquisition = TransactionAcquisition(ProtocolName.CONSENSUS, updatedChange.id)
                 val acquisitionResult = transactionBlocker.tryAcquireReentrant(acquisition)
 
                 if (isDuring2PAndChangeDoesntFinishIt(change)) {
@@ -832,9 +845,11 @@ class RaftConsensusProtocolImpl(
                     return
                 }
 
+
                 logger.info("Propose change to ledger: $updatedChange")
                 state.proposeEntry(entry, updatedChange.id)
                 voteContainer.initializeChange(entry.getId())
+
                 scheduleHeartbeatToPeers(false)
             }
 
@@ -987,14 +1002,12 @@ class RaftConsensusProtocolImpl(
         delay: Duration = heartbeatDelay
     ): Unit {
         if (shouldISendHeartbeatToPeer(peer)) {
-            with(CoroutineScope(executorService!!)) {
-                async {
-                    if (!sendInstantly) {
-                        logger.debug("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
-                        delay(delay.toMillis())
-                    }
-                    sendHeartbeatToPeer(peer, isRegular)
+            CoroutineScope(executorService!!).async {
+                if (!sendInstantly) {
+                    logger.debug("Wait with sending heartbeat to $peer for ${delay.toMillis()} ms")
+                    delay(delay.toMillis())
                 }
+                sendHeartbeatToPeer(peer, isRegular)
             }
         }
     }
