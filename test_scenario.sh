@@ -2,9 +2,9 @@ directory=$(dirname $0)
 echo $directory
 
 #protocols=("alvin" "paxos" "raft" "oldRaft")
-#protocols=("alvin" "paxos" "raft")
+protocols=("alvin" "paxos" "raft")
 #protocols=("alvin" "paxos")
-protocols=("raft")
+#protocols=("raft")
 
 peerset_size_start=5
 peerset_size_end=5
@@ -23,14 +23,14 @@ cd "$directory/misc/grafana-scrapping" && npm i
 synch_repeat=5
 ft_repeat=0
 total_repeats=0
-start_test=3
-end_test=3
+start_test=5
+end_test=5
 
-initial_sleep="4m"
+initial_sleep="2m"
 resource_sleep="3m"
 ft_sleep="2m"
 stress_sleep="1m"
-finish_sleep="10m"
+finish_sleep="5m"
 
 for repeat in $(seq 0 $total_repeats); do
   echo "Repeat: $repeat"
@@ -39,13 +39,17 @@ for repeat in $(seq 0 $total_repeats); do
     for protocol in $protocols; do
       for test_type in $(seq $start_test $end_test); do
         echo "Run experiment type $test_type for protocol: $protocol for peerset_size: $peerset_size"
-        #        if [[ $test_type -eq 0 ]]; then
-        #          echo "Increasing load script"
-        #          cd $directory/cmd && CONSENSUS=$protocol "./scripts/stress-consensus-test.sh" $peerset_size 0 &
-        #        else
-        echo "Constant load script"
-        cd $directory/cmd && CONSENSUS=$protocol "./scripts/consensus.sh" $peerset_size 0 &
-        #        fi
+#        if [[ $test_type -eq 0 ]]; then
+#          echo "Increasing load script"
+#          cd $directory/cmd && CONSENSUS=$protocol "./scripts/stress-consensus-test.sh" $peerset_size 0 &
+#        else
+        if [[ $test_type -gt 3 ]]; then
+          echo "Increasing load script"
+          cd $directory/cmd && CONSENSUS=$protocol $ENFORCE_LEADER=true "./scripts/stress-consensus-test.sh" $peerset_size 0 &
+        else
+          echo "Constant load script"
+          cd $directory/cmd && CONSENSUS=$protocol "./scripts/consensus.sh" $peerset_size 0 &
+        fi
         scriptPID=$!
         START_LEADER=$(date +%s%3N)
         sleep 1m
@@ -106,16 +110,19 @@ for repeat in $(seq 0 $total_repeats); do
           test_name="ft-leader"
           echo "$test_name - During processing changes"
           START_TIMESTAMP=$(date +%s%3N)
-          sleep $ft_sleep
+          sleep 1m
+          #          sleep $ft_sleep
 
           for i in $(seq 0 $ft_repeat); do
             echo "$test_name iteration $i"
             kubectl -n=ddebowski delete scenarioes.lsc.davenury.github.com gpac-chaos-delete-leader
             kubectl apply -f "$directory/cmd/yamls/delete_leader.yaml"
             sleep $ft_sleep
+            #            sleep 2m
           done
 
-          sleep $ft_sleep
+          #          sleep 15m
+          #          sleep $ft_sleep
 
           END_TIMESTAMP=$(date +%s%3N)
 
@@ -146,17 +153,17 @@ for repeat in $(seq 0 $total_repeats); do
           test_name="ft-half-followers"
           echo "$test_name - During processing changes"
           START_TIMESTAMP=$(date +%s%3N)
-          sleep $ft_sleep
+          sleep 45s
 
           for i in $(seq 0 $ft_repeat); do
             echo "$test_name iteration $i"
             kubectl -n=ddebowski delete scenarioes.lsc.davenury.github.com gpac-chaos-delete-followers
             kubectl apply -f "$directory/cmd/yamls/delete_peers.yaml"
-            sleep $ft_sleep
+            sleep 2m
           done
 
-          sleep $ft_sleep
-          sleep 2m
+          #          sleep $ft_sleep
+          sleep 190s
 
           END_TIMESTAMP=$(date +%s%3N)
 

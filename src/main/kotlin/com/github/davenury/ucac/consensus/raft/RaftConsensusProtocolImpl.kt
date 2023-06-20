@@ -177,6 +177,7 @@ class RaftConsensusProtocolImpl(
         Metrics.bumpLeaderElection(peerId, peersetId)
 
         peerToNextIndex.keys.forEach {
+            peerToNextIndex.putIfAbsent(it, PeerIndices(state.lastApplied, state.lastApplied))
             peerToNextIndex.replace(it, PeerIndices(state.lastApplied, state.lastApplied))
         }
 
