@@ -551,7 +551,9 @@ class PaxosProtocolImpl(
         while (result == null) {
             result = sendAccepts(entry)
             if (!amILeader()) {
+//              TODO: verify that leader is elected, bo jest możliwość rc że oboje peerów myśli że drugi jest liderem
                 logger.info("I am not a leader, so stop sending accepts")
+
                 queuedChange.add(
                     ChangeToBePropagatedToLeader(
                         change,
@@ -918,13 +920,21 @@ class PaxosProtocolImpl(
         if (queuedChange.size > 0) logger.info("Try to propagate changes")
         while (true) {
             val changeToBePropagated = queuedChange.poll() ?: break
-            if (amILeader()) {
-                logger.info("Processing a queued change as a leader: ${changeToBePropagated.change}")
-                proposeChangeToLedger(changeToBePropagated.cf, changeToBePropagated.change)
-                if (changeIdToCompletableFuture[changeToBePropagated.change.id]?.isDone == false) return
-            } else {
-                logger.info("Propagating a change to the leader (${votedFor.id}): ${changeToBePropagated.change}")
-                sendRequestToLeader(changeToBePropagated.cf, changeToBePropagated.change)
+
+            when {
+                changeIdToCompletableFuture[changeToBePropagated.change.id]?.isDone == true -> {
+
+                }
+                amILeader() -> {
+                    logger.info("Processing a queued change as a leader: ${changeToBePropagated.change}")
+                    proposeChangeToLedger(changeToBePropagated.cf, changeToBePropagated.change)
+                    if (changeIdToCompletableFuture[changeToBePropagated.change.id]?.isDone == false) return
+                }
+
+                else -> {
+                    logger.info("Propagating a change to the leader (${votedFor.id}): ${changeToBePropagated.change}")
+                    sendRequestToLeader(changeToBePropagated.cf, changeToBePropagated.change)
+                }
             }
         }
     }
