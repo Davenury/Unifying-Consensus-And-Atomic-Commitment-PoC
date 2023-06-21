@@ -243,8 +243,16 @@ class PaxosProtocolImpl(
         }
     }
 
-    override suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult> =
-        proposeChangeAsync(change)
+    override suspend fun handleProposeChange(change: Change): CompletableFuture<ChangeResult> {
+
+        val entry = change.toHistoryEntry(peersetId)
+
+        mutex.withLock {
+            if (!history.containsEntry(entry.getParentId()!!)) throw PaxosLeaderBecameOutdatedException(change.id)
+        }
+
+        return proposeChangeAsync(change)
+    }
 
     override fun getLeaderId(): PeerId? = if (votedFor?.elected == true) votedFor?.id else null
 
@@ -260,13 +268,19 @@ class PaxosProtocolImpl(
         val result = changeIdToCompletableFuture.putIfAbsent(change.id, CompletableFuture())
             ?: changeIdToCompletableFuture[change.id]!!
 
-        if (amILeader() && lastPropagatedEntryId == history.getCurrentEntryId()) {
-            proposeChangeToLedger(result, change)
-        } else {
-            logger.info("We are not a leader or some change maybe needed to propagate")
-            queuedChange.add(ChangeToBePropagatedToLeader(change, result))
-            becomeLeader("Try to process change")
+
+        queuedChange.add(ChangeToBePropagatedToLeader(change, result))
+        CoroutineScope(leaderRequestExecutorService).launch {
+            tryPropagatingChangesToLeader()
         }
+
+//        if (amILeader() && lastPropagatedEntryId == history.getCurrentEntryId()) {
+//            proposeChangeToLedger(result, change)
+//        } else {
+//            logger.info("We are not a leader or some change maybe needed to propagate")
+//            queuedChange.add(ChangeToBePropagatedToLeader(change, result))
+//            becomeLeader("Try to process change")
+//        }
 
         return result
     }
@@ -304,7 +318,7 @@ class PaxosProtocolImpl(
                         transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, changeId))
                         tryPropagatingChangesToLeader()
                     }
-                } else{
+                } else {
                     logger.info("Leader failure detector task is not finished for changeId ${transactionBlocker.getChangeId()}")
                 }
             }
@@ -580,7 +594,6 @@ class PaxosProtocolImpl(
                         )
 
 
-
                         val updatedResponse: ConsensusResponse<PaxosCommitResponse?> = when {
                             response.message == null -> {
                                 logger.info("PaxosCommit response from peer ${peerAddress.peerId} response is null")
@@ -644,6 +657,8 @@ class PaxosProtocolImpl(
                     entryIdPaxosRound.remove(entry.getId())
                     transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
                 }
+
+                checkAfterCommit()
             }
 
             result == PaxosResult.COMMIT -> {
@@ -673,13 +688,13 @@ class PaxosProtocolImpl(
                     if (history.isEntryCompatible(entry)) {
                         history.addEntry(entry)
                         synchronizationMeasurement.entryIdCommitted(entry.getId(), Instant.now())
+                        checkAfterCommit()
                     } else {
                         logger.error("Missing some changes try to finish entry with id ${entry.getId()} after sometime")
                         resetFailureDetector(entry, change)
                         return
                     }
                 }
-
             }
 
             result == PaxosResult.ABORT -> mutex.withLock {
@@ -698,6 +713,16 @@ class PaxosProtocolImpl(
                 )
                 entryIdPaxosRound.remove(entry.getId())
                 transactionBlocker.tryRelease(TransactionAcquisition(ProtocolName.CONSENSUS, change.id))
+            }
+        }
+    }
+
+    private fun checkAfterCommit() {
+        entryIdPaxosRound.values.forEach {
+            if (history.getCurrentEntryId() != it.entry.getParentId()) {
+                entryIdPaxosRound.remove(it.entry.getId())
+                val change = Change.fromHistoryEntry(it.entry)!!
+                changeIdToCompletableFuture[change.id]?.complete(ChangeResult(ChangeResult.Status.CONFLICT))
             }
         }
     }
@@ -896,7 +921,7 @@ class PaxosProtocolImpl(
             if (amILeader()) {
                 logger.info("Processing a queued change as a leader: ${changeToBePropagated.change}")
                 proposeChangeToLedger(changeToBePropagated.cf, changeToBePropagated.change)
-                if(changeIdToCompletableFuture[changeToBePropagated.change.id]?.isDone == false) return
+                if (changeIdToCompletableFuture[changeToBePropagated.change.id]?.isDone == false) return
             } else {
                 logger.info("Propagating a change to the leader (${votedFor.id}): ${changeToBePropagated.change}")
                 sendRequestToLeader(changeToBePropagated.cf, changeToBePropagated.change)

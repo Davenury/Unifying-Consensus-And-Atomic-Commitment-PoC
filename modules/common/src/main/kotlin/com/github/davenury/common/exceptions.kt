@@ -27,6 +27,7 @@ class UnknownPeersetException(val peersetId: PeersetId) : Exception("Unknown pee
 
 class ImNotLeaderException(val peerId: PeerId, val peersetId: PeersetId): Exception("I'm not a consensus leader")
 class AlvinLeaderBecameOutdatedException(changeId: String) : Exception("I as a leader become outdated for entry $changeId")
+class PaxosLeaderBecameOutdatedException(changeId: String) : Exception("I as a leader become outdated for entry $changeId")
 class AlvinOutdatedPrepareException(prevEpoch: Int, currEpoch: Int) : Exception("Receive prepare from previous epoch $prevEpoch, current: $currEpoch")
 class AlvinHistoryBlockedException(changeId: String, protocol: ProtocolName) : Exception("TransactionBlocker is blocked on change: $changeId with protocol $protocol")
 
