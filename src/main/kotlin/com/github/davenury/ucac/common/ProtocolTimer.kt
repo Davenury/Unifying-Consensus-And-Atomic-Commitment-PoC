@@ -43,6 +43,7 @@ class ProtocolTimerImpl(
                 val timeout = delay.plus(backoff)
                 delay(timeout.toMillis())
                 action()
+                task = null
             }
         }
     }
@@ -53,9 +54,10 @@ class ProtocolTimerImpl(
         } catch (e: CancellationException) {
             logger.error("Cancellation exception occurred", e)
         }
+        task = null
     }
 
-    override fun isTaskFinished(): Boolean = task == null || task?.isCompleted ==true || task?.isCancelled == true
+    override fun isTaskFinished(): Boolean = task == null || task?.isCompleted == true || task?.isCancelled == true
 
 
 }
