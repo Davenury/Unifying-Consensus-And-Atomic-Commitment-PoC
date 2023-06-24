@@ -15,44 +15,6 @@ import (
 	"time"
 )
 
-type DeployConfig struct {
-	NumberOfPeersInPeersets []int
-	NumberOfPeersV2         int
-	PeersetsConfigurationV2 string
-	DeployNamespace         string
-	DeployCreateNamespace   bool
-	WaitForReadiness        bool
-	ImageName               string
-	IsMetricTest            bool
-	CreateResources         bool
-	ProxyDelay              string
-	ProxyLimit              string
-	MonitoringNamespace     string
-}
-
-func (cfg *DeployConfig) version() string {
-	if cfg.NumberOfPeersV2 != 0 {
-		return "v2"
-	}
-	return "v1"
-}
-
-func (cfg *DeployConfig) GetPeersAndPeersets() (string, string) {
-	if cfg.version() == "v2" {
-		peers, _ := utils.GenerateServicesForPeersStaticPort([]int{cfg.NumberOfPeersV2}, servicePort)
-		peersets := cfg.PeersetsConfigurationV2
-		return peers, peersets
-	}
-	return utils.GenerateServicesForPeersStaticPort(cfg.NumberOfPeersInPeersets, servicePort)
-}
-
-func (cfg *DeployConfig) GetDeployFunction() func(config DeployConfig, peers string, peersets string, experimentUUID uuid.UUID) {
-	if cfg.version() == "v2" {
-		return DoDeployV2
-	}
-	return DoDeployV1
-}
-
 const ratisPort = 10024
 const servicePort = 8080
 
@@ -78,9 +40,19 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().StringVarP(&config.ImageName, "image", "", "ghcr.io/davenury/ucac:latest", "A Docker image to be used in the deployment")
 	deployCommand.Flags().BoolVar(&config.IsMetricTest, "is-metric-test", false, "Determines whether add additional change related metrics. DO NOT USE WITH NORMAL TESTS!")
 	deployCommand.Flags().BoolVar(&config.CreateResources, "create-resources", true, "Determines if pods should have limits and requests")
-	deployCommand.Flags().StringVar(&config.ProxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	deployCommand.Flags().StringVar(&config.ProxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
 	deployCommand.Flags().StringVar(&config.MonitoringNamespace, "monitoring-namespace", "ddebowski", "Namespace with monitoring deployed")
+
+	deployCommand.Flags().StringVar(&config.ProxyDelay.delayType, "delay-type", "", "Delay type, currently supported: fixed, random, peerset-fixed, peerset-random")
+	deployCommand.Flags().StringVar(&config.ProxyDelay.fixedProxyDelay, "delay-fixed", "", "Fixed delay applied to all request; delay type - fixed")
+	deployCommand.Flags().StringVar(&config.ProxyDelay.randomProxyDelayStart, "delay-random-start", "", "Start of the random range of delays, calculated with each request; delay type - random")
+	deployCommand.Flags().StringVar(&config.ProxyDelay.randomProxyDelayEnd, "delay-random-end", "", "End of the random range of delays, calculated with each request; delay type - random")
+	deployCommand.Flags().StringVar(&config.ProxyDelay.ownPeersetProxyDelay, "delay-own-peerset", "", "Delay applied to peers within the same peerset; delay type - peerset-fixed")
+	deployCommand.Flags().StringVar(&config.ProxyDelay.otherPeersetProxyDelay, "delay-other-peerset", "", "Delay applied to peers outside of the peerset; delay type - peerset-fixed")
+	deployCommand.Flags().StringVar(&config.ProxyDelay.ownPeersetRandomProxyDelayStart, "delay-own-peerset-start", "", "Start of the random range of delays applied to peers within the same peerset; delay type - peerset-random")
+	deployCommand.Flags().StringVar(&config.ProxyDelay.ownPeersetRandomProxyDelayEnd, "delay-own-peerset-end", "", "End of the random range of delays applied to peers within the same peerset; delay type - peerset-random")
+	deployCommand.Flags().StringVar(&config.ProxyDelay.otherPeersetRandomProxyDelayStart, "delay-other-peerset-start", "", "Start of the random range of delays applied to peers outside of the peerset; delay type - peerset-random")
+	deployCommand.Flags().StringVar(&config.ProxyDelay.otherPeersetRandomProxyDelayEnd, "delay-other-peerset-end", "", "End of the random range of delays applied to peers outside of the peerset; delay type - peerset-random")
 
 	return deployCommand
 
@@ -316,7 +288,18 @@ func createRedisContainer() apiv1.Container {
 	}
 }
 
-func createProxyContainer(delay string, limit string) apiv1.Container {
+func createProxyContainer(delay DelayConfig, limit string) apiv1.Container {
+	envs := []apiv1.EnvVar{
+		{
+			Name:  "UPSTREAM",
+			Value: "http://localhost:8081",
+		},
+		{
+			Name:  "LIMIT",
+			Value: limit,
+		},
+	}
+	envs = append(envs, delay.getDelayConfigmap()...)
 	return apiv1.Container{
 		Name:  "proxy",
 		Image: "lovelysystems/throttling-proxy-docker:latest",
@@ -325,20 +308,7 @@ func createProxyContainer(delay string, limit string) apiv1.Container {
 				ContainerPort: 8080,
 			},
 		},
-		Env: []apiv1.EnvVar{
-			{
-				Name:  "UPSTREAM",
-				Value: "http://localhost:8081",
-			},
-			{
-				Name:  "DELAY",
-				Value: delay,
-			},
-			{
-				Name:  "LIMIT",
-				Value: limit,
-			},
-		},
+		Env: envs,
 	}
 }
 func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) apiv1.Container {
