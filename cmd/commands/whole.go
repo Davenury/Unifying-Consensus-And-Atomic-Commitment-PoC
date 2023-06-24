@@ -111,7 +111,7 @@ func perform(config Config) {
 		PeersetsConfigurationV2: config.peersetsConfigurationV2,
 		DeployNamespace:         config.testNamespace,
 		DeployCreateNamespace:   config.createTestNamespace,
-		WaitForReadiness:        true,
+		WaitForReadiness:        false,
 		ImageName:               config.applicationImageName,
 		IsMetricTest:            config.isMetricTest,
 		CreateResources:         true,
@@ -119,8 +119,8 @@ func perform(config Config) {
 		ProxyLimit:              config.proxyLimit,
 		MonitoringNamespace:     config.monitoringNamespace,
 	})
-	fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
-	time.Sleep(30 * time.Second)
+	//fmt.Println("Delay for peersets to be ready e.g. select consensus leader")
+	//time.Sleep(30 * time.Second)
 	fmt.Println("Deploying performance test")
 	performance.DoPerformanceTest(performance.Config{
 		PerformanceNamespace:        config.testNamespace,
@@ -146,13 +146,14 @@ func perform(config Config) {
 		IncreasingLoadIncreaseStep:  config.increasingLoadIncreaseStep,
 		EnforceConsensusLeader:      config.enforceConsensusLeader,
 	})
-	fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
-	waitUntilJobPodCompleted(config)
-	if config.cleanupAfterWork {
-		fmt.Println("Cleanuping")
-		DoCleanup(config.testNamespace)
-		fmt.Printf("Do cleanup after monitoring after you're done with it by: helm delete prometheus grafana -n %s \n", config.monitoringNamespace)
-	}
+	fmt.Println("Deployed, don't forget to cleanup!")
+	//fmt.Println("Waiting for test to finish. You can Ctrl+C now, if you don't want to wait for the result. YOU SHOULD CLEANUP AFTER YOURSELF!")
+	//waitUntilJobPodCompleted(config)
+	//if config.cleanupAfterWork {
+	//	fmt.Println("Cleanuping")
+	//	DoCleanup(config.testNamespace)
+	//	fmt.Printf("Do cleanup after monitoring after you're done with it by: helm delete prometheus grafana -n %s \n", config.monitoringNamespace)
+	//}
 }
 
 func waitUntilJobPodCompleted(config Config) {

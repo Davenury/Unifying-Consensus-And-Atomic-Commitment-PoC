@@ -135,9 +135,40 @@ func DoPerformanceTest(config Config) {
 	createJob(clientset, config)
 }
 
+func sum(arr []int) int {
+	s := 0
+	for _, v := range arr {
+		s += v
+	}
+	return s
+}
+
 func createJob(clientset *kubernetes.Clientset, config Config) {
 
 	jobs := clientset.BatchV1().Jobs(config.PerformanceNamespace)
+
+	var initContainers []v1.Container
+	for i := 0; i < sum(config.PerformanceNumberOfPeers); i++ {
+		initContainers = append(initContainers, v1.Container{
+			Name:  fmt.Sprintf("peer%d-wait", i),
+			Image: "ghcr.io/groundnuty/k8s-wait-for:v1.6",
+			Args:  []string{"pod", fmt.Sprintf("-lpeerId=peer%d", i)},
+		})
+	}
+
+	initContainers = append(initContainers, v1.Container{
+		Name:  "consensus-leaders-wait",
+		Image: "ghcr.io/davenury/ucac-init:latest",
+		EnvFrom: []v1.EnvFromSource{
+			{
+				ConfigMapRef: &v1.ConfigMapEnvSource{
+					LocalObjectReference: v1.LocalObjectReference{
+						Name: "performance-test-configmap",
+					},
+				},
+			},
+		},
+	})
 
 	jobSpec := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -162,6 +193,7 @@ func createJob(clientset *kubernetes.Clientset, config Config) {
 					},
 				},
 				Spec: v1.PodSpec{
+					InitContainers: initContainers,
 					Containers: []v1.Container{
 						{
 							Name: "performance-test",
