@@ -12,41 +12,6 @@ import (
 	"time"
 )
 
-type Config struct {
-	monitoringNamespace            string
-	createMonitoringNamespace      bool
-	numberOfPeersInPeersets        []int
-	numberOfPeersV2                int
-	peersetsConfigurationV2        string
-	createTestNamespace            bool
-	testNamespace                  string
-	applicationImageName           string
-	performanceImage               string
-	singleRequestsNumber           int
-	multipleRequestsNumber         int
-	testDuration                   string
-	maxPeersetsInChange            int
-	testsSendingStrategy           string
-	testsCreatingChangeStrategy    string
-	pushgatewayAddress             string
-	enforceAcUsage                 bool
-	acProtocol                     string
-	consensusProtocol              string
-	performanceTestTimeoutDeadline string
-	cleanupAfterWork               bool
-	isMetricTest                   bool
-	deployMonitoring               bool
-	constantLoad                   string
-	fixedPeersetsInChange          string
-	proxyDelay                     string
-	proxyLimit                     string
-	loadGeneratorType              string
-	increasingLoadBound            float64
-	increasingLoadIncreaseDelay    string
-	increasingLoadIncreaseStep     float64
-	enforceConsensusLeader         bool
-}
-
 func CreateWholeCommand() *cobra.Command {
 
 	var config Config
@@ -87,7 +52,6 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&config.deployMonitoring, "deploy-monitoring", true, "Determines whether deploy monitoring stack")
 	cmd.Flags().StringVar(&config.constantLoad, "constant-load", "", "Number of changes per second for constant load - overrides test duration and number of changes")
 	cmd.Flags().StringVar(&config.fixedPeersetsInChange, "fixed-peersets-in-change", "", "Determines fixed number of peersets in change. Overrides maxPeersetsInChange")
-	cmd.Flags().StringVar(&config.proxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	cmd.Flags().StringVar(&config.proxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
 
 	cmd.Flags().StringVar(&config.loadGeneratorType, "load-generator-type", "", "Load Generator Type - one of constant, bound or increasing")
@@ -95,6 +59,17 @@ func CreateWholeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&config.increasingLoadIncreaseDelay, "load-increase-delay", "PT60S", "Determines how long load should be constant before increasing")
 	cmd.Flags().Float64Var(&config.increasingLoadIncreaseStep, "load-increase-step", float64(1), "Determines how much load should change after load-increase-delay time")
 	cmd.Flags().BoolVar(&config.enforceConsensusLeader, "enforce-consensus-leader", true, "Determines if tests should always send changes to consensus leader")
+
+	cmd.Flags().StringVar(&config.ProxyDelay.delayType, "delay-type", "", "Delay type, currently supported: fixed, random, peerset-fixed, peerset-random")
+	cmd.Flags().StringVar(&config.ProxyDelay.fixedProxyDelay, "delay-fixed", "", "Fixed delay applied to all request; delay type - fixed")
+	cmd.Flags().StringVar(&config.ProxyDelay.randomProxyDelayStart, "delay-random-start", "", "Start of the random range of delays, calculated with each request; delay type - random")
+	cmd.Flags().StringVar(&config.ProxyDelay.randomProxyDelayEnd, "delay-random-end", "", "End of the random range of delays, calculated with each request; delay type - random")
+	cmd.Flags().StringVar(&config.ProxyDelay.ownPeersetProxyDelay, "delay-own-peerset", "", "Delay applied to peers within the same peerset; delay type - peerset-fixed")
+	cmd.Flags().StringVar(&config.ProxyDelay.otherPeersetProxyDelay, "delay-other-peerset", "", "Delay applied to peers outside of the peerset; delay type - peerset-fixed")
+	cmd.Flags().StringVar(&config.ProxyDelay.ownPeersetRandomProxyDelayStart, "delay-own-peerset-start", "", "Start of the random range of delays applied to peers within the same peerset; delay type - peerset-random")
+	cmd.Flags().StringVar(&config.ProxyDelay.ownPeersetRandomProxyDelayEnd, "delay-own-peerset-end", "", "End of the random range of delays applied to peers within the same peerset; delay type - peerset-random")
+	cmd.Flags().StringVar(&config.ProxyDelay.otherPeersetRandomProxyDelayStart, "delay-other-peerset-start", "", "Start of the random range of delays applied to peers outside of the peerset; delay type - peerset-random")
+	cmd.Flags().StringVar(&config.ProxyDelay.otherPeersetRandomProxyDelayEnd, "delay-other-peerset-end", "", "End of the random range of delays applied to peers outside of the peerset; delay type - peerset-random")
 
 	return cmd
 }
@@ -115,7 +90,7 @@ func perform(config Config) {
 		ImageName:               config.applicationImageName,
 		IsMetricTest:            config.isMetricTest,
 		CreateResources:         true,
-		ProxyDelay:              config.proxyDelay,
+		ProxyDelay:              config.ProxyDelay,
 		ProxyLimit:              config.proxyLimit,
 		MonitoringNamespace:     config.monitoringNamespace,
 	})
