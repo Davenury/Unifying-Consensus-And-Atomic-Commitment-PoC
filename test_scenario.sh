@@ -1,10 +1,9 @@
 directory=$(dirname $0)
 echo $directory
 
-#protocols=("alvin" "paxos" "raft" "oldRaft")
 protocols=("alvin" "paxos" "raft")
-#protocols=("alvin" "paxos")
-#protocols=("raft")
+#protocols=("paxos" "raft")
+#protocols=("alvin")
 
 peerset_size_start=5
 peerset_size_end=5
@@ -26,11 +25,11 @@ total_repeats=0
 start_test=5
 end_test=5
 
-initial_sleep="2m"
+initial_sleep="3m"
 resource_sleep="3m"
 ft_sleep="2m"
 stress_sleep="1m"
-finish_sleep="5m"
+finish_sleep="4m"
 
 for repeat in $(seq 0 $total_repeats); do
   echo "Repeat: $repeat"
@@ -39,17 +38,17 @@ for repeat in $(seq 0 $total_repeats); do
     for protocol in $protocols; do
       for test_type in $(seq $start_test $end_test); do
         echo "Run experiment type $test_type for protocol: $protocol for peerset_size: $peerset_size"
-#        if [[ $test_type -eq 0 ]]; then
-#          echo "Increasing load script"
-#          cd $directory/cmd && CONSENSUS=$protocol "./scripts/stress-consensus-test.sh" $peerset_size 0 &
-#        else
-        if [[ $test_type -gt 3 ]]; then
-          echo "Increasing load script"
-          cd $directory/cmd && CONSENSUS=$protocol $ENFORCE_LEADER=true "./scripts/stress-consensus-test.sh" $peerset_size 0 &
-        else
-          echo "Constant load script"
-          cd $directory/cmd && CONSENSUS=$protocol "./scripts/consensus.sh" $peerset_size 0 &
-        fi
+        #        if [[ $test_type -eq 0 ]]; then
+        #          echo "Increasing load script"
+        #          cd $directory/cmd && CONSENSUS=$protocol "./scripts/stress-consensus-test.sh" $peerset_size 0 &
+        #        else
+        #        if [[ $test_type -gt 3 ]]; then
+        #          echo "Constant load script enforce_leader: true"
+        #          cd $directory/cmd && CONSENSUS=$protocol ENFORCE_LEADER=false "./scripts/consensus.sh" $peerset_size 0 &
+        #        else
+        echo "Constant load script enforce_leader: false"
+        cd $directory/cmd && CONSENSUS=$protocol ENFORCE_LEADER=false "./scripts/consensus.sh" $peerset_size 0 &
+        #        fi
         scriptPID=$!
         START_LEADER=$(date +%s%3N)
         sleep 1m
