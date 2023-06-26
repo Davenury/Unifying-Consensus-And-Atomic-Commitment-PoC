@@ -19,5 +19,5 @@ spec:
           resourceType: consensus follower
           action: delete percentage
           deleteConsensusFollowerPercentageSpec:
-            peerUrl: http://peer0-service:8080/peerset-information?peerset=peerset0
+            peerUrl: http://peer0-service.ddebowski:8080/peerset-information?peerset=peerset0
             percentage: 75
