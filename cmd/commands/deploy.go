@@ -427,6 +427,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
 			"EXPERIMENT_UUID":              experimentUUID.String(),
 			"CONSENSUS_NAME":               config.ConsensusProtocol,
+			"TEMPO_HOST":                   fmt.Sprintf("tempo.%s", config.MonitoringNamespace),
 		},
 	}
 

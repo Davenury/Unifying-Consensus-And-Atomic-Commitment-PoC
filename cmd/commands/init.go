@@ -111,7 +111,7 @@ func DoInit(namespace string, createNamespace bool, persistence bool) {
 								{
 									"source_labels": []string{"kubernetes_namespace"},
 									"action":        "keep",
-									"regex":         "ddebowski|rszuma|kjaros",
+									"regex":         "ddebowski|rszuma|kjarosz",
 								},
 							},
 						},
