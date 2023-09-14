@@ -1,0 +1,4 @@
+Index,mean,std,Protocol,Name,Size,Type,name
+0,15.89246370330969,2.4359273758519886,alvin,synchronization,5x1,alvin,alvin 5x1
+1,18.94267547335812,3.8825620329003336,paxos,synchronization,5x1,paxos,paxos 5x1
+2,31.830027922526035,6.366672075398269,raft,synchronization,5x1,raft,raft 5x1

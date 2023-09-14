@@ -28,6 +28,7 @@ type DeployConfig struct {
 	ProxyDelay              string
 	ProxyLimit              string
 	MonitoringNamespace     string
+	ConsensusProtocol       string
 }
 
 func (cfg *DeployConfig) version() string {
@@ -81,6 +82,8 @@ func CreateDeployCommand() *cobra.Command {
 	deployCommand.Flags().StringVar(&config.ProxyDelay, "proxy-delay", "0", "Delay in seconds for proxy, e.g. 0.2")
 	deployCommand.Flags().StringVar(&config.ProxyLimit, "proxy-limit", "0", "Bandwidth limit in bytes per second, e.g. 100, 2M")
 	deployCommand.Flags().StringVar(&config.MonitoringNamespace, "monitoring-namespace", "ddebowski", "Namespace with monitoring deployed")
+	deployCommand.Flags().StringVar(&config.ConsensusProtocol, "consensus-protocol", "raft", "Consensus protocol to use. For now it's one protocol")
+
 
 	return deployCommand
 
@@ -357,7 +360,7 @@ func createSingleContainer(config DeployConfig, peerConfig utils.PeerConfig) api
 		resources = apiv1.ResourceRequirements{
 			Limits: apiv1.ResourceList{
 				"cpu":    resource.MustParse("1"),
-				"memory": resource.MustParse("550Mi"),
+				"memory": resource.MustParse("750Mi"),
 			},
 			Requests: apiv1.ResourceList{
 				"cpu":    resource.MustParse("500m"),
@@ -410,7 +413,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 		},
 		Data: map[string]string{
 			"CONFIG_FILE":                  "application-kubernetes.conf",
-			"JAVA_OPTS":                    "-Xmx200m",
+			"JAVA_OPTS":                    "-Xmx450m",
 			"config_port":                  "8081",
 			"config_peerId":                peerConfig.PeerId,
 			"config_peers":                 peers,
@@ -423,6 +426,7 @@ func deploySinglePeerConfigMap(config DeployConfig, peerConfig utils.PeerConfig,
 			"NAMESPACE":                    config.DeployNamespace,
 			"GPAC_FTAGREE_REPEAT_DELAY":    "PT0.5S",
 			"EXPERIMENT_UUID":              experimentUUID.String(),
+			"CONSENSUS_NAME":               config.ConsensusProtocol,
 			"TEMPO_HOST":                   fmt.Sprintf("tempo.%s", config.MonitoringNamespace),
 		},
 	}

@@ -40,6 +40,16 @@ object Metrics {
             .increment()
     }
 
+    fun bumpLeaderElection(peerId: PeerId, peersetId: PeersetId) {
+        Counter
+            .builder("leader_elected")
+            .tag("peerId", peerId.peerId.lowercase())
+            .tag("peersetId", peersetId.peersetId.lowercase())
+            .tag("protocol", "consensus")
+            .register(meterRegistry)
+            .increment()
+    }
+
     fun startTimer(changeId: String) {
         changeIdToTimer[changeId] = Instant.now()
     }
@@ -50,6 +60,15 @@ object Metrics {
             .builder("change_processing_time")
             .tag("protocol", protocol)
             .tag("result", result.status.name.lowercase())
+            .register(meterRegistry)
+            .record(timeElapsed)
+    }
+
+    fun synchronizationTimer(peerId: PeerId, timeElapsed: Duration) {
+        logger.info("Time elapsed for changes synchronization on peer: $peerId: $timeElapsed")
+        Timer
+            .builder("changes_synchronization_time")
+            .tag("protocol", "consensus")
             .register(meterRegistry)
             .record(timeElapsed)
     }

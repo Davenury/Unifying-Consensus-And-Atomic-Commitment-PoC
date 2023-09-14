@@ -1,0 +1,3 @@
+Index,mean,std,Protocol,Name,Size,Type,Role,name
+0,35413084.06349207,4566242.030807821,paxos,during changes,3x1,paxos-leader,leader,paxos - 3x1
+1,33748036.571428575,4786548.632250855,paxos,during changes,3x1,paxos-cohorts,cohorts,paxos - 3x1

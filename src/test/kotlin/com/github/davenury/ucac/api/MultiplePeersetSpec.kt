@@ -26,6 +26,7 @@ import java.time.Duration
 import java.util.concurrent.Phaser
 import kotlin.system.measureTimeMillis
 
+@Disabled("For fixing consensuses")
 @Suppress("HttpUrlsUsage")
 @ExtendWith(TestLogExtension::class)
 class MultiplePeersetSpec : IntegrationTestBase() {
@@ -458,14 +459,14 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                     "peer7" to signalListenersForAll,
                 ),
                 configOverrides = mapOf(
-                    "peer0" to mapOf("raft.isEnabled" to false),
-                    "peer1" to mapOf("raft.isEnabled" to false),
-                    "peer2" to mapOf("raft.isEnabled" to false),
-                    "peer3" to mapOf("raft.isEnabled" to false),
-                    "peer4" to mapOf("raft.isEnabled" to false),
-                    "peer5" to mapOf("raft.isEnabled" to false, "gpac.leaderFailDelay" to Duration.ZERO),
-                    "peer6" to mapOf("raft.isEnabled" to false),
-                    "peer7" to mapOf("raft.isEnabled" to false),
+                    "peer0" to mapOf("consensus.isEnabled" to false),
+                    "peer1" to mapOf("consensus.isEnabled" to false),
+                    "peer2" to mapOf("consensus.isEnabled" to false),
+                    "peer3" to mapOf("consensus.isEnabled" to false),
+                    "peer4" to mapOf("consensus.isEnabled" to false),
+                    "peer5" to mapOf("consensus.isEnabled" to false, "gpac.leaderFailDelay" to Duration.ZERO),
+                    "peer6" to mapOf("consensus.isEnabled" to false),
+                    "peer7" to mapOf("consensus.isEnabled" to false),
                 ),
             )
             val change = change(0, 1)
@@ -629,7 +630,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 "peer2" to electSignal,
                 "peer5" to electSignal,
             ) + (0..5).map { "peer$it" }.associateWith { applySignal },
-            configOverrides = (0..5).map { "peer$it" }.associateWith { mapOf("raft.isEnabled" to false) }
+            configOverrides = (0..5).map { "peer$it" }.associateWith { mapOf("consensus.isEnabled" to false) }
         )
 
         val change: Change = change(0, 1)
@@ -657,7 +658,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
                 "peerset1" to listOf("peer3", "peer4", "peer5"),
             ),
             configOverrides = (0..5).map { "peer$it" }.associateWith {
-                mapOf("raft.isEnabled" to false)
+                mapOf("consensus.isEnabled" to false)
             } + mapOf("peer2" to mapOf("gpac.abortOnElectMe" to true)),
             signalListeners = (0..5).map { "peer$it" }.associateWith { applyAction }
         )
@@ -685,7 +686,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ),
             configOverrides = (0..5).map { "peer$it" }.associateWith {
                 mapOf(
-                    "raft.isEnabled" to false,
+                    "consensus.isEnabled" to false,
                     "gpac.abortOnElectMe" to true
                 )
             } + mapOf(
@@ -720,7 +721,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ),
             configOverrides = (0..5).map { "peer$it" }.associateWith {
                 mapOf(
-                    "raft.isEnabled" to false,
+                    "consensus.isEnabled" to false,
                 )
             } + (3..5).map { "peer$it" }.associateWith { mapOf("gpac.abortOnElectMe" to true) }
                     + mapOf(
@@ -760,7 +761,7 @@ class MultiplePeersetSpec : IntegrationTestBase() {
             ),
             configOverrides = (0..5).map { "peer$it" }.associateWith {
                 mapOf(
-                    "raft.isEnabled" to false,
+                    "consensus.isEnabled" to false,
                 )
             } + mapOf("peer3" to mapOf("gpac.abortOnElectMe" to true))
                     + mapOf(

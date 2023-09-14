@@ -7,6 +7,7 @@ import com.github.davenury.ucac.common.ChangeNotifier
 import com.github.davenury.ucac.common.MultiplePeersetProtocols
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.common.structure.HttpSubscriber
+import com.github.davenury.ucac.consensus.LatestEntryIdResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -59,7 +60,7 @@ class ApiV2Service(
 
     suspend fun addChange(peersetId: PeersetId, job: ProcessorJob): CompletableFuture<ChangeResult> =
         job.also {
-            logger.info("Service send job $job to queue")
+//            logger.info("Service send job $job to queue")
             workers[peersetId]!!.send(it)
         }.completableFuture
 
@@ -79,6 +80,15 @@ class ApiV2Service(
         return PeersetInformation(
             currentConsensusLeader = multiplePeersetProtocols.protocols[peersetId]?.consensusProtocol?.getLeaderId(),
             peersInPeerset = peerResolver.getPeersFromPeerset(peersetId).map { it.peerId }
+        )
+    }
+
+    fun getLatestEntryIdResponse(entryId: String, peersetId: PeersetId): LatestEntryIdResponse{
+        val consensusProtocol = multiplePeersetProtocols.protocols[peersetId]?.consensusProtocol!!
+        val entries = consensusProtocol.getState().getAllEntriesUntilHistoryEntryId(entryId)
+        return LatestEntryIdResponse(
+            consensusProtocol.getState().getCurrentEntryId(),
+            entries.size
         )
     }
 

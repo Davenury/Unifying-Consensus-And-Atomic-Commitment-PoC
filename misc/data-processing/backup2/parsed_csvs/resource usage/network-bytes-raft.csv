@@ -1,0 +1,3 @@
+Index,mean,std,Protocol,Name,Size,Type,Role,name
+0,26118.615784717662,13516.43337057173,raft,during changes,5x1,raft-leader,leader,raft - 5x1
+1,22042.565511093926,8213.820061068207,raft,during changes,5x1,raft-cohorts,cohorts,raft - 5x1

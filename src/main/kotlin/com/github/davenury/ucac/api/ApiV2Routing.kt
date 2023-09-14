@@ -1,9 +1,6 @@
 package com.github.davenury.ucac.api
 
 import com.github.davenury.common.*
-import com.github.davenury.ucac.common.structure.HttpSubscriber
-import com.github.davenury.ucac.common.structure.Subscriber
-import com.github.davenury.ucac.common.structure.Subscribers
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
@@ -144,6 +141,14 @@ fun Application.apiV2Routing(
         get("/peerset-information") {
             val peersetId = call.peersetId()
             call.respond(service.getPeersetInformation(peersetId).toDto())
+        }
+
+        post("/consensus/latest-entry") {
+
+            val entryId = call.receive<String>()
+            val peersetId = call.peersetId()
+            logger.info("Received question about latest entry in peerset: $peersetId")
+            call.respond(service.getLatestEntryIdResponse(entryId, peersetId))
         }
     }
 }

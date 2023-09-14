@@ -11,9 +11,7 @@ import com.github.davenury.ucac.commitment.twopc.TwoPC
 import com.github.davenury.ucac.commitment.twopc.TwoPCProtocolClientImpl
 import com.github.davenury.ucac.common.structure.CodeSubscriber
 import com.github.davenury.ucac.common.structure.Subscribers
-import com.github.davenury.ucac.consensus.raft.domain.RaftConsensusProtocol
-import com.github.davenury.ucac.consensus.raft.domain.RaftProtocolClientImpl
-import com.github.davenury.ucac.consensus.raft.infrastructure.RaftConsensusProtocolImpl
+import com.github.davenury.ucac.consensus.ConsensusProtocol
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import java.util.concurrent.Executors
@@ -36,7 +34,7 @@ class PeersetProtocols(
     private val ctx: ExecutorCoroutineDispatcher =
         Executors.newCachedThreadPool().asCoroutineDispatcher()
 
-    val consensusProtocol: RaftConsensusProtocol
+    val consensusProtocol: ConsensusProtocol
     val twoPC: TwoPC
     val gpacFactory: GPACFactory
 
@@ -51,17 +49,17 @@ class PeersetProtocols(
             peerResolver,
         )
 
-        consensusProtocol = RaftConsensusProtocolImpl(
-            peersetId,
-            history,
-            config,
-            ctx,
-            peerResolver,
-            signalPublisher,
-            RaftProtocolClientImpl(peersetId),
-            transactionBlocker,
-            subscribers,
-        )
+        consensusProtocol =
+            ConsensusProtocol.createConsensusProtocol(
+                config,
+                peersetId,
+                history,
+                ctx,
+                transactionBlocker,
+                peerResolver,
+                signalPublisher,
+                subscribers,
+            )
 
         twoPC = TwoPC(
             peersetId,

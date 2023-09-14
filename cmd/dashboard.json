@@ -114,6 +114,7 @@
         "y": 1
       },
       "id": 14,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -134,6 +135,7 @@
           },
           "editorMode": "code",
           "expr": "max(rate(container_cpu_usage_seconds_total{pod=~\"peer.*\", namespace=~\"$namespace\"}[30s])) by (pod)",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -206,6 +208,7 @@
         "y": 1
       },
       "id": 16,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -226,6 +229,7 @@
           },
           "editorMode": "code",
           "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"peer.*\", namespace=\"$namespace\"}[30s]))",
+          "interval": "5s",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -238,6 +242,7 @@
           "editorMode": "code",
           "expr": "avg(rate(container_cpu_cfs_throttled_seconds_total{pod=~\"performance-test.*\", namespace=\"$namespace\"}[30s]))",
           "hide": false,
+          "interval": "5s",
           "legendFormat": "performance tests",
           "range": true,
           "refId": "B"
@@ -311,6 +316,7 @@
         "y": 9
       },
       "id": 18,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -331,6 +337,7 @@
           },
           "editorMode": "code",
           "expr": "sum(jvm_memory_used_bytes{area=\"heap\", app_name=~\"peer.*\", kubernetes_namespace=~\"$namespace\"}) by (app_name)",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -404,6 +411,7 @@
         "y": 9
       },
       "id": 27,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -424,6 +432,7 @@
           },
           "editorMode": "code",
           "expr": "sum(container_memory_usage_bytes{pod=~\"peer.*\", namespace=~\"$namespace\"}) by (pod)",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -497,6 +506,7 @@
         "y": 17
       },
       "id": 21,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -517,6 +527,7 @@
           },
           "editorMode": "code",
           "expr": "rate(container_network_receive_bytes_total{pod=~\"peer.*\", namespace=~\"$namespace\", interface=\"eth0\"}[30s])",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -590,6 +601,7 @@
         "y": 17
       },
       "id": 29,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -610,6 +622,7 @@
           },
           "editorMode": "code",
           "expr": "rate(container_network_transmit_bytes_total{pod=~\"peer.*\", namespace=~\"$namespace\", interface=\"eth0\"}[30s])",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -695,6 +708,7 @@
         "y": 29
       },
       "id": 2,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -715,6 +729,7 @@
           },
           "editorMode": "code",
           "expr": "sum(rate(ktor_http_server_requests_seconds_count{route=\"/v2/change/async\", kubernetes_namespace=~\"$namespace\"}[1m]))",
+          "interval": "5s",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -789,6 +804,7 @@
         "y": 29
       },
       "id": 4,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -808,7 +824,8 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(change_processed_total{kubernetes_namespace=~\"$namespace\"}[1m]))",
+          "expr": "max(rate(change_processed_total{kubernetes_namespace=~\"$namespace\"}[15s])) or vector(0)",
+          "interval": "5s",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -848,6 +865,7 @@
         "y": 38
       },
       "id": 6,
+      "interval": "5s",
       "options": {
         "orientation": "auto",
         "reduceOptions": {
@@ -869,6 +887,7 @@
           },
           "editorMode": "code",
           "expr": "(sum(change_processed_total{kubernetes_namespace=~\"$namespace\"}) by (result))",
+          "interval": "5s",
           "legendFormat": "{{result}}",
           "range": true,
           "refId": "A"
@@ -935,12 +954,13 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 7,
         "w": 24,
         "x": 0,
         "y": 48
       },
-      "id": 31,
+      "id": 33,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -960,8 +980,102 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "increase(chaos_operator_phase_change_total{scenario=~\"$scenario\"})",
+          "expr": "avg(changes_synchronization_time_seconds_sum{kubernetes_namespace=~\"$namespace\"}/changes_synchronization_time_seconds_count{kubernetes_namespace=~\"$namespace\"})",
+          "interval": "5s",
           "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Synchronization time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 55
+      },
+      "id": 34,
+      "interval": "5s",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "increase(chaos_operator_phase_change_total)",
+          "interval": "5s",
+          "legendFormat": "phase change",
           "range": true,
           "refId": "A"
         }
@@ -1015,8 +1129,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1032,9 +1145,10 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 63
       },
       "id": 12,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -1055,6 +1169,7 @@
           },
           "editorMode": "code",
           "expr": "avg(rate(change_processing_time_seconds_sum{result=\"success\", kubernetes_namespace=~\"$namespace\"}[1m]) / rate(change_processing_time_seconds_count{result=\"success\", kubernetes_namespace=~\"$namespace\"}[1m]))",
+          "interval": "5s",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -1108,8 +1223,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1121,12 +1235,13 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 7,
         "w": 24,
         "x": 0,
-        "y": 64
+        "y": 70
       },
-      "id": 31,
+      "id": 32,
+      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
@@ -1139,6 +1254,7 @@
           "sort": "none"
         }
       },
+      "pluginVersion": "9.4.3",
       "targets": [
         {
           "datasource": {
@@ -1146,13 +1262,14 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "increase(chaos_operator_phase_change_total)",
-          "legendFormat": "phase change",
+          "expr": "increase(leader_elected_total{kubernetes_namespace=~\"$namespace\"})",
+          "interval": "5s",
+          "legendFormat": "{{peerId}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Chaos Operator phase change",
+      "title": "Leader elected",
       "type": "timeseries"
     },
     {
@@ -1170,8 +1287,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1186,9 +1302,10 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 63
+        "y": 77
       },
       "id": 10,
+      "interval": "5s",
       "options": {
         "orientation": "auto",
         "reduceOptions": {
@@ -1210,6 +1327,7 @@
           },
           "editorMode": "code",
           "expr": "kube_pod_container_status_restarts_total{kubernetes_namespace=~\"$namespace\"}",
+          "interval": "5s",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -1260,6 +1378,10 @@
           "text": "None",
           "value": ""
         },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "definition": "label_values(chaos_operator_phase_change, scenario)",
         "hide": 0,
         "includeAll": false,
@@ -1279,7 +1401,7 @@
     ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},

@@ -4,18 +4,17 @@ import com.github.davenury.common.*
 import com.github.davenury.ucac.api.ApiV2Service
 import com.github.davenury.ucac.api.apiV2Routing
 import com.github.davenury.ucac.common.ChangeNotifier
-import com.github.davenury.ucac.common.MultiplePeersetProtocols
+import com.github.davenury.ucac.common.*
 import com.github.davenury.ucac.common.structure.Subscribers
 import com.github.davenury.ucac.history.historyRouting
-import com.github.davenury.ucac.routing.consensusProtocolRouting
 import com.github.davenury.ucac.routing.gpacProtocolRouting
 import com.github.davenury.ucac.routing.metaRouting
-import com.github.davenury.ucac.routing.twoPCRouting
 import com.zopa.ktor.opentracing.OpenTracingServer
 import com.zopa.ktor.opentracing.ThreadContextElementScopeManager
 import io.jaegertracing.Configuration
 import io.jaegertracing.internal.samplers.ConstSampler
 import io.ktor.application.*
+import com.github.davenury.ucac.routing.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
@@ -155,11 +154,13 @@ class ApplicationUcac(
 
         service = ApiV2Service(config, multiplePeersetProtocols, changeNotifier, peerResolver)
 
+
         install(OpenTracingServer) {
             addTag("threadName") { Thread.currentThread().name }
             config.experimentId?.let { addTag("experiment") { it } }
             filter { call -> call.request.path().startsWith("/_meta") || call.request.path().startsWith("/consensus/heartbeat") }
         }
+
 
         install(CallLogging) {
             level = Level.DEBUG
@@ -262,6 +263,13 @@ class ApplicationUcac(
                 )
             }
 
+            exception<AlvinOutdatedPrepareException> { cause ->
+                call.respond(
+                    status = HttpStatusCode.Unauthorized,
+                    ErrorMessage(cause.message!!)
+                )
+            }
+
             exception<MissingPeersetParameterException> { cause ->
                 logger.error("Missing peerset parameter", cause)
                 call.respond(
@@ -298,11 +306,17 @@ class ApplicationUcac(
         historyRouting(multiplePeersetProtocols)
         apiV2Routing(service)
         gpacProtocolRouting(multiplePeersetProtocols)
-        consensusProtocolRouting(multiplePeersetProtocols)
+        when (config.consensus.name){
+            "raft" -> raftProtocolRouting(multiplePeersetProtocols)
+            "oldRaft" -> oldRaftProtocolRouting(multiplePeersetProtocols)
+            "alvin" -> alvinProtocolRouting(multiplePeersetProtocols)
+            "paxos" -> pigPaxosProtocolRouting(multiplePeersetProtocols)
+            else -> throw IllegalStateException("Unknown consensus type ${config.consensus.name}")
+        }
         twoPCRouting(multiplePeersetProtocols)
 
         runBlocking {
-            if (config.raft.isEnabled) {
+            if (config.consensus.isEnabled) {
                 multiplePeersetProtocols.protocols.values.forEach { protocols ->
                     protocols.consensusProtocol.begin()
                 }
@@ -327,6 +341,7 @@ class ApplicationUcac(
 
     fun stop(gracePeriodMillis: Long = 200, timeoutMillis: Long = 1000) {
         withMdc {
+            logger.info("Stop app ${peerResolver.currentPeer()}")
             if (this::multiplePeersetProtocols.isInitialized) {
                 multiplePeersetProtocols.close()
             }

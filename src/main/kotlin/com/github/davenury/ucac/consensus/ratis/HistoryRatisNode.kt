@@ -4,6 +4,7 @@ import com.github.davenury.common.Change
 import com.github.davenury.common.ChangeResult
 import com.github.davenury.common.PeerId
 import com.github.davenury.common.PeersetId
+import com.github.davenury.common.*
 import com.github.davenury.common.history.History
 import com.github.davenury.ucac.common.PeerResolver
 import com.github.davenury.ucac.consensus.ConsensusProtocol
@@ -30,6 +31,13 @@ class HistoryRatisNode(
     ConsensusProtocol {
 
     private val changeIdToCompletableFuture: MutableMap<String, CompletableFuture<ChangeResult>> = mutableMapOf()
+    override suspend fun begin() {
+        TODO("Not yet implemented")
+    }
+
+    override fun stop() {
+        TODO("Not yet implemented")
+    }
 
     override fun amILeader(): Boolean = true
 
@@ -52,10 +60,30 @@ class HistoryRatisNode(
         return cf
     }
 
+    override suspend fun proposeChangeToLedger(result: CompletableFuture<ChangeResult>, change: Change) {
+        TODO("Not yet implemented")
+    }
+
     override fun getState(): History {
         return history
     }
 
+    override suspend fun isSynchronized(): Boolean {
+        TODO("Not yet implemented")
+    }
+
     override fun getChangeResult(changeId: String): CompletableFuture<ChangeResult>? =
         changeIdToCompletableFuture[changeId]
+
+    override fun otherConsensusPeers(): List<PeerAddress> {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun getProposedChanges(): List<Change> {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun getAcceptedChanges(): List<Change> {
+        TODO("Not yet implemented")
+    }
 }
