@@ -143,4 +143,37 @@ class GetProposePhaseResponsesTest {
         ) }
     }
 
+    @Test
+    fun `should be able to repeat to peersets with dead peers`(): Unit = runBlocking {
+        coEvery { protocolClientMock.sendAccept(any(), any()) } returnsMany listOf(
+            // first return
+            mapOf(
+                peerResolver.resolve(PeerId("peer3")) to TwoPCRequestResponse(success = false, failureBecauseOfDeadPeer = true, peersetId = PeersetId("peerset1")),
+                peerResolver.resolve(PeerId("peer4")) to TwoPCRequestResponse(success = true, peersetId = PeersetId("peerset2"))
+            ),
+            // second return
+            mapOf(
+                peerResolver.resolve(PeerId("peer2")) to TwoPCRequestResponse(success = true, peersetId = PeersetId("peerset1"))
+            )
+        )
+
+        val decision = subject.getProposePhaseResponses(
+            mapOf(PeersetId("peerset1") to peerResolver.resolve(PeerId("peer3")), PeersetId("peerset2") to  peerResolver.resolve(PeerId("peer4"))),
+            change = AddUserChange(""),
+            mapOf()
+        )
+
+        expectThat(decision).isTrue()
+        expectThat(subject.currentConsensusLeaders[PeersetId("peerset1")]).isEqualTo(peerResolver.resolve(PeerId("peer2")))
+
+        coVerify(exactly = 1) { protocolClientMock.sendAccept(
+            mapOf(PeersetId("peerset1") to peerResolver.resolve(PeerId("peer3")), PeersetId("peerset2") to  peerResolver.resolve(PeerId("peer4"))),
+            any()
+        ) }
+        coVerify(exactly = 1) { protocolClientMock.sendAccept(
+            mapOf(PeersetId("peerset1") to peerResolver.resolve(PeerId("peer2"))),
+            any()
+        ) }
+    }
+
 }

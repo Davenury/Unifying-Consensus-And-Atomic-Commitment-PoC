@@ -15,10 +15,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.slf4j.MDCContext
 import org.slf4j.LoggerFactory
+import java.io.IOException
 
 data class TwoPCRequestResponse(
     val success: Boolean,
     val redirect: Boolean = false,
+    val failureBecauseOfDeadPeer: Boolean = false,
     val newConsensusLeaderId: PeerId? = null,
     val newConsensusLeaderPeersetId: PeersetId? = null,
     val peersetId: PeersetId,
@@ -77,6 +79,13 @@ class TwoPCProtocolClientImpl : TwoPCProtocolClient {
                     newConsensusLeaderId = newConsensusLeaderId.peerId,
                     newConsensusLeaderPeersetId = newConsensusLeaderId.peersetId,
                     peersetId = it.second,
+                )
+            } catch(e: IOException) {
+                logger.error("Error while evaluating response from ${it.first} - peer is dead", e)
+                it.first to TwoPCRequestResponse(
+                    success = false,
+                    peersetId = it.second,
+                    failureBecauseOfDeadPeer = true,
                 )
             } catch (e: Exception) {
                 logger.error("Error while evaluating response from ${it.first}", e)

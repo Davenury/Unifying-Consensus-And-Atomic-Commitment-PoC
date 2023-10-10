@@ -2,16 +2,20 @@ package com.github.davenury.ucac.commitment.twopc
 
 import com.github.davenury.common.*
 import com.github.davenury.common.history.History
-import com.github.davenury.ucac.*
+import com.github.davenury.ucac.Signal
+import com.github.davenury.ucac.SignalPublisher
+import com.github.davenury.ucac.SignalSubject
+import com.github.davenury.ucac.TwoPCConfig
 import com.github.davenury.ucac.commitment.AbstractAtomicCommitmentProtocol
-import com.github.davenury.ucac.common.*
+import com.github.davenury.ucac.common.ChangeNotifier
+import com.github.davenury.ucac.common.PeerResolver
+import com.github.davenury.ucac.common.ProtocolTimer
+import com.github.davenury.ucac.common.ProtocolTimerImpl
 import com.github.davenury.ucac.consensus.ConsensusProtocol
 import com.zopa.ktor.opentracing.span
-import io.micrometer.core.instrument.Tag
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
-import okhttp3.internal.notifyAll
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
@@ -68,7 +72,8 @@ class TwoPC(
             }
 
             signal(Signal.TwoPCOnChangeAccepted, change)
-            val decisionPhaseOtherPeers = otherPeersets.associateWith { currentConsensusLeaders[it] ?: peerResolver.getPeersFromPeerset(it)[0] }
+            val decisionPhaseOtherPeers =
+                otherPeersets.associateWith { currentConsensusLeaders[it] ?: peerResolver.getPeersFromPeerset(it)[0] }
             decisionPhase(acceptChange, decision, decisionPhaseOtherPeers)
 
             val result = if (decision) ChangeResult.Status.SUCCESS else ChangeResult.Status.ABORTED
@@ -122,10 +127,14 @@ class TwoPC(
         } else {
             consensusProtocol.getLeaderId()?.let {
                 throw ImNotLeaderException(it, peersetId)
-            } ?: throw TwoPCHandleException("TwoPCChange didn't apply change")
+            } ?: kotlin.run {
+                logger.error("There's no consensus leader!")
+                throw TwoPCHandleException("TwoPCChange didn't apply change")
+            }
         }
 
         if (result.status != ChangeResult.Status.SUCCESS) {
+            logger.error("Two pc did not apply change, result is ${result.status.name.lowercase()}")
             throw TwoPCHandleException("TwoPCChange didn't apply change")
         }
 
@@ -275,15 +284,12 @@ class TwoPC(
         mainChangeId: String,
         otherPeers: Map<PeersetId, PeerAddress>,
     ): Boolean = span("TwoPc.proposePhase") {
-        val acceptResult = checkChangeAndProposeToConsensus(acceptChange, mainChangeId).await()
+        val acceptResult = checkChangeAndProposeToConsensus(acceptChange, mainChangeId)
 
-        if (acceptResult.status != ChangeResult.Status.SUCCESS) {
-            changeConflict(mainChangeId, "failed during processing acceptChange in 2PC")
-        } else {
-            logger.info("Change accepted locally ${acceptChange.change}")
-        }
+        val remoteDecision = getProposePhaseResponses(otherPeers, acceptChange, mapOf())
+        val localDecision = acceptResult.await().status == ChangeResult.Status.SUCCESS
+        val decision = remoteDecision && localDecision
 
-        val decision = getProposePhaseResponses(otherPeers, acceptChange, mapOf())
 
         logger.info("Decision $decision from other peerset for ${acceptChange.change}")
 
@@ -293,8 +299,12 @@ class TwoPC(
     suspend fun getProposePhaseResponses(
         peers: Map<PeersetId, PeerAddress>,
         change: Change,
-        recentResponses: Map<PeerAddress, TwoPCRequestResponse>
+        recentResponses: Map<PeerAddress, TwoPCRequestResponse>,
+        iteration: Int = 0,
     ): Boolean {
+        if (iteration > peers.keys.maxOf { peerResolver.getPeersFromPeerset(it).size }) {
+            return false
+        }
         val responses = protocolClient.sendAccept(peers, change)
 
         val addressesToAskAgain = responses.filter { (_, response) -> response.redirect }
@@ -309,14 +319,29 @@ class TwoPC(
                 response.peersetId to address
             }.toMap()
 
-        if (addressesToAskAgain.isEmpty()) {
+        val deadPeersSubstitute = responses.filter { (_, response) -> response.failureBecauseOfDeadPeer }
+            .map { (peerAddress, response) ->
+                val peers = peerResolver.getPeersFromPeerset(response.peersetId)
+                val addressIndex = peers.indexOf(peerAddress)
+                if (addressIndex == -1) {
+                    throw IllegalStateException("Peer $peerAddress not found in peerset ${response.peersetId}")
+                }
+                val newAddress = peers.getOrNull((addressIndex + 1) % peers.size)
+                    ?: return false
+                currentConsensusLeaders[response.peersetId] = newAddress
+                logger.info("Peer from peerset ${response.peersetId} appears to be dead, I get next peer ${newAddress.peerId}")
+                response.peersetId to newAddress
+            }
+
+        if (addressesToAskAgain.isEmpty() && deadPeersSubstitute.isEmpty()) {
             return (recentResponses + responses).values.map { it.success }.all { it }
         }
 
         return getProposePhaseResponses(
-            addressesToAskAgain,
+            addressesToAskAgain + deadPeersSubstitute,
             change,
-            (recentResponses + responses.filterNot { it.value.redirect })
+            (recentResponses + responses.filterNot { it.value.failureBecauseOfDeadPeer || it.value.redirect }),
+            iteration + 1,
         )
     }
 
@@ -340,14 +365,16 @@ class TwoPC(
         }
         logger.info("Change to commit: $commitChange")
 
-        protocolClient.sendDecision(otherPeers, commitChange)
-        val changeResult = checkChangeAndProposeToConsensus(
+        val changeResultLocally = checkChangeAndProposeToConsensus(
             commitChange.copyWithNewParentId(
                 peersetId,
                 acceptChangeId,
             ),
             acceptChange.change.id
-        ).await()
+        )
+
+        protocolClient.sendDecision(otherPeers, commitChange)
+        val changeResult = changeResultLocally.await()
 
         if (changeResult.status != ChangeResult.Status.SUCCESS) {
             throw TwoPCConflictException("Change failed during committing locally")
@@ -369,7 +396,12 @@ class TwoPC(
                     change.toHistoryEntry(peersetId).getParentId()
                 } is ${history.getCurrentEntryId()}"
             )
-            changeIdToCompletableFuture[originalChangeId]!!.complete(ChangeResult(ChangeResult.Status.REJECTED, currentEntryId = history.getCurrentEntryId()))
+            changeIdToCompletableFuture[originalChangeId]!!.complete(
+                ChangeResult(
+                    ChangeResult.Status.REJECTED,
+                    currentEntryId = history.getCurrentEntryId()
+                )
+            )
             throw HistoryCannotBeBuildException()
         }
     }
