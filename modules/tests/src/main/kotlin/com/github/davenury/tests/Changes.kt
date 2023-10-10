@@ -77,7 +77,7 @@ class Changes(
                     val parentId = change.toHistoryEntry(peersetId).getId()
                     changes[peersetId]!!.overrideParentId(parentId)
                     logger.info("Setting new parent id for peerset $peersetId: $parentId, change type: ${change::class.java.simpleName}${if (change is AddUserChange) "change was for ${change.userName}" else ""}")
-                } else if (notification.result.status == ChangeResult.Status.CONFLICT && notification.result.currentEntryId != null) {
+                } else if (notification.result.currentEntryId != null) {
                     logger.info("Change is ${notification.result.status.name.lowercase()}, yet we have current entry id for peerset: ${notification.result.currentEntryId}")
                     changes[peersetId]!!.overrideParentId(notification.result.currentEntryId!!)
                 }
