@@ -29,3 +29,14 @@ WORKDIR /tests
 COPY --from=builder /home/gradle/src/modules/tests/build/install/tests .
 
 ENTRYPOINT ["sh", "-c", "/tests/bin/tests"]
+
+###
+
+FROM alpine:3.17.1 as checker
+RUN apk add openjdk11 && apk add --no-cache jattach --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/
+
+WORKDIR /checker
+
+COPY --from=builder /home/gradle/src/modules/checker/build/install/checker .
+
+ENTRYPOINT ["sh", "-c", "/checker/bin/checker"]

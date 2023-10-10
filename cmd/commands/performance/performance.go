@@ -5,13 +5,14 @@ import "github.com/spf13/cobra"
 func CreatePerformanceCommand() *cobra.Command {
 
 	var cmd = &cobra.Command{
-		Use: "performance",
+		Use:   "performance",
 		Short: "Manage performance tests",
-		Run: func(cmd *cobra.Command, args []string) {},
+		Run:   func(cmd *cobra.Command, args []string) {},
 	}
 
 	cmd.AddCommand(createPerformanceDeployCommand())
 	cmd.AddCommand(createCleanupCommand())
+	cmd.AddCommand(createCheckCommand())
 
 	return cmd
 }

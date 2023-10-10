@@ -36,7 +36,6 @@ out/
 .vscode/
 
 [0-9]*
-history-*
 
 **/*.png
 env

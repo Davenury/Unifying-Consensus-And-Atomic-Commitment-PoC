@@ -42,6 +42,15 @@ jobs:
           tags: ${{env.REGISTRY}}/davenury/tests:${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}
           target: tests
 
+      - name: Build and push checker
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          file: Dockerfile.builder
+          tags: ${{env.REGISTRY}}/davenury/checker:${{ github.ref == 'refs/heads/main' && 'latest' || github.sha }}
+          target: checker
+
       - name: start minikube
         id: minikube
         uses: medyagh/setup-minikube@v0.0.8
