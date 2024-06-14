@@ -1,0 +1,67 @@
+\usepackage{pgfplots}
+\pgfplotsset{width=0.9\linewidth,compat=1.18}
+\usepgfplotslibrary{statistics}
+
+\makeatletter
+\pgfplotsset{
+    boxplot prepared from table/.code={
+        \def\tikz@plot@handler{\pgfplotsplothandlerboxplotprepared}%
+        \pgfplotsset{
+            /pgfplots/boxplot prepared from table/.cd,
+            #1,
+        }
+    },
+    /pgfplots/boxplot prepared from table/.cd,
+        table/.code={\pgfplotstablecopy{#1}\to\boxplot@datatable},
+        row/.initial=0,
+        make style readable from table/.style={
+            #1/.code={
+                \pgfplotstablegetelem{\pgfkeysvalueof{/pgfplots/boxplot prepared from table/row}}{##1}\of\boxplot@datatable
+                \pgfplotsset{boxplot/#1/.expand once={\pgfplotsretval}}
+            }
+        },
+        make style readable from table=lower whisker,
+        make style readable from table=upper whisker,
+        make style readable from table=lower quartile,
+        make style readable from table=upper quartile,
+        make style readable from table=median,
+        make style readable from table=lower notch,
+        make style readable from table=upper notch
+}
+\makeatother
+
+\begin{document}
+
+\pgfplotstableread[col sep=comma]{performance-tests/results/avg-commit-latency.csv}{\avgcommitlatencytable}
+
+\begin{tikzpicture}
+\begin{axis}[
+    boxplot/draw direction=y,
+    xtick={1,...,\TotalRows+1},
+    xticklabels from table={\avgcommitlatencytable}{name},
+    x tick label style={rotate=90,anchor=east},
+    xlabel={Protocol - number of peers},
+    ylabel={Average Commit Latency [s]},
+    title={Average Commit Latency per experiment configuration}
+]
+\pgfplotstablegetrowsof{\avgcommitlatencytable}
+\pgfmathtruncatemacro\TotalRows{\pgfplotsretval-1}
+\pgfplotsinvokeforeach{0,...,\TotalRows}
+{
+  \addplot+[
+  boxplot prepared from table={
+    table=\avgcommitlatencytable,
+    row=#1,
+    lower whisker=lower-whisker,
+    upper whisker=upper-whisker,
+    lower quartile=lower-quartile,
+    upper quartile=upper-quartile,
+    median=median
+  },
+  boxplot prepared,
+  ]
+  coordinates {};
+
+}
+\end{axis}
+\end{tikzpicture}
